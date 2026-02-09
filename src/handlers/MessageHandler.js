@@ -264,7 +264,7 @@ export class MessageHandler {
     list.forEach((p, index) => {
       const isDefault =
         p.key === LUMA_CONFIG.DEFAULT_PERSONALITY ? " ⭐ (Padrão)" : "";
-      text += `p${index + 1} - ${p.name}${isDefault}\n${p.description}\n\n`;
+      text += `p${index + 1} - ${p.name}${isDefault}\n${p.desc}\n\n`;
     });
 
     text += MENUS.PERSONALITY.FOOTER;
