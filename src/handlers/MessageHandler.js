@@ -75,33 +75,39 @@ export class MessageHandler {
       }
     }
 
-    if (this.lumaHandler.isReplyToLuma(bot.raw)) {
-      return await this.handleLumaCommand(bot, true);
-    }
+    const isReplyToBot = bot.isRepliedToMe;
 
-    if (text && LumaHandler.isTriggered(text)) {
-      return await this.handleLumaCommand(bot, false);
+    const isTriggered = text && LumaHandler.isTriggered(text);
+
+    if (isReplyToBot || isTriggered) {
+      return await this.handleLumaCommand(bot, isReplyToBot);
     }
   }
 
   static async handleLumaCommand(bot, isReply = false) {
     try {
       const senderName = bot.senderName;
-
+      const quotedText = bot.quotedText;
       let userMessage = isReply
         ? bot.body
         : this.lumaHandler.extractUserMessage(bot.body);
 
-      if (!userMessage && !bot.hasVisualContent) {
-        const bored = this.lumaHandler.getRandomBoredResponse();
-        const sent = await bot.reply(bored);
-        if (sent?.key?.id)
-          this.lumaHandler.saveLastBotMessage(bot.jid, sent.key.id);
-        return;
+      if (!userMessage && bot.hasVisualContent) {
+        if (bot.hasSticker) {
+          userMessage =
+            "[O usuário respondeu com uma figurinha/sticker. Analise a imagem visualmente, entenda a emoção dela e reaja ao contexto]";
+        } else {
+          userMessage = "[O usuário enviou uma imagem. Analise o conteúdo]";
+        }
       }
 
-      if (!userMessage && bot.hasVisualContent) {
-        userMessage = "O que você acha dessa imagem?";
+      if (!userMessage) {
+        const bored = this.lumaHandler.getRandomBoredResponse();
+        const sent = await bot.reply(bored);
+        if (sent?.key?.id) {
+          this.lumaHandler.saveLastBotMessage(bot.jid, sent.key.id);
+        }
+        return;
       }
 
       await bot.sendPresence("composing");
@@ -113,6 +119,7 @@ export class MessageHandler {
         bot.raw,
         bot.socket,
         senderName,
+        quotedText,
       );
 
       const sentMessage = await bot.reply(responseText);
@@ -122,7 +129,9 @@ export class MessageHandler {
       }
     } catch (error) {
       Logger.error("❌ Erro no comando da Luma:", error);
-      await bot.reply("Num deu certo não. Bugou aqui, tenta depois.");
+      if (error.message?.includes("API_KEY")) {
+        await bot.reply("Tô sem cérebro (API Key inválida).");
+      }
     }
   }
 
@@ -227,7 +236,6 @@ export class MessageHandler {
 
   static async sendStats(bot) {
     const dbStats = DatabaseService.getMetrics();
-
     const memoryStats = this.lumaHandler.getStats();
 
     let statsText =
@@ -256,7 +264,7 @@ export class MessageHandler {
     list.forEach((p, index) => {
       const isDefault =
         p.key === LUMA_CONFIG.DEFAULT_PERSONALITY ? " ⭐ (Padrão)" : "";
-      text += `p${index + 1} - ${p.name}${isDefault}\n${p.desc}\n\n`;
+      text += `p${index + 1} - ${p.name}${isDefault}\n${p.description}\n\n`;
     });
 
     text += MENUS.PERSONALITY.FOOTER;

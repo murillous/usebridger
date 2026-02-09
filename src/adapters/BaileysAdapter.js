@@ -43,6 +43,89 @@ export class BaileysAdapter {
     return match ? match[1] : pushName;
   }
 
+  // 🔥 LÓGICA BLINDADA COM DEBUG 🔥
+  get isRepliedToMe() {
+    try {
+      const msg = this.message.message;
+
+      // 1. Procura contexto em todos os lugares
+      const context =
+        msg?.extendedTextMessage?.contextInfo ||
+        msg?.imageMessage?.contextInfo ||
+        msg?.videoMessage?.contextInfo ||
+        msg?.stickerMessage?.contextInfo ||
+        msg?.audioMessage?.contextInfo;
+
+      // Se não tem contexto, não é resposta
+      if (!context?.participant) return false;
+
+      // 2. Obtém credenciais completas (ID e LID)
+      const me = this.sock.authState?.creds?.me;
+
+      if (!me) {
+        // Fallback para user.id se authState falhar
+        if (this.sock.user?.id) {
+          const myId = this.sock.user.id
+            .split(":")[0]
+            .split("@")[0]
+            .replace(/\D/g, "");
+          const quotedId = context.participant
+            .split(":")[0]
+            .split("@")[0]
+            .replace(/\D/g, "");
+          return myId === quotedId;
+        }
+        return false;
+      }
+
+      // 3. Função de Limpeza
+      const clean = (id) => {
+        if (!id) return null;
+        return id.split(":")[0].split("@")[0].replace(/\D/g, "");
+      };
+
+      const quotedClean = clean(context.participant);
+      const myIdClean = clean(me.id);
+      const myLidClean = clean(me.lid);
+
+      // 4. Comparação Dupla (Telefone OU Dispositivo)
+      const isMatch =
+        quotedClean === myIdClean || (myLidClean && quotedClean === myLidClean);
+
+      // 🔍 DEBUG: Se estiver em dúvida, descomente a linha abaixo para ver no terminal
+      // Logger.info(`DEBUG REPLY: Quoted=${quotedClean} | MeID=${myIdClean} | MeLID=${myLidClean} | Match=${isMatch}`);
+
+      return isMatch;
+    } catch (e) {
+      Logger.error("Erro ao verificar reply:", e);
+      return false;
+    }
+  }
+
+  get quotedMessage() {
+    const msg = this.message.message;
+    const context =
+      msg?.extendedTextMessage?.contextInfo ||
+      msg?.imageMessage?.contextInfo ||
+      msg?.videoMessage?.contextInfo ||
+      msg?.stickerMessage?.contextInfo;
+
+    return context?.quotedMessage;
+  }
+
+  get quotedText() {
+    const q = this.quotedMessage;
+    if (!q) return null;
+
+    return (
+      q.conversation ||
+      q.extendedTextMessage?.text ||
+      q.imageMessage?.caption ||
+      q.videoMessage?.caption ||
+      null
+    );
+  }
+
   // --- Métodos de Envio ---
 
   async sendText(text, options = {}) {
@@ -127,27 +210,21 @@ export class BaileysAdapter {
     return !!this.message.message?.stickerMessage;
   }
 
-  get quotedMessage() {
-    return this.message.message?.extendedTextMessage?.contextInfo
-      ?.quotedMessage;
-  }
-
-  get quotedText() {
-    const q = this.quotedMessage;
-    if (!q) return null;
-    return q.conversation || q.extendedTextMessage?.text || null;
-  }
-
   getQuotedAdapter() {
     if (!this.quotedMessage) return null;
+
+    const msg = this.message.message;
+    const context =
+      msg?.extendedTextMessage?.contextInfo ||
+      msg?.imageMessage?.contextInfo ||
+      msg?.stickerMessage?.contextInfo;
 
     const fakeMsg = {
       key: {
         remoteJid: this.remoteJid,
         fromMe: false,
-        id: this.message.message.extendedTextMessage.contextInfo.stanzaId,
-        participant:
-          this.message.message.extendedTextMessage.contextInfo.participant,
+        id: context?.stanzaId,
+        participant: context?.participant,
       },
       message: this.quotedMessage,
     };
