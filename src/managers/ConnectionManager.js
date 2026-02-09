@@ -10,6 +10,7 @@ import { CONFIG, MESSAGES } from "../config/constants.js";
 import { Logger } from "../utils/Logger.js";
 import { FileSystem } from "../utils/FileSystem.js";
 import { MessageHandler } from "../handlers/MessageHandler.js";
+import { BaileysAdapter } from "../adapters/BaileysAdapter.js";
 
 let qrcode;
 try {
@@ -85,7 +86,7 @@ export class ConnectionManager {
 
   setupEventHandlers(saveCreds) {
     this.sock.ev.on("connection.update", (update) =>
-      this.handleConnectionUpdate(update)
+      this.handleConnectionUpdate(update),
     );
 
     this.sock.ev.on("creds.update", saveCreds);
@@ -108,7 +109,6 @@ export class ConnectionManager {
         Logger.info("🔗 Conectando...");
       } else if (connection === "open") {
         Logger.info(MESSAGES.CONNECTED);
-        Logger.info(MESSAGES.BOT_READY);
         this.isConnecting = false;
         this.reconnectAttempts = 0;
         this.qrRetries = 0;
@@ -121,10 +121,10 @@ export class ConnectionManager {
 
   displayQrCode(qr) {
     Logger.info(
-      `\n📱 QR Code gerado! (Tentativa ${this.qrRetries}/${this.maxQrRetries})`
+      `\n📱 QR Code gerado! (Tentativa ${this.qrRetries}/${this.maxQrRetries})`,
     );
     Logger.info(
-      "📶 IMPORTANTE: Certifique-se de ter boa conexão no celular!\n"
+      "📶 IMPORTANTE: Certifique-se de ter boa conexão no celular!\n",
     );
 
     if (qrcode) {
@@ -155,7 +155,7 @@ export class ConnectionManager {
     ) {
       if (this.qrRetries >= this.maxQrRetries) {
         Logger.info(
-          `❌ Máximo de tentativas de QR atingido (${this.maxQrRetries})`
+          `❌ Máximo de tentativas de QR atingido (${this.maxQrRetries})`,
         );
         Logger.info("🧹 Limpando sessão para nova tentativa...\n");
         await this.cleanAndRestart();
@@ -207,9 +207,13 @@ export class ConnectionManager {
 
   async handleMessagesUpsert(m) {
     try {
-      const message = m.messages[0];
-      if (message) {
-        await MessageHandler.process(message, this.sock);
+      if (m.type !== "notify") return;
+
+      for (const message of m.messages) {
+        if (!message.message) continue;
+        const botAdapter = new BaileysAdapter(this.sock, message);
+
+        await MessageHandler.process(botAdapter);
       }
     } catch (error) {
       Logger.error("Erro ao processar mensagem:", error);
@@ -245,7 +249,7 @@ export class ConnectionManager {
   async reconnect() {
     if (this.reconnectAttempts >= CONFIG.MAX_RECONNECT_ATTEMPTS) {
       Logger.info(
-        `❌ Máximo de ${CONFIG.MAX_RECONNECT_ATTEMPTS} tentativas atingido`
+        `❌ Máximo de ${CONFIG.MAX_RECONNECT_ATTEMPTS} tentativas atingido`,
       );
       Logger.info("🧹 Limpando sessão...\n");
       await this.cleanAndRestart();
@@ -255,13 +259,13 @@ export class ConnectionManager {
     this.reconnectAttempts++;
     const delay = Math.min(
       CONFIG.RECONNECT_DELAY * this.reconnectAttempts,
-      15000
+      15000,
     );
 
     Logger.info(
       `⏳ Reconectando em ${delay / 1000}s (${this.reconnectAttempts}/${
         CONFIG.MAX_RECONNECT_ATTEMPTS
-      })...`
+      })...`,
     );
 
     await new Promise((r) => setTimeout(r, delay));
@@ -271,7 +275,7 @@ export class ConnectionManager {
 
   async handleInitializationError(error) {
     const now = Date.now();
-    if (now - this.lastCleanTime > CONFIG.MIN_CLEAN_INTERVAL) {
+    if (now - this.lastCleanTime > CONFIG.MIN_CLEAN_INTERVAL || 60000) {
       if (this.isAuthError(error.message)) {
         await this.cleanAndRestart();
       } else {
@@ -286,14 +290,16 @@ export class ConnectionManager {
 
   isAuthError(message) {
     return ["405", "auth", "401", "Connection Failure"].some((err) =>
-      message.includes(err)
+      message.includes(err),
     );
   }
 
   gracefulShutdown() {
     Logger.info("\n🛑 Finalizando...");
     this.closeSafely();
-    FileSystem.cleanupDir(CONFIG.TEMP_DIR);
+    try {
+      FileSystem.cleanupDir(CONFIG.TEMP_DIR);
+    } catch (e) {}
     Logger.info("✅ Finalizado");
     process.exit(0);
   }

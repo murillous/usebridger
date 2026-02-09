@@ -5,8 +5,8 @@ import { GroupManager } from "../managers/GroupManager.js";
 import { BlacklistManager } from "../managers/BlacklistManager.js";
 import { LumaHandler } from "./LumaHandler.js";
 import { LUMA_CONFIG } from "../config/lumaConfig.js";
-import { PersonalityManager } from "../managers/PersonalityManager.js";
 import { DatabaseService } from "../services/Database.js";
+import { PersonalityManager } from "../managers/PersonalityManager.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -14,318 +14,271 @@ dotenv.config();
 export class MessageHandler {
   static lumaHandler = new LumaHandler();
 
-  static async process(message, sock) {
-    const jid = message.key.remoteJid;
+  static async process(bot) {
+    const text = bot.body;
+    const jid = bot.jid;
 
-    if (CONFIG.IGNORE_SELF && message.key.fromMe) {
-      return;
-    }
+    if (CONFIG.IGNORE_SELF && bot.isFromMe) return;
 
-    const text = this.extractText(message);
-
-    if (jid.endsWith("@g.us") && BlacklistManager.isBlocked(jid)) {
+    if (bot.isGroup && BlacklistManager.isBlocked(jid)) {
       const ownerNumber = process.env.OWNER_NUMBER?.replace(/\D/g, "");
-      const senderNumber = message.key.fromMe
+      const senderNumber = bot.isFromMe
         ? ownerNumber
-        : await this.getSenderNumber(message, sock);
-      const isOwner = message.key.fromMe || senderNumber === ownerNumber;
+        : await bot.getSenderNumber();
 
-      if (!isOwner) return;
+      if (senderNumber !== ownerNumber) return;
     }
 
     if (text) {
-      if (await this.handleMenuReply(message, sock, text)) {
-        return;
-      }
-
-      if (await this.handleAdminCommands(message, sock, text)) {
-        return;
-      }
+      if (await this.handleMenuReply(bot, text)) return;
+      if (await this.handleAdminCommands(bot, text)) return;
 
       const command = this.detectCommand(text);
 
       if (command) {
         switch (command) {
           case COMMANDS.HELP:
-            await this.sendHelp(sock, jid);
-            return;
-
+            return await bot.sendText(MENUS.HELP_TEXT);
           case COMMANDS.PERSONA:
-            await this.sendPersonalityMenu(sock, jid);
-            return;
-
+            return await this.sendPersonalityMenu(bot);
           case COMMANDS.LUMA_STATS:
           case COMMANDS.LUMA_STATS_SHORT:
-            const dbStats = DatabaseService.getMetrics();
-            const memoryStats = this.lumaHandler.getStats();
-
-            const statsText =
-              `📊 *Estatísticas Globais da Luma*\n\n` +
-              `🧠 *Inteligência Artificial:*\n` +
-              `• Respostas Geradas: ${dbStats.ai_responses || 0}\n` +
-              `• Conversas Ativas (RAM): ${memoryStats.totalConversations}\n\n` +
-
-              `🎨 *Mídia Gerada:*\n` +
-              `• Figurinhas: ${dbStats.stickers_created || 0}\n` +
-              `• Imagens: ${dbStats.images_created || 0}\n` +
-              `• GIFs: ${dbStats.gifs_created || 0}\n\n` +
-
-              `📈 *Total de Interações:* ${dbStats.total_messages || 0}`;
-
-            await this.sendMessage(sock, jid, statsText);
-            return;
-
+            return await this.sendStats(bot);
           case COMMANDS.LUMA_CLEAR:
           case COMMANDS.LUMA_CLEAR_SHORT:
           case COMMANDS.LUMA_CLEAR_ALT:
             this.lumaHandler.clearHistory(jid);
-            await this.sendMessage(sock, jid, "🗑️ Memória da Luma limpa nesta conversa!");
-            return;
-
+            return await bot.reply("🗑️ Memória da Luma limpa nesta conversa!");
+          case COMMANDS.MY_NUMBER:
+            const senderNum = await bot.getSenderNumber();
+            const chatId = bot.jid;
+            return await bot.reply(
+              `📱 *Informações de ID*\n\n👤 *Seu Número:* ${senderNum}\n💬 *ID deste Chat:* ${chatId}`,
+            );
           case COMMANDS.STICKER:
           case COMMANDS.STICKER_SHORT:
-            await this.handleStickerCommand(message, sock);
-            return;
-
+            return await this.handleStickerCommand(bot, text);
           case COMMANDS.IMAGE:
           case COMMANDS.IMAGE_SHORT:
-            await this.handleImageCommand(message, sock);
-            return;
-
+            return await this.handleImageCommand(bot);
           case COMMANDS.GIF:
           case COMMANDS.GIF_SHORT:
-            await this.handleGifCommand(message, sock);
-            return;
-
+            return await this.handleGifCommand(bot);
           case COMMANDS.EVERYONE:
-            if (jid.endsWith("@g.us")) {
-              await GroupManager.mentionEveryone(message, sock);
+            if (bot.isGroup) {
+              await GroupManager.mentionEveryone(bot.raw, bot.socket);
             } else {
-              await this.sendMessage(sock, jid, "⚠️ Este comando só funciona em grupos!");
+              await bot.reply("⚠️ Este comando só funciona em grupos!");
             }
             return;
         }
       }
     }
 
-    if (this.lumaHandler.isReplyToLuma(message)) {
-      await this.handleLumaCommand(message, sock, true);
-      return;
+    if (this.lumaHandler.isReplyToLuma(bot.raw)) {
+      return await this.handleLumaCommand(bot, true);
     }
 
     if (text && LumaHandler.isTriggered(text)) {
-      await this.handleLumaCommand(message, sock, false);
+      return await this.handleLumaCommand(bot, false);
+    }
+  }
+
+  static async handleLumaCommand(bot, isReply = false) {
+    try {
+      const senderName = bot.senderName;
+
+      let userMessage = isReply
+        ? bot.body
+        : this.lumaHandler.extractUserMessage(bot.body);
+
+      if (!userMessage && !bot.hasVisualContent) {
+        const bored = this.lumaHandler.getRandomBoredResponse();
+        const sent = await bot.reply(bored);
+        if (sent?.key?.id)
+          this.lumaHandler.saveLastBotMessage(bot.jid, sent.key.id);
+        return;
+      }
+
+      if (!userMessage && bot.hasVisualContent) {
+        userMessage = "O que você acha dessa imagem?";
+      }
+
+      await bot.sendPresence("composing");
+      await this.randomDelay();
+
+      const responseText = await this.lumaHandler.generateResponse(
+        userMessage,
+        bot.jid,
+        bot.raw,
+        bot.socket,
+        senderName,
+      );
+
+      const sentMessage = await bot.reply(responseText);
+
+      if (sentMessage?.key?.id) {
+        this.lumaHandler.saveLastBotMessage(bot.jid, sentMessage.key.id);
+      }
+    } catch (error) {
+      Logger.error("❌ Erro no comando da Luma:", error);
+      await bot.reply("Num deu certo não. Bugou aqui, tenta depois.");
+    }
+  }
+
+  static async handleStickerCommand(bot, text) {
+    const url = this.extractUrl(text);
+    if (url) {
+      await MediaProcessor.processUrlToSticker(url, bot.socket, bot.raw);
+      this.incrementMediaStats("stickers_created");
       return;
     }
-  }
-
-  static extractText(message) {
-    return (
-      message.message?.conversation ||
-      message.message?.extendedTextMessage?.text ||
-      message.message?.imageMessage?.caption ||
-      message.message?.videoMessage?.caption ||
-      null
-    );
-  }
-
-  static async handleAdminCommands(message, sock, text) {
-    const jid = message.key.remoteJid;
-    if (!text) return false;
-
-    const lower = text.toLowerCase();
-
-    let senderNumber = null;
-    if (!message.key.fromMe) {
-      senderNumber = await this.getSenderNumber(message, sock);
+    if (bot.hasMedia) {
+      await MediaProcessor.processToSticker(bot.raw, bot.socket);
+      this.incrementMediaStats("stickers_created");
+      return;
     }
+    const quoted = bot.getQuotedAdapter();
+    if (quoted?.hasMedia) {
+      await MediaProcessor.processToSticker(quoted.raw, bot.socket, bot.jid);
+      this.incrementMediaStats("stickers_created");
+    } else {
+      await bot.reply(MESSAGES.REPLY_MEDIA_STICKER);
+    }
+  }
 
-    const ownerNumber = process.env.OWNER_NUMBER?.replace(/\D/g, "");
-
-    const isOwner = message.key.fromMe || (senderNumber === ownerNumber);
-
-    if (!isOwner) return false;
-
-    if (lower === COMMANDS.MY_NUMBER) {
-      const detected = message.key.fromMe
-        ? sock.user?.id?.split("@")[0].split(":")[0]
-        : senderNumber;
-
-      await this.sendMessage(
-        sock,
-        jid,
-        `📱 *ID de Admin Detectado:*\n${detected}\n\nConfigure isso no .env como OWNER_NUMBER.`
+  static async handleImageCommand(bot) {
+    if (bot.hasSticker) {
+      await MediaProcessor.processStickerToImage(bot.raw, bot.socket);
+      this.incrementMediaStats("images_created");
+      return;
+    }
+    const quoted = bot.getQuotedAdapter();
+    if (quoted?.hasSticker) {
+      await MediaProcessor.processStickerToImage(
+        quoted.raw,
+        bot.socket,
+        bot.jid,
       );
-      return true;
+      this.incrementMediaStats("images_created");
+    } else {
+      await bot.reply(MESSAGES.REPLY_STICKER_IMAGE);
     }
+  }
+
+  static async handleGifCommand(bot) {
+    if (bot.hasSticker) {
+      await MediaProcessor.processStickerToGif(bot.raw, bot.socket);
+      this.incrementMediaStats("gifs_created");
+      return;
+    }
+    const quoted = bot.getQuotedAdapter();
+    if (quoted?.hasSticker) {
+      await MediaProcessor.processStickerToGif(quoted.raw, bot.socket, bot.jid);
+      this.incrementMediaStats("gifs_created");
+    } else {
+      await bot.reply(MESSAGES.REPLY_STICKER_GIF);
+    }
+  }
+
+  static async handleAdminCommands(bot, text) {
+    const lower = text.toLowerCase();
+    const ownerNumber = process.env.OWNER_NUMBER?.replace(/\D/g, "");
+    const senderNumber = bot.isFromMe
+      ? ownerNumber
+      : await bot.getSenderNumber();
+
+    if (senderNumber !== ownerNumber) return false;
 
     if (lower.startsWith("!blacklist")) {
       const parts = lower.split(" ");
       const action = parts[1];
 
       if (action === "add") {
-        if (!jid.endsWith("@g.us")) {
-          await this.sendMessage(sock, jid, "⚠️ Use isso dentro do grupo que quer bloquear.");
-          return true;
-        }
-        if (BlacklistManager.add(jid)) {
-          await this.sendMessage(sock, jid, "🚫 Grupo adicionado à blacklist!");
-        } else {
-          await this.sendMessage(sock, jid, "❌ Erro ao adicionar.");
-        }
+        if (!bot.isGroup) return bot.reply("⚠️ Use isso dentro do grupo.");
+        if (BlacklistManager.add(bot.jid))
+          await bot.reply("🚫 Grupo bloqueado!");
+        else await bot.reply("❌ Erro ao adicionar.");
         return true;
       }
-
       if (action === "remove") {
-        if (BlacklistManager.remove(jid)) {
-          await this.sendMessage(sock, jid, "✅ Grupo removido da blacklist!");
-        } else {
-          await this.sendMessage(sock, jid, "⚠️ Este grupo não estava bloqueado.");
-        }
+        if (BlacklistManager.remove(bot.jid))
+          await bot.reply("✅ Grupo desbloqueado!");
+        else await bot.reply("⚠️ Não estava bloqueado.");
         return true;
       }
-
       if (action === "list") {
         const list = BlacklistManager.list();
-        const listText = list.length > 0
-          ? `📋 *Blacklist:*\n\n${list.map((g, i) => `${i + 1}. ${g}`).join("\n")}`
-          : "📋 Blacklist vazia.";
-        await this.sendMessage(sock, jid, listText);
+        await bot.reply(
+          list.length ? `📋 *Blacklist:*\n${list.join("\n")}` : "📋 Vazia.",
+        );
         return true;
       }
-
       if (action === "clear") {
         BlacklistManager.clear();
-        await this.sendMessage(sock, jid, "🗑️ Blacklist zerada!");
+        await bot.reply("🗑️ Blacklist zerada!");
         return true;
       }
-
-      await this.sendMessage(sock, jid, "Use: !blacklist <add|remove|list|clear>");
+      await bot.reply("Use: !blacklist <add|remove|list|clear>");
       return true;
     }
-
     return false;
   }
 
-  static async getSenderNumber(message, sock) {
-    try {
-      let jid =
-        message?.key?.participant ||
-        message?.participant ||
-        message?.message?.extendedTextMessage?.contextInfo?.participant ||
-        message?.key?.remoteJid;
-
-      if (!jid) return null;
-
-      if (jid.includes("@lid")) {
-        try {
-          const results = await sock.onWhatsApp(jid);
-          if (results && results.length > 0 && results[0]?.jid) {
-            jid = results[0].jid;
-          }
-        } catch (e) {
-          Logger.warn(`⚠️ Não foi possível resolver LID ${jid}: ${e.message}`);
-        }
-      }
-
-      let number = jid.split("@")[0];
-      if (number.includes(":")) number = number.split(":")[0];
-      number = number.replace(/\D/g, "");
-
-      return number || null;
-    } catch (error) {
-      Logger.error("❌ Erro ao extrair número:", error);
-      return null;
-    }
+  static async sendStats(bot) {
+    const dbStats = DatabaseService.getMetrics();
+    const memoryStats = this.lumaHandler.getStats();
+    const statsText = `📊 *Estatísticas Globais*\n🧠 IA: ${dbStats.ai_responses}\n🎨 Stickers: ${dbStats.stickers_created}`;
+    await bot.sendText(statsText);
   }
 
-  static async handleLumaCommand(message, sock, isReply = false) {
-    try {
-      const jid = message.key.remoteJid;
-      const text = this.extractText(message);
+  static async sendPersonalityMenu(bot) {
+    const list = PersonalityManager.getList();
+    const currentName = PersonalityManager.getActiveName(bot.jid);
 
-      let userMessage = isReply
-        ? text
-        : this.lumaHandler.extractUserMessage(text);
+    let text = `${MENUS.PERSONALITY.HEADER}\n`;
+    text += `🔹 Atual neste chat: ${currentName}\n\n`;
 
-      const quotedMessage = {
-        key: message.key,
-        message: message.message,
-      };
+    list.forEach((p, index) => {
+      const isDefault =
+        p.key === LUMA_CONFIG.DEFAULT_PERSONALITY ? " ⭐ (Padrão)" : "";
+      text += `p${index + 1} - ${p.name}${isDefault}\n${p.desc}\n\n`;
+    });
 
-      const hasVisualContent = await this.hasVisualContent(message);
-
-      if (!userMessage && !hasVisualContent) {
-        const response = await sock.sendMessage(
-          jid,
-          {
-            text: this.lumaHandler.getRandomBoredResponse(),
-          },
-          { quoted: quotedMessage }
-        );
-
-        if (response?.key?.id) {
-          this.lumaHandler.saveLastBotMessage(jid, response.key.id);
-        }
-        return;
-      }
-
-      if (!userMessage && hasVisualContent) {
-        userMessage = "O que você acha dessa imagem?";
-      }
-
-      await sock.sendPresenceUpdate("composing", jid);
-      await this.randomDelay();
-
-      const responseText = await this.lumaHandler.generateResponse(
-        userMessage,
-        jid,
-        message,
-        sock
-      );
-
-      const sentMessage = await sock.sendMessage(
-        jid,
-        {
-          text: responseText,
-        },
-        { quoted: quotedMessage }
-      );
-
-      if (sentMessage?.key?.id) {
-        this.lumaHandler.saveLastBotMessage(jid, sentMessage.key.id);
-      }
-    } catch (error) {
-      Logger.error("❌ Erro no comando da Luma:", error);
-      await this.sendMessage(
-        sock,
-        message.key.remoteJid,
-        "Num deu certo não. Bugou aqui, tenta depois"
-      );
-    }
+    text += MENUS.PERSONALITY.FOOTER;
+    await bot.sendText(text);
   }
 
-  static async hasVisualContent(message) {
-    if (message.message?.imageMessage || message.message?.stickerMessage) {
+  static async handleMenuReply(bot, text) {
+    const quotedText = bot.quotedText;
+    if (!quotedText) return false;
+    if (quotedText.includes(MENUS.PERSONALITY.HEADER.split("\n")[0])) {
+      const list = PersonalityManager.getList();
+      const num = parseInt(text.trim().toLowerCase().replace("p", ""));
+      const index = !isNaN(num) && num > 0 ? num - 1 : -1;
+      if (index >= 0 && index < list.length) {
+        PersonalityManager.setPersonality(bot.jid, list[index].key);
+        await bot.reply(`${MENUS.MSGS.PERSONA_CHANGED}*${list[index].name}*`);
+      } else {
+        await bot.reply(MENUS.MSGS.INVALID_OPT);
+      }
       return true;
     }
-
-    const quotedMsg =
-      message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-    if (quotedMsg?.imageMessage || quotedMsg?.stickerMessage) {
-      return true;
-    }
-
     return false;
   }
 
   static detectCommand(text) {
     const lower = text.toLowerCase();
-    if (lower.includes(COMMANDS.LUMA_CLEAR) || lower.includes(COMMANDS.LUMA_CLEAR_SHORT) || lower.includes(COMMANDS.LUMA_CLEAR_ALT)) return COMMANDS.LUMA_CLEAR;
-    if (lower.includes(COMMANDS.LUMA_STATS) || lower.includes(COMMANDS.LUMA_STATS_SHORT)) return COMMANDS.LUMA_STATS;
-    if (lower.includes(COMMANDS.STICKER) || lower.includes(COMMANDS.STICKER_SHORT)) return COMMANDS.STICKER;
-    if (lower.includes(COMMANDS.IMAGE) || lower.includes(COMMANDS.IMAGE_SHORT)) return COMMANDS.IMAGE;
-    if (lower.includes(COMMANDS.GIF) || lower.includes(COMMANDS.GIF_SHORT)) return COMMANDS.GIF;
+    if (lower === COMMANDS.MY_NUMBER) return COMMANDS.MY_NUMBER;
+    if (lower.includes(COMMANDS.LUMA_CLEAR)) return COMMANDS.LUMA_CLEAR;
+    if (lower.includes("!clear")) return COMMANDS.LUMA_CLEAR_ALT;
+    if (lower.includes(COMMANDS.LUMA_STATS)) return COMMANDS.LUMA_STATS;
+    if (lower.includes(COMMANDS.STICKER)) return COMMANDS.STICKER;
+    if (lower.includes(COMMANDS.STICKER_SHORT)) return COMMANDS.STICKER;
+    if (lower.includes(COMMANDS.IMAGE)) return COMMANDS.IMAGE;
+    if (lower.includes(COMMANDS.IMAGE_SHORT)) return COMMANDS.IMAGE;
+    if (lower.includes(COMMANDS.GIF)) return COMMANDS.GIF;
+    if (lower.includes(COMMANDS.GIF_SHORT)) return COMMANDS.GIF;
     if (lower.includes(COMMANDS.EVERYONE.toLowerCase()) || lower === "@todos")
       return COMMANDS.EVERYONE;
     if (lower.includes(COMMANDS.HELP) || lower === "!menu")
@@ -334,249 +287,39 @@ export class MessageHandler {
     return null;
   }
 
-  static async handleStickerCommand(message, sock) {
-    const text = this.extractText(message);
-    const url = this.extractUrl(text);
-    const jid = message.key.remoteJid;
-
-    // Caso 1: Sticker via URL
-    if (url) {
-      await MediaProcessor.processUrlToSticker(url, sock, message);
-      // Incrementa métricas
-      DatabaseService.incrementMetric("stickers_created");
-      DatabaseService.incrementMetric("total_messages");
-      return;
-    }
-
-    // Caso 2: Sticker via Upload Direto (Imagem/Vídeo na mensagem)
-    if (MessageHandler.hasMedia(message)) {
-      await MediaProcessor.processToSticker(message, sock);
-      // Incrementa métricas
-      DatabaseService.incrementMetric("stickers_created");
-      DatabaseService.incrementMetric("total_messages");
-    }
-    // Caso 3: Sticker via Resposta (Reply)
-    else if (MessageHandler.hasQuotedMessage(message)) {
-      const quoted = MessageHandler.extractQuotedMessage(message);
-      if (MessageHandler.hasMedia(quoted)) {
-        await MediaProcessor.processToSticker(quoted, sock, jid);
-        // Incrementa métricas
-        DatabaseService.incrementMetric("stickers_created");
-        DatabaseService.incrementMetric("total_messages");
-      } else {
-        await MessageHandler.sendMessage(
-          sock,
-          jid,
-          MESSAGES.REPLY_MEDIA_STICKER
-        );
-      }
-    } else {
-      await MessageHandler.sendMessage(
-        sock,
-        jid,
-        MESSAGES.SEND_MEDIA_STICKER +
-        " ou envie uma URL (ex: !sticker https://site.com/foto.jpg)"
-      );
-    }
-  }
-
-  static async handleImageCommand(message, sock) {
-    if (MessageHandler.hasSticker(message)) {
-      await MediaProcessor.processStickerToImage(message, sock);
-      DatabaseService.incrementMetric("images_created");
-      DatabaseService.incrementMetric("total_messages");
-    }
-    else if (MessageHandler.hasQuotedMessage(message)) {
-      const quoted = MessageHandler.extractQuotedMessage(message);
-      if (MessageHandler.hasSticker(quoted)) {
-        await MediaProcessor.processStickerToImage(
-          quoted,
-          sock,
-          message.key.remoteJid
-        );
-        DatabaseService.incrementMetric("images_created");
-        DatabaseService.incrementMetric("total_messages");
-      } else {
-        await MessageHandler.sendMessage(
-          sock,
-          message.key.remoteJid,
-          MESSAGES.REPLY_STICKER_IMAGE
-        );
-      }
-    } else {
-      await MessageHandler.sendMessage(
-        sock,
-        message.key.remoteJid,
-        MESSAGES.SEND_STICKER_IMAGE
-      );
-    }
-  }
-
-  static async handleGifCommand(message, sock) {
-    if (MessageHandler.hasSticker(message)) {
-      await MediaProcessor.processStickerToGif(message, sock);
-      DatabaseService.incrementMetric("gifs_created");
-      DatabaseService.incrementMetric("total_messages");
-    }
-    else if (MessageHandler.hasQuotedMessage(message)) {
-      const quoted = MessageHandler.extractQuotedMessage(message);
-      if (MessageHandler.hasSticker(quoted)) {
-        await MediaProcessor.processStickerToGif(
-          quoted,
-          sock,
-          message.key.remoteJid
-        );
-        DatabaseService.incrementMetric("gifs_created");
-        DatabaseService.incrementMetric("total_messages");
-      } else {
-        await MessageHandler.sendMessage(
-          sock,
-          message.key.remoteJid,
-          MESSAGES.REPLY_STICKER_GIF
-        );
-      }
-    } else {
-      await MessageHandler.sendMessage(
-        sock,
-        message.key.remoteJid,
-        MESSAGES.SEND_STICKER_GIF
-      );
-    }
-  }
-
   static extractUrl(text) {
     if (!text) return null;
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const match = text.match(urlRegex);
+    const match = text.match(/(https?:\/\/[^\s]+)/g);
     return match ? match[0] : null;
   }
 
-  static hasMedia(message) {
-    return !!(message.message?.imageMessage || message.message?.videoMessage);
-  }
-
-  static hasSticker(message) {
-    return !!message.message?.stickerMessage;
-  }
-
-  static hasQuotedMessage(message) {
-    return !!message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-  }
-
-  static extractQuotedMessage(message) {
-    return {
-      message: message.message.extendedTextMessage.contextInfo.quotedMessage,
-      key: {
-        remoteJid: message.key.remoteJid,
-        id: message.message.extendedTextMessage.contextInfo.stanzaId,
-      },
-    };
-  }
-
-  static getMessageType(message) {
-    if (message.message?.imageMessage) {
-      return message.message.imageMessage.mimetype?.includes("gif")
-        ? "gif"
-        : "image";
-    }
-    if (message.message?.videoMessage) {
-      return message.message.videoMessage.gifPlayback ? "gif" : "video";
-    }
-    return "image";
-  }
-
-  static async sendMessage(sock, jid, text) {
-    try {
-      if (sock?.user) {
-        await sock.sendMessage(jid, { text });
-      }
-    } catch (error) {
-      Logger.error("Erro ao enviar:", error);
-    }
+  static incrementMediaStats(type) {
+    DatabaseService.incrementMetric(type);
+    DatabaseService.incrementMetric("total_messages");
   }
 
   static async randomDelay() {
     const { min, max } = LUMA_CONFIG.TECHNICAL.thinkingDelay;
     await new Promise((resolve) =>
-      setTimeout(resolve, min + Math.random() * (max - min))
+      setTimeout(resolve, min + Math.random() * (max - min)),
     );
   }
 
-  static async sendMainMenu(sock, jid) {
-    const currentPersona = PersonalityManager.getActiveName(jid);
-
-    const text =
-      `${MENUS.MAIN.HEADER}\n` +
-      `🎭 *Personalidade Atual:* ${currentPersona}\n\n` +
-      `${MENUS.MAIN.OPTIONS}` +
-      `${MENUS.MAIN.FOOTER}`;
-
-    await sock.sendMessage(jid, { text });
+  // Legacy
+  static getMessageType(message) {
+    if (message.message?.imageMessage)
+      return message.message.imageMessage.mimetype?.includes("gif")
+        ? "gif"
+        : "image";
+    if (message.message?.videoMessage)
+      return message.message.videoMessage.gifPlayback ? "gif" : "video";
+    return "image";
   }
-
-  static async sendPersonalityMenu(sock, jid) {
-    const list = PersonalityManager.getList();
-    let text = `${MENUS.PERSONALITY.HEADER}\n`;
-
-    list.forEach((p, index) => {
-      text += `*p${index + 1}* - ${p.name}\n_${p.desc}_\n\n`;
-    });
-
-    text += MENUS.PERSONALITY.FOOTER;
-    await sock.sendMessage(jid, { text });
-  }
-
-  static async sendHelp(sock, jid) {
-    await sock.sendMessage(jid, { text: MENUS.HELP_TEXT });
-  }
-
-  static async sendPersonalityMenu(sock, jid) {
-    const list = PersonalityManager.getList();
-    const currentName = PersonalityManager.getActiveName(jid);
-
-    let text = `${MENUS.PERSONALITY.HEADER}\n`;
-    text += `🔹 _Atual neste chat: *${currentName}*_\n\n`;
-
-    list.forEach((p, index) => {
-      const isDefault =
-        p.key === LUMA_CONFIG.DEFAULT_PERSONALITY ? " ⭐ (Padrão)" : "";
-
-      text += `*p${index + 1}* - ${p.name}${isDefault}\n_${p.desc}_\n\n`;
-    });
-
-    text += MENUS.PERSONALITY.FOOTER;
-    await sock.sendMessage(jid, { text });
-  }
-
-  static async handleMenuReply(message, sock, text) {
-    const quotedMsg =
-      message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-    if (!quotedMsg) return false;
-
-    const quotedText =
-      quotedMsg.conversation || quotedMsg.extendedTextMessage?.text;
-    if (!quotedText) return false;
-
-    const jid = message.key.remoteJid;
-    const cleanText = text.trim().toLowerCase();
-
-    if (quotedText.includes(MENUS.PERSONALITY.HEADER.split("\n")[0])) {
-      const list = PersonalityManager.getList();
-      let index = -1;
-      const num = parseInt(cleanText.replace("p", ""));
-      if (!isNaN(num) && num > 0) index = num - 1;
-
-      if (index >= 0 && index < list.length) {
-        const selected = list[index];
-        PersonalityManager.setPersonality(jid, selected.key);
-        await sock.sendMessage(jid, {
-          text: `${MENUS.MSGS.PERSONA_CHANGED}*${selected.name}*\n\n_Pode interagir!_`,
-        });
-      } else {
-        await sock.sendMessage(jid, { text: MENUS.MSGS.INVALID_OPT });
-      }
-      return true;
+  static async sendMessage(sock, jid, text) {
+    try {
+      if (sock) await sock.sendMessage(jid, { text });
+    } catch (error) {
+      Logger.error("Erro ao enviar:", error);
     }
-    return false;
   }
 }
