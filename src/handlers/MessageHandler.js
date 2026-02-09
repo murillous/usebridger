@@ -227,8 +227,22 @@ export class MessageHandler {
 
   static async sendStats(bot) {
     const dbStats = DatabaseService.getMetrics();
+
     const memoryStats = this.lumaHandler.getStats();
-    const statsText = `📊 *Estatísticas Globais*\n🧠 IA: ${dbStats.ai_responses}\n🎨 Stickers: ${dbStats.stickers_created}`;
+
+    let statsText =
+      `📊 *Estatísticas Globais da Luma*\n\n` +
+      `🧠 *Inteligência Artificial:*\n` +
+      `• Respostas Geradas: ${dbStats.ai_responses || 0}\n` +
+      `• Conversas Ativas (RAM): ${memoryStats.totalConversations}\n`;
+
+    statsText +=
+      `\n🎨 *Mídia Gerada:*\n` +
+      `• Figurinhas: ${dbStats.stickers_created || 0}\n` +
+      `• Imagens: ${dbStats.images_created || 0}\n` +
+      `• GIFs: ${dbStats.gifs_created || 0}\n\n` +
+      `📈 *Total de Interações:* ${dbStats.total_messages || 0}`;
+
     await bot.sendText(statsText);
   }
 
@@ -273,6 +287,7 @@ export class MessageHandler {
     if (lower.includes(COMMANDS.LUMA_CLEAR)) return COMMANDS.LUMA_CLEAR;
     if (lower.includes("!clear")) return COMMANDS.LUMA_CLEAR_ALT;
     if (lower.includes(COMMANDS.LUMA_STATS)) return COMMANDS.LUMA_STATS;
+    if (lower.includes(COMMANDS.LUMA_STATS_SHORT)) return COMMANDS.LUMA_STATS;
     if (lower.includes(COMMANDS.STICKER)) return COMMANDS.STICKER;
     if (lower.includes(COMMANDS.STICKER_SHORT)) return COMMANDS.STICKER;
     if (lower.includes(COMMANDS.IMAGE)) return COMMANDS.IMAGE;

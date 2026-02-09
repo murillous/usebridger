@@ -95,7 +95,9 @@ export class AIService {
   getStats() {
     return Array.from(this.stats.entries()).map(([model, data]) => ({
       model,
-      ...data,
+      successes: data.successes,
+      failures: data.failures,
+      lastError: data.lastError,
     }));
   }
 }

@@ -235,7 +235,9 @@ export class LumaHandler {
     const historySize = this.conversationHistory
       ? this.conversationHistory.size
       : 0;
+
     const modelStats = this.aiService ? this.aiService.getStats() : [];
+
     return {
       totalConversations: historySize,
       modelStats: modelStats,
