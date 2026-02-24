@@ -11,6 +11,7 @@ import { Logger } from "../utils/Logger.js";
 import { FileSystem } from "../utils/FileSystem.js";
 import { MessageHandler } from "../handlers/MessageHandler.js";
 import { BaileysAdapter } from "../adapters/BaileysAdapter.js";
+import { VoteKickManager } from "../managers/VoteKickManager.js";
 
 let qrcode;
 try {
@@ -79,7 +80,7 @@ export class ConnectionManager {
     if (this.sock) {
       try {
         this.sock.end(undefined);
-      } catch (error) {}
+      } catch (error) { }
       this.sock = null;
     }
   }
@@ -263,8 +264,7 @@ export class ConnectionManager {
     );
 
     Logger.info(
-      `⏳ Reconectando em ${delay / 1000}s (${this.reconnectAttempts}/${
-        CONFIG.MAX_RECONNECT_ATTEMPTS
+      `⏳ Reconectando em ${delay / 1000}s (${this.reconnectAttempts}/${CONFIG.MAX_RECONNECT_ATTEMPTS
       })...`,
     );
 
@@ -299,7 +299,7 @@ export class ConnectionManager {
     this.closeSafely();
     try {
       FileSystem.cleanupDir(CONFIG.TEMP_DIR);
-    } catch (e) {}
+    } catch (e) { }
     Logger.info("✅ Finalizado");
     process.exit(0);
   }

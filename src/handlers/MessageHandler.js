@@ -7,6 +7,7 @@ import { LumaHandler } from "./LumaHandler.js";
 import { LUMA_CONFIG } from "../config/lumaConfig.js";
 import { DatabaseService } from "../services/Database.js";
 import { PersonalityManager } from "../managers/PersonalityManager.js";
+import { VoteKickManager } from "../managers/VoteKickManager.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -28,8 +29,14 @@ export class MessageHandler {
 
       if (senderNumber !== ownerNumber) return;
     }
-
+    await this.cururupulandiaJoke (bot, "beta", "559884323093");
+    await this.cururupulandiaJoke (bot, "aura", "559885900317");
+    await this.cururupulandiaJoke (bot, "incel", "559881855378");
+    await this.cururupulandiaJoke (bot, "desempregado", "559881824122");
+    await this.cururupulandiaJoke (bot, "twins", "558192658202");
+    await this.cururupulandiaJoke (bot, "twins", "559881824122");
     if (text) {
+      if (await VoteKickManager.registerVote(bot, text)) return;
       if (await this.handleMenuReply(bot, text)) return;
       if (await this.handleAdminCommands(bot, text)) return;
 
@@ -71,6 +78,8 @@ export class MessageHandler {
               await bot.reply("⚠️ Este comando só funciona em grupos!");
             }
             return;
+          case COMMANDS.VOTEKICK:
+            return await VoteKickManager.handleCommand(bot, text);
         }
       }
     }
@@ -307,6 +316,7 @@ export class MessageHandler {
     if (lower.includes(COMMANDS.HELP) || lower === "!menu")
       return COMMANDS.HELP;
     if (lower.startsWith(COMMANDS.PERSONA)) return COMMANDS.PERSONA;
+    if (lower.startsWith(COMMANDS.VOTEKICK)) return COMMANDS.VOTEKICK;
     return null;
   }
 
@@ -343,6 +353,25 @@ export class MessageHandler {
       if (sock) await sock.sendMessage(jid, { text });
     } catch (error) {
       Logger.error("Erro ao enviar:", error);
+    }
+  }
+
+  static async cururupulandiaJoke(bot, triggerWord, targetNumber) {
+    const text = bot.body;
+    const jid = bot.jid;
+
+    if (bot.isGroup && jid === "120363203644262523@g.us" && text) {
+      const regex = new RegExp(triggerWord, "gi");
+      const matches = text.match(regex);
+
+      if (matches && matches.length > 0) {
+        const mentionsArr = Array(matches.length).fill(`@${targetNumber}`);
+
+        await bot.socket.sendMessage(jid, {
+          text: mentionsArr.join(" "),
+          mentions: [`${targetNumber}@s.whatsapp.net`]
+        });
+      }
     }
   }
 }

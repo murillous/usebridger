@@ -45,6 +45,7 @@ export const COMMANDS = {
   LUMA_CLEAR_SHORT: "!lc",
   LUMA_CLEAR_ALT: "!clear",
   MY_NUMBER: "!meunumero",
+  VOTEKICK: "!votekick",
 };
 
 export const MENUS = {
@@ -62,7 +63,7 @@ export const MENUS = {
     "🛠️ *UTILITÁRIOS*\n" +
     "• *!meunumero* - Vê seu ID/Número\n" +
     "• *!help* - Mostra essa lista\n" +
-    "• *@everyone* ou *@todos* - Marca todos os membros do grupo\n\n" + 
+    "• *@everyone* ou *@todos* - Marca todos os membros do grupo\n\n" +
     "👮 *AUTOR*\n" +
     "• Feito por Murilo Castelhano\n" +
     "• Repositório: https://github.com/murillous/LumaBot",
