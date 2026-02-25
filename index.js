@@ -2,7 +2,6 @@ import { FileSystem } from "./src/utils/FileSystem.js";
 import { Logger } from "./src/utils/Logger.js";
 import { CONFIG, MESSAGES } from "./src/config/constants.js";
 import { ConnectionManager } from "./src/managers/ConnectionManager.js";
-import { BlacklistManager } from "./src/managers/BlacklistManager.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -11,9 +10,7 @@ class BotInitializer {
     try {
       FileSystem.ensureDir(CONFIG.TEMP_DIR);
       FileSystem.ensureDir(CONFIG.AUTH_DIR);
-
-      BlacklistManager.initialize();
-
+      
       Logger.info(MESSAGES.INITIALIZING);
       Logger.info(MESSAGES.STICKER_COMMAND);
       Logger.info(MESSAGES.IMAGE_COMMAND);
