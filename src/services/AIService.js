@@ -2,6 +2,10 @@ import { GoogleGenAI } from "@google/genai";
 import { Logger } from "../utils/Logger.js";
 import { LUMA_CONFIG } from "../config/lumaConfig.js";
 
+/**
+ * Serviço de comunicação com a API do Google Gemini.
+ * Tenta múltiplos modelos em sequência (fallback automático).
+ */
 export class AIService {
   constructor(apiKey) {
     if (!apiKey) {
@@ -27,6 +31,7 @@ export class AIService {
     return stats;
   }
 
+  /** Envia conteúdo para o Gemini com fallback entre modelos configurados. */
   async generateContent(contents) {
     let lastError = null;
 
@@ -39,7 +44,8 @@ export class AIService {
         const response = await this.client.models.generateContent({
           model: model,
           contents: contents,
-          generationConfig: {
+          config: {
+            tools: LUMA_CONFIG.TOOLS,
             temperature: this.genConfig.temperature,
             maxOutputTokens: this.genConfig.maxOutputTokens,
             topP: this.genConfig.topP,
@@ -47,13 +53,13 @@ export class AIService {
           },
         });
 
-        const text = this._extractTextFromResponse(response);
+        const result = this._extractFromResponse(response);
 
         modelStats.successes++;
         modelStats.lastUsed = new Date().toISOString();
         modelStats.lastError = null;
 
-        return text;
+        return result;
       } catch (error) {
         modelStats.failures++;
         modelStats.lastError = error.message;
@@ -69,14 +75,34 @@ export class AIService {
     );
   }
 
-  _extractTextFromResponse(response) {
-    if (response.candidates?.[0]?.content?.parts?.[0]?.text) {
-      return response.candidates[0].content.parts[0].text;
+  /**
+   * Extrai texto e chamadas de ferramenta da resposta da IA.
+   * Trata tanto a estrutura candidates/parts quanto acessores diretos.
+   */
+  _extractFromResponse(response) {
+    let text = "";
+    let functionCalls = [];
+
+    const parts = response.candidates?.[0]?.content?.parts;
+
+    if (parts) {
+      for (const part of parts) {
+        if (part.text) text += part.text;
+        if (part.functionCall) functionCalls.push(part.functionCall);
+      }
+    } else {
+      try {
+        if (response.text) text = response.text;
+      } catch (e) { }
+
+      try {
+        if (response.functionCalls && Array.isArray(response.functionCalls)) {
+          functionCalls = response.functionCalls;
+        }
+      } catch (e) { }
     }
-    if (typeof response.text === "string") {
-      return response.text;
-    }
-    throw new Error("Formato de resposta da IA desconhecido");
+
+    return { text, functionCalls };
   }
 
   _logError(model, error) {

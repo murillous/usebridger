@@ -30,6 +30,7 @@ Se você quer entender como o projeto funciona "por baixo do capô", siga esta t
 ```
 lumabot/
 ├── src/
+│   ├── adapters/       # Adaptadores de protocolo
 │   ├── handlers/       # Controladores de eventos
 │   ├── processors/     # Workers de processamento
 │   ├── managers/       # Gerenciadores de estado
@@ -113,17 +114,19 @@ Leia cada arquivo de documentação antes de contribuir. Entender a arquitetura 
 - **JID**: Jabber ID, identificador único de usuários/grupos no WhatsApp
 - **Socket**: Conexão WebSocket mantida com os servidores do WhatsApp
 - **Baileys**: Biblioteca que implementa o protocolo do WhatsApp Web
-- **Gemini**: Modelo de IA do Google usado para conversação
+- **BaileysAdapter**: Adaptador que normaliza e desempacota mensagens do Baileys
+- **Gemini**: Modelo de IA do Google usado para conversação e tool calling
 - **Sticker**: Figurinha do WhatsApp (formato WebP específico)
 - **Handler**: Módulo que recebe e processa eventos
+- **ToolDispatcher**: Despachante de ferramentas acionadas pela IA
 - **Processor**: Módulo que executa tarefas computacionais
+- **Tool Calling**: Mecanismo onde a IA aciona funções reais do bot
 
 ## 🆘 Problemas Comuns
 
 ### Bot não responde
 1. Verifique se o número está correto no `.env`
-2. Confirme que não está em nenhuma blacklist
-3. Veja os logs em busca de erros de API
+2. Veja os logs em busca de erros de API
 
 ### QR Code não aparece
 1. Delete a pasta `auth_info/`

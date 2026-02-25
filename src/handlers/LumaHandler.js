@@ -8,6 +8,10 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+/**
+ * Gerenciador de inteligência artificial da Luma.
+ * Monta prompts, mantém histórico por conversa e aciona o Gemini.
+ */
 export class LumaHandler {
   constructor() {
     this.conversationHistory = new Map();
@@ -36,6 +40,10 @@ export class LumaHandler {
     return this.aiService !== null;
   }
 
+  /**
+   * Pipeline principal: monta prompt com personalidade e histórico,
+   * envia para a IA e retorna texto + chamadas de ferramenta.
+   */
   async generateResponse(
     userMessage,
     userJid,
@@ -58,28 +66,25 @@ export class LumaHandler {
         senderName,
       );
 
-      const rawText = await this.aiService.generateContent(promptParts);
+      const response = await this.aiService.generateContent(promptParts);
+      const cleanedResponse = this._cleanResponseText(response.text);
 
-      const cleanedResponse = this._cleanResponseText(rawText);
+      if (cleanedResponse) {
+        this._addToHistory(userJid, userMessage, cleanedResponse, senderName);
+        this._updateMetrics(userJid);
+      }
 
-      this._addToHistory(userJid, userMessage, cleanedResponse, senderName);
-
-      this._updateMetrics(userJid);
-
-      return cleanedResponse;
+      return {
+        text: cleanedResponse,
+        toolCalls: response.functionCalls || []
+      };
     } catch (error) {
       Logger.error("❌ Erro no fluxo Luma:", error.message);
       return this._getErrorResponse("GENERAL", error);
     }
   }
 
-  _buildPromptRequest(
-    userMessage,
-    userJid,
-    imageData,
-    personaConfig,
-    senderName,
-  ) {
+  _buildPromptRequest(userMessage, userJid, imageData, personaConfig, senderName) {
     const history = this._getHistoryText(userJid);
     const hasHistory = history !== "Nenhuma conversa anterior.";
 
@@ -97,22 +102,21 @@ export class LumaHandler {
         "{{HISTORY_PLACEHOLDER}}",
         hasHistory ? `CONVERSA ANTERIOR:\n${history}\n` : "",
       )
-      // ✅ Injeta o nome na mensagem atual
       .replace("{{USER_MESSAGE}}", `${senderName}: ${userMessage}`);
 
     const parts = [{ text: promptText }];
-    if (imageData) {
-      parts.push(imageData);
-    }
+    if (imageData) parts.push(imageData);
 
     return [{ role: "user", parts }];
   }
 
+  /** Extrai imagem ou sticker da mensagem (ou do quoted) para visão da IA. */
   async _extractImage(message, sock) {
     try {
       if (message.message?.imageMessage || message.message?.stickerMessage) {
         return await this._convertImageToBase64(message, sock);
       }
+
       const quoted =
         message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
       if (quoted?.imageMessage || quoted?.stickerMessage) {
@@ -123,6 +127,7 @@ export class LumaHandler {
         };
         return await this._convertImageToBase64(fakeMsg, sock);
       }
+
       return null;
     } catch (error) {
       Logger.error("❌ Erro ao extrair imagem:", error);
@@ -156,6 +161,8 @@ export class LumaHandler {
     return cleaned;
   }
 
+  // --- Histórico de Conversa ---
+
   _addToHistory(userJid, userMessage, botResponse, senderName) {
     if (!this.conversationHistory.has(userJid)) {
       this.conversationHistory.set(userJid, {
@@ -165,7 +172,6 @@ export class LumaHandler {
     }
 
     const data = this.conversationHistory.get(userJid);
-    // Formato: "Nome: Mensagem"
     data.messages.push(`${senderName}: ${userMessage}`);
     data.messages.push(`Luma: ${botResponse}`);
     data.lastUpdate = Date.now();
@@ -183,6 +189,7 @@ export class LumaHandler {
     return data?.messages.join("\n") || "Nenhuma conversa anterior.";
   }
 
+  /** Limpa históricos antigos periodicamente. */
   _startCleanupInterval() {
     setInterval(() => {
       const now = Date.now();
@@ -200,6 +207,9 @@ export class LumaHandler {
     DatabaseService.incrementMetric("total_messages");
   }
 
+  // --- Gatilhos e Utilitários ---
+
+  /** Verifica se o texto aciona a Luma (ex: "Luma,...", "Ei Luma"). */
   static isTriggered(text) {
     if (!text) return false;
     return LUMA_CONFIG.TRIGGERS.some((regex) =>
@@ -220,7 +230,9 @@ export class LumaHandler {
     if (messageId) this.lastBotMessages.set(jid, messageId);
   }
 
+  /** Remove prefixos de chamada da Luma ("Ei Luma, ..." → "..."). */
   extractUserMessage(text) {
+    if (!text) return "";
     return text
       .replace(/^(ei\s+|oi\s+|e\s+aí\s+|fala\s+)?luma[,!?]?\s*/i, "")
       .trim();
@@ -235,7 +247,6 @@ export class LumaHandler {
     const historySize = this.conversationHistory
       ? this.conversationHistory.size
       : 0;
-
     const modelStats = this.aiService ? this.aiService.getStats() : [];
 
     return {

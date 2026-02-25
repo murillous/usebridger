@@ -1,5 +1,9 @@
 import { Logger } from "../utils/Logger.js";
 
+/**
+ * Adaptador que normaliza as mensagens do Baileys para uso interno no bot.
+ * Desempacota protocolos aninhados (ephemeral, viewOnce) transparentemente.
+ */
 export class BaileysAdapter {
   constructor(sock, message) {
     this.sock = sock;
@@ -27,12 +31,46 @@ export class BaileysAdapter {
     return this.remoteJid.endsWith("@g.us");
   }
 
+  /**
+   * Desempacota recursivamente os envelopes do WhatsApp
+   * (ephemeralMessage, viewOnce, documentWithCaption).
+   */
+  static unwrapMessage(msg) {
+    if (!msg) return null;
+    let unwrapped = msg;
+    let isWrapped = true;
+
+    while (isWrapped && unwrapped) {
+      isWrapped = false;
+      if (unwrapped.ephemeralMessage?.message) {
+        unwrapped = unwrapped.ephemeralMessage.message;
+        isWrapped = true;
+      } else if (unwrapped.viewOnceMessageV2?.message) {
+        unwrapped = unwrapped.viewOnceMessageV2.message;
+        isWrapped = true;
+      } else if (unwrapped.viewOnceMessage?.message) {
+        unwrapped = unwrapped.viewOnceMessage.message;
+        isWrapped = true;
+      } else if (unwrapped.documentWithCaptionMessage?.message) {
+        unwrapped = unwrapped.documentWithCaptionMessage.message;
+        isWrapped = true;
+      }
+    }
+    return unwrapped;
+  }
+
+  /** Retorna a mensagem já desempacotada de qualquer envelope. */
+  get innerMessage() {
+    return BaileysAdapter.unwrapMessage(this.message?.message);
+  }
+
   get body() {
+    const msg = this.innerMessage;
     return (
-      this.message.message?.conversation ||
-      this.message.message?.extendedTextMessage?.text ||
-      this.message.message?.imageMessage?.caption ||
-      this.message.message?.videoMessage?.caption ||
+      msg?.conversation ||
+      msg?.extendedTextMessage?.text ||
+      msg?.imageMessage?.caption ||
+      msg?.videoMessage?.caption ||
       null
     );
   }
@@ -43,12 +81,14 @@ export class BaileysAdapter {
     return match ? match[1] : pushName;
   }
 
-  // 🔥 LÓGICA BLINDADA COM DEBUG 🔥
+  /**
+   * Verifica se a mensagem atual é uma resposta direta a uma mensagem do bot.
+   * Compara o JID e o LID para compatibilidade com dispositivos linkados.
+   */
   get isRepliedToMe() {
     try {
-      const msg = this.message.message;
+      const msg = this.innerMessage;
 
-      // 1. Procura contexto em todos os lugares
       const context =
         msg?.extendedTextMessage?.contextInfo ||
         msg?.imageMessage?.contextInfo ||
@@ -56,14 +96,11 @@ export class BaileysAdapter {
         msg?.stickerMessage?.contextInfo ||
         msg?.audioMessage?.contextInfo;
 
-      // Se não tem contexto, não é resposta
       if (!context?.participant) return false;
 
-      // 2. Obtém credenciais completas (ID e LID)
       const me = this.sock.authState?.creds?.me;
 
       if (!me) {
-        // Fallback para user.id se authState falhar
         if (this.sock.user?.id) {
           const myId = this.sock.user.id
             .split(":")[0]
@@ -78,7 +115,6 @@ export class BaileysAdapter {
         return false;
       }
 
-      // 3. Função de Limpeza
       const clean = (id) => {
         if (!id) return null;
         return id.split(":")[0].split("@")[0].replace(/\D/g, "");
@@ -88,14 +124,8 @@ export class BaileysAdapter {
       const myIdClean = clean(me.id);
       const myLidClean = clean(me.lid);
 
-      // 4. Comparação Dupla (Telefone OU Dispositivo)
-      const isMatch =
-        quotedClean === myIdClean || (myLidClean && quotedClean === myLidClean);
-
-      // 🔍 DEBUG: Se estiver em dúvida, descomente a linha abaixo para ver no terminal
-      // Logger.info(`DEBUG REPLY: Quoted=${quotedClean} | MeID=${myIdClean} | MeLID=${myLidClean} | Match=${isMatch}`);
-
-      return isMatch;
+      // Comparação dupla (telefone OU dispositivo linkado)
+      return quotedClean === myIdClean || (myLidClean && quotedClean === myLidClean);
     } catch (e) {
       Logger.error("Erro ao verificar reply:", e);
       return false;
@@ -103,7 +133,7 @@ export class BaileysAdapter {
   }
 
   get quotedMessage() {
-    const msg = this.message.message;
+    const msg = this.innerMessage;
     const context =
       msg?.extendedTextMessage?.contextInfo ||
       msg?.imageMessage?.contextInfo ||
@@ -165,13 +195,12 @@ export class BaileysAdapter {
         this.message.key.participant ||
         this.remoteJid;
 
+      // Resolve LID para JID real se necessário
       if (jid.includes("@lid")) {
         try {
           const [result] = await this.sock.onWhatsApp(jid);
-          if (result && result.jid) {
-            jid = result.jid;
-          }
-        } catch (error) {}
+          if (result && result.jid) jid = result.jid;
+        } catch (error) { }
       }
 
       let number = jid.split("@")[0];
@@ -189,34 +218,52 @@ export class BaileysAdapter {
     );
   }
 
-  // --- Métodos de Mídia/Contexto ---
+  // --- Detecção de Mídia ---
 
+  /** Verifica se há conteúdo visual (imagem, vídeo, sticker) na mensagem ou no quoted. */
   get hasVisualContent() {
+    const msg = this.innerMessage;
+    const quotedInner = BaileysAdapter.unwrapMessage(this.quotedMessage);
+
     return !!(
-      this.message.message?.imageMessage ||
-      this.message.message?.stickerMessage ||
-      this.quotedMessage?.imageMessage ||
-      this.quotedMessage?.stickerMessage
+      msg?.imageMessage ||
+      msg?.videoMessage ||
+      msg?.stickerMessage ||
+      quotedInner?.imageMessage ||
+      quotedInner?.videoMessage ||
+      quotedInner?.stickerMessage
     );
   }
 
   get hasMedia() {
+    const msg = this.innerMessage;
+    const quotedInner = BaileysAdapter.unwrapMessage(this.quotedMessage);
     return !!(
-      this.message.message?.imageMessage || this.message.message?.videoMessage
+      msg?.imageMessage ||
+      msg?.videoMessage ||
+      quotedInner?.imageMessage ||
+      quotedInner?.videoMessage
     );
   }
 
   get hasSticker() {
-    return !!this.message.message?.stickerMessage;
+    const msg = this.innerMessage;
+    const quotedInner = BaileysAdapter.unwrapMessage(this.quotedMessage);
+    return !!(msg?.stickerMessage || quotedInner?.stickerMessage);
   }
 
+  /**
+   * Cria um adaptador para a mensagem citada (quoted), permitindo
+   * acessar suas propriedades de mídia como se fosse uma mensagem normal.
+   */
   getQuotedAdapter() {
     if (!this.quotedMessage) return null;
 
-    const msg = this.message.message;
+    const msg = this.innerMessage;
     const context =
       msg?.extendedTextMessage?.contextInfo ||
       msg?.imageMessage?.contextInfo ||
+      msg?.videoMessage?.contextInfo ||
       msg?.stickerMessage?.contextInfo;
 
     const fakeMsg = {

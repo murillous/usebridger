@@ -86,13 +86,7 @@ CREATE TABLE chat_settings (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Blacklist de usuários
-CREATE TABLE blacklist (
-    jid TEXT PRIMARY KEY,
-    reason TEXT,
-    added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    added_by TEXT
-);
+
 
 -- Cache de sessões (evita recalcular)
 CREATE TABLE session_cache (
@@ -124,18 +118,6 @@ CREATE TABLE user_preferences (
 chatSettings.set(groupJID, {
     personality: 'aggressive',
     language: 'pt-BR'
-});
-
-// Blacklist
-blacklist.add(userJID, {
-    reason: 'Spam',
-    added_by: 'admin'
-});
-
-// Preferências
-userPreferences.set(userJID, {
-    auto_sticker: true,
-    compact_mode: false
 });
 ```
 
@@ -235,28 +217,6 @@ class DatabaseService {
         `);
         
         return stmt.get(jid)?.personality || 'default';
-    }
-    
-    // === BLACKLIST (Privado) ===
-    
-    addToBlacklist(jid, reason, addedBy) {
-        const stmt = this.dbPrivate.prepare(`
-            INSERT INTO blacklist (jid, reason, added_by)
-            VALUES (?, ?, ?)
-            ON CONFLICT(jid) DO UPDATE SET
-                reason = ?,
-                added_at = CURRENT_TIMESTAMP
-        `);
-        
-        stmt.run(jid, reason, addedBy, reason);
-    }
-    
-    isBlacklisted(jid) {
-        const stmt = this.dbPrivate.prepare(`
-            SELECT 1 FROM blacklist WHERE jid = ?
-        `);
-        
-        return stmt.get(jid) !== undefined;
     }
     
     // === CACHE (Privado) ===

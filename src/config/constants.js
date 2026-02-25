@@ -1,7 +1,7 @@
 export const CONFIG = {
   TEMP_DIR: "./temp",
   AUTH_DIR: "./auth_info",
-  BLACKLIST_FILE: "./blacklist.json",
+
   MAX_RECONNECT_ATTEMPTS: 3,
   RECONNECT_DELAY: 5000,
   MIN_CLEAN_INTERVAL: 60000,
@@ -35,17 +35,13 @@ export const COMMANDS = {
   HELP: "!help",
   PERSONA: "!persona",
   EVERYONE: "@everyone",
-  BLACKLIST_ADD: "!blacklist add",
-  BLACKLIST_REMOVE: "!blacklist remove",
-  BLACKLIST_LIST: "!blacklist list",
-  BLACKLIST_CLEAR: "!blacklist clear",
+
   LUMA_STATS: "!luma stats",
   LUMA_STATS_SHORT: "!ls",
   LUMA_CLEAR: "!luma clear",
   LUMA_CLEAR_SHORT: "!lc",
   LUMA_CLEAR_ALT: "!clear",
   MY_NUMBER: "!meunumero",
-  VOTEKICK: "!votekick",
 };
 
 export const MENUS = {

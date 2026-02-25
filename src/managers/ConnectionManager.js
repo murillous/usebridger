@@ -11,7 +11,6 @@ import { Logger } from "../utils/Logger.js";
 import { FileSystem } from "../utils/FileSystem.js";
 import { MessageHandler } from "../handlers/MessageHandler.js";
 import { BaileysAdapter } from "../adapters/BaileysAdapter.js";
-import { VoteKickManager } from "../managers/VoteKickManager.js";
 
 let qrcode;
 try {

@@ -10,34 +10,36 @@ O diagrama abaixo ilustra o que acontece quando o bot recebe uma mensagem (`mess
 sequenceDiagram
     participant User as Usuário (WhatsApp)
     participant Baileys as Baileys (Socket)
-    participant Index as Index.js
+    participant Adapter as BaileysAdapter
     participant Handler as MessageHandler
-    participant Router as Router Lógico
     participant Luma as LumaHandler (IA)
+    participant Tools as ToolDispatcher
     participant Media as MediaProcessor
 
     User->>Baileys: Envia Mensagem
-    Baileys->>Index: Evento 'messages.upsert'
-    Index->>Handler: MessageHandler.process()
+    Baileys->>Adapter: Cria BaileysAdapter (unwrap)
+    Adapter->>Handler: MessageHandler.process()
     
     rect rgb(240, 240, 240)
         note right of Handler: Pipeline de Validação
         Handler->>Handler: Verifica IGNORE_SELF
-        Handler->>Handler: Verifica Blacklist (JSON)
-        Handler->>Handler: Extrai Texto e Mídia
+        Handler->>Handler: Easter Eggs / Menus
+        Handler->>Handler: Detecta Comandos
     end
 
-    Handler->>Router: Qual o tipo de mensagem?
-    
     alt É Comando (!sticker)
-        Router->>Media: Processar Mídia
+        Handler->>Media: Processar Mídia
         Media-->>User: Envia Sticker
     else É Interação IA (Luma)
-        Router->>Luma: generateResponse()
+        Handler->>Luma: generateResponse()
         Luma->>Luma: Monta Prompt + Contexto
-        Luma->>User: Envia Resposta Texto
+        Luma-->>Handler: Texto + Tool Calls
+        Handler-->>User: Envia Resposta Texto
+        Handler->>Tools: ToolDispatcher.handleToolCalls()
+        Tools->>Media: Processar Mídia (se necessário)
+        Media-->>User: Envia Resultado
     else Outros
-        Router-->>Handler: Ignora
+        Handler-->>Handler: Ignora
     end
 ```
 
@@ -52,21 +54,18 @@ Localizados em `src/handlers/`. Atuam como **Controladores**. Eles recebem a ent
 ```javascript
 // src/handlers/MessageHandler.js (Simplificado)
 class MessageHandler {
-    async process(sock, msg) {
+    async process(bot) {
         // 1. Validação
-        if (this.isFromBot(msg)) return;
-        if (this.isBlacklisted(msg.from)) return;
+        if (CONFIG.IGNORE_SELF && bot.isFromMe) return;
         
-        // 2. Normalização
-        const normalized = this.normalize(msg);
-        
-        // 3. Roteamento
-        if (normalized.isCommand) {
-            await CommandRouter.route(sock, normalized);
-        } else if (normalized.isMedia) {
-            await MediaProcessor.handle(sock, normalized);
-        } else {
-            await LumaHandler.respond(sock, normalized);
+        // 2. Roteamento
+        const command = this.detectCommand(bot.body);
+        if (command) {
+            await this._executeExplicitCommand(bot, command);
+        } else if (LumaHandler.isTriggered(bot.body)) {
+            const response = await LumaHandler.generateResponse(...);
+            // 3. Despacho de ferramentas da IA
+            await ToolDispatcher.handleToolCalls(bot, response.toolCalls);
         }
     }
 }
@@ -209,19 +208,19 @@ class DatabaseService {
 │  Manager    │   │   Handler     │
 └─────────────┘   └───────┬───────┘
                           │
-        ┌─────────────────┼─────────────────┐
-        │                 │                 │
-┌───────▼─────┐  ┌────────▼──────┐  ┌──────▼───────┐
-│   Luma      │  │    Media      │  │   Command    │
-│  Handler    │  │  Processor    │  │   Router     │
-└──────┬──────┘  └───────┬───────┘  └──────────────┘
+        ┌─────────────────┼──────────────────┐
+        │                 │                  │
+┌───────▼─────┐  ┌────────▼──────┐  ┌────────▼──────┐
+│   Luma      │  │    Media      │  │    Tool       │
+│  Handler    │  │  Processor    │  │  Dispatcher   │
+└──────┬──────┘  └───────┬───────┘  └───────────────┘
        │                 │
        │         ┌───────┴──────┐
        │         │              │
-   ┌───▼────┐ ┌─▼─────┐ ┌─────▼──┐
-   │Database│ │ Image  │ │ Video  │
-   │Service │ │Processor│ │Converter│
-   └────────┘ └────────┘ └────────┘
+   ┌───▼────┐ ┌──▼──────┐ ┌────▼─────┐
+   │  AI    │ │ Image   │ │ Video    │
+   │Service │ │Processor│ │Converter │
+   └────────┘ └─────────┘ └──────────┘
 ```
 
 ## 🔀 Fluxo de Dados Detalhado
@@ -276,14 +275,14 @@ if (!msg.key || !msg.message) return;
 // Camada 2: Handler valida origem
 if (msg.key.fromMe && IGNORE_SELF) return;
 
-// Camada 3: Handler valida blacklist
-if (blacklist.includes(msg.key.remoteJid)) return;
+// Camada 3: Adapter desempacota protocolos (ephemeral, viewOnce)
+const msg = BaileysAdapter.unwrapMessage(message);
 
 // Camada 4: Processor valida dados
 if (Buffer.byteLength(mediaBuffer) > MAX_SIZE) throw Error;
 
-// Camada 5: Service valida antes de salvar
-if (!isValidJID(jid)) throw Error;
+// Camada 5: ToolDispatcher valida permissões (admin check)
+if (!senderIsAdmin) return reply("Sem permissão");
 ```
 
 ## 🔧 Padrões de Configuração
@@ -297,7 +296,6 @@ if (!isValidJID(jid)) throw Error;
 
 **Dinâmicas** (Banco de Dados):
 - Personalidade por grupo
-- Blacklist de usuários
 - Histórico de conversas
 
 ```javascript

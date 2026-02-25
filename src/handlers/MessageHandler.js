@@ -2,101 +2,114 @@ import { COMMANDS, CONFIG, MESSAGES, MENUS } from "../config/constants.js";
 import { Logger } from "../utils/Logger.js";
 import { MediaProcessor } from "./MediaProcessor.js";
 import { GroupManager } from "../managers/GroupManager.js";
-import { BlacklistManager } from "../managers/BlacklistManager.js";
 import { LumaHandler } from "./LumaHandler.js";
 import { LUMA_CONFIG } from "../config/lumaConfig.js";
 import { DatabaseService } from "../services/Database.js";
 import { PersonalityManager } from "../managers/PersonalityManager.js";
-import { VoteKickManager } from "../managers/VoteKickManager.js";
+import { ToolDispatcher } from "./ToolDispatcher.js";
 import dotenv from "dotenv";
 
 dotenv.config();
 
+/**
+ * Controlador central de mensagens do bot.
+ * Orquestra comandos explícitos (!sticker, !help), gatilhos da Luma
+ * e despacho de ferramentas da IA.
+ */
 export class MessageHandler {
   static lumaHandler = new LumaHandler();
 
+  /**
+   * Ponto de entrada principal para cada mensagem recebida.
+   * Fluxo: validações → easter eggs → comandos → Luma IA.
+   */
   static async process(bot) {
     const text = bot.body;
     const jid = bot.jid;
 
     if (CONFIG.IGNORE_SELF && bot.isFromMe) return;
 
-    if (bot.isGroup && BlacklistManager.isBlocked(jid)) {
-      const ownerNumber = process.env.OWNER_NUMBER?.replace(/\D/g, "");
-      const senderNumber = bot.isFromMe
-        ? ownerNumber
-        : await bot.getSenderNumber();
+    await this._handleEasterEggs(bot);
 
-      if (senderNumber !== ownerNumber) return;
-    }
-    await this.cururupulandiaJoke (bot, "beta", "559884323093");
-    await this.cururupulandiaJoke (bot, "aura", "559885900317");
-    await this.cururupulandiaJoke (bot, "incel", "559881855378");
-    await this.cururupulandiaJoke (bot, "desempregado", "559881824122");
-    await this.cururupulandiaJoke (bot, "twins", "558192658202");
-    await this.cururupulandiaJoke (bot, "twins", "559881824122");
     if (text) {
-      if (await VoteKickManager.registerVote(bot, text)) return;
       if (await this.handleMenuReply(bot, text)) return;
-      if (await this.handleAdminCommands(bot, text)) return;
 
       const command = this.detectCommand(text);
-
       if (command) {
-        switch (command) {
-          case COMMANDS.HELP:
-            return await bot.sendText(MENUS.HELP_TEXT);
-          case COMMANDS.PERSONA:
-            return await this.sendPersonalityMenu(bot);
-          case COMMANDS.LUMA_STATS:
-          case COMMANDS.LUMA_STATS_SHORT:
-            return await this.sendStats(bot);
-          case COMMANDS.LUMA_CLEAR:
-          case COMMANDS.LUMA_CLEAR_SHORT:
-          case COMMANDS.LUMA_CLEAR_ALT:
-            this.lumaHandler.clearHistory(jid);
-            return await bot.reply("🗑️ Memória da Luma limpa nesta conversa!");
-          case COMMANDS.MY_NUMBER:
-            const senderNum = await bot.getSenderNumber();
-            const chatId = bot.jid;
-            return await bot.reply(
-              `📱 *Informações de ID*\n\n👤 *Seu Número:* ${senderNum}\n💬 *ID deste Chat:* ${chatId}`,
-            );
-          case COMMANDS.STICKER:
-          case COMMANDS.STICKER_SHORT:
-            return await this.handleStickerCommand(bot, text);
-          case COMMANDS.IMAGE:
-          case COMMANDS.IMAGE_SHORT:
-            return await this.handleImageCommand(bot);
-          case COMMANDS.GIF:
-          case COMMANDS.GIF_SHORT:
-            return await this.handleGifCommand(bot);
-          case COMMANDS.EVERYONE:
-            if (bot.isGroup) {
-              await GroupManager.mentionEveryone(bot.raw, bot.socket);
-            } else {
-              await bot.reply("⚠️ Este comando só funciona em grupos!");
-            }
-            return;
-          case COMMANDS.VOTEKICK:
-            return await VoteKickManager.handleCommand(bot, text);
-        }
+        const handled = await this._executeExplicitCommand(bot, command, text);
+        if (handled) return;
       }
     }
 
     const isReplyToBot = bot.isRepliedToMe;
-
     const isTriggered = text && LumaHandler.isTriggered(text);
+    const isPrivateChat = !bot.isGroup;
 
-    if (isReplyToBot || isTriggered) {
+    if (isPrivateChat || isReplyToBot || isTriggered) {
       return await this.handleLumaCommand(bot, isReplyToBot);
     }
   }
 
+  /**
+   * Roteia comandos com prefixo (ex: !sticker, !help, !persona).
+   * @private
+   */
+  static async _executeExplicitCommand(bot, command, text) {
+    const jid = bot.jid;
+    switch (command) {
+      case COMMANDS.HELP:
+        await bot.sendText(MENUS.HELP_TEXT);
+        return true;
+      case COMMANDS.PERSONA:
+        await this.sendPersonalityMenu(bot);
+        return true;
+      case COMMANDS.LUMA_STATS:
+      case COMMANDS.LUMA_STATS_SHORT:
+        await this.sendStats(bot);
+        return true;
+      case COMMANDS.LUMA_CLEAR:
+      case COMMANDS.LUMA_CLEAR_SHORT:
+      case COMMANDS.LUMA_CLEAR_ALT:
+        this.lumaHandler.clearHistory(jid);
+        await bot.reply("🗑️ Memória da Luma limpa nesta conversa!");
+        return true;
+      case COMMANDS.MY_NUMBER:
+        const senderNum = await bot.getSenderNumber();
+        const chatId = bot.jid;
+        await bot.reply(
+          `📱 *Informações de ID*\n\n👤 *Seu Número:* ${senderNum}\n💬 *ID deste Chat:* ${chatId}`,
+        );
+        return true;
+      case COMMANDS.STICKER:
+      case COMMANDS.STICKER_SHORT:
+        await this.handleStickerCommand(bot, text);
+        return true;
+      case COMMANDS.IMAGE:
+      case COMMANDS.IMAGE_SHORT:
+        await this.handleImageCommand(bot);
+        return true;
+      case COMMANDS.GIF:
+      case COMMANDS.GIF_SHORT:
+        await this.handleGifCommand(bot);
+        return true;
+      case COMMANDS.EVERYONE:
+        if (bot.isGroup) {
+          await GroupManager.mentionEveryone(bot.raw, bot.socket);
+        } else {
+          await bot.reply("⚠️ Este comando só funciona em grupos!");
+        }
+        return true;
+    }
+    return false;
+  }
+
+  /**
+   * Envia a mensagem do usuário para a Luma (IA) e despacha ferramentas se necessário.
+   * Salva o quotedBot ANTES de chamar a IA, pois o download de mídia muta o protobuf.
+   */
   static async handleLumaCommand(bot, isReply = false) {
     try {
       const senderName = bot.senderName;
-      const quotedText = bot.quotedText;
       let userMessage = isReply
         ? bot.body
         : this.lumaHandler.extractUserMessage(bot.body);
@@ -122,19 +135,28 @@ export class MessageHandler {
       await bot.sendPresence("composing");
       await this.randomDelay();
 
-      const responseText = await this.lumaHandler.generateResponse(
+      // Salva referência ao quoted ANTES da IA processar (protobuf é mutado no download)
+      const quotedBot = bot.getQuotedAdapter();
+
+      const response = await this.lumaHandler.generateResponse(
         userMessage,
         bot.jid,
         bot.raw,
         bot.socket,
         senderName,
-        quotedText,
       );
 
-      const sentMessage = await bot.reply(responseText);
+      const responseText = response.text;
 
-      if (sentMessage?.key?.id) {
-        this.lumaHandler.saveLastBotMessage(bot.jid, sentMessage.key.id);
+      if (responseText) {
+        const sentMessage = await bot.reply(responseText);
+        if (sentMessage?.key?.id) {
+          this.lumaHandler.saveLastBotMessage(bot.jid, sentMessage.key.id);
+        }
+      }
+
+      if (response.toolCalls && response.toolCalls.length > 0) {
+        await ToolDispatcher.handleToolCalls(bot, response.toolCalls, this.lumaHandler, quotedBot);
       }
     } catch (error) {
       Logger.error("❌ Erro no comando da Luma:", error);
@@ -143,6 +165,8 @@ export class MessageHandler {
       }
     }
   }
+
+  // --- Comandos de Mídia ---
 
   static async handleStickerCommand(bot, text) {
     const url = this.extractUrl(text);
@@ -157,7 +181,7 @@ export class MessageHandler {
       return;
     }
     const quoted = bot.getQuotedAdapter();
-    if (quoted?.hasMedia) {
+    if (quoted?.hasVisualContent) {
       await MediaProcessor.processToSticker(quoted.raw, bot.socket, bot.jid);
       this.incrementMediaStats("stickers_created");
     } else {
@@ -173,11 +197,7 @@ export class MessageHandler {
     }
     const quoted = bot.getQuotedAdapter();
     if (quoted?.hasSticker) {
-      await MediaProcessor.processStickerToImage(
-        quoted.raw,
-        bot.socket,
-        bot.jid,
-      );
+      await MediaProcessor.processStickerToImage(quoted.raw, bot.socket, bot.jid);
       this.incrementMediaStats("images_created");
     } else {
       await bot.reply(MESSAGES.REPLY_STICKER_IMAGE);
@@ -199,49 +219,7 @@ export class MessageHandler {
     }
   }
 
-  static async handleAdminCommands(bot, text) {
-    const lower = text.toLowerCase();
-    const ownerNumber = process.env.OWNER_NUMBER?.replace(/\D/g, "");
-    const senderNumber = bot.isFromMe
-      ? ownerNumber
-      : await bot.getSenderNumber();
-
-    if (senderNumber !== ownerNumber) return false;
-
-    if (lower.startsWith("!blacklist")) {
-      const parts = lower.split(" ");
-      const action = parts[1];
-
-      if (action === "add") {
-        if (!bot.isGroup) return bot.reply("⚠️ Use isso dentro do grupo.");
-        if (BlacklistManager.add(bot.jid))
-          await bot.reply("🚫 Grupo bloqueado!");
-        else await bot.reply("❌ Erro ao adicionar.");
-        return true;
-      }
-      if (action === "remove") {
-        if (BlacklistManager.remove(bot.jid))
-          await bot.reply("✅ Grupo desbloqueado!");
-        else await bot.reply("⚠️ Não estava bloqueado.");
-        return true;
-      }
-      if (action === "list") {
-        const list = BlacklistManager.list();
-        await bot.reply(
-          list.length ? `📋 *Blacklist:*\n${list.join("\n")}` : "📋 Vazia.",
-        );
-        return true;
-      }
-      if (action === "clear") {
-        BlacklistManager.clear();
-        await bot.reply("🗑️ Blacklist zerada!");
-        return true;
-      }
-      await bot.reply("Use: !blacklist <add|remove|list|clear>");
-      return true;
-    }
-    return false;
-  }
+  // --- Menus e Estatísticas ---
 
   static async sendStats(bot) {
     const dbStats = DatabaseService.getMetrics();
@@ -298,6 +276,8 @@ export class MessageHandler {
     return false;
   }
 
+  // --- Utilitários ---
+
   static detectCommand(text) {
     const lower = text.toLowerCase();
     if (lower === COMMANDS.MY_NUMBER) return COMMANDS.MY_NUMBER;
@@ -316,7 +296,6 @@ export class MessageHandler {
     if (lower.includes(COMMANDS.HELP) || lower === "!menu")
       return COMMANDS.HELP;
     if (lower.startsWith(COMMANDS.PERSONA)) return COMMANDS.PERSONA;
-    if (lower.startsWith(COMMANDS.VOTEKICK)) return COMMANDS.VOTEKICK;
     return null;
   }
 
@@ -338,7 +317,7 @@ export class MessageHandler {
     );
   }
 
-  // Legacy
+  /** Usado pelo MediaProcessor para identificar o tipo da mídia. */
   static getMessageType(message) {
     if (message.message?.imageMessage)
       return message.message.imageMessage.mimetype?.includes("gif")
@@ -348,12 +327,25 @@ export class MessageHandler {
       return message.message.videoMessage.gifPlayback ? "gif" : "video";
     return "image";
   }
+
   static async sendMessage(sock, jid, text) {
     try {
       if (sock) await sock.sendMessage(jid, { text });
     } catch (error) {
       Logger.error("Erro ao enviar:", error);
     }
+  }
+
+  // --- Easter Eggs ---
+
+  /** @private */
+  static async _handleEasterEggs(bot) {
+    await this.cururupulandiaJoke(bot, "beta", "559884323093");
+    await this.cururupulandiaJoke(bot, "aura", "559885900317");
+    await this.cururupulandiaJoke(bot, "incel", "559881855378");
+    await this.cururupulandiaJoke(bot, "desempregado", "559881824122");
+    await this.cururupulandiaJoke(bot, "twins", "558192658202");
+    await this.cururupulandiaJoke(bot, "twins", "559881824122");
   }
 
   static async cururupulandiaJoke(bot, triggerWord, targetNumber) {

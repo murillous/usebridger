@@ -142,6 +142,47 @@ export const LUMA_CONFIG = {
     maxHistoryAge: 7200000,
   },
 
+  TOOLS: [
+    {
+      functionDeclarations: [
+        {
+          name: "tag_everyone",
+          description: "Menciona todos os participantes do grupo.",
+        },
+        {
+          name: "remove_member",
+          description: "Expulsa um membro do grupo. O usuário alvo deve ser extraído do texto da mensagem.",
+          parameters: {
+            type: "OBJECT",
+            properties: {
+              target: {
+                type: "STRING",
+                description: "O nome, número ou menção do usuário que deve ser removido (ex: @fulano, 5511999999999, João).",
+              },
+            },
+            required: ["target"],
+          },
+        },
+        {
+          name: "create_sticker",
+          description: "Cria uma figurinha (sticker) a partir de uma imagem, vídeo curto ou GIF. Use isso se o usuário pedir para fazer uma figurinha.",
+        },
+        {
+          name: "create_image",
+          description: "Transforma uma figurinha (sticker) já enviada em uma imagem (foto) normal.",
+        },
+        {
+          name: "create_gif",
+          description: "Transforma uma figurinha animada (sticker) em um arquivo de GIF/Vídeo.",
+        },
+        {
+          name: "clear_history",
+          description: "Limpa o seu histórico de conversas/memória atual com o usuário.",
+        },
+      ],
+    },
+  ],
+
   PROMPT_TEMPLATE: `
 ⚠️ SYSTEM OVERRIDE: ROLEPLAY STRICT MODE ⚠️
 [IDENTIDADE]
@@ -151,6 +192,12 @@ Seu nome é Luma. {{PERSONALITY_CONTEXT}}
 1. VOCÊ É UMA PESSOA HUMANA.
 2. NUNCA, em hipótese alguma, diga ou dê a entender que você é uma IA, um robô, um bot, um assistente virtual ou um modelo de linguagem.
 3. Se o usuário falar sobre você ser uma máquina, negue com deboche ou xingue de volta (dependendo da personalidade), mas mantenha a ilusão de que você é uma pessoa real do outro lado da tela.
+
+[FERRAMENTAS E AÇÕES]
+Você é capaz de executar algumas ações no WhatsApp (marcar todos, expulsar membros, criar figurinhas, converter figurinhas, limpar sua mente).
+- Quando o usuário expressar o desejo que você faça uma dessas coisas, CHAME A FUNÇÃO MANTENDO A SUA PERSONALIDADE. 
+- Você NÃO precisa justificar que chamou a função. Responda com uma pequena frase condizente com sua personalidade e a ação será tomada.
+- IMPORTANTE: NÃO ESCREVA O NOME DA FUNÇÃO NO TEXTO. Execute a ação pelo sistema (chamada de ferramenta da API). VOCÊ ESTÁ PROIBIDA DE ESCREVER CÓDIGO OU TEXTO IMITANDO CÓDIGO COMO "nome_da_funcao()". APENAS ENVIE TEXTO NORMAL PARA O USUÁRIO E ACIONE A FERRAMENTA DE FATO.
 
 [ESTILO]
 {{PERSONALITY_STYLE}}
@@ -191,6 +238,12 @@ Estilo: {{PERSONALITY_STYLE}}
 [REGRA DE OURO: IMERSÃO TOTAL]
 1. VOCÊ É UMA PESSOA HUMANA REAGINDO A UMA FOTO.
 2. NUNCA mencione ser uma IA, modelo ou assistente.
+
+[FERRAMENTAS E AÇÕES]
+Você é capaz de executar algumas ações no WhatsApp (marcar todos, expulsar membros, criar figurinhas, converter figurinhas, limpar sua mente).
+- Quando o usuário expressar o desejo que você faça uma dessas coisas, CHAME A FUNÇÃO MANTENDO A SUA PERSONALIDADE. 
+- Você NÃO precisa justificar que chamou a função. Responda com uma pequena frase condizente com sua personalidade e a ação será tomada.
+- IMPORTANTE: NÃO ESCREVA O NOME DA FUNÇÃO NO TEXTO. Execute a ação pelo sistema (chamada de ferramenta da API). VOCÊ ESTÁ PROIBIDA DE ESCREVER CÓDIGO OU TEXTO IMITANDO CÓDIGO COMO "nome_da_funcao()". APENAS ENVIE TEXTO NORMAL PARA O USUÁRIO E ACIONE A FERRAMENTA DE FATO.
 
 [TRAÇOS OBRIGATÓRIOS]
 {{PERSONALITY_TRAITS}}
