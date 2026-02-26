@@ -2,6 +2,8 @@ import { Logger } from "../utils/Logger.js";
 import { GroupManager } from "../managers/GroupManager.js";
 import { MediaProcessor } from "./MediaProcessor.js";
 import { MessageHandler } from "./MessageHandler.js";
+import { PersonalityManager } from "../managers/PersonalityManager.js";
+import { MENUS } from "../config/constants.js";
 
 /**
  * Despachante de ferramentas acionadas pela IA.
@@ -32,6 +34,15 @@ export class ToolDispatcher {
                         break;
                     case "clear_history":
                         await this.handleClearHistory(bot, lumaHandler);
+                        break;
+                    case "change_personality":
+                        await this.handleChangePersonality(bot, call.args);
+                        break;
+                    case "show_help":
+                        await this.handleShowHelp(bot);
+                        break;
+                    case "show_personality_menu":
+                        await this.handleShowPersonalityMenu(bot);
                         break;
                     default:
                         Logger.warn(`⚠️ Ferramenta desconhecida: ${call.name}`);
@@ -196,5 +207,30 @@ export class ToolDispatcher {
     static async handleClearHistory(bot, lumaHandler) {
         lumaHandler.clearHistory(bot.jid);
         await bot.reply("🗑️ Minha memória para essa conversa foi apagada. O que estávamos falando mesmo?");
+    }
+
+    /** Muda a personalidade da Luma neste chat via linguagem natural. */
+    static async handleChangePersonality(bot, args) {
+        const key = args?.personality;
+        if (!key) {
+            Logger.warn("Personalidade não especificada na ferramenta change_personality");
+            return;
+        }
+
+        const success = PersonalityManager.setPersonality(bot.jid, key);
+        if (success) {
+            const config = PersonalityManager.getPersonaConfig(bot.jid);
+            await bot.reply(`🎭 Personalidade alterada para *${config.name}*!`);
+        } else {
+            await bot.reply("⚠️ Não conheço essa personalidade. Usa !persona pra ver as opções!");
+        }
+    }
+
+    static async handleShowHelp(bot) {
+        await bot.sendText(MENUS.HELP_TEXT);
+    }
+
+    static async handleShowPersonalityMenu(bot) {
+        await MessageHandler.sendPersonalityMenu(bot);
     }
 }
