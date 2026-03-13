@@ -220,36 +220,28 @@ export class BaileysAdapter {
 
   // --- Detecção de Mídia ---
 
-  /** Verifica se há conteúdo visual (imagem, vídeo, sticker) na mensagem ou no quoted. */
+  /** Verifica se há conteúdo visual (imagem, vídeo, sticker) na mensagem em si. */
   get hasVisualContent() {
     const msg = this.innerMessage;
-    const quotedInner = BaileysAdapter.unwrapMessage(this.quotedMessage);
 
     return !!(
       msg?.imageMessage ||
       msg?.videoMessage ||
-      msg?.stickerMessage ||
-      quotedInner?.imageMessage ||
-      quotedInner?.videoMessage ||
-      quotedInner?.stickerMessage
+      msg?.stickerMessage
     );
   }
 
   get hasMedia() {
     const msg = this.innerMessage;
-    const quotedInner = BaileysAdapter.unwrapMessage(this.quotedMessage);
     return !!(
       msg?.imageMessage ||
-      msg?.videoMessage ||
-      quotedInner?.imageMessage ||
-      quotedInner?.videoMessage
+      msg?.videoMessage
     );
   }
 
   get hasSticker() {
     const msg = this.innerMessage;
-    const quotedInner = BaileysAdapter.unwrapMessage(this.quotedMessage);
-    return !!(msg?.stickerMessage || quotedInner?.stickerMessage);
+    return !!(msg?.stickerMessage);
   }
 
   /**

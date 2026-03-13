@@ -346,6 +346,9 @@ export class MessageHandler {
     await this.cururupulandiaJoke(bot, "desempregado", "559881824122");
     await this.cururupulandiaJoke(bot, "twins", "558192658202");
     await this.cururupulandiaJoke(bot, "twins", "559881824122");
+    await this.cururupulandiaJoke(bot, "ei", "559888966906");
+    await this.cururupulandiaJoke(bot, "67", "559888966906");
+    await this.cururupulandiaJoke(bot, "insano", "559888966906");
   }
 
   static async cururupulandiaJoke(bot, triggerWord, targetNumber) {

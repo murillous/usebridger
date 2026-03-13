@@ -118,8 +118,7 @@ export class MediaProcessor {
     try {
       const metadata = await ImageProcessor.getMetadata(buffer);
       Logger.info(
-        `📐 Dimensões: ${metadata.width}x${metadata.height}, páginas: ${
-          metadata.pages || 1
+        `📐 Dimensões: ${metadata.width}x${metadata.height}, páginas: ${metadata.pages || 1
         }`
       );
 
@@ -225,7 +224,21 @@ export class MediaProcessor {
 
   static async downloadMedia(message, sock) {
     try {
-      return await downloadMediaMessage(
+      if (!message || !message.message) {
+        Logger.error("❌ Falha no download: Objeto de mensagem inválido ou nulo");
+        return null;
+      }
+
+      const msgType = Object.keys(message.message)[0];
+      const mediaContent = message.message[msgType];
+
+      Logger.info(`📥 Iniciando download de mídia (tipo: ${msgType})...`);
+
+      if (mediaContent && !mediaContent.mediaKey && !mediaContent.url && !mediaContent.directPath) {
+        Logger.warn(`⚠️ Mídia do tipo ${msgType} pode estar sem mediaKey válido. O download pode falhar.`);
+      }
+
+      const buffer = await downloadMediaMessage(
         message,
         "buffer",
         {},
@@ -234,8 +247,21 @@ export class MediaProcessor {
           reuploadRequest: sock.updateMediaMessage,
         }
       );
+
+      if (buffer) {
+        Logger.info(`✅ Download concluído. Tamanho: ${(buffer.length / 1024).toFixed(1)} KB`);
+      }
+      return buffer;
     } catch (error) {
-      Logger.error("Erro ao baixar mídia:", error);
+      Logger.error(`❌ Erro ao baixar mídia (${error.message}):`, error);
+
+      try {
+        const msgType = Object.keys(message?.message || {})[0];
+        const mediaContent = message?.message?.[msgType];
+        Logger.debug(`🔍 Detalhes para debug -> Tipo: ${msgType} | Tem mediaKey? ${!!mediaContent?.mediaKey} | Tem url? ${!!mediaContent?.url} | Tem directPath? ${!!mediaContent?.directPath}`);
+      } catch (e) {
+        // Ignora erro ao logar debug
+      }
       return null;
     }
   }
