@@ -8,6 +8,8 @@ import { DatabaseService } from "../services/Database.js";
 import { PersonalityManager } from "../managers/PersonalityManager.js";
 import { ToolDispatcher } from "./ToolDispatcher.js";
 import { AudioTranscriber } from "../services/AudioTranscriber.js";
+import { VideoDownloader } from "../services/VideoDownloader.js";
+import fs from "fs";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -36,7 +38,6 @@ export class MessageHandler {
    */
   static async process(bot) {
     const text = bot.body;
-    const jid = bot.jid;
 
     if (CONFIG.IGNORE_SELF && bot.isFromMe) return;
 
@@ -49,6 +50,14 @@ export class MessageHandler {
       if (command) {
         const handled = await this._executeExplicitCommand(bot, command, text);
         if (handled) return;
+      }
+
+      // Detecta links de Twitter/X ou Instagram e baixa o vídeo automaticamente
+      if (!command) {
+        const videoUrl = VideoDownloader.detectVideoUrl(text);
+        if (videoUrl) {
+          return await this.handleVideoDownload(bot, videoUrl);
+        }
       }
     }
 
@@ -218,13 +227,14 @@ export class MessageHandler {
         this.lumaHandler.clearHistory(jid);
         await bot.reply("🗑️ Memória da Luma limpa nesta conversa!");
         return true;
-      case COMMANDS.MY_NUMBER:
+      case COMMANDS.MY_NUMBER: {
         const senderNum = await bot.getSenderNumber();
         const chatId = bot.jid;
         await bot.reply(
           `📱 *Informações de ID*\n\n👤 *Seu Número:* ${senderNum}\n💬 *ID deste Chat:* ${chatId}`,
         );
         return true;
+      }
       case COMMANDS.STICKER:
       case COMMANDS.STICKER_SHORT:
         await this.handleStickerCommand(bot, text);
@@ -237,6 +247,15 @@ export class MessageHandler {
       case COMMANDS.GIF_SHORT:
         await this.handleGifCommand(bot);
         return true;
+      case COMMANDS.DOWNLOAD: {
+        const url = this.extractUrl(text);
+        if (url) {
+          await this.handleVideoDownload(bot, url);
+        } else {
+          await bot.reply(MESSAGES.VIDEO_NO_URL);
+        }
+        return true;
+      }
       case COMMANDS.EVERYONE:
         if (bot.isGroup) {
           await GroupManager.mentionEveryone(bot.raw, bot.socket);
@@ -421,6 +440,49 @@ export class MessageHandler {
     return false;
   }
 
+  // --- Download de Vídeos Sociais ---
+
+  /**
+   * Baixa o vídeo de um link do Twitter/X ou Instagram via yt-dlp
+   * e envia na conversa como vídeo.
+   */
+  static async handleVideoDownload(bot, url) {
+    let filePath = null;
+    try {
+      await bot.react("⏳");
+      Logger.info(`🎬 Iniciando download de vídeo social: ${url}`);
+
+      filePath = await VideoDownloader.download(url);
+
+      const videoBuffer = fs.readFileSync(filePath);
+      await bot.socket.sendMessage(bot.jid, {
+        video: videoBuffer,
+        caption: MESSAGES.VIDEO_SENT,
+      });
+
+      Logger.info("✅ Vídeo social enviado com sucesso.");
+      await bot.react("✅");
+    } catch (error) {
+      Logger.error("❌ Erro no download de vídeo social:", error.message);
+
+      if (error.message?.includes("yt-dlp") && error.message?.includes("not found")) {
+        await bot.reply(MESSAGES.YTDLP_NOT_FOUND);
+      } else if (error.message?.includes("File is larger")) {
+        await bot.reply(MESSAGES.VIDEO_TOO_LARGE);
+      } else {
+        await bot.reply(MESSAGES.VIDEO_DOWNLOAD_ERROR);
+      }
+
+      await bot.react("❌");
+    } finally {
+      if (filePath) {
+        try {
+          fs.unlinkSync(filePath);
+        } catch (_) { /* ignora erro de limpeza */ }
+      }
+    }
+  }
+
   // --- Utilitários ---
 
   static detectCommand(text) {
@@ -441,6 +503,8 @@ export class MessageHandler {
     if (lower.includes(COMMANDS.HELP) || lower === "!menu")
       return COMMANDS.HELP;
     if (lower.startsWith(COMMANDS.PERSONA)) return COMMANDS.PERSONA;
+    if (lower.startsWith(COMMANDS.DOWNLOAD)) return COMMANDS.DOWNLOAD;
+    if (lower.startsWith(COMMANDS.DOWNLOAD_SHORT) && lower.length > 2) return COMMANDS.DOWNLOAD;
     return null;
   }
 

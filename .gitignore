@@ -4,3 +4,4 @@ auth_info
 blacklist.json
 data/*
 !data/luma_metrics.sqlite
+bin/

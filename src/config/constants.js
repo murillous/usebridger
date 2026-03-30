@@ -42,6 +42,8 @@ export const COMMANDS = {
   LUMA_CLEAR_SHORT: "!lc",
   LUMA_CLEAR_ALT: "!clear",
   MY_NUMBER: "!meunumero",
+  DOWNLOAD: "!download",
+  DOWNLOAD_SHORT: "!d",
 };
 
 export const MENUS = {
@@ -57,6 +59,7 @@ export const MENUS = {
     "• *!luma clear* (!lc ou !clear) - Limpa memória da conversa\n" +
     "• *!luma stats* (!ls) - Mostra estatísticas da Luma\n\n" +
     "🛠️ *UTILITÁRIOS*\n" +
+    "• *!download* (!d) - Baixa vídeo do Twitter/X ou Instagram\n" +
     "• *!meunumero* - Vê seu ID/Número\n" +
     "• *!help* - Mostra essa lista\n" +
     "• *@everyone* ou *@todos* - Marca todos os membros do grupo\n\n" +
@@ -99,4 +102,10 @@ export const MESSAGES = {
   CONVERSION_ERROR: "❌ Erro na conversão",
   GENERAL_ERROR: "❌ Erro",
   UNSUPPORTED_FORMAT: "❌ Formato não suportado ou arquivo corrompido.",
+  VIDEO_DOWNLOADING: "⏳ Baixando vídeo...",
+  VIDEO_SENT: "🎬 Pronto!",
+  VIDEO_TOO_LARGE: "❌ Vídeo muito grande para enviar (máx. ~50MB).",
+  VIDEO_DOWNLOAD_ERROR: "❌ Não consegui baixar esse vídeo. O conteúdo pode ser privado ou a URL inválida.",
+  VIDEO_NO_URL: "ℹ️ Cole o link do vídeo junto com o comando.\nEx: `!download https://x.com/...`",
+  YTDLP_NOT_FOUND: "❌ *yt-dlp* não está instalado. Instale com: `pip install yt-dlp`",
 };
