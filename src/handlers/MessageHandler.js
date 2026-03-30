@@ -182,12 +182,10 @@ export class MessageHandler {
         senderName
       );
 
-      const responseText = response.text;
-
-      if (responseText) {
-        const sentMessage = await bot.reply(responseText);
-        if (sentMessage?.key?.id) {
-          this.lumaHandler.saveLastBotMessage(bot.jid, sentMessage.key.id);
+      if (response.parts?.length > 0) {
+        const lastSent = await this._sendParts(bot, response.parts);
+        if (lastSent?.key?.id) {
+          this.lumaHandler.saveLastBotMessage(bot.jid, lastSent.key.id);
         }
       }
 
@@ -202,6 +200,29 @@ export class MessageHandler {
     } catch (error) {
       Logger.error("❌ Erro ao chamar Luma com mensagem injetada:", error);
     }
+  }
+
+  /**
+   * Envia uma lista de partes de texto em cadeia:
+   * a primeira cita a mensagem original do usuário,
+   * as seguintes citam a parte anterior do bot.
+   * @returns {Promise<object|null>} A última mensagem enviada
+   */
+  static async _sendParts(bot, parts) {
+    let lastSent = null;
+    for (const part of parts) {
+      if (!lastSent) {
+        // Primeira parte: cita a mensagem original do usuário
+        lastSent = await bot.reply(part);
+      } else {
+        // Partes seguintes: citam a parte anterior do bot
+        lastSent = await bot.socket.sendMessage(bot.jid, {
+          text: part,
+          quoted: lastSent,
+        });
+      }
+    }
+    return lastSent;
   }
 
   /**
@@ -311,12 +332,10 @@ export class MessageHandler {
         senderName,
       );
 
-      const responseText = response.text;
-
-      if (responseText) {
-        const sentMessage = await bot.reply(responseText);
-        if (sentMessage?.key?.id) {
-          this.lumaHandler.saveLastBotMessage(bot.jid, sentMessage.key.id);
+      if (response.parts?.length > 0) {
+        const lastSent = await this._sendParts(bot, response.parts);
+        if (lastSent?.key?.id) {
+          this.lumaHandler.saveLastBotMessage(bot.jid, lastSent.key.id);
         }
       }
 

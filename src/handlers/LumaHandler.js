@@ -76,6 +76,7 @@ export class LumaHandler {
 
       return {
         text: cleanedResponse,
+        parts: this.splitIntoParts(cleanedResponse),
         toolCalls: response.functionCalls || []
       };
     } catch (error) {
@@ -147,18 +148,61 @@ export class LumaHandler {
 
   _cleanResponseText(text) {
     if (!text) return "";
-    let cleaned = text
+    return text
       .trim()
       .replace(/<think>[\s\S]*?<\/think>/gi, "")
       .replace(/^Luma:\s*/i, "")
       .trim();
+  }
 
-    if (cleaned.length > LUMA_CONFIG.TECHNICAL.maxResponseLength) {
-      cleaned =
-        cleaned.substring(0, LUMA_CONFIG.TECHNICAL.maxResponseLength - 3) +
-        "...";
+  /**
+   * Divide a resposta em partes para envio sequencial no WhatsApp.
+   * Usa o separador [PARTE] instruído no prompt.
+   * Se a IA não usou o separador mas a resposta for longa,
+   * divide em pontos naturais (fim de frase).
+   */
+  splitIntoParts(text) {
+    if (!text) return [];
+    const maxLen = LUMA_CONFIG.TECHNICAL.maxResponseLength;
+    const maxParts = LUMA_CONFIG.TECHNICAL.maxParts;
+
+    // Divide pelo separador explícito da IA
+    const byMarker = text
+      .split("[PARTE]")
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0)
+      .slice(0, maxParts);
+
+    if (byMarker.length > 1) return byMarker;
+
+    // Fallback: resposta sem separador mas dentro do limite → retorna como está
+    if (text.length <= maxLen) return [text];
+
+    // Fallback: divide em pontos naturais (fim de frase) sem cortar palavras
+    const parts = [];
+    let remaining = text;
+
+    while (remaining.length > 0 && parts.length < maxParts) {
+      if (remaining.length <= maxLen) {
+        parts.push(remaining);
+        break;
+      }
+
+      let cutAt = maxLen;
+      const breaks = [". ", "! ", "? ", "\n", "; "];
+      for (const br of breaks) {
+        const idx = remaining.lastIndexOf(br, maxLen);
+        if (idx > maxLen * 0.4) {
+          cutAt = idx + br.length;
+          break;
+        }
+      }
+
+      parts.push(remaining.substring(0, cutAt).trim());
+      remaining = remaining.substring(cutAt).trim();
     }
-    return cleaned;
+
+    return parts.filter((p) => p.length > 0);
   }
 
   // --- Histórico de Conversa ---

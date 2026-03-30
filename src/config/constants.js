@@ -106,5 +106,4 @@ export const MESSAGES = {
   VIDEO_TOO_LARGE: "❌ Vídeo muito grande para enviar (máx. ~50MB).",
   VIDEO_DOWNLOAD_ERROR: "❌ Não consegui baixar esse vídeo. O conteúdo pode ser privado ou a URL inválida.",
   VIDEO_NO_URL: "ℹ️ Cole o link do vídeo junto com o comando.\nEx: `!download https://x.com/...`",
-  YTDLP_NOT_FOUND: "❌ *yt-dlp* não está instalado. Instale com: `pip install yt-dlp`",
 };
