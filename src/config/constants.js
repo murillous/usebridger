@@ -35,15 +35,14 @@ export const COMMANDS = {
   HELP: "!help",
   PERSONA: "!persona",
   EVERYONE: "@everyone",
-
+  DOWNLOAD_SHORT: "!d",
+  DOWNLOAD: "!download",
   LUMA_STATS: "!luma stats",
   LUMA_STATS_SHORT: "!ls",
   LUMA_CLEAR: "!luma clear",
   LUMA_CLEAR_SHORT: "!lc",
   LUMA_CLEAR_ALT: "!clear",
   MY_NUMBER: "!meunumero",
-  DOWNLOAD: "!download",
-  DOWNLOAD_SHORT: "!d",
 };
 
 export const MENUS = {

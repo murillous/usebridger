@@ -257,6 +257,7 @@ export class MessageHandler {
         return true;
       }
       case COMMANDS.EVERYONE:
+        await bot.react("📢");
         if (bot.isGroup) {
           await GroupManager.mentionEveryone(bot.raw, bot.socket);
         } else {
@@ -333,52 +334,65 @@ export class MessageHandler {
   // --- Comandos de Mídia ---
 
   static async handleStickerCommand(bot, text) {
+    await bot.react("⏳");
     const url = this.extractUrl(text);
     if (url) {
       await MediaProcessor.processUrlToSticker(url, bot.socket, bot.raw);
       this.incrementMediaStats("stickers_created");
+      await bot.react("✅");
       return;
     }
     if (bot.hasMedia) {
       await MediaProcessor.processToSticker(bot.raw, bot.socket);
       this.incrementMediaStats("stickers_created");
+      await bot.react("✅");
       return;
     }
     const quoted = bot.getQuotedAdapter();
     if (quoted?.hasVisualContent) {
       await MediaProcessor.processToSticker(quoted.raw, bot.socket, bot.jid);
       this.incrementMediaStats("stickers_created");
+      await bot.react("✅");
     } else {
+      await bot.react("❌");
       await bot.reply(MESSAGES.REPLY_MEDIA_STICKER);
     }
   }
 
   static async handleImageCommand(bot) {
+    await bot.react("⏳");
     if (bot.hasSticker) {
       await MediaProcessor.processStickerToImage(bot.raw, bot.socket);
       this.incrementMediaStats("images_created");
+      await bot.react("✅");
       return;
     }
     const quoted = bot.getQuotedAdapter();
     if (quoted?.hasSticker) {
       await MediaProcessor.processStickerToImage(quoted.raw, bot.socket, bot.jid);
       this.incrementMediaStats("images_created");
+      await bot.react("✅");
     } else {
+      await bot.react("❌");
       await bot.reply(MESSAGES.REPLY_STICKER_IMAGE);
     }
   }
 
   static async handleGifCommand(bot) {
+    await bot.react("⏳");
     if (bot.hasSticker) {
       await MediaProcessor.processStickerToGif(bot.raw, bot.socket);
       this.incrementMediaStats("gifs_created");
+      await bot.react("✅");
       return;
     }
     const quoted = bot.getQuotedAdapter();
     if (quoted?.hasSticker) {
       await MediaProcessor.processStickerToGif(quoted.raw, bot.socket, bot.jid);
       this.incrementMediaStats("gifs_created");
+      await bot.react("✅");
     } else {
+      await bot.react("❌");
       await bot.reply(MESSAGES.REPLY_STICKER_GIF);
     }
   }
@@ -399,7 +413,8 @@ export class MessageHandler {
       `\n🎨 *Mídia Gerada:*\n` +
       `• Figurinhas: ${dbStats.stickers_created || 0}\n` +
       `• Imagens: ${dbStats.images_created || 0}\n` +
-      `• GIFs: ${dbStats.gifs_created || 0}\n\n` +
+      `• GIFs: ${dbStats.gifs_created || 0}\n` +
+      `• Vídeos Baixados: ${dbStats.videos_downloaded || 0}\n\n` +
       `📈 *Total de Interações:* ${dbStats.total_messages || 0}`;
 
     await bot.sendText(statsText);
@@ -461,6 +476,8 @@ export class MessageHandler {
       });
 
       Logger.info("✅ Vídeo social enviado com sucesso.");
+      DatabaseService.incrementMetric("videos_downloaded");
+      DatabaseService.incrementMetric("total_messages");
       await bot.react("✅");
     } catch (error) {
       Logger.error("❌ Erro no download de vídeo social:", error.message);
