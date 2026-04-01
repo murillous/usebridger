@@ -39,25 +39,14 @@ export class VideoDownloader {
   }
 
   /**
-   * Retorna o caminho do binário yt-dlp.
-   * Tenta: binário local (bin/yt-dlp.exe) → yt-dlp no PATH.
-   * Se não encontrar em nenhum, baixa automaticamente.
+   * Retorna o caminho do binário yt-dlp local.
+   * Se não existir no projeto, baixa automaticamente.
    */
   static async getBinaryPath() {
-    // 1. Binário local no projeto
-    if (fs.existsSync(YTDLP_BIN)) return YTDLP_BIN;
-
-    // 2. Tenta o yt-dlp do PATH
-    try {
-      await execAsync("yt-dlp --version", { timeout: 5000 });
-      return "yt-dlp";
-    } catch (_) {
-      // Não está no PATH
+    if (!fs.existsSync(YTDLP_BIN)) {
+      Logger.info("📦 yt-dlp não encontrado. Baixando binário standalone...");
+      await this._downloadBinary();
     }
-
-    // 3. Nenhum encontrado → baixa automaticamente
-    Logger.info("📦 yt-dlp não encontrado. Baixando binário standalone...");
-    await this._downloadBinary();
     return YTDLP_BIN;
   }
 
