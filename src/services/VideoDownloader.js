@@ -8,9 +8,11 @@ import { Logger } from "../utils/Logger.js";
 const execAsync = promisify(exec);
 
 // Caminho do binário standalone do yt-dlp dentro do projeto
-const YTDLP_BIN = path.join("bin", "yt-dlp.exe");
-const YTDLP_URL =
-  "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe";
+const isWindows = process.platform === "win32";
+const YTDLP_BIN = path.join("bin", isWindows ? "yt-dlp.exe" : "yt-dlp");
+const YTDLP_URL = isWindows
+  ? "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
+  : "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp";
 
 /**
  * Serviço de download de vídeos de redes sociais via yt-dlp.
@@ -66,6 +68,7 @@ export class VideoDownloader {
 
     const buffer = Buffer.from(await response.arrayBuffer());
     fs.writeFileSync(YTDLP_BIN, buffer);
+    if (!isWindows) fs.chmodSync(YTDLP_BIN, 0o755);
 
     Logger.info(`✅ yt-dlp baixado com sucesso → ${YTDLP_BIN}`);
   }
