@@ -217,11 +217,13 @@ class DatabaseService {
        │                 │
        │         ┌───────┴──────┐
        │         │              │
-   ┌───▼────┐ ┌──▼──────┐ ┌────▼─────┐
-   │  AI    │ │ Image   │ │ Video    │
-   │Service │ │Processor│ │Converter │
-   └────────┘ └─────────┘ └──────────┘
+   ┌───▼────┐ ┌──▼──────┐ ┌────▼─────┐ ┌────────────────┐ ┌─────────────────────┐
+   │  AI    │ │ Image   │ │ Video    │ │ Video          │ │ WebSearch           │
+   │Service │ │Processor│ │Converter │ │ Downloader     │ │ Service             │
+   └────────┘ └─────────┘ └──────────┘ └────────────────┘ └─────────────────────┘
 ```
+
+O `SpontaneousHandler` é um módulo paralelo ao `MessageHandler`: ele processa mensagens de grupo que não foram capturadas pelo fluxo normal e decide, de forma probabilística, se a Luma deve interagir.
 
 ## 🔀 Fluxo de Dados Detalhado
 
@@ -262,6 +264,59 @@ class DatabaseService {
 7. MediaProcessor retorna sticker pronto
 8. MessageHandler envia via sock.sendMessage()
 9. DatabaseService.incrementMetric('stickers_created')
+```
+
+### Cenário 3: Luma recebe pergunta que precisa de busca na internet
+
+```
+1. Usuário: "Luma, quem ganhou a Copa do Mundo 2026?"
+2. LumaHandler detecta que precisa buscar informação atual
+3. LumaHandler chama WebSearchService.search(query, geminiClient, model)
+4. WebSearchService:
+   a. Verifica se TAVILY_API_KEY existe e se cota não foi esgotada
+   b. Tenta Tavily: POST https://api.tavily.com/search
+   c. Se cota 429 → flag tavilyQuotaExceeded = true → usa Google Grounding
+   d. Google Grounding: chama Gemini com tools: [{ googleSearch: {} }]
+5. Resultado da busca injetado no contexto da resposta
+6. Luma responde com informação atualizada
+```
+
+### Cenário 4: SpontaneousHandler — Luma reage sem ser chamada
+
+```
+1. Mensagem normal chega em grupo
+2. MessageHandler não detecta comando nem gatilho da Luma
+3. SpontaneousHandler.handle(bot, lumaHandler) é chamado
+4. SpontaneousHandler:
+   a. Verifica se está habilitado (LUMA_CONFIG.SPONTANEOUS.enabled)
+   b. Checa cooldown: última interação neste grupo < 8 minutos? → ignora
+   c. Sorteia: Math.random() < 0.04 (4%)? → continua ou ignora
+   d. Sorteia tipo: react (35%) | reply (35%) | topic (30%)
+5. Se "react": bot.react(emoji aleatório) — fim
+6. Se "reply": LumaHandler gera resposta para a mensagem atual (quoted)
+7. Se "topic": LumaHandler gera assunto aleatório e envia standalone
+8. Cooldown atualizado para este grupo
+```
+
+### Cenário 5: Usuário usa `!download https://x.com/...`
+
+```
+1. WhatsApp → Baileys emite evento "messages.upsert"
+2. index.js → MessageHandler.process()
+3. MessageHandler detecta: "é comando !download com URL"
+4. MessageHandler chama VideoDownloader.download(url)
+5. VideoDownloader:
+   a. Verifica se yt-dlp.exe existe em bin/ (baixa se necessário)
+   b. Executa yt-dlp com formato bestvideo[height<=720]+bestaudio
+   c. Salva arquivo temporário em temp/
+6. MessageHandler chama VideoConverter.remuxForMobile(filePath)
+7. VideoConverter:
+   a. Re-encoda vídeo para H.264 (libx264 ultrafast)
+   b. Copia stream de áudio sem re-encoding
+   c. Aplica -movflags faststart (compatibilidade iOS)
+8. MessageHandler lê o arquivo convertido e envia via sock.sendMessage()
+9. Arquivos temporários são removidos no finally
+10. DatabaseService.incrementMetric('videos_downloaded')
 ```
 
 ## 🛡️ Camadas de Segurança

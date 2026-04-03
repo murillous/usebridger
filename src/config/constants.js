@@ -14,7 +14,7 @@ export const CONFIG = {
   MAX_FILE_SIZE: 800,
   VIDEO_DOWNLOAD_MAX_SIZE_MB: 100,
   VIDEO_DOWNLOAD_TIMEOUT_MS: 240000,
-  VIDEO_DOWNLOAD_FORMAT: "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+  VIDEO_DOWNLOAD_FORMAT: "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]/best",
   WEBP_QUALITY: 75,
   MAX_GIF_FRAMES: 50,
   TIMEOUT_MS: 60000,

@@ -15,7 +15,33 @@ Uma assistente virtual com personalidade dinâmica, visão computacional, ferram
 
 ---
 
-## ✨ O Que Há de Novo? (v4.0)
+## ✨ O Que Há de Novo? (v5.0)
+
+### 📥 Download de Vídeos de Redes Sociais
+Baixe vídeos do **Twitter/X** e **Instagram** diretamente no WhatsApp com um comando:
+- `!download https://x.com/...` ou `!d <url>`
+- Suporte a Reels, posts, stories e tweets com vídeo
+- Download automático via **yt-dlp** (binário standalone, sem instalação manual)
+- Limite de **720p** para downloads rápidos e leves
+- Re-encoding automático para **H.264 + faststart**, garantindo compatibilidade com **iOS**
+
+### 🔍 Motor de Busca na Internet
+A Luma agora pode pesquisar na internet quando precisar de informações atualizadas:
+- Provedor principal: **Tavily API** — resultados rápidos e relevantes
+- Fallback automático: **Google Search Grounding** (via Gemini) quando a cota do Tavily for esgotada
+- A troca de provedor é silenciosa e automática, sem interrupção para o usuário
+
+### 🎲 Interações Espontâneas (SpontaneousHandler)
+A Luma agora "ganha vida" em grupos sem precisar ser chamada:
+- **4% de chance** de interagir em cada mensagem recebida (cooldown de 8 min por grupo)
+- Três tipos de interação sorteados por peso:
+  - **Reagir** (35%) — reage com emoji à mensagem
+  - **Responder** (35%) — comenta a mensagem atual sem ter sido chamada
+  - **Puxar assunto** (30%) — inicia um assunto aleatório do nada
+
+---
+
+## ✨ v4.0
 
 ### 🔧 Ferramentas por Linguagem Natural (Tool Calling)
 A Luma agora aciona ferramentas automaticamente quando você pede por linguagem natural:
@@ -160,6 +186,7 @@ Crie um arquivo `.env` na raiz do projeto:
 ```env
 GEMINI_API_KEY=sua_chave_aqui
 OWNER_NUMBER=5598988776655
+TAVILY_API_KEY=sua_chave_aqui   # Opcional — busca na internet
 ```
 
 **Obter API Key:**
@@ -232,6 +259,7 @@ Limpa o histórico de conversa com a Luma no chat atual.
 | `!image` / `!i` | Sticker → Imagem PNG | Envie ou responda sticker |
 | `!gif` / `!g` | Sticker → GIF/MP4 | Envie ou responda sticker animado |
 | `!sticker <url>` | Figurinha via URL | Cole o link direto |
+| `!download` / `!d` | Baixar vídeo de rede social | `!d <url do Twitter/X ou Instagram>` |
 
 ### 👥 Gerenciamento de Grupos
 
@@ -260,6 +288,7 @@ lumabot/
 │   │   ├── LumaHandler.js       # Pipeline da IA
 │   │   ├── MediaProcessor.js    # Processamento de mídia
 │   │   ├── MessageHandler.js    # Controlador de mensagens
+│   │   ├── SpontaneousHandler.js # Interações espontâneas em grupos
 │   │   └── ToolDispatcher.js    # Despacho de ferramentas da IA
 │   ├── managers/
 │   │   ├── ConnectionManager.js    # Conexão WhatsApp
@@ -267,14 +296,18 @@ lumabot/
 │   │   └── PersonalityManager.js   # Personalidades por chat
 │   ├── processors/
 │   │   ├── ImageProcessor.js    # Sharp - Imagens
-│   │   └── VideoConverter.js    # FFmpeg - Vídeos
+│   │   └── VideoConverter.js    # FFmpeg - Vídeos e remux
 │   ├── services/
 │   │   ├── AIService.js         # Cliente Google Gemini
-│   │   └── Database.js          # SQLite dual database
+│   │   ├── Database.js          # SQLite dual database
+│   │   ├── VideoDownloader.js   # Download via yt-dlp
+│   │   └── WebSearchService.js  # Tavily + Google Search Grounding
 │   └── utils/
 │       ├── Exif.js              # Metadados WebP
 │       ├── FileSystem.js        # Gerenciamento de arquivos
 │       └── Logger.js            # Sistema de logs
+├── bin/
+│   └── yt-dlp.exe               # Binário standalone (auto-download)
 ├── temp/                        # Arquivos temporários
 ├── auth_info/                   # Sessão do WhatsApp
 ├── .env                         # API Keys
@@ -409,6 +442,10 @@ Desenvolvido com [Baileys](https://github.com/WhiskeySockets/Baileys), [Sharp](h
 - ✅ Assistente virtual com IA, visão e tool calling
 - ✅ Sistema de personalidades dinâmicas
 - ✅ Ferramentas acionadas por linguagem natural
+- ✅ Busca na internet (Tavily + Google Search Grounding)
+- ✅ Interações espontâneas em grupos (SpontaneousHandler)
+- ✅ Download de vídeos do Twitter/X e Instagram
+- ✅ Compatibilidade de vídeo com iOS (H.264 + faststart)
 - ✅ Metadados profissionais (Exif)
 - ✅ Adaptador inteligente com unwrap de protocolos
 - ✅ Dual database system

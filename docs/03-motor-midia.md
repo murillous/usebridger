@@ -483,6 +483,78 @@ async function testStickerQuality() {
 }
 ```
 
+## 📥 Download de Vídeos de Redes Sociais
+
+O LumaBot usa o **yt-dlp** para baixar vídeos do Twitter/X e Instagram diretamente no chat.
+
+### Fluxo Completo
+
+```
+!download <url>
+    ↓
+VideoDownloader.download(url)     → yt-dlp salva MP4 em temp/
+    ↓
+VideoConverter.remuxForMobile()   → FFmpeg converte para H.264 + faststart
+    ↓
+sock.sendMessage({ video: buffer }) → Enviado ao WhatsApp
+    ↓
+Arquivos temporários removidos
+```
+
+### Por que Re-encodar?
+
+Vídeos baixados de redes sociais frequentemente usam codecs como **VP9**, **H.265** ou **AV1**, que não são reproduzidos corretamente no iOS via WhatsApp. O re-encoding garante:
+
+| Problema | Solução |
+|----------|---------|
+| Codec incompatível (VP9/H.265/AV1) | `-c:v libx264` (H.264 universal) |
+| Vídeo não carrega no iOS | `-movflags faststart` (moov atom no início) |
+| Pixel format incompatível | `-pix_fmt yuv420p` |
+
+### O Comando FFmpeg (remuxForMobile)
+
+```bash
+ffmpeg -y -i input.mp4 \
+  -c:v libx264 \          # Re-encoda vídeo para H.264
+  -preset ultrafast \     # Velocidade máxima de encoding
+  -crf 23 \               # Qualidade (0=melhor, 51=pior) — 23 é o padrão
+  -pix_fmt yuv420p \      # Pixel format universal
+  -c:a copy \             # Copia áudio sem re-encoding (muito mais rápido)
+  -movflags faststart \   # Coloca metadados no início (obrigatório iOS)
+  output.mp4
+```
+
+**Por que `ultrafast` e não `fast`?**
+O preset `ultrafast` é ~4x mais rápido que `fast` com uma leve diferença de compressão (arquivo ligeiramente maior). Para vídeos de redes sociais já comprimidos, essa troca é ideal.
+
+**Por que `-c:a copy`?**
+O áudio baixado pelo yt-dlp já é AAC (padrão do mp4), compatível com iOS. Re-encodar seria desperdício de tempo sem ganho.
+
+### Limite de Resolução (720p)
+
+O formato configurado em `constants.js` limita o download a 720p:
+
+```javascript
+VIDEO_DOWNLOAD_FORMAT: "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]/best"
+```
+
+**Motivo**: O WhatsApp só envia em HD se o usuário ativar a opção manualmente. Baixar em 1080p/4K seria desperdício de banda, armazenamento e tempo de encoding sem benefício visível.
+
+### Download Automático do yt-dlp
+
+O binário `yt-dlp.exe` é baixado automaticamente na primeira execução, sem necessidade de instalação manual:
+
+```javascript
+// src/services/VideoDownloader.js
+static async getBinaryPath() {
+    if (!fs.existsSync(YTDLP_BIN)) {
+        // Baixa de github.com/yt-dlp/yt-dlp/releases/latest
+        await this._downloadBinary();
+    }
+    return YTDLP_BIN;
+}
+```
+
 ---
 
 **Próximo passo**: Entenda o sistema de banco de dados em [04-banco-dados.md](./04-banco-dados.md)

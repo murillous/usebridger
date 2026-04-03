@@ -57,6 +57,22 @@ export class VideoConverter {
     return output;
   }
 
+  /**
+   * Remux rápido para compatibilidade com iOS: apenas reposiciona o moov atom
+   * (faststart) sem re-encodar. Quase instantâneo independente do tamanho.
+   * Usa -c:v copy -c:a copy, então o codec original é preservado.
+   * Se o vídeo já for H.264 (padrão do yt-dlp), funciona perfeitamente no iOS.
+   */
+  static async remuxForMobile(input) {
+    const output = this.createTempPath("mp4", "video");
+    // Re-encoda só o vídeo para H.264 (ultrafast = mínimo de CPU) e copia o áudio.
+    // Garante compatibilidade com iOS independente do codec original (VP9, H.265, AV1...).
+    const cmd = `ffmpeg -y -i "${input}" -c:v libx264 -preset ultrafast -crf 23 -pix_fmt yuv420p -c:a copy -movflags faststart "${output}"`;
+
+    await execAsync(cmd);
+    return output;
+  }
+
   static createTempPath(extension, prefix = "temp") {
     return path.join(CONFIG.TEMP_DIR, `${prefix}_${Date.now()}.${extension}`);
   }

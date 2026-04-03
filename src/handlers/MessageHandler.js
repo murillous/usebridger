@@ -9,6 +9,7 @@ import { PersonalityManager } from "../managers/PersonalityManager.js";
 import { ToolDispatcher } from "./ToolDispatcher.js";
 import { AudioTranscriber } from "../services/AudioTranscriber.js";
 import { VideoDownloader } from "../services/VideoDownloader.js";
+import { VideoConverter } from "../processors/VideoConverter.js";
 import { SpontaneousHandler } from "./SpontaneousHandler.js";
 import fs from "fs";
 import dotenv from "dotenv";
@@ -35,7 +36,7 @@ export class MessageHandler {
 
   /**
    * Ponto de entrada principal para cada mensagem recebida.
-   * Fluxo: validações → easter eggs → comandos → transcrição de áudio → Luma IA.
+   * Fluxo: validações → comandos → transcrição de áudio → Luma IA.
    */
   static async process(bot) {
     const text = bot.body;
@@ -491,13 +492,17 @@ export class MessageHandler {
    */
   static async handleVideoDownload(bot, url) {
     let filePath = null;
+    let convertedPath = null;
     try {
       await bot.react("⏳");
       Logger.info(`🎬 Iniciando download de vídeo social: ${url}`);
 
       filePath = await VideoDownloader.download(url);
 
-      const videoBuffer = fs.readFileSync(filePath);
+      Logger.info("🔄 Remuxando para compatibilidade com iOS...");
+      convertedPath = await VideoConverter.remuxForMobile(filePath);
+
+      const videoBuffer = fs.readFileSync(convertedPath);
       await bot.socket.sendMessage(bot.jid, {
         video: videoBuffer,
         caption: MESSAGES.VIDEO_SENT,
@@ -520,10 +525,10 @@ export class MessageHandler {
 
       await bot.react("❌");
     } finally {
-      if (filePath) {
-        try {
-          fs.unlinkSync(filePath);
-        } catch (_) { /* ignora erro de limpeza */ }
+      for (const f of [filePath, convertedPath]) {
+        if (f) {
+          try { fs.unlinkSync(f); } catch (_) { /* ignora erro de limpeza */ }
+        }
       }
     }
   }
@@ -594,22 +599,14 @@ export class MessageHandler {
 
   /** @private */
   static async _handleEasterEggs(bot) {
-    await this.cururupulandiaJoke(bot, "beta", "559884323093");
-    await this.cururupulandiaJoke(bot, "aura", "559885900317");
-    await this.cururupulandiaJoke(bot, "incel", "559881855378");
-    await this.cururupulandiaJoke(bot, "desempregado", "559881824122");
-    await this.cururupulandiaJoke(bot, "twins", "558192658202");
-    await this.cururupulandiaJoke(bot, "twins", "559881824122");
-    await this.cururupulandiaJoke(bot, "ei", "559888966906");
-    await this.cururupulandiaJoke(bot, "67", "559888966906");
-    await this.cururupulandiaJoke(bot, "insano", "559888966906");
+    await this.groupJoke(bot, "beta", "559884323093","120363203644262523@g.us");
   }
 
-  static async cururupulandiaJoke(bot, triggerWord, targetNumber) {
+  static async groupJoke(bot, triggerWord, targetNumber, targetGroup) {
     const text = bot.body;
     const jid = bot.jid;
 
-    if (bot.isGroup && jid === "120363203644262523@g.us" && text) {
+    if (bot.isGroup && jid === targetGroup && text) {
       const regex = new RegExp(triggerWord, "gi");
       const matches = text.match(regex);
 

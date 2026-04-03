@@ -119,8 +119,12 @@ Leia cada arquivo de documentação antes de contribuir. Entender a arquitetura 
 - **Sticker**: Figurinha do WhatsApp (formato WebP específico)
 - **Handler**: Módulo que recebe e processa eventos
 - **ToolDispatcher**: Despachante de ferramentas acionadas pela IA
+- **SpontaneousHandler**: Módulo que dispara interações da Luma em grupos sem ser chamada
 - **Processor**: Módulo que executa tarefas computacionais
 - **Tool Calling**: Mecanismo onde a IA aciona funções reais do bot
+- **Tavily**: Serviço de busca na internet usado como provedor principal pelo WebSearchService
+- **Google Search Grounding**: Ferramenta nativa do Gemini para busca na internet, usada como fallback
+- **yt-dlp**: Ferramenta CLI de download de vídeos de redes sociais (Twitter/X, Instagram)
 
 ## 🆘 Problemas Comuns
 

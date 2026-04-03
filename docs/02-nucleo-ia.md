@@ -466,6 +466,104 @@ async function testLuma() {
 testLuma();
 ```
 
+## 🔍 Motor de Busca na Internet
+
+A Luma pode buscar informações atualizadas usando o `WebSearchService`, que abstrai dois provedores com troca automática.
+
+### Estratégia de Providers
+
+```
+WebSearchService.search(query)
+    │
+    ├─ TAVILY_API_KEY existe e cota OK?
+    │       └─ SIM → _searchTavily(query)  ✓ rápido, resultados diretos
+    │
+    └─ NÃO (sem key ou cota 429)
+            └─ _searchWithGrounding(query)  ← Gemini + Google Search tool
+```
+
+### Tavily (Provedor Principal)
+
+```javascript
+// POST https://api.tavily.com/search
+{
+  api_key: process.env.TAVILY_API_KEY,
+  query,
+  search_depth: "basic",
+  max_results: 5,
+  include_answer: true   // Inclui resumo gerado pela Tavily
+}
+```
+
+Retorna até 4 resultados formatados + um resumo direto da resposta (`data.answer`), ideal para injetar no contexto da Luma.
+
+### Google Search Grounding (Fallback)
+
+Quando a cota do Tavily é esgotada (`HTTP 429`), o serviço troca automaticamente e permanece no fallback pelo resto da sessão (`tavilyQuotaExceeded = true`):
+
+```javascript
+// Chama Gemini com ferramenta de busca nativa
+await geminiClient.models.generateContent({
+    model,
+    contents: [{ role: "user", parts: [{ text: `Pesquise: ${query}` }] }],
+    config: {
+        tools: [{ googleSearch: {} }],   // Google Search Grounding
+        maxOutputTokens: 1024,
+    },
+});
+```
+
+A troca é silenciosa — o usuário não percebe a diferença.
+
+## 🎲 Interações Espontâneas (SpontaneousHandler)
+
+A Luma pode interagir em grupos sem ser chamada, simulando presença ativa na conversa.
+
+### Lógica de Disparo
+
+```javascript
+// Para cada mensagem de grupo que não acionou nenhum comando:
+SpontaneousHandler.handle(bot, lumaHandler)
+
+// Condições para disparar (todas devem ser verdadeiras):
+1. LUMA_CONFIG.SPONTANEOUS.enabled === true
+2. Date.now() - ultimaInteração[grupo] >= 8 minutos  (cooldown)
+3. Math.random() < 0.04                               (4% de chance)
+```
+
+### Tipos de Interação
+
+| Tipo | Peso | O que faz |
+|------|------|-----------|
+| **react** | 35% | Reage à mensagem com emoji aleatório do pool |
+| **reply** | 35% | Gera resposta com IA e envia como quoted reply |
+| **topic** | 30% | Gera assunto aleatório e envia standalone |
+
+### Configuração em `lumaConfig.js`
+
+```javascript
+SPONTANEOUS: {
+  enabled: true,
+  chance: 0.04,               // 4% por mensagem
+  cooldownMs: 8 * 60 * 1000,  // 8 min entre interações por grupo
+
+  typeWeights: {
+    REACT: 0.35,
+    REPLY: 0.35,
+    TOPIC: 0.30,
+  },
+
+  emojiPool: ["😂", "💀", "😭", "🤔", "👀", "😳", "🗿", ...],
+
+  prompts: {
+    REPLY: "...[sistema]: você notou essa mensagem. Reaja naturalmente: {message}",
+    TOPIC: "...[sistema]: você quer compartilhar algo aleatório. Seja espontânea.",
+  },
+}
+```
+
+Os prompts usam um prefixo de sistema que a Luma não revela ao usuário, mantendo a ilusão de naturalidade.
+
 ---
 
 **Próximo passo**: Aprenda sobre processamento de mídia em [03-motor-midia.md](./03-motor-midia.md)
