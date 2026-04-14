@@ -1,10 +1,8 @@
 <div align="center">
 
-# 🤖 LumaBot - Assistente de WhatsApp com IA & Stickers
+# 🤖 LumaBot
 
-**A evolução dos bots de WhatsApp.**
-
-Uma assistente virtual com personalidade dinâmica, visão computacional, ferramentas acionadas por linguagem natural e estúdio profissional de figurinhas.
+**Assistente de WhatsApp com IA, personalidades dinâmicas e dashboard de controle.**
 
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Baileys](https://img.shields.io/badge/Baileys-7.x-25D366?logo=whatsapp&logoColor=white)](https://github.com/WhiskeySockets/Baileys)
@@ -15,149 +13,118 @@ Uma assistente virtual com personalidade dinâmica, visão computacional, ferram
 
 ---
 
-## ✨ O Que Há de Novo? (v5.0)
+## Visão Geral
 
-### 📥 Download de Vídeos de Redes Sociais
-Baixe vídeos do **Twitter/X** e **Instagram** diretamente no WhatsApp com um comando:
-- `!download https://x.com/...` ou `!d <url>`
-- Suporte a Reels, posts, stories e tweets com vídeo
-- Download automático via **yt-dlp** (binário standalone, sem instalação manual)
-- Limite de **720p** para downloads rápidos e leves
-- Re-encoding automático para **H.264 + faststart**, garantindo compatibilidade com **iOS**
-
-### 🔍 Motor de Busca na Internet
-A Luma agora pode pesquisar na internet quando precisar de informações atualizadas:
-- Provedor principal: **Tavily API** — resultados rápidos e relevantes
-- Fallback automático: **Google Search Grounding** (via Gemini) quando a cota do Tavily for esgotada
-- A troca de provedor é silenciosa e automática, sem interrupção para o usuário
-
-### 🎲 Interações Espontâneas (SpontaneousHandler)
-A Luma agora "ganha vida" em grupos sem precisar ser chamada:
-- **Chance dinâmica** por atividade: 4% (grupo quieto) → 10% (grupo ativo) → 15% (imagem/sticker)
-- Cooldown de 8 min por grupo garante que ela não apareça demais
-- Três tipos de interação sorteados por peso:
-  - **Reagir** (35%) — reage com emoji à mensagem (só em texto)
-  - **Responder** (35%) — comenta a mensagem atual sem ter sido chamada
-  - **Puxar assunto** (30%) — inicia um assunto aleatório do nada (só em texto)
-- **Imagens e stickers** sempre disparam uma resposta comentando o visual (nunca react/topic)
+LumaBot é um bot de WhatsApp construído sobre o Baileys com uma assistente virtual chamada **Luma** — uma IA com personalidade que se passa por uma pessoa humana no chat. Inclui visão computacional, tool calling, transcrição de áudio, interações espontâneas em grupos, estúdio de mídia completo e um **dashboard web** para monitoramento e controle remoto.
 
 ---
 
-## ✨ v4.0
+## Funcionalidades
 
-### 🔧 Ferramentas por Linguagem Natural (Tool Calling)
-A Luma agora aciona ferramentas automaticamente quando você pede por linguagem natural:
-- "Luma, faz uma figurinha disso" → cria o sticker da mídia respondida
-- "Luma, transforma em imagem" → converte sticker → PNG
-- "Luma, transforma em gif" → converte sticker animado → GIF
-- "Luma, marca todo mundo" → menciona todos no grupo
-- "Luma, expulsa o Fulano" → remove membro (somente admins)
+### 🧠 Luma — Assistente Virtual
 
-### 🛡️ Adaptador Inteligente (BaileysAdapter)
-Novo sistema que desempacota automaticamente os protocolos do WhatsApp (mensagens temporárias, viewOnce, etc.), garantindo detecção de mídia 100% confiável mesmo em grupos com mensagens temporárias ativadas.
+- **Gemini 2.5 Flash** com fallback automático entre modelos
+- **Personalidades dinâmicas** por chat (Pensadora, Pistola, Good Vibes, Sênior)
+- **Visão computacional** — analisa imagens, stickers e memes
+- **Tool calling** — executa ações no WhatsApp por linguagem natural
+- **Transcrição de áudio** — transcreve áudios via Gemini multimodal
+- **Memória de contexto** — até 80 mensagens por conversa, auto-limpeza após 2h
+- **Buffer de grupo** — captura as últimas 15 mensagens do grupo e injeta no prompt
+- **Busca na internet** — Tavily API com fallback para Google Search Grounding
 
-### 🏗️ Refatoração Completa
-- Código limpo com comentários em português nas partes importantes
-- Remoção do sistema de blacklist (desnecessário com número dedicado)
-- `ToolDispatcher` independente para despacho de ferramentas da IA
-- Verificação de admin para comandos de remoção de membros
+### 🎲 Interações Espontâneas
 
----
+A Luma "ganha vida" em grupos sem ser chamada:
 
-## 🧠 Luma: Inteligência Artificial Avançada
+| Tipo | Chance | Descrição |
+|------|--------|-----------|
+| Reagir | 35% | Reage com emoji à mensagem |
+| Responder | 35% | Comenta a mensagem sem ter sido chamada |
+| Puxar assunto | 30% | Inicia um assunto aleatório |
 
-A Luma utiliza o modelo **Gemini 2.5 Flash** com visão multimodal, memória de contexto e chamada de ferramentas.
+- Chance dinâmica: **4%** (grupo quieto) → **10%** (grupo ativo) → **15%** (imagem/sticker)
+- Cooldown de **8 minutos** por grupo
 
-### 🎭 Personalidades Dinâmicas
+### 🎨 Estúdio de Mídia
 
-Cansou da Luma boazinha? **Mude o humor dela!**
+| Entrada | Saída | Comando |
+|---------|-------|---------|
+| Imagem | Sticker | `!sticker` |
+| Vídeo / GIF | Sticker Animado | `!sticker` |
+| Sticker | PNG | `!image` |
+| Sticker Animado | GIF / MP4 | `!gif` |
+| URL | Sticker | `!sticker <url>` |
 
-| Personalidade | Descrição | Exemplo |
-|--------------|-----------|---------|
-| 🎭 **Sarcástica** | Ajuda, mas reclama e faz piada | "Ah claro, vou largar tudo pra fazer SEU sticker..." |
-| 😤 **Agressiva** | Curta, grossa e sem paciência | "Quer o sticker? Manda a foto. Sem enrolação." |
-| 💖 **Amigável** | Fofa, usa muitos emojis | "Oiii! 🥰 Claro que eu faço seu sticker! ✨" |
-| 🎓 **Intelectual** | Formal, técnica e correta | "Certamente. Processarei sua solicitação." |
-| 🏖️ **Carioca** | Cheia de gírias e marra | "E aí, parça! Bora criar uns adesivo da hora!" |
+### 📥 Download de Vídeos
 
-**Como mudar:**
-```
-Digite: !persona
-→ Menu interativo aparecerá com todas as opções
-```
+- `!download <url>` ou `!d <url>`
+- Suporte a Twitter/X e Instagram (Reels, posts, stories)
+- Limite de 720p, re-encoding automático para **H.264 + faststart** (compatível com iOS)
+- Binário `yt-dlp` standalone com auto-download por SO
 
-### 🔧 Ferramentas da IA (Tool Calling)
+### 🖥️ Dashboard Web
 
-A Luma pode executar ações reais no WhatsApp quando você pede naturalmente:
-
-| Ferramenta | Exemplo de Frase | Restrição |
-|-----------|------------------|-----------|
-| Criar Figurinha | "Luma, faz figurinha dessa imagem" | — |
-| Converter p/ Imagem | "Luma, transforma essa figurinha em foto" | — |
-| Converter p/ GIF | "Luma, transforma isso em gif" | — |
-| Marcar Todos | "Luma, chama todo mundo" | Apenas em grupos |
-| Remover Membro | "Luma, expulsa o João" | Apenas admins |
-| Limpar Memória | "Luma, esquece tudo" | — |
-
-### 👁️ Visão Computacional
-
-- **Analisa fotos, memes e figurinhas** com contexto completo
-- **Entende o contexto visual** e reage de acordo com a personalidade ativa
-- **Lê textos em imagens** (OCR integrado)
-
-**Exemplos de uso:**
-```
-✅ [Foto de comida] + "luma, tá bom isso?"
-✅ [Meme] + "ei luma, explica esse meme"
-✅ [Selfie] + "luma, comenta essa foto"
-```
-
-### 🧠 Memória de Contexto
-
-- Mantém **até 80 mensagens** por conversa com a Luma
-- **Buffer de grupo**: captura as últimas 15 mensagens do grupo (de qualquer pessoa) e injeta no prompt quando a Luma é chamada — ela entende o que estava sendo discutido antes de ser acionada
-- **Auto-limpeza** após 2 horas de inatividade
-- Histórico pode ser limpo com `!luma clear`
+- Interface terminal com monitoramento em tempo real via **WebSocket**
+- Controle do bot: ligar, desligar, reiniciar
+- Stream de logs com filtro por nível (INFO / WARN / ERROR / OK) e busca por texto
+- QR Code renderizado automaticamente no browser quando necessário
+- Acesso remoto via **Cloudflare Tunnel** (URL pública gerada automaticamente)
+- Proteção por senha via variável de ambiente
 
 ---
 
-## 🎨 Estúdio de Mídia Profissional
+## Comandos
 
-### 🖼️ Conversões Disponíveis
+### Assistente Luma
 
-| Entrada | Saída | Comando | Via Luma (IA) |
-|---------|-------|---------|---------------|
-| 📷 Imagem | 🎭 Sticker | `!sticker` | "Luma, faz figurinha" |
-| 🎥 Vídeo/GIF | 🎬 Sticker Animado | `!sticker` | "Luma, faz figurinha" |
-| 🎭 Sticker | 🖼️ PNG | `!image` | "Luma, converte em imagem" |
-| 🎬 Sticker Animado | 🎞️ GIF/MP4 | `!gif` | "Luma, converte em gif" |
-| 🔗 URL | 🎭 Sticker | `!sticker <url>` | — |
+| Gatilho | Descrição |
+|---------|-----------|
+| `luma, [mensagem]` | Aciona a Luma |
+| `ei luma`, `oi luma` | Variações de trigger |
+| Responder mensagem da Luma | Continua a conversa |
+| Mensagem privada | Responde automaticamente |
 
-### 🏷️ Metadados Profissionais (Auto-Exif)
+### Mídia
 
-Todas as figurinhas incluem automaticamente:
-- ✅ Nome do pacote: "LumaBot 🤖"
-- ✅ Autor: "Criado por @Luma"
-- ✅ Links e emojis personalizados
+| Comando | Descrição |
+|---------|-----------|
+| `!sticker` / `!s` | Imagem, vídeo ou link → sticker |
+| `!image` / `!i` | Sticker → imagem PNG |
+| `!gif` / `!g` | Sticker animado → GIF |
+| `!download` / `!d <url>` | Baixa vídeo de rede social |
 
-### ⚙️ Otimizações Automáticas
+### Bot
 
-- **Redimensionamento**: Sempre 512x512 pixels
-- **Compressão inteligente**: Mantém < 800 KB
-- **Qualidade preservada**: Sharp + FFmpeg otimizados
-- **Limpeza automática**: Arquivos temporários removidos
+| Comando | Descrição |
+|---------|-----------|
+| `!persona` | Abre menu de personalidades |
+| `!luma stats` / `!ls` | Estatísticas globais |
+| `!luma clear` / `!lc` | Limpa memória da conversa |
+| `@everyone` / `@todos` | Menciona todos no grupo |
+| `!meunumero` | Exibe seu ID e o do chat |
+| `!help` / `!menu` | Lista de comandos |
 
 ---
 
-## 📦 Instalação
+## Instalação
 
-### 1. Pré-requisitos
+### Pré-requisitos
 
-- **Node.js** v18.0.0 ou superior
-- **FFmpeg** instalado e no PATH do sistema
-- Conta Google para API do Gemini (gratuita)
+- **Node.js** v18+
+- **FFmpeg** instalado e no PATH
 
-### 2. Clonar e Instalar
+```bash
+# Linux (Debian/Ubuntu)
+sudo apt install ffmpeg -y
+
+# Fedora
+sudo dnf install ffmpeg -y
+
+# macOS
+brew install ffmpeg
+```
+
+### Setup
 
 ```bash
 git clone https://github.com/murillous/LumaBot.git
@@ -165,303 +132,212 @@ cd LumaBot
 npm install
 ```
 
-### 3. Instalar o FFmpeg
-
-**Linux (Debian/Ubuntu):**
-```bash
-sudo apt update && sudo apt install ffmpeg -y
-```
-
-**MacOS:**
-```bash
-brew install ffmpeg
-```
-
-**Windows:**
-1. [Download FFmpeg](https://ffmpeg.org/download.html)
-2. Extrair e adicionar ao PATH
-
-### 4. Configuração (.env)
-
-Crie um arquivo `.env` na raiz do projeto:
+### Configuração (`.env`)
 
 ```env
+# Obrigatório
 GEMINI_API_KEY=sua_chave_aqui
+
+# Opcional
 OWNER_NUMBER=5598988776655
-TAVILY_API_KEY=sua_chave_aqui   # Opcional — busca na internet
+TAVILY_API_KEY=sua_chave_aqui
+
+# Dashboard
+DASHBOARD_PORT=3000
+DASHBOARD_PASSWORD=suasenha
+
+# Cloudflare Tunnel (URL pública)
+CLOUDFLARE_TUNNEL=true
 ```
 
-**Obter API Key:**
-1. Acesse [Google AI Studio](https://aistudio.google.com/app/apikey)
-2. Crie uma API Key gratuita
-3. Cole no arquivo `.env`
-
-### 5. Descobrir seu número
-
-```
-1. Inicie o bot e escaneie o QR Code
-2. Envie !meunumero em qualquer conversa
-3. Copie o número e configure em OWNER_NUMBER no .env
-```
+**Obter API Keys:**
+- Gemini: [aistudio.google.com](https://aistudio.google.com/app/apikey)
+- Tavily: [tavily.com](https://tavily.com)
 
 ---
 
-## ▶️ Como Usar
+## Uso
 
-### Iniciar o Bot
+### Apenas o Bot
 
 ```bash
-# Produção
-npm start
-
-# Desenvolvimento (hot-reload)
-npm run dev
+npm start          # produção
+npm run dev        # desenvolvimento (hot-reload)
 ```
+
+### Bot + Dashboard
+
+```bash
+npm run dashboard          # produção
+npm run dashboard:dev      # desenvolvimento (hot-reload)
+```
+
+O dashboard sobe em `http://localhost:3000` e inicia o bot automaticamente. Com `CLOUDFLARE_TUNNEL=true`, uma URL pública é gerada e exibida no painel.
+
+> **Cloudflared:** instale em [developers.cloudflare.com/cloudflared](https://developers.cloudflare.com/cloudflared/install) para usar o tunnel.
 
 ### Primeiros Passos
 
-1. Execute `npm start`
-2. **Escaneie o QR Code** com seu WhatsApp
+1. Suba o bot ou o dashboard
+2. Escaneie o QR Code (terminal ou modal do dashboard)
 3. Aguarde: **✅ Conectado com sucesso!**
-4. Use os comandos ou converse com a Luma
 
 ---
 
-## 🎯 Comandos Completos
-
-### 🧠 Assistente Virtual Luma
-
-#### Conversação Natural
-
-Acione a Luma usando qualquer gatilho:
-```
-• luma, [mensagem]
-• ei luma, [mensagem]
-• oi luma, [mensagem]
-• Responder mensagem da Luma diretamente
-• Mensagens privadas (responde automaticamente)
-```
-
-#### !persona — Mudar personalidade
-Abre menu interativo para trocar o humor da Luma.
-- 🎭 Cada chat pode ter personalidade diferente
-- 💾 Configuração é salva permanentemente
-
-#### !luma stats — Estatísticas
-Exibe métricas globais: stickers criados, mensagens processadas, conversas ativas.
-
-#### !luma clear — Limpar memória
-Limpa o histórico de conversa com a Luma no chat atual.
-
-### 🎨 Comandos de Mídia
-
-| Comando | Descrição | Uso |
-|---------|-----------|-----|
-| `!sticker` / `!s` | Criar figurinha | Envie ou responda mídia |
-| `!image` / `!i` | Sticker → Imagem PNG | Envie ou responda sticker |
-| `!gif` / `!g` | Sticker → GIF/MP4 | Envie ou responda sticker animado |
-| `!sticker <url>` | Figurinha via URL | Cole o link direto |
-| `!download` / `!d` | Baixar vídeo de rede social | `!d <url do Twitter/X ou Instagram>` |
-
-### 👥 Gerenciamento de Grupos
-
-| Comando | Descrição | Requisito |
-|---------|-----------|-----------|
-| `@everyone` / `@todos` | Mencionar todos | Apenas em grupos |
-| `!meunumero` | Ver seu ID e o do chat | — |
-| `!help` / `!menu` | Listar comandos | — |
-
----
-
-## 🏗️ Arquitetura do Projeto
+## Arquitetura
 
 ```
-lumabot/
-├── data/
-│   ├── luma_metrics.sqlite   # 🟢 Público: Estatísticas (Git)
-│   └── luma_private.sqlite   # 🔴 Privado: Configs (Ignorado)
+LumaBot/
+├── index.js                      # Entry point do bot
+├── dashboard/
+│   └── server.js                 # Servidor Express + WebSocket + gerenciamento do bot
 ├── src/
 │   ├── adapters/
-│   │   └── BaileysAdapter.js    # Adaptador do Baileys com unwrap
+│   │   └── BaileysAdapter.js     # Unwrap de protocolos do WhatsApp
 │   ├── config/
-│   │   ├── constants.js         # Configurações gerais
-│   │   └── lumaConfig.js        # Personalidades e prompts
+│   │   ├── constants.js          # Comandos, mensagens e configurações
+│   │   └── lumaConfig.js         # Personalidades, prompts e tools da IA
 │   ├── handlers/
-│   │   ├── LumaHandler.js       # Pipeline da IA
-│   │   ├── MediaProcessor.js    # Processamento de mídia
-│   │   ├── MessageHandler.js    # Controlador de mensagens
+│   │   ├── LumaHandler.js        # Pipeline da IA: histórico, prompt, resposta
+│   │   ├── MediaProcessor.js     # Download e conversão de mídia
+│   │   ├── MessageHandler.js     # Controlador central de mensagens
 │   │   ├── SpontaneousHandler.js # Interações espontâneas em grupos
-│   │   └── ToolDispatcher.js    # Despacho de ferramentas da IA
+│   │   └── ToolDispatcher.js     # Despacho de tool calls da IA
 │   ├── managers/
-│   │   ├── ConnectionManager.js    # Conexão WhatsApp
-│   │   ├── GroupManager.js         # Funções de grupo
-│   │   └── PersonalityManager.js   # Personalidades por chat
+│   │   ├── ConnectionManager.js  # Conexão WhatsApp e reconexão automática
+│   │   ├── GroupManager.js       # Funções de grupo (menção, remoção)
+│   │   └── PersonalityManager.js # Personalidades por chat (persistidas)
 │   ├── processors/
-│   │   ├── ImageProcessor.js    # Sharp - Imagens
-│   │   └── VideoConverter.js    # FFmpeg - Vídeos e remux
+│   │   ├── ImageProcessor.js     # Sharp: resize, compressão, sticker
+│   │   └── VideoConverter.js     # FFmpeg: remux H.264 + faststart para iOS
+│   ├── public/
+│   │   ├── dashboard.html        # Interface do dashboard
+│   │   ├── dashboard.js          # Cliente WebSocket + lógica do dashboard
+│   │   ├── login.html            # Página de autenticação
+│   │   └── styles.css            # Estética terminal
 │   ├── services/
-│   │   ├── AIService.js         # Cliente Google Gemini
-│   │   ├── Database.js          # SQLite dual database
-│   │   ├── VideoDownloader.js   # Download via yt-dlp
-│   │   └── WebSearchService.js  # Tavily + Google Search Grounding
+│   │   ├── AIService.js          # Cliente Gemini com fallback entre modelos
+│   │   ├── AudioTranscriber.js   # Transcrição de áudio via Gemini multimodal
+│   │   ├── Database.js           # SQLite dual (métricas públicas + dados privados)
+│   │   ├── VideoDownloader.js    # Download via yt-dlp
+│   │   └── WebSearchService.js   # Tavily API + Google Search Grounding
 │   └── utils/
-│       ├── Exif.js              # Metadados WebP
-│       ├── FileSystem.js        # Gerenciamento de arquivos
-│       └── Logger.js            # Sistema de logs
+│       ├── Exif.js               # Metadados WebP nos stickers
+│       ├── FileSystem.js         # Helpers de sistema de arquivos
+│       └── Logger.js             # Sistema de logs
+├── data/
+│   ├── luma_metrics.sqlite       # Métricas públicas (versionado)
+│   └── luma_private.sqlite       # Configurações privadas (ignorado)
 ├── bin/
-│   └── yt-dlp.exe               # Binário standalone (auto-download)
-├── temp/                        # Arquivos temporários
-├── auth_info/                   # Sessão do WhatsApp
-├── .env                         # API Keys
-├── index.js                     # Entry point
-└── package.json
+│   └── yt-dlp                    # Binário standalone (auto-download)
+└── temp/                         # Arquivos temporários
 ```
 
-### Princípios de Design
+### Comunicação Dashboard ↔ Bot
 
-- **Clean Architecture**: Separação clara de responsabilidades
-- **Adaptador Inteligente**: `BaileysAdapter` com `unwrapMessage` para transparência de protocolos
-- **Tool Calling**: `ToolDispatcher` centraliza ações acionadas pela IA
-- **Dual Database**: Dados privados separados de métricas públicas
+O dashboard gerencia o bot como um **processo filho** (`child_process.spawn`). A comunicação acontece via stdout com prefixos reservados:
+
+| Sinal | Direção | Descrição |
+|-------|---------|-----------|
+| `[LUMA_QR]:rawdata` | bot → dashboard | QR Code para renderizar no browser |
+| `[LUMA_STATUS]:connected` | bot → dashboard | WhatsApp conectado |
+| `[LUMA_STATUS]:connecting` | bot → dashboard | Tentando conectar |
+| `[LUMA_STATUS]:disconnected` | bot → dashboard | Desconectado |
+
+O dashboard transmite todos os eventos para o browser via **WebSocket**.
 
 ---
 
-## ⚙️ Configuração Avançada
+## Tecnologias
 
-### Personalizar Metadados dos Stickers
+| Tecnologia | Versão | Uso |
+|------------|--------|-----|
+| [Node.js](https://nodejs.org/) | 18+ | Runtime |
+| [Baileys](https://github.com/WhiskeySockets/Baileys) | 7.x | WhatsApp Web API |
+| [Google Gemini AI](https://ai.google.dev/) | 2.5 Flash | IA multimodal + tool calling |
+| [Express](https://expressjs.com/) | 5.x | Servidor HTTP do dashboard |
+| [ws](https://github.com/websockets/ws) | 8.x | WebSocket (tempo real) |
+| [Sharp](https://sharp.pixelplumbing.com/) | 0.32 | Processamento de imagens |
+| [FFmpeg](https://ffmpeg.org/) | — | Processamento de vídeos |
+| [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) | 12.x | Banco de dados local |
+| [qrcode](https://github.com/soldair/node-qrcode) | 1.x | Renderização do QR no dashboard |
+| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | latest | Download de vídeos sociais |
+| [cloudflared](https://developers.cloudflare.com/cloudflared/) | — | Tunnel para URL pública |
 
-Edite `src/config/constants.js`:
-```javascript
+---
+
+## Configurações Avançadas
+
+### Personalizar Stickers
+
+`src/config/constants.js`:
+```js
 export const STICKER_METADATA = {
   PACK_NAME: "LumaBot 🤖",
-  AUTHOR: "Criado com ❤️ por LumaBot"
+  AUTHOR: "Criado com ❤️ por LumaBot",
 };
 ```
 
-### Criar Novas Personalidades
+### Criar Nova Personalidade
 
-Edite `src/config/lumaConfig.js`:
-```javascript
-nova_persona: {
-  name: "Nome da Persona",
-  description: "Aparece no menu",
-  context: `Você é uma IA que...`,
-  style: "Estilo de escrita",
-  traits: ["use emojis", "seja concisa", "faça piadas"]
+`src/config/lumaConfig.js`:
+```js
+PERSONALITIES: {
+  minha_persona: {
+    name: "Nome da Persona",
+    description: "Aparece no menu",
+    context: "Você é uma IA que...",
+    style: "Estilo de escrita",
+    traits: ["traço 1", "traço 2"],
+  }
 }
 ```
 
-### Ajustar Qualidade das Figurinhas
+### Ajustar Interações Espontâneas
 
-Em `src/config/constants.js`:
-```javascript
-export const CONFIG = {
-  STICKER_SIZE: 512,       // Dimensões (px)
-  STICKER_QUALITY: 90,     // Qualidade Sharp (0-100)
-  VIDEO_DURATION: 6,       // Duração vídeos (s)
-  GIF_DURATION: 8,         // Duração GIFs (s)
-  VIDEO_FPS: 15,           // FPS animações
-  MAX_FILE_SIZE: 800,      // Tamanho máximo (KB)
-};
+`src/config/lumaConfig.js` → `SPONTANEOUS`:
+```js
+chance: 0.04,           // 4% grupo quieto
+imageChance: 0.15,      // 15% quando tem imagem
+cooldownMs: 8 * 60000,  // 8 minutos entre interações
 ```
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
-### Luma não responde
-- [ ] Arquivo `.env` existe com `GEMINI_API_KEY`
-- [ ] Mencionou "luma" na mensagem ou está no privado
-- [ ] Verifique logs no terminal
+**Luma não responde**
+- Verifique se `GEMINI_API_KEY` está no `.env`
+- Mensagem precisa conter "luma" ou ser no privado
 
-### Sticker/Imagem/GIF não converte
-- [ ] FFmpeg instalado: `ffmpeg -version`
-- [ ] Está respondendo à mídia correta
-- [ ] Se usando Luma, verifique se a ferramenta foi acionada nos logs
+**Sticker / GIF não converte**
+- Confirme FFmpeg instalado: `ffmpeg -version`
+- Responda à mídia antes de usar o comando
 
-### Bot não conecta
-1. Verificar internet
-2. Deletar `auth_info` e reescanear QR
-3. Confirmar FFmpeg: `ffmpeg -version`
-4. Reiniciar o bot
+**Bot não conecta**
+- Delete a pasta `auth_info` e escaneie o QR novamente
+- Verifique conexão com a internet
 
-### "API Key inválida"
-1. Verificar `.env` sem espaços/aspas
-2. Gerar nova key no [AI Studio](https://aistudio.google.com/app/apikey)
-3. Reiniciar o bot após alterar
+**Dashboard inacessível**
+- Confirme que `npm run dashboard` está rodando
+- Verifique a porta em `DASHBOARD_PORT` (padrão: 3000)
 
----
-
-## 🛠 Tecnologias Utilizadas
-
-| Tecnologia | Propósito |
-|------------|-----------|
-| [Node.js](https://nodejs.org/) v18+ | Runtime JavaScript |
-| [Baileys](https://github.com/WhiskeySockets/Baileys) v7.x | WhatsApp Web API |
-| [Google Gemini AI](https://ai.google.dev/) 2.5 Flash | IA com visão multimodal + tool calling |
-| [Sharp](https://sharp.pixelplumbing.com/) | Processamento de imagens |
-| [FFmpeg](https://ffmpeg.org/) | Processamento de vídeos |
-| [Better-SQLite3](https://www.npmjs.com/package/better-sqlite3) | Banco de dados local |
-| [dotenv](https://github.com/motdotla/dotenv) | Variáveis de ambiente |
+**Download falha**
+- `yt-dlp` é baixado automaticamente na primeira execução
+- Conteúdo privado não pode ser baixado
 
 ---
 
-## 🤝 Contribuindo
+## Licença
 
-Contribuições são muito bem-vindas!
-
-### Como Contribuir
-
-1. **Fork** o projeto
-2. Crie uma **branch**: `git checkout -b feature/MinhaFeature`
-3. **Commit**: `git commit -m 'Add: MinhaFeature incrível'`
-4. **Push**: `git push origin feature/MinhaFeature`
-5. Abra um **Pull Request**
-
-### Diretrizes
-
-- ✅ Siga os princípios de Clean Code
-- ✅ Comentários em português, apenas nas partes importantes
-- ✅ Teste suas mudanças antes de submeter
-- ✅ Documente novas personalidades
-
----
-
-## 📝 Licença
-
-Este projeto é open source e está disponível sob a [Licença MIT](LICENSE).
-
----
-
-## 🎓 Créditos
-
-**Desenvolvido por Murilo Castelhano**
-
-Desenvolvido com [Baileys](https://github.com/WhiskeySockets/Baileys), [Sharp](https://sharp.pixelplumbing.com/), [FFmpeg](https://ffmpeg.org/) e [Google Gemini AI](https://ai.google.dev/).
-
-### Funcionalidades Principais
-
-- ✅ Assistente virtual com IA, visão e tool calling
-- ✅ Sistema de personalidades dinâmicas
-- ✅ Ferramentas acionadas por linguagem natural
-- ✅ Busca na internet (Tavily + Google Search Grounding)
-- ✅ Interações espontâneas em grupos (SpontaneousHandler)
-- ✅ Download de vídeos do Twitter/X e Instagram
-- ✅ Compatibilidade de vídeo com iOS (H.264 + faststart)
-- ✅ Metadados profissionais (Exif)
-- ✅ Adaptador inteligente com unwrap de protocolos
-- ✅ Dual database system
-- ✅ Conversão completa de mídia
-- ✅ Verificação de admin para remoção de membros
-- ✅ Reconexão automática inteligente
-- ✅ Arquitetura limpa e modular
+MIT — veja [LICENSE](LICENSE).
 
 ---
 
 <div align="center">
 
-**Feito com ❤️ para meus amigos**
+Desenvolvido por **Murilo Castelhano**
 
-[⭐ Star no GitHub](https://github.com/murillous/LumaBot) • [🐛 Report Bug](https://github.com/murillous/LumaBot/issues) • [💡 Request Feature](https://github.com/murillous/LumaBot/issues)
+[⭐ Star](https://github.com/murillous/LumaBot) · [🐛 Bug](https://github.com/murillous/LumaBot/issues) · [💡 Feature](https://github.com/murillous/LumaBot/issues)
 
 </div>

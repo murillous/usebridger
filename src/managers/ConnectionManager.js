@@ -104,10 +104,13 @@ export class ConnectionManager {
       }
 
       if (connection === "close") {
+        process.stdout.write("[LUMA_STATUS]:disconnected\n");
         await this.handleDisconnection(lastDisconnect);
       } else if (connection === "connecting") {
+        process.stdout.write("[LUMA_STATUS]:connecting\n");
         Logger.info("🔗 Conectando...");
       } else if (connection === "open") {
+        process.stdout.write("[LUMA_STATUS]:connected\n");
         Logger.info(MESSAGES.CONNECTED);
         this.isConnecting = false;
         this.reconnectAttempts = 0;
@@ -126,6 +129,9 @@ export class ConnectionManager {
     Logger.info(
       "📶 IMPORTANTE: Certifique-se de ter boa conexão no celular!\n",
     );
+
+    // Sinal para o dashboard renderizar o QR no browser
+    process.stdout.write(`[LUMA_QR]:${qr}\n`);
 
     if (qrcode) {
       qrcode.generate(qr, { small: true });

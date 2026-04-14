@@ -1,92 +1,150 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>zapgigurinha - terminal dashboard</title>
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body>
-    <div class="container">
-      <div class="header">
-        <div class="header-title">
-          <div class="status-indicator" id="statusIndicator"></div>
-          <span>zapFigurinha.sys terminal v1.0</span>
-        </div>
-        <div class="timestamp" id="currentTime">00:00:00</div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LumaBot Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ── QR Modal ─────────────────────────────────────────────────────────── -->
+  <div class="qr-overlay" id="qrOverlay">
+    <div class="qr-modal">
+      <div class="qr-title">📱 ESCANEIE O QR CODE</div>
+      <div class="qr-subtitle">Abra o WhatsApp → Aparelhos conectados → Conectar aparelho</div>
+      <div class="qr-img-wrap">
+        <img id="qrImage" src="" alt="QR Code" />
       </div>
+      <div class="qr-waiting">
+        <span class="qr-dot"></span>
+        Aguardando escaneamento<span class="typing-dots"></span>
+      </div>
+    </div>
+  </div>
 
-      <div class="main-content">
-        <!-- Control Panel -->
-        <div class="section">
-          <div class="section-header">Control Panel</div>
-          <div class="section-content">
-            <div class="control-panel">
-              <!-- Bot Status Toggle -->
-              <div class="control-group">
-                <div class="control-label">Bot Status</div>
-                <div class="toggle-switch">
-                  <label class="switch">
-                    <input type="checkbox" id="botToggle" checked />
-                    <span class="slider"></span>
-                  </label>
-                  <span class="status-text online" id="statusText"
-                    >● ONLINE</span
-                  >
-                </div>
-              </div>
+  <!-- ── Layout principal ──────────────────────────────────────────────────── -->
+  <div class="container">
 
-              <!-- Quick Actions -->
-              <div class="control-group">
-                <div class="control-label">Quick Actions</div>
-                <div class="button-group">
-                  <button class="btn success" onclick="dashboard.refreshPage()">
-                    Refresh
-                  </button>
-                  <button class="btn danger" onclick="dashboard.clearLogs()">
-                    Clear Logs
-                  </button>
-                </div>
-              </div>
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <div class="status-indicator" id="statusDot"></div>
+        <span class="header-title">LUMABOT<span class="header-sys">.SYS</span></span>
+        <span class="status-badge" id="statusBadge">● OFFLINE</span>
+      </div>
+      <div class="header-right">
+        <span class="header-pid" id="headerPid"></span>
+        <span class="header-time" id="headerTime">00:00:00</span>
+      </div>
+    </div>
 
-              <!-- Statistics -->
-              <div class="control-group">
-                <div class="control-label">Statistics</div>
-                <div class="stats-grid">
-                  <div class="stat-card">
-                    <div class="stat-label">Status</div>
-                    <div class="stat-value" id="botStatus">RUNNING</div>
-                  </div>
-                  <div class="stat-card">
-                    <div class="stat-label">Version</div>
-                    <div class="stat-value" id="version">1.0.0</div>
-                  </div>
-                </div>
-              </div>
+    <!-- Main -->
+    <div class="main-content">
 
-              <!-- Info Text -->
-              <div class="info-text">
-                > Bot em execução<br />
-                > Dashboard Monitor v1.0
-              </div>
+      <!-- Painel esquerdo — controles + métricas -->
+      <div class="panel panel-left">
+
+        <!-- Controle do bot -->
+        <div class="panel-section">
+          <div class="panel-title">CONTROLE</div>
+          <div class="control-buttons">
+            <button class="btn btn-success" id="btnStart"   onclick="api.start()">▶ START</button>
+            <button class="btn btn-danger"  id="btnStop"    onclick="api.stop()">⏹ STOP</button>
+            <button class="btn btn-warn"    id="btnRestart" onclick="api.restart()">↺ RESTART</button>
+          </div>
+        </div>
+
+        <!-- Status -->
+        <div class="panel-section">
+          <div class="panel-title">STATUS</div>
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <div class="metric-label">ESTADO</div>
+              <div class="metric-value" id="metricStatus">OFFLINE</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">UPTIME</div>
+              <div class="metric-value" id="metricUptime">00:00:00</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">PID</div>
+              <div class="metric-value" id="metricPid">—</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">RECONEXÕES</div>
+              <div class="metric-value" id="metricReconnects">0</div>
             </div>
           </div>
         </div>
 
-        <!-- Logs/Output Section -->
-        <div class="section" style="flex: 1.5">
-          <div class="section-header">
-            <span>Console Output</span>
-            <span style="font-size: 10px; font-weight: normal">[ LIVE ]</span>
-          </div>
-          <div class="section-content" id="logsContainer">
-            <div class="empty-state">» Aguardando dados...</div>
+        <!-- Estatísticas do bot (SQLite) -->
+        <div class="panel-section">
+          <div class="panel-title">ESTATÍSTICAS</div>
+          <div class="stats-list" id="statsList">
+            <div class="stat-row"><span class="stat-k">Respostas IA</span><span class="stat-v" id="sAI">—</span></div>
+            <div class="stat-row"><span class="stat-k">Stickers</span><span class="stat-v" id="sStickers">—</span></div>
+            <div class="stat-row"><span class="stat-k">Imagens</span><span class="stat-v" id="sImages">—</span></div>
+            <div class="stat-row"><span class="stat-k">GIFs</span><span class="stat-v" id="sGifs">—</span></div>
+            <div class="stat-row"><span class="stat-k">Vídeos</span><span class="stat-v" id="sVideos">—</span></div>
+            <div class="stat-row"><span class="stat-k">Total msgs</span><span class="stat-v" id="sTotal">—</span></div>
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- Scripts -->
-    <script src="dashboard.js"></script>
-  </body>
+        <!-- URL pública (Cloudflare Tunnel) -->
+        <div class="panel-section" id="tunnelSection" style="display:none">
+          <div class="panel-title">ACESSO EXTERNO</div>
+          <div class="tunnel-url-wrap">
+            <a class="tunnel-url" id="tunnelUrl" href="#" target="_blank" rel="noopener"></a>
+            <button class="btn btn-sm btn-success" onclick="dashboard.copyTunnelUrl()">COPIAR</button>
+          </div>
+          <div class="tunnel-note">URL temporária — muda ao reiniciar</div>
+        </div>
+
+        <!-- Rodapé do painel -->
+        <div class="panel-footer">
+          &gt; Dashboard v2.0 — LumaBot
+        </div>
+      </div>
+
+      <!-- Painel direito — console de logs -->
+      <div class="panel panel-right">
+        <div class="panel-title console-title">
+          <span>CONSOLE OUTPUT</span>
+          <span class="live-badge" id="liveBadge">◉ LIVE</span>
+        </div>
+
+        <!-- Barra de filtros -->
+        <div class="log-toolbar">
+          <div class="log-filters" id="logFilters">
+            <button class="filter-btn active" data-level="all">ALL</button>
+            <button class="filter-btn info"    data-level="info">INFO</button>
+            <button class="filter-btn warn"    data-level="warn">WARN</button>
+            <button class="filter-btn error"   data-level="error">ERROR</button>
+            <button class="filter-btn success" data-level="success">OK</button>
+          </div>
+          <div class="log-search-wrap">
+            <span class="log-search-icon">/</span>
+            <input
+              type="text"
+              id="logSearch"
+              class="log-search"
+              placeholder="filtrar logs..."
+              oninput="dashboard.onSearch(this.value)"
+            />
+          </div>
+          <button class="btn btn-sm btn-danger" onclick="dashboard.clearLogs()">CLEAR</button>
+        </div>
+
+        <!-- Log container -->
+        <div class="log-container" id="logContainer">
+          <div class="log-empty">» Aguardando conexão com o bot...</div>
+        </div>
+      </div>
+
+    </div><!-- /main-content -->
+  </div><!-- /container -->
+
+  <script src="dashboard.js"></script>
+</body>
 </html>

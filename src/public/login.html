@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LumaBot — Login</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-box">
+      <div class="login-logo">LUMABOT<span class="login-logo-sys">.SYS</span></div>
+      <div class="login-sub">DASHBOARD v2.0 — ACESSO RESTRITO</div>
+      <form id="loginForm" autocomplete="off">
+        <div class="login-field">
+          <span class="login-prefix">&gt; </span>
+          <input
+            type="password"
+            id="passwordInput"
+            class="login-input"
+            placeholder="senha de acesso_"
+            autofocus
+          />
+        </div>
+        <div class="login-error" id="loginError"></div>
+        <button type="submit" class="login-btn">ENTRAR ↩</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const password = document.getElementById('passwordInput').value;
+      const errEl    = document.getElementById('loginError');
+      errEl.textContent = '';
+
+      try {
+        const res  = await fetch('/api/login', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ password }),
+        });
+        const data = await res.json();
+
+        if (data.ok) {
+          localStorage.setItem('dash_token', data.token ?? '');
+          document.cookie = `dash_token=${data.token ?? ''}; path=/`;
+          location.href = '/';
+        } else {
+          errEl.textContent = '» SENHA INCORRETA';
+        }
+      } catch {
+        errEl.textContent = '» ERRO DE CONEXÃO';
+      }
+    });
+  </script>
+</body>
+</html>

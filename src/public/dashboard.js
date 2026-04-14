@@ -1,247 +1,361 @@
-// oi curiosos heheehheeheh
-class Dashboard {
-  /**
-   * Inicializa o Dashboard
-   */
-  constructor() {
-    this.statusIndicatorElement = document.getElementById("statusIndicator");
-    this.statusTextElement = document.getElementById("statusText");
-    this.botStatusElement = document.getElementById("botStatus");
-    this.currentTimeElement = document.getElementById("currentTime");
-    this.logsContainerElement = document.getElementById("logsContainer");
-    this.botToggleElement = document.getElementById("botToggle");
+// ─── Autenticação ─────────────────────────────────────────────────────────────
 
-    this.isOnline = true;
-    this.logs = [];
-    this.maxLogs = 50;
+const TOKEN = localStorage.getItem('dash_token') ?? '';
 
-    this.initializeEventListeners();
-    this.initializeDashboard();
-  }
+function authHeader() {
+  return TOKEN ? { 'x-dashboard-token': TOKEN } : {};
+}
 
-  /**
-   * Inicializa os event listeners
-   */
-  initializeEventListeners() {
-    // Toggle do bot
-    this.botToggleElement.addEventListener("change", (event) => {
-      this.handleBotToggle(event);
-    });
+function tokenParam() {
+  return TOKEN ? `?token=${encodeURIComponent(TOKEN)}` : '';
+}
 
-    // Atalho de teclado: Ctrl+C para limpar logs
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "c" && event.ctrlKey) {
-        event.preventDefault();
-        this.clearLogs();
-      }
-    });
+// ─── API ──────────────────────────────────────────────────────────────────────
 
-    // Atualizar relógio a cada segundo
-    setInterval(() => {
-      this.updateClock();
-    }, 1000);
-  }
-
-  /*
-  
-    CASO sistema nao funcione, implementar logs alternativos 
-    junto ao Socket IO conexão direta com o index.js
-
-    CASO dashboard nao carregue, implemente fallback
-    dentro do index via express(server)/axios(apernas requisitar) para pagina. 
-  
-
-    :) luisao esteve aqui
-  */
-
-  /**
-   * Inicializa o dashboard com dados padrão
-   */
-  initializeDashboard() {
-    this.updateClock();
-    this.loadBotStatus();
-    this.displayWelcomeMessages();
-  }
-
-  /**
-   * Atualiza o relógio na interface
-   */
-  updateClock() {
-    const now = new Date();
-    const timeString = now.toLocaleTimeString("en-US", {
-      hour12: false,
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-
-    this.currentTimeElement.textContent = timeString;
-  }
-
-  /**
-   * Carrega o status atual do bot
-   */
-  loadBotStatus() {
+const api = {
+  async _post(path) {
     try {
-      this.botStatusElement.textContent = "RUNNING";
-      this.statusIndicatorElement.className = "status-indicator active";
-      this.statusTextElement.textContent = "● ONLINE";
-      this.isOnline = true;
-    } catch (error) {
-      console.error("Erro ao carregar status do bot:", error);
-      this.addLog("Erro ao carregar status", "error");
+      const res  = await fetch(path, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
+      });
+      if (res.status === 401) return location.href = '/login';
+      return res.json();
+    } catch (e) {
+      dashboard.pushLog(`Erro de rede: ${e.message}`, 'error');
     }
+  },
+  start()   { return this._post('/api/bot/start');   },
+  stop()    { return this._post('/api/bot/stop');     },
+  restart() { return this._post('/api/bot/restart'); },
+};
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+
+class Dashboard {
+  constructor() {
+    this.logs        = [];          // todos os logs recebidos
+    this.maxLogs     = 500;
+    this.activeLevel = 'all';       // filtro de nível ativo
+    this.searchQuery = '';          // texto do filtro de busca
+    this.autoScroll  = true;        // rola para o fim automaticamente
+    this.status      = 'stopped';
+    this.uptimeStart = null;
+    this.reconnects  = 0;
+    this.pid         = null;
+
+    this._wsRetries = 0;
+    this._bindFilterButtons();
+    this._startClock();
+    this._startUptimeTicker();
+    this._connectWS();
+    this._fetchStats();
+    setInterval(() => this._fetchStats(), 30000);
   }
 
-  /**
-   * Gerencia o toggle do bot (on/off)
-   * @param {Event} event - Evento do toggle
-   */
-  handleBotToggle(event) {
-    this.isOnline = event.target.checked;
+  // ── WebSocket ─────────────────────────────────────────────────────────────
 
-    if (this.isOnline) {
-      this.statusTextElement.textContent = "● ONLINE";
-      this.statusTextElement.className = "status-text online";
-      this.statusIndicatorElement.className = "status-indicator active";
-      this.addLog("Bot conectado", "success");
-    } else {
-      this.statusTextElement.textContent = "● OFFLINE";
-      this.statusTextElement.className = "status-text offline";
-      this.statusIndicatorElement.className = "status-indicator inactive";
-      this.addLog("Bot desconectado", "warning");
-    }
-  }
+  _connectWS() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const url   = `${proto}//${location.host}/ws${tokenParam()}`;
 
-  /**
-   * Adiciona uma nova entrada de log
-   * @param {string} message - Mensagem do log
-   * @param {string} type - Tipo do log (info, success, warning, error)
-   */
-  addLog(message, type = "info") {
-    const timestamp = new Date();
+    this._ws = new WebSocket(url);
 
-    const logEntry = {
-      message,
-      type,
-      timestamp,
+    this._ws.onopen = () => {
+      this._wsRetries = 0;
+      this._setLiveBadge(true);
     };
 
-    this.logs.unshift(logEntry);
+    this._ws.onmessage = (e) => {
+      try {
+        this._handleEvent(JSON.parse(e.data));
+      } catch (_) {}
+    };
 
-    // Limita o número de logs armazenados
-    if (this.logs.length > this.maxLogs) {
-      this.logs.pop();
-    }
+    this._ws.onclose = (ev) => {
+      this._setLiveBadge(false);
+      // 4001 = não autorizado, não tenta reconectar
+      if (ev.code === 4001) { location.href = '/login'; return; }
+      // Reconecta com backoff simples
+      const delay = Math.min((this._wsRetries++ || 1) * 2000, 15000);
+      setTimeout(() => this._connectWS(), delay);
+    };
 
-    this.renderLogs();
+    this._ws.onerror = () => {
+      this._setLiveBadge(false);
+    };
   }
 
-  /**
-   * Renderiza os logs na interface
-   */
-  renderLogs() {
-    if (this.logs.length === 0) {
-      this.logsContainerElement.innerHTML =
-        '<div class="empty-state">» Nenhum log disponível</div>';
+  _handleEvent(ev) {
+    switch (ev.type) {
+      case 'init':
+        this._applyStatus(ev.status);
+        if (ev.qr)        this._showQR(ev.qr);
+        if (ev.publicUrl) this._setTunnelUrl(ev.publicUrl);
+        if (ev.logs) {
+          this.logs = [];
+          ev.logs.forEach(l => this._addLog(l.message, l.level, l.timestamp, false));
+          this._renderLogs();
+        }
+        break;
+
+      case 'log':
+        this._addLog(ev.message, ev.level, ev.timestamp);
+        break;
+
+      case 'status':
+        this._applyStatus(ev.status);
+        break;
+
+      case 'qr':
+        this._showQR(ev.dataUrl);
+        break;
+
+      case 'qr_clear':
+        this._hideQR();
+        break;
+
+      case 'tunnel_url':
+        this._setTunnelUrl(ev.url);
+        break;
+    }
+  }
+
+  // ── Estado do bot ─────────────────────────────────────────────────────────
+
+  _applyStatus(status) {
+    this.status = status;
+
+    const dot   = document.getElementById('statusDot');
+    const badge = document.getElementById('statusBadge');
+    const metric = document.getElementById('metricStatus');
+
+    const MAP = {
+      stopped:    { cls: 'inactive', label: '● OFFLINE',    color: 'red'    },
+      starting:   { cls: 'blink',    label: '● STARTING',   color: 'yellow' },
+      connecting: { cls: 'blink',    label: '● CONNECTING', color: 'yellow' },
+      qr_wait:    { cls: 'blink',    label: '● QR WAIT',    color: 'yellow' },
+      running:    { cls: 'active',   label: '● ONLINE',     color: 'green'  },
+      error:      { cls: 'inactive', label: '● ERROR',      color: 'red'    },
+    };
+
+    const cfg = MAP[status] ?? MAP.stopped;
+    dot.className   = `status-indicator ${cfg.cls}`;
+    badge.textContent = cfg.label;
+    badge.className   = `status-badge status-${cfg.color}`;
+    metric.textContent = status.toUpperCase();
+    metric.className   = `metric-value status-${cfg.color}`;
+
+    // Atualiza botões
+    const running = status === 'running' || status === 'connecting' || status === 'starting';
+    document.getElementById('btnStart').disabled   = running;
+    document.getElementById('btnStop').disabled    = !running;
+    document.getElementById('btnRestart').disabled = !botProcess && status === 'stopped';
+
+    // Fecha QR se conectou
+    if (status === 'running') this._hideQR();
+
+    // Registra início de uptime
+    if (status === 'running' && !this.uptimeStart) this.uptimeStart = Date.now();
+    if (status === 'stopped' || status === 'error') this.uptimeStart = null;
+  }
+
+  updateServerInfo(data) {
+    this.reconnects = data.reconnects ?? this.reconnects;
+    this.pid        = data.pid ?? null;
+    document.getElementById('metricReconnects').textContent = this.reconnects;
+    document.getElementById('metricPid').textContent        = this.pid ?? '—';
+    document.getElementById('headerPid').textContent        = this.pid ? `PID ${this.pid}` : '';
+  }
+
+  // ── Tunnel URL ────────────────────────────────────────────────────────────
+
+  _setTunnelUrl(url) {
+    const section = document.getElementById('tunnelSection');
+    const link    = document.getElementById('tunnelUrl');
+    if (url) {
+      link.href        = url;
+      link.textContent = url;
+      section.style.display = '';
+    } else {
+      section.style.display = 'none';
+    }
+  }
+
+  copyTunnelUrl() {
+    const url = document.getElementById('tunnelUrl').href;
+    if (!url || url === '#') return;
+    navigator.clipboard.writeText(url).then(() => {
+      this.pushLog(`📋 URL copiada: ${url}`, 'success');
+    });
+  }
+
+  // ── QR Code ───────────────────────────────────────────────────────────────
+
+  _showQR(dataUrl) {
+    document.getElementById('qrImage').src = dataUrl;
+    document.getElementById('qrOverlay').classList.add('visible');
+  }
+
+  _hideQR() {
+    document.getElementById('qrOverlay').classList.remove('visible');
+  }
+
+  // ── Logs ──────────────────────────────────────────────────────────────────
+
+  _addLog(message, level = 'info', timestamp = Date.now(), render = true) {
+    this.logs.push({ message, level, timestamp });
+    if (this.logs.length > this.maxLogs) this.logs.shift();
+    if (render) this._appendLogEntry({ message, level, timestamp });
+  }
+
+  pushLog(message, level = 'info') {
+    this._addLog(message, level, Date.now(), true);
+  }
+
+  _matchesFilter(log) {
+    if (this.activeLevel !== 'all' && log.level !== this.activeLevel) return false;
+    if (this.searchQuery) {
+      return log.message.toLowerCase().includes(this.searchQuery);
+    }
+    return true;
+  }
+
+  _renderLogs() {
+    const container = document.getElementById('logContainer');
+    const filtered  = this.logs.filter(l => this._matchesFilter(l));
+
+    if (!filtered.length) {
+      container.innerHTML = '<div class="log-empty">» Nenhum log neste filtro</div>';
       return;
     }
 
-    const logsHTML = this.logs
-      .map((log) => this.createLogEntryHTML(log))
-      .join("");
-
-    this.logsContainerElement.innerHTML = logsHTML;
-    this.logsContainerElement.scrollTop = 0;
+    container.innerHTML = filtered.map(l => this._logHTML(l)).join('');
+    if (this.autoScroll) container.scrollTop = container.scrollHeight;
   }
 
-  /**
-   * Cria o HTML de uma entrada de log
-   * @param {Object} log - Objeto do log
-   * @returns {string} HTML da entrada
-   */
-  createLogEntryHTML(log) {
-    const timeString = log.timestamp.toLocaleTimeString("en-US", {
-      hour12: false,
-    });
+  _appendLogEntry(log) {
+    if (!this._matchesFilter(log)) return;
+    const container = document.getElementById('logContainer');
 
-    const logType = log.type.toUpperCase();
-    const escapedMessage = this.escapeHTML(log.message);
+    // Remove estado vazio
+    const empty = container.querySelector('.log-empty');
+    if (empty) empty.remove();
 
-    return `
-      <div class="log-entry ${log.type}">
-        <span class="log-time">[${timeString}]</span>
-        <span class="log-type">${logType}</span>
-        <span class="log-message">${escapedMessage}</span>
-      </div>
-    `;
+    const div = document.createElement('div');
+    div.innerHTML = this._logHTML(log);
+    container.appendChild(div.firstChild);
+
+    // Limita DOM a 300 entradas visíveis para performance
+    while (container.children.length > 300) {
+      container.removeChild(container.firstChild);
+    }
+
+    if (this.autoScroll) container.scrollTop = container.scrollHeight;
   }
 
-  /**
-   * Escapa caracteres HTML para evitar injeção
-   * @param {string} text - Texto a ser escapado
-   * @returns {string} Texto escapado
-   */
-  escapeHTML(text) {
-    const htmlEscapeMap = {
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#039;",
-    };
-
-    return text.replace(/[&<>"']/g, (char) => htmlEscapeMap[char]);
+  _logHTML(log) {
+    const time = new Date(log.timestamp).toLocaleTimeString('pt-BR', { hour12: false });
+    const msg  = this._escape(log.message);
+    const lvl  = log.level.toUpperCase();
+    return `<div class="log-entry log-${log.level}">` +
+           `<span class="log-time">[${time}]</span>` +
+           `<span class="log-level">${lvl}</span>` +
+           `<span class="log-msg">${msg}</span>` +
+           `</div>`;
   }
 
-  /**
-   * Limpa todos os logs
-   */
   clearLogs() {
     this.logs = [];
-    this.renderLogs();
-    this.addLog("Logs limpos", "info");
+    document.getElementById('logContainer').innerHTML =
+      '<div class="log-empty">» Logs limpos</div>';
   }
 
-  /**
-   * Exibe mensagens de boas-vindas
-   */
-  displayWelcomeMessages() {
-    const welcomeMessages = [
-      {
-        text: "WhatsApp Sticker Bot - Dashboard Inicializado",
-        type: "success",
-      },
-      {
-        text: "!sticker - Converte imagem/vídeo para sticker",
-        type: "info",
-      },
-      {
-        text: "!image - Converte sticker para imagem",
-        type: "info",
-      },
-      {
-        text: "!gif - Converte sticker animado para GIF",
-        type: "info",
-      },
-    ];
+  onSearch(value) {
+    this.searchQuery = value.trim().toLowerCase();
+    this._renderLogs();
+  }
 
-    welcomeMessages.forEach((msg) => {
-      this.addLog(msg.text, msg.type);
+  // ── Filtros ───────────────────────────────────────────────────────────────
+
+  _bindFilterButtons() {
+    document.getElementById('logFilters').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-level]');
+      if (!btn) return;
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      this.activeLevel = btn.dataset.level;
+      this._renderLogs();
+    });
+
+    // Detecta se o usuário rolou manualmente para cima → desativa auto-scroll
+    document.getElementById('logContainer').addEventListener('scroll', (e) => {
+      const el = e.target;
+      this.autoScroll = el.scrollTop + el.clientHeight >= el.scrollHeight - 10;
     });
   }
 
-  /**
-   * Recarrega a página (refresh)
-   */
-  refreshPage() {
-    location.reload();
+  // ── Relógio e uptime ──────────────────────────────────────────────────────
+
+  _startClock() {
+    const tick = () => {
+      document.getElementById('headerTime').textContent =
+        new Date().toLocaleTimeString('pt-BR', { hour12: false });
+    };
+    tick();
+    setInterval(tick, 1000);
+  }
+
+  _startUptimeTicker() {
+    setInterval(() => {
+      const el = document.getElementById('metricUptime');
+      if (!this.uptimeStart) { el.textContent = '00:00:00'; return; }
+      const s  = Math.floor((Date.now() - this.uptimeStart) / 1000);
+      const h  = String(Math.floor(s / 3600)).padStart(2, '0');
+      const m  = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+      const ss = String(s % 60).padStart(2, '0');
+      el.textContent = `${h}:${m}:${ss}`;
+    }, 1000);
+  }
+
+  // ── Estatísticas ──────────────────────────────────────────────────────────
+
+  async _fetchStats() {
+    try {
+      const res  = await fetch('/api/status', { headers: authHeader() });
+      if (!res.ok) return;
+      const data = await res.json();
+      this.updateServerInfo(data);
+      if (data.status && data.status !== this.status) this._applyStatus(data.status);
+      if (data.qr && !document.getElementById('qrOverlay').classList.contains('visible')) {
+        this._showQR(data.qr);
+      }
+    } catch (_) {}
+  }
+
+  // ── Live badge ────────────────────────────────────────────────────────────
+
+  _setLiveBadge(connected) {
+    const el = document.getElementById('liveBadge');
+    el.textContent = connected ? '◉ LIVE' : '○ OFFLINE';
+    el.className   = connected ? 'live-badge' : 'live-badge disconnected';
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  _escape(text) {
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 }
 
-/**
- * Inicializa o Dashboard quando o DOM estiver pronto
- */
-document.addEventListener("DOMContentLoaded", () => {
+// Variável usada nos botões do HTML
+let botProcess = false; // placeholder para lógica de disable
+
+document.addEventListener('DOMContentLoaded', () => {
   window.dashboard = new Dashboard();
+  window.api       = api;
 });

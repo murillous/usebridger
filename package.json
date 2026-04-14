@@ -6,7 +6,9 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "dashboard": "node dashboard/server.js",
+    "dashboard:dev": "nodemon dashboard/server.js"
   },
   "keywords": [
     "whatsapp",
@@ -21,10 +23,13 @@
     "@whiskeysockets/baileys": "^7.0.0-rc.9",
     "better-sqlite3": "^12.5.0",
     "dotenv": "^17.2.3",
+    "express": "^5.2.1",
     "node-webpmux": "^3.2.1",
     "pino": "^10.0.0",
+    "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
-    "sharp": "^0.32.6"
+    "sharp": "^0.32.6",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
