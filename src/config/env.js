@@ -29,23 +29,27 @@ dotenv.config();
  * Lista de variáveis que DEVEM existir para o bot funcionar.
  * O código não chega à linha de importação se alguma estiver ausente.
  */
-const REQUIRED = ['GEMINI_API_KEY'];
-
 /**
- * Valida que todas as variáveis obrigatórias estão presentes e não estão vazias.
- * Lança erro descritivo com todas as variáveis ausentes de uma só vez
- * (não falha na primeira e esconde o resto).
+ * Valida as variáveis obrigatórias com base no provider de IA ativo.
+ * Só exige a API Key do provider configurado em AI_PROVIDER.
  */
 function validateRequired() {
-  const missing = REQUIRED.filter(
-    (key) => !process.env[key] || process.env[key].trim() === '',
-  );
+  const missing = [];
+  const provider = process.env.AI_PROVIDER || 'gemini';
+
+  if (provider === 'gemini' || provider === undefined) {
+    if (!process.env.GEMINI_API_KEY?.trim()) missing.push('GEMINI_API_KEY');
+  }
+
+  if (provider === 'openai') {
+    if (!process.env.OPENAI_API_KEY?.trim()) missing.push('OPENAI_API_KEY');
+  }
 
   if (missing.length > 0) {
     throw new Error(
       `[Config] Variáveis de ambiente obrigatórias ausentes: ${missing.join(', ')}\n` +
       `Crie ou verifique o arquivo .env na raiz do projeto.\n` +
-      `Exemplo: GEMINI_API_KEY=sua_chave_aqui`,
+      `Provider ativo: AI_PROVIDER=${provider}`,
     );
   }
 }
@@ -62,7 +66,10 @@ validateRequired();
  * Acesse sempre via este objeto, nunca via process.env diretamente.
  *
  * @type {{
- *   GEMINI_API_KEY: string,
+ *   AI_PROVIDER: string,
+ *   AI_MODEL: string,
+ *   GEMINI_API_KEY: string | undefined,
+ *   OPENAI_API_KEY: string | undefined,
  *   TAVILY_API_KEY: string | undefined,
  *   OWNER_NUMBER: string | undefined,
  *   LOG_LEVEL: string,
@@ -72,8 +79,14 @@ validateRequired();
  * }}
  */
 export const env = Object.freeze({
-  // IA — obrigatório
-  GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+  // Provider de IA — define qual adapter usar ('gemini' | 'openai')
+  AI_PROVIDER: process.env.AI_PROVIDER || 'gemini',
+  // Modelo específico — cada adapter usa seu padrão se não informado
+  AI_MODEL: process.env.AI_MODEL || undefined,
+
+  // API Keys — apenas a do provider ativo é obrigatória
+  GEMINI_API_KEY:  process.env.GEMINI_API_KEY  || undefined,
+  OPENAI_API_KEY:  process.env.OPENAI_API_KEY  || undefined,
 
   // Busca na internet — opcional (cai para Google Grounding se ausente)
   TAVILY_API_KEY: process.env.TAVILY_API_KEY || undefined,

@@ -3,6 +3,7 @@ import { Container } from './Container.js';
 import { env } from '../config/env.js';
 
 import { GeminiAdapter } from '../adapters/ai/GeminiAdapter.js';
+import { OpenAIAdapter } from '../adapters/ai/OpenAIAdapter.js';
 import { TavilyAdapter } from '../adapters/search/TavilyAdapter.js';
 import { GoogleGroundingAdapter } from '../adapters/search/GoogleGroundingAdapter.js';
 import { GeminiTranscriberAdapter } from '../adapters/transcriber/GeminiTranscriberAdapter.js';
@@ -41,9 +42,19 @@ export function createContainer({ overrides = {} } = {}) {
   });
 
   // --- IA ---
-  // O GeminiAdapter recebe o SearchPort para executar o loop multi-turn de busca.
+  // O adapter é escolhido via env.AI_PROVIDER — zero alteração de código de domínio.
   container.register('aiPort', (c) => {
-    const adapter = new GeminiAdapter({ apiKey: env.GEMINI_API_KEY });
+    if (env.AI_PROVIDER === 'openai') {
+      return new OpenAIAdapter({
+        apiKey: env.OPENAI_API_KEY,
+        model:  env.AI_MODEL,
+      });
+    }
+    // Padrão: Gemini com loop multi-turn de busca
+    const adapter = new GeminiAdapter({
+      apiKey: env.GEMINI_API_KEY,
+      ...(env.AI_MODEL ? { models: [env.AI_MODEL] } : {}),
+    });
     adapter.setSearchPort(c.get('searchPort'));
     return adapter;
   });
