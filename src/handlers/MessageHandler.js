@@ -11,10 +11,8 @@ import { AudioTranscriber } from "../services/AudioTranscriber.js";
 import { VideoDownloader } from "../services/VideoDownloader.js";
 import { VideoConverter } from "../processors/VideoConverter.js";
 import { SpontaneousHandler } from "./SpontaneousHandler.js";
+import { env } from "../config/env.js";
 import fs from "fs";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 /**
  * Controlador central de mensagens do bot.
@@ -31,8 +29,8 @@ export class MessageHandler {
   static _groupBuffer = new Map();
 
   static get audioTranscriber() {
-    if (!this._audioTranscriber && process.env.GEMINI_API_KEY) {
-      this._audioTranscriber = new AudioTranscriber(process.env.GEMINI_API_KEY);
+    if (!this._audioTranscriber && env.GEMINI_API_KEY) {
+      this._audioTranscriber = new AudioTranscriber(env.GEMINI_API_KEY);
     }
     return this._audioTranscriber;
   }
