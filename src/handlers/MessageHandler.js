@@ -575,6 +575,9 @@ export class MessageHandler {
     const lower = text.toLowerCase();
     if (lower === COMMANDS.MY_NUMBER) return COMMANDS.MY_NUMBER;
     if (lower.includes(COMMANDS.LUMA_CLEAR)) return COMMANDS.LUMA_CLEAR;
+    // Aliases de luma clear: !lc e !clear — verificados ANTES de !clear para
+    // evitar que "!lc" seja parcialmente absorvido por outra checagem.
+    if (lower === COMMANDS.LUMA_CLEAR_SHORT) return COMMANDS.LUMA_CLEAR;
     if (lower.includes("!clear")) return COMMANDS.LUMA_CLEAR_ALT;
     if (lower.includes(COMMANDS.LUMA_STATS)) return COMMANDS.LUMA_STATS;
     if (lower.includes(COMMANDS.LUMA_STATS_SHORT)) return COMMANDS.LUMA_STATS;
