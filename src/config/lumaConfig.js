@@ -83,6 +83,7 @@ export const LUMA_CONFIG = {
     /^ei\s+luma/i,
     /^oi\s+luma/i,
     /^fala\s+luma/i,
+    /\bluma\b/i,
   ],
 
   BORED_RESPONSES: [
@@ -111,7 +112,7 @@ export const LUMA_CONFIG = {
       topK: 50,
     },
 
-    maxHistory: 50,
+    maxHistory: 80,
     maxResponseLength: 500,
     maxParts: 3,
     thinkingDelay: { min: 2000, max: 5000 },
