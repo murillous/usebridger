@@ -1,18 +1,17 @@
 import { describe, it, expect, vi } from 'vitest';
 
 /**
- * Testes de caracterização das funções puras do MessageHandler.
+ * Testes de caracterização do MessageHandler.
  *
- * Apenas as funções determinísticas são testadas aqui:
- * - detectCommand: parsing de comandos com prefixo
- * - extractUrl: extração de URLs de texto
- * - getMessageType: detecção de tipo de mídia
+ * As funções puras detectCommand, extractUrl e getMessageType foram
+ * movidas respectivamente para:
+ *   - CommandRouter.detect  → tests/unit/core/services/CommandRouter.test.js
+ *   - MessageUtils.extractUrl    → tests/unit/utils/MessageUtils.test.js
+ *   - MessageUtils.getMessageType → tests/unit/utils/MessageUtils.test.js
  *
- * O fluxo completo (process, handleLumaCommand) pertence aos testes
- * de integração, pois envolve socket real + IA.
+ * Este arquivo mantém os testes usando os novos locais para evitar regressão.
  */
 
-// Isola as dependências com efeitos colaterais do MessageHandler
 vi.mock('../../src/services/AIService.js', () => ({
   AIService: vi.fn().mockImplementation(() => ({
     generateContent: vi.fn(),
@@ -52,160 +51,157 @@ vi.mock('../../src/handlers/SpontaneousHandler.js', () => ({
   SpontaneousHandler: { handle: vi.fn(), trackActivity: vi.fn() },
 }));
 
-import { MessageHandler } from '../../src/handlers/MessageHandler.js';
 import { COMMANDS } from '../../src/config/constants.js';
+import { CommandRouter } from '../../src/core/services/CommandRouter.js';
+import { getMessageType, extractUrl } from '../../src/utils/MessageUtils.js';
 
-describe('MessageHandler.detectCommand — detecção de comandos', () => {
+describe('CommandRouter.detect — detecção de comandos (via MessageHandler.test)', () => {
   it('detecta !sticker', () => {
-    expect(MessageHandler.detectCommand('!sticker')).toBe(COMMANDS.STICKER);
+    expect(CommandRouter.detect('!sticker')).toBe(COMMANDS.STICKER);
   });
 
   it('detecta !s (alias do sticker)', () => {
-    expect(MessageHandler.detectCommand('!s')).toBe(COMMANDS.STICKER);
+    expect(CommandRouter.detect('!s')).toBe(COMMANDS.STICKER);
   });
 
   it('detecta !image', () => {
-    expect(MessageHandler.detectCommand('!image')).toBe(COMMANDS.IMAGE);
+    expect(CommandRouter.detect('!image')).toBe(COMMANDS.IMAGE);
   });
 
   it('detecta !i (alias do image)', () => {
-    expect(MessageHandler.detectCommand('!i')).toBe(COMMANDS.IMAGE);
+    expect(CommandRouter.detect('!i')).toBe(COMMANDS.IMAGE);
   });
 
   it('detecta !gif', () => {
-    expect(MessageHandler.detectCommand('!gif')).toBe(COMMANDS.GIF);
+    expect(CommandRouter.detect('!gif')).toBe(COMMANDS.GIF);
   });
 
   it('detecta !g (alias do gif)', () => {
-    expect(MessageHandler.detectCommand('!g')).toBe(COMMANDS.GIF);
+    expect(CommandRouter.detect('!g')).toBe(COMMANDS.GIF);
   });
 
   it('detecta !help', () => {
-    expect(MessageHandler.detectCommand('!help')).toBe(COMMANDS.HELP);
+    expect(CommandRouter.detect('!help')).toBe(COMMANDS.HELP);
   });
 
   it('detecta !menu como alias do help', () => {
-    expect(MessageHandler.detectCommand('!menu')).toBe(COMMANDS.HELP);
+    expect(CommandRouter.detect('!menu')).toBe(COMMANDS.HELP);
   });
 
   it('detecta !persona', () => {
-    expect(MessageHandler.detectCommand('!persona')).toBe(COMMANDS.PERSONA);
+    expect(CommandRouter.detect('!persona')).toBe(COMMANDS.PERSONA);
   });
 
   it('detecta !download com URL', () => {
-    expect(MessageHandler.detectCommand('!download https://x.com/algo')).toBe(COMMANDS.DOWNLOAD);
+    expect(CommandRouter.detect('!download https://x.com/algo')).toBe(COMMANDS.DOWNLOAD);
   });
 
   it('detecta !d (alias do download)', () => {
-    expect(MessageHandler.detectCommand('!d https://x.com/algo')).toBe(COMMANDS.DOWNLOAD);
+    expect(CommandRouter.detect('!d https://x.com/algo')).toBe(COMMANDS.DOWNLOAD);
   });
 
   it('detecta @everyone', () => {
-    expect(MessageHandler.detectCommand('@everyone')).toBe(COMMANDS.EVERYONE);
+    expect(CommandRouter.detect('@everyone')).toBe(COMMANDS.EVERYONE);
   });
 
   it('detecta @todos (alias do everyone)', () => {
-    expect(MessageHandler.detectCommand('@todos')).toBe(COMMANDS.EVERYONE);
+    expect(CommandRouter.detect('@todos')).toBe(COMMANDS.EVERYONE);
   });
 
   it('detecta !luma stats', () => {
-    expect(MessageHandler.detectCommand('!luma stats')).toBe(COMMANDS.LUMA_STATS);
+    expect(CommandRouter.detect('!luma stats')).toBe(COMMANDS.LUMA_STATS);
   });
 
   it('detecta !ls (alias do luma stats)', () => {
-    expect(MessageHandler.detectCommand('!ls')).toBe(COMMANDS.LUMA_STATS);
+    expect(CommandRouter.detect('!ls')).toBe(COMMANDS.LUMA_STATS);
   });
 
   it('detecta !luma clear', () => {
-    expect(MessageHandler.detectCommand('!luma clear')).toBe(COMMANDS.LUMA_CLEAR);
+    expect(CommandRouter.detect('!luma clear')).toBe(COMMANDS.LUMA_CLEAR);
   });
 
   it('detecta !lc (alias do luma clear)', () => {
-    expect(MessageHandler.detectCommand('!lc')).toBe(COMMANDS.LUMA_CLEAR);
+    expect(CommandRouter.detect('!lc')).toBe(COMMANDS.LUMA_CLEAR);
   });
 
   it('detecta !clear (alias alternativo do luma clear)', () => {
-    expect(MessageHandler.detectCommand('!clear')).toBe(COMMANDS.LUMA_CLEAR_ALT);
+    expect(CommandRouter.detect('!clear')).toBe(COMMANDS.LUMA_CLEAR_ALT);
   });
 
   it('detecta !meunumero', () => {
-    expect(MessageHandler.detectCommand('!meunumero')).toBe(COMMANDS.MY_NUMBER);
+    expect(CommandRouter.detect('!meunumero')).toBe(COMMANDS.MY_NUMBER);
   });
 
   it('é case insensitive — !STICKER detecta como sticker', () => {
-    expect(MessageHandler.detectCommand('!STICKER')).toBe(COMMANDS.STICKER);
+    expect(CommandRouter.detect('!STICKER')).toBe(COMMANDS.STICKER);
   });
 
   it('retorna null para texto sem comando', () => {
-    expect(MessageHandler.detectCommand('oi tudo bem?')).toBeNull();
+    expect(CommandRouter.detect('oi tudo bem?')).toBeNull();
   });
 
   it('retorna null para string vazia', () => {
-    expect(MessageHandler.detectCommand('')).toBeNull();
+    expect(CommandRouter.detect('')).toBeNull();
   });
 
   it('retorna null para mensagem da Luma sem prefixo de comando', () => {
-    expect(MessageHandler.detectCommand('luma me explica isso')).toBeNull();
+    expect(CommandRouter.detect('luma me explica isso')).toBeNull();
   });
 });
 
-describe('MessageHandler.extractUrl — extração de URLs', () => {
+describe('extractUrl — extração de URLs', () => {
   it('extrai URL https de texto simples', () => {
-    const url = MessageHandler.extractUrl('!download https://x.com/user/status/123');
-    expect(url).toBe('https://x.com/user/status/123');
+    expect(extractUrl('!download https://x.com/user/status/123')).toBe('https://x.com/user/status/123');
   });
 
   it('extrai URL http também', () => {
-    const url = MessageHandler.extractUrl('veja em http://exemplo.com/pagina');
-    expect(url).toBe('http://exemplo.com/pagina');
+    expect(extractUrl('veja em http://exemplo.com/pagina')).toBe('http://exemplo.com/pagina');
   });
 
   it('extrai a primeira URL quando há múltiplas', () => {
-    const url = MessageHandler.extractUrl('veja https://primeiro.com e https://segundo.com');
-    expect(url).toBe('https://primeiro.com');
+    expect(extractUrl('veja https://primeiro.com e https://segundo.com')).toBe('https://primeiro.com');
   });
 
   it('retorna null para texto sem URL', () => {
-    expect(MessageHandler.extractUrl('texto sem link nenhum')).toBeNull();
+    expect(extractUrl('texto sem link nenhum')).toBeNull();
   });
 
   it('retorna null para null', () => {
-    expect(MessageHandler.extractUrl(null)).toBeNull();
+    expect(extractUrl(null)).toBeNull();
   });
 
   it('retorna null para string vazia', () => {
-    expect(MessageHandler.extractUrl('')).toBeNull();
+    expect(extractUrl('')).toBeNull();
   });
 
   it('extrai URL do Instagram corretamente', () => {
-    const url = MessageHandler.extractUrl('!d https://instagram.com/reel/abc123/');
-    expect(url).toBe('https://instagram.com/reel/abc123/');
+    expect(extractUrl('!d https://instagram.com/reel/abc123/')).toBe('https://instagram.com/reel/abc123/');
   });
 });
 
-describe('MessageHandler.getMessageType — detecção de tipo de mídia', () => {
+describe('getMessageType — detecção de tipo de mídia', () => {
   it('retorna "image" para imageMessage sem gif', () => {
     const msg = { message: { imageMessage: { mimetype: 'image/jpeg' } } };
-    expect(MessageHandler.getMessageType(msg)).toBe('image');
+    expect(getMessageType(msg)).toBe('image');
   });
 
   it('retorna "gif" para imageMessage com mimetype gif', () => {
     const msg = { message: { imageMessage: { mimetype: 'image/gif' } } };
-    expect(MessageHandler.getMessageType(msg)).toBe('gif');
+    expect(getMessageType(msg)).toBe('gif');
   });
 
   it('retorna "video" para videoMessage sem gifPlayback', () => {
     const msg = { message: { videoMessage: { gifPlayback: false } } };
-    expect(MessageHandler.getMessageType(msg)).toBe('video');
+    expect(getMessageType(msg)).toBe('video');
   });
 
   it('retorna "gif" para videoMessage com gifPlayback true', () => {
     const msg = { message: { videoMessage: { gifPlayback: true } } };
-    expect(MessageHandler.getMessageType(msg)).toBe('gif');
+    expect(getMessageType(msg)).toBe('gif');
   });
 
   it('retorna "image" como fallback para tipos desconhecidos', () => {
     const msg = { message: { stickerMessage: {} } };
-    expect(MessageHandler.getMessageType(msg)).toBe('image');
+    expect(getMessageType(msg)).toBe('image');
   });
 });

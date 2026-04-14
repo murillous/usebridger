@@ -4,6 +4,7 @@ import { LUMA_CONFIG } from "../config/lumaConfig.js";
 import { MediaProcessor } from "./MediaProcessor.js";
 import { PersonalityManager } from "../managers/PersonalityManager.js";
 import { DatabaseService } from "../services/Database.js";
+import { ToolDispatcher } from "./ToolDispatcher.js";
 import { env } from "../config/env.js";
 
 /**
@@ -307,6 +308,178 @@ export class LumaHandler {
   getRandomBoredResponse() {
     const responses = LUMA_CONFIG.BORED_RESPONSES;
     return responses[Math.floor(Math.random() * responses.length)];
+  }
+
+  // ---------------------------------------------------------------------------
+  // Métodos de alto nível — chamados pelo MessageHandler
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Processa uma mensagem do usuário direcionada à Luma e envia a resposta.
+   * Substitui MessageHandler.handleLumaCommand().
+   *
+   * @param {object} bot - BaileysAdapter
+   * @param {boolean} isReply - Se é uma resposta direta a uma mensagem da Luma
+   * @param {string} groupContext - Contexto recente do grupo (para grupos)
+   */
+  async handle(bot, isReply = false, groupContext = "") {
+    try {
+      let userMessage = isReply
+        ? bot.body
+        : this.extractUserMessage(bot.body);
+
+      if (!userMessage && bot.hasVisualContent) {
+        userMessage = bot.hasSticker
+          ? "[O usuário respondeu com uma figurinha/sticker. Analise a imagem visualmente, entenda a emoção dela e reaja ao contexto]"
+          : "[O usuário enviou uma imagem. Analise o conteúdo]";
+      }
+
+      if (!userMessage) {
+        const bored  = this.getRandomBoredResponse();
+        const sent   = await bot.reply(bored);
+        if (sent?.key?.id) this.saveLastBotMessage(bot.jid, sent.key.id);
+        return;
+      }
+
+      await bot.sendPresence("composing");
+      await this._delay();
+
+      const quotedBot = bot.getQuotedAdapter();
+
+      const response = await this.generateResponse(
+        userMessage, bot.jid, bot.raw, bot.socket, bot.senderName, groupContext,
+      );
+
+      await this._dispatchResponse(bot, response, quotedBot);
+    } catch (error) {
+      Logger.error("❌ Erro no handle da Luma:", error);
+      if (error.message?.includes("API_KEY")) {
+        await bot.reply("Tô sem cérebro (API Key inválida).");
+      }
+    }
+  }
+
+  /**
+   * Processa um áudio (transcrevendo-o) e responde via Luma.
+   * Substitui MessageHandler.handleAudioTranscription().
+   *
+   * @param {object} bot - BaileysAdapter
+   * @param {object} audioTranscriber - Instância de AudioTranscriber
+   * @param {string} groupContext
+   */
+  async handleAudio(bot, audioTranscriber, groupContext = "") {
+    try {
+      if (!audioTranscriber) {
+        return await this.handle(bot, bot.isRepliedToMe, groupContext);
+      }
+
+      await bot.sendPresence("composing");
+      await bot.react("🎙️");
+
+      // Resolve a fonte do áudio: mensagem direta ou quoted
+      let audioRaw, mimeType;
+      if (bot.hasAudio) {
+        audioRaw = bot.raw;
+        mimeType = bot.audioMimeType;
+      } else {
+        const quotedAdapter = bot.getQuotedAdapter();
+        if (!quotedAdapter) return await this.handle(bot, bot.isRepliedToMe, groupContext);
+        audioRaw = quotedAdapter.raw;
+        mimeType = bot.quotedAudioMimeType;
+      }
+
+      Logger.info("🎙️ Baixando áudio para transcrição...");
+      const audioBuffer = await MediaProcessor.downloadMedia(audioRaw, bot.socket);
+
+      if (!audioBuffer || audioBuffer.length === 0) {
+        Logger.warn("⚠️ Áudio vazio ou falha no download.");
+        await bot.reply("⚠️ Não consegui baixar o áudio para transcrever.");
+        return;
+      }
+
+      Logger.info(`📊 Áudio baixado: ${(audioBuffer.length / 1024).toFixed(1)}KB`);
+      const transcription = await audioTranscriber.transcribe(audioBuffer, mimeType);
+
+      if (!transcription) {
+        await bot.reply("⚠️ Não consegui transcrever esse áudio.");
+        return;
+      }
+
+      if (transcription === "[áudio ininteligível]" || transcription === "[áudio sem conteúdo]") {
+        const desc = transcription === "[áudio ininteligível]"
+          ? "não consegui entender o que foi dito"
+          : "ele estava vazio ou silencioso";
+        await bot.reply(`🎙️ _Tentei ouvir o áudio, mas ${desc}._`);
+        return;
+      }
+
+      Logger.info(`✅ Transcrição: "${transcription.substring(0, 80)}..."`);
+      await bot.sendText(`🎙️ _"${transcription}"_`, { quoted: bot.raw });
+
+      const userText = bot.body ? this.extractUserMessage(bot.body) : "";
+      const enrichedMessage = userText
+        ? `[O usuário respondeu a um áudio com a transcrição: "${transcription}"] ${userText}`
+        : `[O usuário pediu pra você ouvir/responder o seguinte áudio que foi transcrito: "${transcription}"]`;
+
+      await this._respondWithMessage(bot, enrichedMessage, groupContext);
+    } catch (error) {
+      Logger.error("❌ Erro no fluxo de transcrição:", error);
+      await this.handle(bot, bot.isRepliedToMe, groupContext);
+    }
+  }
+
+  /**
+   * Responde com uma mensagem já construída (usada internamente e pelo handleAudio).
+   * @private
+   */
+  async _respondWithMessage(bot, message, groupContext = "") {
+    await bot.sendPresence("composing");
+    await this._delay();
+
+    const quotedBot = bot.getQuotedAdapter();
+
+    const response = await this.generateResponse(
+      message, bot.jid, bot.raw, bot.socket, bot.senderName, groupContext,
+    );
+
+    await this._dispatchResponse(bot, response, quotedBot);
+  }
+
+  /**
+   * Envia as partes da resposta e despacha tool calls.
+   * @private
+   */
+  async _dispatchResponse(bot, response, quotedBot) {
+    if (response.parts?.length > 0) {
+      const lastSent = await this._sendParts(bot, response.parts);
+      if (lastSent?.key?.id) this.saveLastBotMessage(bot.jid, lastSent.key.id);
+    }
+
+    if (response.toolCalls?.length > 0) {
+      await ToolDispatcher.handleToolCalls(bot, response.toolCalls, this, quotedBot);
+    }
+  }
+
+  /**
+   * Envia partes de texto em cadeia, cada parte citando a anterior.
+   * @private
+   */
+  async _sendParts(bot, parts) {
+    let lastSent = null;
+    for (const part of parts) {
+      if (!lastSent) {
+        lastSent = await bot.reply(part);
+      } else {
+        lastSent = await bot.socket.sendMessage(bot.jid, { text: part, quoted: lastSent });
+      }
+    }
+    return lastSent;
+  }
+
+  /** @private */
+  async _delay() {
+    const { min, max } = LUMA_CONFIG.TECHNICAL.thinkingDelay;
+    await new Promise((r) => setTimeout(r, min + Math.random() * (max - min)));
   }
 
   _getErrorResponse(type, error = null) {
