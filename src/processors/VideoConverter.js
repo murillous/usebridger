@@ -63,14 +63,30 @@ export class VideoConverter {
    * Usa -c:v copy -c:a copy, então o codec original é preservado.
    * Se o vídeo já for H.264 (padrão do yt-dlp), funciona perfeitamente no iOS.
    */
+  /**
+   * Tenta re-encodar para H.264 com fallback entre encoders disponíveis.
+   * Ordem: libx264 → libopenh264 → cópia direta (apenas faststart).
+   */
   static async remuxForMobile(input) {
     const output = this.createTempPath("mp4", "video");
-    // Re-encoda só o vídeo para H.264 (ultrafast = mínimo de CPU) e copia o áudio.
-    // Garante compatibilidade com iOS independente do codec original (VP9, H.265, AV1...).
-    const cmd = `ffmpeg -y -i "${input}" -c:v libx264 -preset ultrafast -crf 23 -pix_fmt yuv420p -c:a copy -movflags faststart "${output}"`;
 
-    await execAsync(cmd);
-    return output;
+    const cmds = [
+      `ffmpeg -y -i "${input}" -c:v libx264 -preset ultrafast -crf 23 -pix_fmt yuv420p -c:a copy -movflags faststart "${output}"`,
+      `ffmpeg -y -i "${input}" -c:v libopenh264 -pix_fmt yuv420p -c:a copy -movflags faststart "${output}"`,
+      `ffmpeg -y -i "${input}" -c:v copy -c:a copy -movflags faststart "${output}"`,
+    ];
+
+    let lastError;
+    for (const cmd of cmds) {
+      try {
+        await execAsync(cmd);
+        return output;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+
+    throw lastError;
   }
 
   static createTempPath(extension, prefix = "temp") {
