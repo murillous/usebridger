@@ -108,13 +108,19 @@ export class OpenAIAdapter extends AIPort {
    * @returns {Array}
    */
   #convertTools(geminiTools) {
-    return geminiTools.map((tool) => ({
-      type: "function",
-      function: {
-        name:        tool.name,
-        description: tool.description,
-        parameters:  tool.parameters,
-      },
-    }));
+    // Suporta tanto array plano quanto o formato Gemini { functionDeclarations: [...] }
+    const declarations = geminiTools.flatMap(t =>
+      Array.isArray(t.functionDeclarations) ? t.functionDeclarations : [t]
+    );
+    return declarations
+      .filter(t => t.name)
+      .map((tool) => ({
+        type: "function",
+        function: {
+          name:        tool.name,
+          description: tool.description ?? "",
+          parameters:  tool.parameters ?? { type: "object", properties: {} },
+        },
+      }));
   }
 }

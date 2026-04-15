@@ -2,6 +2,7 @@ import { AIService } from "../services/AIService.js";
 import { OpenAIAdapter } from "../adapters/ai/OpenAIAdapter.js";
 import { Logger } from "../utils/Logger.js";
 import { LUMA_CONFIG } from "../config/lumaConfig.js";
+import { WebSearchService } from "../services/WebSearchService.js";
 import { MediaProcessor } from "./MediaProcessor.js";
 import { PersonalityManager } from "../managers/PersonalityManager.js";
 import { DatabaseService } from "../services/Database.js";
@@ -104,11 +105,43 @@ export class LumaHandler {
           ? fullText.substring(splitIdx).trim()
           : fullText;
 
-        return adapter.generateContent(
-          [{ role: 'user', parts: [{ text: userContent }] }],
-          systemPrompt,
-          [],
-        );
+        const history = [{ role: 'user', parts: [{ text: userContent }] }];
+
+        // Primeira chamada com todas as ferramentas disponíveis
+        const result = await adapter.generateContent(history, systemPrompt, LUMA_CONFIG.TOOLS);
+
+        if (result.functionCalls?.length > 0) {
+          Logger.info(`🔧 OpenAI/DeepSeek: função(ões) chamada(s): ${result.functionCalls.map(fc => fc.name).join(', ')}`);
+        }
+
+        // Multi-turn: se o modelo pediu busca web, executa e reenvia
+        const searchCall = result.functionCalls?.find(fc => fc.name === 'search_web');
+        if (searchCall) {
+          try {
+            const query = searchCall.args?.query || '';
+            Logger.info(`🔍 Luma buscando (DeepSeek): "${query}"`);
+
+            const searchResults = await WebSearchService.search(query, null, null);
+
+            // Injeta os resultados no contexto e chama novamente sem tools
+            const enrichedHistory = [{
+              role: 'user',
+              parts: [{ text: `${userContent}\n\n[Resultados da busca sobre "${query}"]:\n${searchResults}` }],
+            }];
+
+            const finalResult = await adapter.generateContent(enrichedHistory, systemPrompt, []);
+
+            // Preserva tool calls que não sejam search_web (ex: create_sticker)
+            const otherCalls = result.functionCalls.filter(fc => fc.name !== 'search_web');
+            finalResult.functionCalls = [...otherCalls, ...(finalResult.functionCalls ?? [])];
+
+            return finalResult;
+          } catch (error) {
+            Logger.error(`❌ Erro no multi-turn de busca (DeepSeek): ${error.message}`);
+          }
+        }
+
+        return result;
       },
       getStats() { return adapter.getStats(); },
     };

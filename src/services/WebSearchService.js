@@ -19,7 +19,7 @@ export class WebSearchService {
   static async search(query, geminiClient, model) {
     const tavilyKey = env.TAVILY_API_KEY;
 
-    Logger.info(`🔍 WebSearch: "${query}" | Tavily: ${tavilyKey ? 'configurado' : 'ausente'}`);
+    Logger.info(`🔍 WebSearch: "${query}" | Tavily: ${tavilyKey ? 'configurado' : 'ausente'} | Grounding: ${geminiClient ? 'disponível' : 'indisponível'}`);
 
     if (!this.tavilyQuotaExceeded && tavilyKey) {
       try {
@@ -36,6 +36,11 @@ export class WebSearchService {
       }
     } else if (!tavilyKey) {
       Logger.info("ℹ️ TAVILY_API_KEY não configurada — usando Google Search Grounding.");
+    }
+
+    if (!geminiClient) {
+      Logger.warn("⚠️ Google Grounding indisponível (provider não-Gemini sem TAVILY_API_KEY). Configure TAVILY_API_KEY no .env para habilitar busca.");
+      return "Busca web não disponível: configure TAVILY_API_KEY no .env para usar busca com DeepSeek/OpenAI.";
     }
 
     return await this._searchWithGrounding(query, geminiClient, model);
