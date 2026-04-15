@@ -266,6 +266,15 @@ function authMiddleware(req, res, next) {
 app.post('/api/login', (req, res) => {
   const { password } = req.body ?? {};
   if (!PASSWORD || password === PASSWORD) {
+    // Detecta se a requisição chegou via HTTPS (ex: Cloudflare tunnel)
+    const isSecure = req.headers['x-forwarded-proto'] === 'https' || req.secure;
+    res.cookie('dash_token', PASSWORD, {
+      httpOnly: false,            // precisa ser false para o dashboard.js ler via document.cookie se necessário
+      sameSite: isSecure ? 'none' : 'lax',
+      secure:   isSecure,        // SameSite=None exige Secure
+      path:     '/',
+      maxAge:   7 * 24 * 60 * 60 * 1000, // 7 dias
+    });
     res.json({ ok: true, token: PASSWORD });
   } else {
     res.status(401).json({ error: 'Senha incorreta' });
