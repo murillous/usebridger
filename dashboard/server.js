@@ -4,8 +4,10 @@ import { WebSocketServer } from 'ws';
 import { spawn }     from 'child_process';
 import { fileURLToPath } from 'url';
 import path          from 'path';
+import fs           from 'fs';
 import QRCode        from 'qrcode';
 import dotenv        from 'dotenv';
+import Database      from 'better-sqlite3';
 
 dotenv.config();
 
@@ -303,6 +305,21 @@ app.get('/api/logs', (req, res) => {
   if (level && level !== 'all') logs = logs.filter(l => l.level === level);
   if (search) { const q = search.toLowerCase(); logs = logs.filter(l => l.message.toLowerCase().includes(q)); }
   res.json(logs.slice(-parseInt(limit)));
+});
+
+app.get('/api/stats', (_req, res) => {
+  const dbPath = path.join(ROOT_DIR, 'data', 'luma_metrics.sqlite');
+  try {
+    if (!fs.existsSync(dbPath)) return res.json({});
+    const db   = new Database(dbPath, { readonly: true });
+    const rows = db.prepare('SELECT key, count FROM metrics').all();
+    db.close();
+    const stats = {};
+    for (const row of rows) stats[row.key] = row.count;
+    res.json(stats);
+  } catch (_) {
+    res.json({});
+  }
 });
 
 app.post('/api/bot/start',   (_req, res) => res.json(startBot()));
