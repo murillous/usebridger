@@ -81,9 +81,10 @@ export class LumaHandler {
    * LumaHandler usa internamente: generateContent(contents) onde contents
    * é um array Gemini-style [{ role, parts: [{ text }] }].
    *
-   * O LumaHandler já embute toda a personalidade e histórico no texto do
-   * prompt, então o system prompt do OpenAI fica vazio e o texto completo
-   * vai como mensagem do usuário.
+   * O prompt do LumaHandler tem o marcador [USUÁRIO ATUAL] separando o contexto
+   * de sistema (personalidade, histórico, instruções) da mensagem real do usuário.
+   * Dividimos no marcador: tudo antes vai como systemPrompt (maior prioridade no
+   * modelo), e o resto vai como mensagem do usuário.
    */
   _wrapOpenAIAdapter(adapter) {
     return {
@@ -93,9 +94,19 @@ export class LumaHandler {
           .map(p => p.text ?? '')
           .join('\n');
 
+        const SPLIT_MARKER = '[USUÁRIO ATUAL]';
+        const splitIdx = fullText.indexOf(SPLIT_MARKER);
+
+        const systemPrompt = splitIdx !== -1
+          ? fullText.substring(0, splitIdx).trim()
+          : '';
+        const userContent = splitIdx !== -1
+          ? fullText.substring(splitIdx).trim()
+          : fullText;
+
         return adapter.generateContent(
-          [{ role: 'user', parts: [{ text: fullText }] }],
-          '', // todo o contexto já está embutido no fullText
+          [{ role: 'user', parts: [{ text: userContent }] }],
+          systemPrompt,
           [],
         );
       },
