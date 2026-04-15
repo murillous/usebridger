@@ -45,6 +45,10 @@ export class AIService {
         const response = await this._callModel(model, contents);
         const result = this._extractFromResponse(response);
 
+        if (result.functionCalls.length > 0) {
+          Logger.info(`🔧 AIService: função(ões) chamada(s): ${result.functionCalls.map(fc => fc.name).join(', ')}`);
+        }
+
         // Multi-turn: se o modelo quer buscar na internet, executa e reenvia
         const searchCall = result.functionCalls.find((fc) => fc.name === "search_web");
         if (searchCall) {

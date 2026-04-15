@@ -19,19 +19,23 @@ export class WebSearchService {
   static async search(query, geminiClient, model) {
     const tavilyKey = env.TAVILY_API_KEY;
 
+    Logger.info(`🔍 WebSearch: "${query}" | Tavily: ${tavilyKey ? 'configurado' : 'ausente'}`);
+
     if (!this.tavilyQuotaExceeded && tavilyKey) {
       try {
         const result = await this._searchTavily(query, tavilyKey);
-        Logger.info("🔍 Busca Tavily concluída.");
+        Logger.info("✅ Busca Tavily concluída.");
         return result;
       } catch (error) {
         if (this._isQuotaError(error)) {
           this.tavilyQuotaExceeded = true;
           Logger.warn("⚠️ Tavily: cota esgotada — usando Google Search Grounding.");
         } else {
-          Logger.error(`❌ Tavily falhou (${error.message}), tentando grounding.`);
+          Logger.error(`❌ Tavily falhou (${error.message}) — usando Google Search Grounding.`);
         }
       }
+    } else if (!tavilyKey) {
+      Logger.info("ℹ️ TAVILY_API_KEY não configurada — usando Google Search Grounding.");
     }
 
     return await this._searchWithGrounding(query, geminiClient, model);
@@ -85,11 +89,13 @@ export class WebSearchService {
    * @private
    */
   static async _searchWithGrounding(query, geminiClient, model) {
+    // Prefere gemini-2.0-flash para grounding — suporte mais estável
+    const groundingModel = model.startsWith("gemini-2.0") ? model : "gemini-2.0-flash";
     try {
-      Logger.info(`🌐 Google Grounding: "${query}"`);
+      Logger.info(`🌐 Google Grounding (${groundingModel}): "${query}"`);
 
       const response = await geminiClient.models.generateContent({
-        model,
+        model: groundingModel,
         contents: [{
           role: "user",
           parts: [{
