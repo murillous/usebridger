@@ -24,8 +24,7 @@ LumaBot é um bot de WhatsApp construído sobre o Baileys com uma assistente vir
 
 ### 🧠 Luma — Assistente Virtual
 
-- **Multi-provider**: Google Gemini (padrão) ou OpenAI via variável de ambiente
-- **Gemini 2.5 Flash** com fallback automático entre modelos
+- **Multi-provider**: Google Gemini (padrão), OpenAI ou Deepseek via variável de ambiente
 - **Personalidades dinâmicas** por chat (Pensadora, Pistola, Good Vibes, Sênior)
 - **Visão computacional** — analisa imagens, stickers e memes
 - **Tool calling** — executa ações no WhatsApp por linguagem natural
