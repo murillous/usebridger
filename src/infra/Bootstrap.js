@@ -50,6 +50,16 @@ export function createContainer({ overrides = {} } = {}) {
         model:  env.AI_MODEL,
       });
     }
+
+    if (env.AI_PROVIDER === 'deepseek') {
+      // A API do DeepSeek é compatível com o formato OpenAI — reutilizamos o mesmo adapter.
+      return new OpenAIAdapter({
+        apiKey:   env.DEEPSEEK_API_KEY,
+        model:    env.AI_MODEL ?? 'deepseek-chat',
+        baseURL:  'https://api.deepseek.com',
+      });
+    }
+
     // Padrão: Gemini com loop multi-turn de busca
     const adapter = new GeminiAdapter({
       apiKey: env.GEMINI_API_KEY,

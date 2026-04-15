@@ -45,6 +45,10 @@ function validateRequired() {
     if (!process.env.OPENAI_API_KEY?.trim()) missing.push('OPENAI_API_KEY');
   }
 
+  if (provider === 'deepseek') {
+    if (!process.env.DEEPSEEK_API_KEY?.trim()) missing.push('DEEPSEEK_API_KEY');
+  }
+
   if (missing.length > 0) {
     throw new Error(
       `[Config] Variáveis de ambiente obrigatórias ausentes: ${missing.join(', ')}\n` +
@@ -85,8 +89,9 @@ export const env = Object.freeze({
   AI_MODEL: process.env.AI_MODEL || undefined,
 
   // API Keys — apenas a do provider ativo é obrigatória
-  GEMINI_API_KEY:  process.env.GEMINI_API_KEY  || undefined,
-  OPENAI_API_KEY:  process.env.OPENAI_API_KEY  || undefined,
+  GEMINI_API_KEY:   process.env.GEMINI_API_KEY   || undefined,
+  OPENAI_API_KEY:   process.env.OPENAI_API_KEY   || undefined,
+  DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY || undefined,
 
   // Busca na internet — opcional (cai para Google Grounding se ausente)
   TAVILY_API_KEY: process.env.TAVILY_API_KEY || undefined,

@@ -13,13 +13,14 @@ export class OpenAIAdapter extends AIPort {
 
   /**
    * @param {object} options
-   * @param {string} options.apiKey  - Chave da API da OpenAI
-   * @param {string} [options.model] - Modelo a usar (padrão: gpt-4o-mini)
+   * @param {string} options.apiKey     - Chave da API
+   * @param {string} [options.model]    - Modelo a usar (padrão: gpt-4o-mini)
+   * @param {string} [options.baseURL]  - URL base da API (para providers compatíveis como DeepSeek)
    */
-  constructor({ apiKey, model = "gpt-4o-mini" } = {}) {
+  constructor({ apiKey, model = "gpt-4o-mini", baseURL } = {}) {
     super();
     if (!apiKey) throw new Error("OpenAIAdapter: apiKey é obrigatória.");
-    this.#client = new OpenAI({ apiKey });
+    this.#client = new OpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) });
     this.#model  = model;
   }
 
