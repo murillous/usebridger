@@ -3,8 +3,12 @@ export class Logger {
     console.log(message);
   }
 
-  static error(message, error = null) {
-    console.error(message, error?.message || "");
+  static error(message, errorOrDetail = null) {
+    const detail =
+      typeof errorOrDetail === "string"
+        ? errorOrDetail
+        : errorOrDetail?.message || errorOrDetail || "";
+    console.error(message, detail);
   }
 
   static warn(message) {

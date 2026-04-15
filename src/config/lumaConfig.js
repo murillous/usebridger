@@ -103,7 +103,7 @@ export const LUMA_CONFIG = {
   },
 
   TECHNICAL: {
-    models: ["gemini-2.5-flash", "gemini-2.0-flash-exp", "gemini-2.0-flash"],
+    models: ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"],
 
     generationConfig: {
       temperature: 1.4,

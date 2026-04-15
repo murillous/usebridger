@@ -14,7 +14,7 @@ export const CONFIG = {
   MAX_FILE_SIZE: 800,
   VIDEO_DOWNLOAD_MAX_SIZE_MB: 100,
   VIDEO_DOWNLOAD_TIMEOUT_MS: 240000,
-  VIDEO_DOWNLOAD_FORMAT: "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]/best",
+  VIDEO_DOWNLOAD_FORMAT: "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best/best",
   WEBP_QUALITY: 75,
   MAX_GIF_FRAMES: 50,
   TIMEOUT_MS: 60000,
@@ -108,4 +108,5 @@ export const MESSAGES = {
   VIDEO_TOO_LARGE: "❌ Vídeo muito grande para enviar (máx. ~50MB).",
   VIDEO_DOWNLOAD_ERROR: "❌ Não consegui baixar esse vídeo. O conteúdo pode ser privado ou a URL inválida.",
   VIDEO_NO_URL: "ℹ️ Cole o link do vídeo junto com o comando.\nEx: `!download https://x.com/...`",
+  YTDLP_NOT_FOUND: "❌ Não foi possível baixar o yt-dlp. Verifique sua conexão e tente novamente.",
 };
