@@ -1,39 +1,27 @@
-import {
-  makeWASocket,
-  DisconnectReason,
-  useMultiFileAuthState,
-  fetchLatestBaileysVersion,
-} from "@whiskeysockets/baileys";
-import fs from "fs";
-import pino from "pino";
-import { CONFIG, MESSAGES } from "../config/constants.js";
-import { Logger } from "../utils/Logger.js";
-import { env } from "../config/env.js";
-import { FileSystem } from "../utils/FileSystem.js";
-import { MessageHandler } from "../handlers/MessageHandler.js";
-import { BaileysAdapter } from "../adapters/BaileysAdapter.js";
+import fs from 'fs';
+import { CONFIG, MESSAGES } from '../config/constants.js';
+import { Logger } from '../utils/Logger.js';
+import { env } from '../config/env.js';
+import { FileSystem } from '../utils/FileSystem.js';
+import { prepareBaileysSession, createBaileysSocket } from '../infra/BaileysSocketFactory.js';
+import { presentQrCode } from '../infra/QrCodePresenter.js';
+import { routeMessages } from '../infra/MessageRouter.js';
+import { ReconnectionPolicy } from '../infra/ReconnectionPolicy.js';
 
-let qrcode;
-try {
-  const qrcodeModule = await import("qrcode-terminal");
-  qrcode = qrcodeModule.default;
-} catch (e) {
-  console.log("💡 Para QR Code visual, instale: npm install qrcode-terminal");
-}
-
+/**
+ * Coordenador do ciclo de vida do socket WhatsApp.
+ * Inicializa a conexão, gerencia reconexões e encaminha eventos.
+ */
 export class ConnectionManager {
   constructor() {
-    this.sock = null;
+    this.sock         = null;
     this.isConnecting = false;
-    this.reconnectAttempts = 0;
-    this.lastCleanTime = 0;
-    this.qrRetries = 0;
-    this.maxQrRetries = 5;
+    this.policy       = new ReconnectionPolicy(CONFIG);
   }
 
   async initialize() {
     if (this.isConnecting) {
-      Logger.info("⏳ Já existe uma tentativa de conexão em andamento...");
+      Logger.info('⏳ Já existe uma tentativa de conexão em andamento...');
       return;
     }
 
@@ -43,34 +31,14 @@ export class ConnectionManager {
       this.closeSafely();
       Logger.info(MESSAGES.CONNECTING);
 
-      const { version, isLatest } = await fetchLatestBaileysVersion();
-      Logger.info(`📦 Usando WA v${version.join(".")}, isLatest: ${isLatest}`);
+      const { version, isLatest, state, saveCreds } = await prepareBaileysSession(CONFIG);
+      Logger.info(`📦 Usando WA v${version.join('.')}, isLatest: ${isLatest}`);
 
-      const { state, saveCreds } = await useMultiFileAuthState(CONFIG.AUTH_DIR);
-      const logger = pino({ level: env.LOG_LEVEL });
-
-      this.sock = makeWASocket({
-        version,
-        auth: state,
-        logger,
-        browser: ["Ubuntu", "Chrome", "20.0.04"],
-        printQRInTerminal: false,
-        defaultQueryTimeoutMs: CONFIG.TIMEOUT_MS,
-        connectTimeoutMs: CONFIG.TIMEOUT_MS,
-        keepAliveIntervalMs: CONFIG.KEEPALIVE_MS,
-        qrTimeout: 60000,
-        retryRequestDelayMs: 2000,
-        emitOwnEvents: false,
-        markOnlineOnConnect: true,
-        syncFullHistory: false,
-        generateHighQualityLinkPreview: false,
-        fireInitQueries: false,
-        getMessage: async () => undefined,
-      });
+      this.sock = createBaileysSocket({ state, version, config: CONFIG, logLevel: env.LOG_LEVEL });
 
       this.setupEventHandlers(saveCreds);
     } catch (error) {
-      Logger.error("❌ Erro ao iniciar o bot:", error);
+      Logger.error('❌ Erro ao iniciar o bot:', error);
       this.isConnecting = false;
       await this.handleInitializationError(error);
     }
@@ -78,21 +46,15 @@ export class ConnectionManager {
 
   closeSafely() {
     if (this.sock) {
-      try {
-        this.sock.end(undefined);
-      } catch (error) { }
+      try { this.sock.end(undefined); } catch {}
       this.sock = null;
     }
   }
 
   setupEventHandlers(saveCreds) {
-    this.sock.ev.on("connection.update", (update) =>
-      this.handleConnectionUpdate(update),
-    );
-
-    this.sock.ev.on("creds.update", saveCreds);
-
-    this.sock.ev.on("messages.upsert", (m) => this.handleMessagesUpsert(m));
+    this.sock.ev.on('connection.update', update => this.handleConnectionUpdate(update));
+    this.sock.ev.on('creds.update', saveCreds);
+    this.sock.ev.on('messages.upsert', m => routeMessages(this.sock, m));
   }
 
   async handleConnectionUpdate(update) {
@@ -100,213 +62,135 @@ export class ConnectionManager {
 
     try {
       if (qr) {
-        this.qrRetries++;
-        this.displayQrCode(qr);
+        this.policy.qrRetries++;
+        await presentQrCode(qr, {
+          attempt:     this.policy.qrRetries,
+          maxAttempts: this.policy.maxQrRetries,
+        });
       }
 
-      if (connection === "close") {
-        process.stdout.write("[LUMA_STATUS]:disconnected\n");
+      if (connection === 'close') {
+        process.stdout.write('[LUMA_STATUS]:disconnected\n');
         await this.handleDisconnection(lastDisconnect);
-      } else if (connection === "connecting") {
-        process.stdout.write("[LUMA_STATUS]:connecting\n");
-        Logger.info("🔗 Conectando...");
-      } else if (connection === "open") {
-        process.stdout.write("[LUMA_STATUS]:connected\n");
+      } else if (connection === 'connecting') {
+        process.stdout.write('[LUMA_STATUS]:connecting\n');
+        Logger.info('🔗 Conectando...');
+      } else if (connection === 'open') {
+        process.stdout.write('[LUMA_STATUS]:connected\n');
         Logger.info(MESSAGES.CONNECTED);
         this.isConnecting = false;
-        this.reconnectAttempts = 0;
-        this.qrRetries = 0;
+        this.policy.resetAttempts();
       }
     } catch (error) {
-      Logger.error("Erro no handler de conexão:", error);
+      Logger.error('Erro no handler de conexão:', error);
       this.isConnecting = false;
     }
-  }
-
-  displayQrCode(qr) {
-    Logger.info(
-      `\n📱 QR Code gerado! (Tentativa ${this.qrRetries}/${this.maxQrRetries})`,
-    );
-    Logger.info(
-      "📶 IMPORTANTE: Certifique-se de ter boa conexão no celular!\n",
-    );
-
-    // Sinal para o dashboard renderizar o QR no browser
-    process.stdout.write(`[LUMA_QR]:${qr}\n`);
-
-    if (qrcode) {
-      qrcode.generate(qr, { small: true });
-    } else {
-      Logger.info("QR Code (texto):", qr);
-      Logger.info("\n💡 Instale qrcode-terminal para QR visual\n");
-    }
-
-    Logger.info("\n⏰ QR Code expira em ~60 segundos");
   }
 
   async handleDisconnection(lastDisconnect) {
     this.isConnecting = false;
-    const statusCode = lastDisconnect?.error?.output?.statusCode;
-    const errorMessage = lastDisconnect?.error?.message || "Desconhecido";
+    const statusCode   = lastDisconnect?.error?.output?.statusCode;
+    const errorMessage = lastDisconnect?.error?.message || 'Desconhecido';
 
     Logger.info(`🔌 Desconectado: ${errorMessage}`);
+    if (statusCode) Logger.info(`📊 Status Code: ${statusCode}`);
 
-    if (statusCode) {
-      Logger.info(`📊 Status Code: ${statusCode}`);
-    }
+    const action = this.policy.decide(statusCode, errorMessage);
 
-    if (
-      statusCode === 408 ||
-      statusCode === 440 ||
-      errorMessage.includes("timed out")
-    ) {
-      if (this.qrRetries >= this.maxQrRetries) {
-        Logger.info(
-          `❌ Máximo de tentativas de QR atingido (${this.maxQrRetries})`,
-        );
-        Logger.info("🧹 Limpando sessão para nova tentativa...\n");
+    switch (action) {
+      case 'qr_max_reached':
+        Logger.info(`❌ Máximo de tentativas de QR atingido (${this.policy.maxQrRetries})`);
+        Logger.info('🧹 Limpando sessão para nova tentativa...\n');
         await this.cleanAndRestart();
-        return;
-      }
+        break;
 
-      Logger.info("⏱️ Timeout ao escanear QR - gerando novo código...");
-      await new Promise((r) => setTimeout(r, 3000));
-      this.isConnecting = false;
-      await this.initialize();
-      return;
-    }
+      case 'regenerate_qr':
+        Logger.info('⏱️ Timeout ao escanear QR - gerando novo código...');
+        await new Promise(r => setTimeout(r, 3000));
+        this.isConnecting = false;
+        await this.initialize();
+        break;
 
-    if (
-      statusCode === 503 ||
-      statusCode === 500 ||
-      errorMessage.includes("Connection Failure")
-    ) {
-      Logger.info("📡 Erro de conexão detectado - tentando novamente...");
-      await new Promise((r) => setTimeout(r, 5000));
-      this.isConnecting = false;
-      await this.initialize();
-      return;
-    }
+      case 'retry_connection':
+        Logger.info('📡 Erro de conexão detectado - tentando novamente...');
+        await new Promise(r => setTimeout(r, 5000));
+        this.isConnecting = false;
+        await this.initialize();
+        break;
 
-    if (this.isAuthenticationError(statusCode)) {
-      await this.cleanAndRestart();
-      return;
-    }
+      case 'clean_and_restart':
+        Logger.info('🔄 Reiniciando sessão...');
+        await this.cleanAndRestart();
+        break;
 
-    if (statusCode === DisconnectReason.loggedOut) {
-      Logger.info("🔄 Deslogado do WhatsApp - gerando novo QR");
-      await this.cleanAndRestart();
-      return;
-    }
-
-    const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-    if (shouldReconnect) {
-      await this.reconnect();
-    } else {
-      Logger.info("🛑 Bot finalizado");
-      process.exit(0);
-    }
-  }
-
-  isAuthenticationError(statusCode) {
-    return [405, 401, 403].includes(statusCode);
-  }
-
-  async handleMessagesUpsert(m) {
-    try {
-      if (m.type !== "notify") return;
-
-      for (const message of m.messages) {
-        if (!message.message) continue;
-        const botAdapter = new BaileysAdapter(this.sock, message);
-
-        await MessageHandler.process(botAdapter);
-      }
-    } catch (error) {
-      Logger.error("Erro ao processar mensagem:", error);
+      default: // 'reconnect'
+        await this.reconnect();
+        break;
     }
   }
 
   async cleanAndRestart() {
-    Logger.info("🧹 Limpando sessão...");
-    this.lastCleanTime = Date.now();
-    this.qrRetries = 0;
+    Logger.info('🧹 Limpando sessão...');
+    this.policy.markCleanTime();
+    this.policy.resetAttempts();
 
     try {
       this.closeSafely();
 
       if (fs.existsSync(CONFIG.AUTH_DIR)) {
         FileSystem.removeDir(CONFIG.AUTH_DIR);
-        Logger.info("✅ Sessão removida");
+        Logger.info('✅ Sessão removida');
       }
 
-      await new Promise((r) => setTimeout(r, 3000));
-      Logger.info("🚀 Reiniciando...\n");
+      await new Promise(r => setTimeout(r, 3000));
+      Logger.info('🚀 Reiniciando...\n');
 
-      this.reconnectAttempts = 0;
       this.isConnecting = false;
       await this.initialize();
     } catch (error) {
-      Logger.error("❌ Erro ao limpar:", error);
+      Logger.error('❌ Erro ao limpar:', error);
       Logger.warn("⚠️ Remova manualmente a pasta 'auth_info' e reinicie");
       process.exit(1);
     }
   }
 
   async reconnect() {
-    if (this.reconnectAttempts >= CONFIG.MAX_RECONNECT_ATTEMPTS) {
-      Logger.info(
-        `❌ Máximo de ${CONFIG.MAX_RECONNECT_ATTEMPTS} tentativas atingido`,
-      );
-      Logger.info("🧹 Limpando sessão...\n");
+    const { delayMs, hasReachedLimit } = this.policy.nextReconnectDelay();
+
+    if (hasReachedLimit) {
+      Logger.info(`❌ Máximo de ${CONFIG.MAX_RECONNECT_ATTEMPTS} tentativas atingido`);
+      Logger.info('🧹 Limpando sessão...\n');
       await this.cleanAndRestart();
       return;
     }
 
-    this.reconnectAttempts++;
-    const delay = Math.min(
-      CONFIG.RECONNECT_DELAY * this.reconnectAttempts,
-      15000,
-    );
-
-    Logger.info(
-      `⏳ Reconectando em ${delay / 1000}s (${this.reconnectAttempts}/${CONFIG.MAX_RECONNECT_ATTEMPTS
-      })...`,
-    );
-
-    await new Promise((r) => setTimeout(r, delay));
+    Logger.info(`⏳ Reconectando em ${delayMs / 1000}s (${this.policy.reconnectAttempts}/${CONFIG.MAX_RECONNECT_ATTEMPTS})...`);
+    await new Promise(r => setTimeout(r, delayMs));
     this.isConnecting = false;
     await this.initialize();
   }
 
   async handleInitializationError(error) {
     const now = Date.now();
-    if (now - this.lastCleanTime > CONFIG.MIN_CLEAN_INTERVAL || 60000) {
-      if (this.isAuthError(error.message)) {
+    // NOTE: bug pré-existente — `|| 60000` é sempre truthy, preservado intencionalmente.
+    if (now - this.policy.lastCleanTime > CONFIG.MIN_CLEAN_INTERVAL || 60000) {
+      if (this.policy.isAuthError(error.message)) {
         await this.cleanAndRestart();
       } else {
         await this.reconnect();
       }
     } else {
-      Logger.info("⏳ Aguardando antes de tentar novamente...");
-      await new Promise((r) => setTimeout(r, 10000));
+      Logger.info('⏳ Aguardando antes de tentar novamente...');
+      await new Promise(r => setTimeout(r, 10000));
       await this.reconnect();
     }
   }
 
-  isAuthError(message) {
-    return ["405", "auth", "401", "Connection Failure"].some((err) =>
-      message.includes(err),
-    );
-  }
-
   gracefulShutdown() {
-    Logger.info("\n🛑 Finalizando...");
+    Logger.info('\n🛑 Finalizando...');
     this.closeSafely();
-    try {
-      FileSystem.cleanupDir(CONFIG.TEMP_DIR);
-    } catch (e) { }
-    Logger.info("✅ Finalizado");
+    try { FileSystem.cleanupDir(CONFIG.TEMP_DIR); } catch {}
+    Logger.info('✅ Finalizado');
     process.exit(0);
   }
 }
