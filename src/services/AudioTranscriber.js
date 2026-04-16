@@ -83,7 +83,7 @@ export class AudioTranscriber {
           config: { temperature: 0.1, maxOutputTokens: 1024 },
         });
 
-        const text = this._extractGeminiText(response);
+        const text = this._extractText(response);
         if (text) {
           Logger.info(`✅ Áudio transcrito (${text.length} chars)`);
           return text.trim();
@@ -161,7 +161,7 @@ export class AudioTranscriber {
     return map[base] || "ogg";
   }
 
-  _extractGeminiText(response) {
+  _extractText(response) {
     const parts = response.candidates?.[0]?.content?.parts;
     if (parts) {
       return parts.filter((p) => p.text).map((p) => p.text).join("");

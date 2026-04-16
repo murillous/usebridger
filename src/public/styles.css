@@ -83,7 +83,13 @@ body::after {
 }
 
 /* ─── Barba wrapper / container ──────────────────────────────────────────────────── */
-[data-barba="wrapper"],
+[data-barba="wrapper"] {
+  position: relative;   /* contém o container saindo (position:absolute do barba) */
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
 [data-barba="container"] {
   height: 100vh;
   height: 100dvh;
@@ -227,11 +233,13 @@ body::after {
     display: none;
     flex-direction: column;
     overflow: hidden;
+    z-index: 0;
   }
 
   .panel-left.tab-active,
   .panel-right.tab-active {
     display: flex;
+    z-index: 1;
   }
 
   /* left panel scrolls on mobile */

@@ -104,10 +104,10 @@ export class GeminiAdapter extends AIPort {
         topP: this.genConfig.topP,
         topK: this.genConfig.topK,
         safetySettings: [
-          { category: "HARM_CATEGORY_HATE_SPEECH",        threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_HARASSMENT",          threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",   threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_DANGEROUS_CONTENT",   threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
         ],
       },
     });
@@ -180,10 +180,10 @@ export class GeminiAdapter extends AIPort {
         if (part.functionCall) functionCalls.push(part.functionCall);
       }
     } else {
-      try { if (response.text) text = response.text; } catch (_) {}
+      try { if (response.text) text = response.text; } catch (_) { }
       try {
         if (Array.isArray(response.functionCalls)) functionCalls = response.functionCalls;
-      } catch (_) {}
+      } catch (_) { }
     }
 
     return { text, functionCalls };

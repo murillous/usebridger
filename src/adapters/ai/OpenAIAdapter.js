@@ -119,8 +119,31 @@ export class OpenAIAdapter extends AIPort {
         function: {
           name:        tool.name,
           description: tool.description ?? "",
-          parameters:  tool.parameters ?? { type: "object", properties: {} },
+          parameters:  this.#normalizeSchema(tool.parameters ?? { type: "object", properties: {} }),
         },
       }));
+  }
+
+  /**
+   * Normaliza um JSON Schema do formato Gemini (tipos em UPPERCASE) para o
+   * formato OpenAI (tipos em lowercase), recursivamente.
+   * @param {object} schema
+   * @returns {object}
+   */
+  #normalizeSchema(schema) {
+    if (!schema || typeof schema !== "object") return schema;
+    const result = { ...schema };
+    if (typeof result.type === "string") {
+      result.type = result.type.toLowerCase();
+    }
+    if (result.properties && typeof result.properties === "object") {
+      result.properties = Object.fromEntries(
+        Object.entries(result.properties).map(([k, v]) => [k, this.#normalizeSchema(v)])
+      );
+    }
+    if (result.items) {
+      result.items = this.#normalizeSchema(result.items);
+    }
+    return result;
   }
 }

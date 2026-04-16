@@ -89,8 +89,8 @@ export const env = Object.freeze({
   AI_MODEL: process.env.AI_MODEL || undefined,
 
   // API Keys — apenas a do provider ativo é obrigatória
-  GEMINI_API_KEY:   process.env.GEMINI_API_KEY   || undefined,
-  OPENAI_API_KEY:   process.env.OPENAI_API_KEY   || undefined,
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY || undefined,
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY || undefined,
   DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY || undefined,
 
   // Busca na internet — opcional (cai para Google Grounding se ausente)

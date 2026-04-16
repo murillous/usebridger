@@ -107,33 +107,39 @@
         setError('');
         setLoading(true);
 
+        // Fetch e parse separados — assim erros de rede e erros de navegação
+        // não caem no mesmo catch e não mostram "ERRO DE CONEXÃO" indevidamente.
+        let data;
         try {
-          const res  = await fetch('/api/login', {
+          const res = await fetch('/api/login', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify({ password }),
           });
-          const data = await res.json();
-
-          if (data.ok) {
-            const token = data.token ?? '';
-            localStorage.setItem('dash_token', token);
-            document.cookie = `dash_token=${encodeURIComponent(token)}; path=/; SameSite=Strict`;
-            // Navega via barba.js para transição animada; fallback para redirect
-            if (window.barba) {
-              barba.go('/');
-            } else {
-              location.href = `/?token=${encodeURIComponent(token)}`;
-            }
-          } else {
-            setError('» CREDENCIAL INVÁLIDA');
-            setLoading(false);
-            input.value = '';
-            input.focus();
+          // Se a resposta não for JSON (ex: página de erro do Cloudflare tunnel
+          // antes de estabilizar), json() lança — tratamos como erro de rede.
+          if (!res.ok && !res.headers.get('content-type')?.includes('application/json')) {
+            throw new TypeError('non-json response');
           }
+          data = await res.json();
         } catch {
           setError('» ERRO DE CONEXÃO');
           setLoading(false);
+          return;
+        }
+
+        if (data.ok) {
+          const token = data.token ?? '';
+          localStorage.setItem('dash_token', token);
+          // Cookie já é setado pelo servidor via Set-Cookie na resposta do /api/login.
+          // Navegação completa (não SPA) para garantir que o browser processe o cookie
+          // antes de requisitar a rota protegida.
+          location.href = '/';
+        } else {
+          setError('» CREDENCIAL INVÁLIDA');
+          setLoading(false);
+          input.value = '';
+          input.focus();
         }
       });
     };

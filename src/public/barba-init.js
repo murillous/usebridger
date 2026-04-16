@@ -19,28 +19,30 @@ window.bindLoginForm = function bindLoginForm() {
     errEl.textContent = '';
     if (btn) { btn.disabled = true; btn.textContent = 'AUTENTICANDO...'; }
 
+    let data;
     try {
-      const res  = await fetch('/api/login', {
+      const res = await fetch('/api/login', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ password }),
       });
-      const data = await res.json();
-
-      if (data.ok) {
-        localStorage.setItem('dash_token', data.token ?? '');
-        document.cookie = `dash_token=${encodeURIComponent(data.token ?? '')}; path=/; SameSite=Strict`;
-        if (window.barba) {
-          barba.go('/');
-        } else {
-          location.href = '/';
-        }
-      } else {
-        errEl.textContent = '» SENHA INCORRETA';
-        if (btn) { btn.disabled = false; btn.textContent = 'ENTRAR ↩'; }
+      if (!res.ok && !res.headers.get('content-type')?.includes('application/json')) {
+        throw new TypeError('non-json response');
       }
+      data = await res.json();
     } catch {
       errEl.textContent = '» ERRO DE CONEXÃO';
+      if (btn) { btn.disabled = false; btn.textContent = 'ENTRAR ↩'; }
+      return;
+    }
+
+    if (data.ok) {
+      localStorage.setItem('dash_token', data.token ?? '');
+      // Cookie já é setado pelo servidor via Set-Cookie na resposta do /api/login.
+      // Navegação completa para garantir que o browser processe o cookie.
+      location.href = '/';
+    } else {
+      errEl.textContent = '» SENHA INCORRETA';
       if (btn) { btn.disabled = false; btn.textContent = 'ENTRAR ↩'; }
     }
   });
