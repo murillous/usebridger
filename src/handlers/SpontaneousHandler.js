@@ -80,6 +80,7 @@ export class SpontaneousHandler {
    */
   static async handle(bot, lumaHandler) {
     if (!bot.isGroup) return;
+    if (!lumaHandler.isConfigured) return;
 
     // Imagem/sticker sem áudio — contexto visual disponível para a IA
     const hasVisual = bot.hasVisualContent && !bot.hasAudio;

@@ -23,44 +23,32 @@ import dotenv from 'dotenv';
 // No dashboard, process.cwd() é o mesmo root pois o script é lançado de lá.
 dotenv.config();
 
-// ─── Variáveis obrigatórias ────────────────────────────────────────────────────
+// ─── Aviso de configuração de IA ──────────────────────────────────────────────
 
 /**
- * Lista de variáveis que DEVEM existir para o bot funcionar.
- * O código não chega à linha de importação se alguma estiver ausente.
+ * Emite warnings se nenhuma chave de IA estiver configurada.
+ * A ausência de chave não impede o bot de iniciar — features sem IA (sticker,
+ * download, comandos de grupo) continuam funcionando normalmente.
+ * O provider de IA é opcional: só falha silenciosamente para as mensagens
+ * que precisariam de resposta inteligente.
  */
-/**
- * Valida as variáveis obrigatórias com base no provider de IA ativo.
- * Só exige a API Key do provider configurado em AI_PROVIDER.
- */
-function validateRequired() {
-  const missing = [];
+function warnIfNoAIKey() {
   const provider = process.env.AI_PROVIDER || 'gemini';
 
-  if (provider === 'gemini' || provider === undefined) {
-    if (!process.env.GEMINI_API_KEY?.trim()) missing.push('GEMINI_API_KEY');
-  }
+  const hasKey =
+    (provider === 'gemini'   && process.env.GEMINI_API_KEY?.trim()) ||
+    (provider === 'openai'   && process.env.OPENAI_API_KEY?.trim()) ||
+    (provider === 'deepseek' && process.env.DEEPSEEK_API_KEY?.trim());
 
-  if (provider === 'openai') {
-    if (!process.env.OPENAI_API_KEY?.trim()) missing.push('OPENAI_API_KEY');
-  }
-
-  if (provider === 'deepseek') {
-    if (!process.env.DEEPSEEK_API_KEY?.trim()) missing.push('DEEPSEEK_API_KEY');
-  }
-
-  if (missing.length > 0) {
-    throw new Error(
-      `[Config] Variáveis de ambiente obrigatórias ausentes: ${missing.join(', ')}\n` +
-      `Crie ou verifique o arquivo .env na raiz do projeto.\n` +
-      `Provider ativo: AI_PROVIDER=${provider}`,
+  if (!hasKey) {
+    console.warn(
+      `[Config] ⚠️  Nenhuma API Key de IA configurada para o provider "${provider}". ` +
+      `O bot iniciará sem suporte a conversas — sticker, download e comandos de grupo funcionam normalmente.`,
     );
   }
 }
 
-// Validação executada no momento do import — falha rápido e explícito.
-// Em ambiente de teste, use vi.stubEnv() para injetar valores sem tocar no .env real.
-validateRequired();
+warnIfNoAIKey();
 
 // ─── Exportação congelada ──────────────────────────────────────────────────────
 

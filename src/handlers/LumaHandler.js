@@ -78,6 +78,8 @@ export class LumaHandler {
   // ── Handlers de alto nível (chamados pelo LumaPlugin) ───────────────────────
 
   async handle(bot, isReply = false, groupContext = '') {
+    if (!this.isConfigured) return;
+
     try {
       let userMessage = isReply
         ? bot.body
@@ -114,6 +116,8 @@ export class LumaHandler {
   }
 
   async handleAudio(bot, audioTranscriber, groupContext = '') {
+    if (!this.isConfigured) return;
+
     try {
       if (!audioTranscriber) {
         return await this.handle(bot, bot.isRepliedToMe, groupContext);
