@@ -6,20 +6,39 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * Foco nas funções puras e determinísticas que não precisam de rede:
  * - isTriggered: regex de ativação da Luma
  * - extractUserMessage: remoção de prefixos de chamada
- * - splitIntoParts: divisão de respostas longas
  * - clearHistory / getStats: gerenciamento de memória
+ * - isConfigured / getRandomBoredResponse: comportamento básico
  *
- * O AIService (Gemini) é mockado inteiramente — testes de IA real
- * ficam para testes de integração.
+ * O AIService (Gemini) e ConversationHistory são mockados — testes de IA
+ * e histórico ficam em seus próprios arquivos de teste.
+ *
+ * splitIntoParts foi extraído para ResponseFormatter.js — ver
+ * tests/unit/utils/ResponseFormatter.test.js
  */
 
-// Mocka todo o módulo AIService para que o LumaHandler possa ser
-// instanciado sem precisar de uma API Key real.
-// Usa class syntax — obrigatório no Vitest 4 para mocks de construtores com `new`.
-vi.mock('../../src/services/AIService.js', () => ({
-  AIService: class {
-    generateContent = vi.fn().mockResolvedValue({ text: 'resposta mock', functionCalls: [] });
-    getStats = vi.fn().mockReturnValue([]);
+// Mocka createAIProvider para que o LumaHandler possa ser instanciado
+// sem precisar de uma API Key real.
+vi.mock('../../src/core/services/AIProviderFactory.js', () => ({
+  createAIProvider: vi.fn(() => ({
+    generateContent: vi.fn().mockResolvedValue({ text: 'resposta mock', functionCalls: [] }),
+    getStats:        vi.fn().mockReturnValue([]),
+  })),
+}));
+
+// Mocka ConversationHistory para evitar vazamento do setInterval nos testes.
+vi.mock('../../src/core/services/ConversationHistory.js', () => ({
+  ConversationHistory: class {
+    constructor() {
+      this._store = new Map();
+    }
+    add(jid, userMsg, botResp) {
+      if (!this._store.has(jid)) this._store.set(jid, []);
+      this._store.get(jid).push({ userMsg, botResp });
+    }
+    getText()   { return 'Nenhuma conversa anterior.'; }
+    clear(jid)  { this._store.delete(jid); }
+    get size()  { return this._store.size; }
+    destroy()   {}
   },
 }));
 
@@ -27,7 +46,7 @@ vi.mock('../../src/services/AIService.js', () => ({
 vi.mock('../../src/services/Database.js', () => ({
   DatabaseService: {
     incrementMetric: vi.fn(),
-    getMetrics: vi.fn().mockReturnValue({}),
+    getMetrics:      vi.fn().mockReturnValue({}),
   },
 }));
 
@@ -36,8 +55,8 @@ vi.mock('../../src/managers/PersonalityManager.js', () => ({
   PersonalityManager: {
     getPersonaConfig: vi.fn().mockReturnValue({
       context: 'Você é a Luma.',
-      style: 'informal',
-      traits: ['seja amigável'],
+      style:   'informal',
+      traits:  ['seja amigável'],
     }),
   },
 }));
@@ -50,6 +69,8 @@ vi.mock('../../src/handlers/MediaProcessor.js', () => ({
 }));
 
 import { LumaHandler } from '../../src/handlers/LumaHandler.js';
+
+// ── isTriggered ────────────────────────────────────────────────────────────────
 
 describe('LumaHandler.isTriggered — detecção de gatilhos', () => {
   it('detecta trigger com "luma," no início', () => {
@@ -89,6 +110,8 @@ describe('LumaHandler.isTriggered — detecção de gatilhos', () => {
   });
 });
 
+// ── extractUserMessage ─────────────────────────────────────────────────────────
+
 describe('LumaHandler.extractUserMessage — remoção de prefixos', () => {
   let handler;
 
@@ -125,81 +148,11 @@ describe('LumaHandler.extractUserMessage — remoção de prefixos', () => {
   });
 
   it('não altera mensagem que não começa com prefixo da Luma', () => {
-    // Mensagem que já foi pré-processada (ex: reply) — não deve ser mutada
     expect(handler.extractUserMessage('qual é a capital do Brasil?')).toBe('qual é a capital do Brasil?');
   });
 });
 
-describe('LumaHandler.splitIntoParts — divisão de respostas', () => {
-  let handler;
-
-  beforeEach(() => {
-    handler = new LumaHandler();
-  });
-
-  it('retorna array vazio para texto vazio', () => {
-    expect(handler.splitIntoParts('')).toEqual([]);
-  });
-
-  it('retorna array vazio para null/undefined', () => {
-    expect(handler.splitIntoParts(null)).toEqual([]);
-    expect(handler.splitIntoParts(undefined)).toEqual([]);
-  });
-
-  it('retorna texto curto como parte única sem separar', () => {
-    const texto = 'resposta curta aqui';
-    const parts = handler.splitIntoParts(texto);
-
-    expect(parts).toHaveLength(1);
-    expect(parts[0]).toBe(texto);
-  });
-
-  it('divide pelo separador explícito [PARTE]', () => {
-    const texto = 'primeiro bloco[PARTE]segundo bloco[PARTE]terceiro bloco';
-    const parts = handler.splitIntoParts(texto);
-
-    expect(parts).toHaveLength(3);
-    expect(parts[0]).toBe('primeiro bloco');
-    expect(parts[1]).toBe('segundo bloco');
-    expect(parts[2]).toBe('terceiro bloco');
-  });
-
-  it('remove partes vazias ao dividir por [PARTE]', () => {
-    const texto = 'bloco um[PARTE][PARTE]bloco três';
-    const parts = handler.splitIntoParts(texto);
-
-    // Partes vazias são filtradas
-    expect(parts.every(p => p.length > 0)).toBe(true);
-  });
-
-  it('respeita o limite máximo de partes (3)', () => {
-    // 4 blocos — deve retornar no máximo 3
-    const texto = 'a[PARTE]b[PARTE]c[PARTE]d';
-    const parts = handler.splitIntoParts(texto);
-
-    expect(parts.length).toBeLessThanOrEqual(3);
-  });
-
-  it('texto longo sem [PARTE] é dividido em ponto final natural', () => {
-    // Texto > 500 caracteres sem separador — deve ser dividido
-    const longo = 'a'.repeat(200) + '. ' + 'b'.repeat(200) + '. ' + 'c'.repeat(200);
-    const parts = handler.splitIntoParts(longo);
-
-    expect(parts.length).toBeGreaterThan(1);
-    // Nenhuma parte deve ser vazia
-    expect(parts.every(p => p.length > 0)).toBe(true);
-  });
-
-  it('partes individualmente não excedem maxResponseLength', () => {
-    const longo = 'palavra '.repeat(200); // ~1600 chars, bem acima de 500
-    const parts = handler.splitIntoParts(longo);
-
-    // Todas as partes devem ter tamanho razoável (com margem para quebra em palavra)
-    parts.forEach(p => {
-      expect(p.length).toBeLessThanOrEqual(600);
-    });
-  });
-});
+// ── gerenciamento de histórico ─────────────────────────────────────────────────
 
 describe('LumaHandler — gerenciamento de histórico', () => {
   let handler;
@@ -208,24 +161,24 @@ describe('LumaHandler — gerenciamento de histórico', () => {
     handler = new LumaHandler();
   });
 
-  it('clearHistory remove o histórico do JID especificado', () => {
+  it('clearHistory delega para history.clear e remove o JID', () => {
     const jid = 'test@s.whatsapp.net';
 
-    // Insere algo no histórico manualmente (via método privado acessado pelo contrato público)
-    handler._addToHistory(jid, 'pergunta', 'resposta', 'Usuário');
-    expect(handler.conversationHistory.has(jid)).toBe(true);
+    // Adiciona diretamente no store do mock para simular histórico existente
+    handler.history.add(jid, 'pergunta', 'resposta', 'Usuário');
+    expect(handler.history._store.has(jid)).toBe(true);
 
     handler.clearHistory(jid);
-    expect(handler.conversationHistory.has(jid)).toBe(false);
+    expect(handler.history._store.has(jid)).toBe(false);
   });
 
   it('clearHistory em JID inexistente não lança erro', () => {
-    expect(() => handler.clearHistory('jid_que_nao_existe@s.whatsapp.net')).not.toThrow();
+    expect(() => handler.clearHistory('jid_inexistente@s.whatsapp.net')).not.toThrow();
   });
 
   it('getStats retorna totalConversations correto', () => {
-    handler._addToHistory('jid1@s.whatsapp.net', 'oi', 'oi', 'User1');
-    handler._addToHistory('jid2@s.whatsapp.net', 'oi', 'oi', 'User2');
+    handler.history.add('jid1@s.whatsapp.net', 'oi', 'oi', 'User1');
+    handler.history.add('jid2@s.whatsapp.net', 'oi', 'oi', 'User2');
 
     const stats = handler.getStats();
     expect(stats.totalConversations).toBe(2);
@@ -235,17 +188,30 @@ describe('LumaHandler — gerenciamento de histórico', () => {
     const stats = handler.getStats();
     expect(stats.totalConversations).toBe(0);
   });
-});
 
-describe('LumaHandler — isConfigured', () => {
-  it('isConfigured retorna false quando API Key está ausente', () => {
-    const handler = new LumaHandler();
-    // O mock do AIService garante que ele é criado, mas podemos
-    // verificar via getter se o serviço foi injetado
-    // (O handler criado nos testes usa o mock, então aiService não é null)
-    expect(typeof handler.isConfigured).toBe('boolean');
+  it('getStats inclui modelStats do aiService', () => {
+    const stats = handler.getStats();
+    expect(Array.isArray(stats.modelStats)).toBe(true);
   });
 });
+
+// ── isConfigured ───────────────────────────────────────────────────────────────
+
+describe('LumaHandler — isConfigured', () => {
+  it('isConfigured retorna true quando aiService foi criado com sucesso', () => {
+    const handler = new LumaHandler();
+    expect(handler.isConfigured).toBe(true);
+  });
+
+  it('isConfigured retorna false quando createAIProvider retorna null (API key ausente)', async () => {
+    const { createAIProvider } = await import('../../src/core/services/AIProviderFactory.js');
+    vi.mocked(createAIProvider).mockReturnValueOnce(null);
+    const handler = new LumaHandler();
+    expect(handler.isConfigured).toBe(false);
+  });
+});
+
+// ── getRandomBoredResponse ─────────────────────────────────────────────────────
 
 describe('LumaHandler.getRandomBoredResponse — respostas de tédio', () => {
   let handler;
@@ -261,10 +227,38 @@ describe('LumaHandler.getRandomBoredResponse — respostas de tédio', () => {
   });
 
   it('retorna valores dentro do array BORED_RESPONSES', () => {
-    // Chama várias vezes para verificar que é sempre do pool configurado
     const valid = ['Fala logo, mds...', 'Tô ouvindo, pode falar.', '🙄 Digita aí...'];
     for (let i = 0; i < 10; i++) {
       expect(valid).toContain(handler.getRandomBoredResponse());
     }
+  });
+});
+
+// ── saveLastBotMessage / isReplyToLuma ─────────────────────────────────────────
+
+describe('LumaHandler — rastreamento da última mensagem do bot', () => {
+  let handler;
+
+  beforeEach(() => {
+    handler = new LumaHandler();
+  });
+
+  it('saveLastBotMessage armazena o ID por JID', () => {
+    handler.saveLastBotMessage('jid@s.whatsapp.net', 'msg-id-123');
+    expect(handler.lastBotMessages.get('jid@s.whatsapp.net')).toBe('msg-id-123');
+  });
+
+  it('saveLastBotMessage ignora ID nulo/undefined', () => {
+    handler.saveLastBotMessage('jid@s.whatsapp.net', null);
+    expect(handler.lastBotMessages.has('jid@s.whatsapp.net')).toBe(false);
+  });
+
+  it('isReplyToLuma retorna false quando aiService é null', () => {
+    const h = new LumaHandler({ aiService: null });
+    expect(h.isReplyToLuma({})).toBe(false);
+  });
+
+  it('isReplyToLuma retorna false para mensagem sem contextInfo', () => {
+    expect(handler.isReplyToLuma({ message: {} })).toBe(false);
   });
 });
