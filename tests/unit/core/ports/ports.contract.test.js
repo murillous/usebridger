@@ -32,32 +32,42 @@ describe('AIPort — contrato base', () => {
 describe('MessagingPort — contrato base', () => {
   const port = new MessagingPort();
 
+  it('body lança erro se não implementado', () => {
+    expect(() => port.body).toThrow('MessagingPort não implementou MessagingPort.body');
+  });
+
+  it('jid lança erro se não implementado', () => {
+    expect(() => port.jid).toThrow('MessagingPort não implementou MessagingPort.jid');
+  });
+
+  it('reply lança erro se não implementado', async () => {
+    await expect(port.reply('texto')).rejects.toThrow('MessagingPort não implementou MessagingPort.reply()');
+  });
+
   it('sendText lança erro se não implementado', async () => {
-    await expect(port.sendText('jid', 'texto')).rejects.toThrow('MessagingPort não implementou MessagingPort.sendText()');
+    await expect(port.sendText('texto')).rejects.toThrow('MessagingPort não implementou MessagingPort.sendText()');
   });
 
-  it('sendImage lança erro se não implementado', async () => {
-    await expect(port.sendImage('jid', Buffer.from(''))).rejects.toThrow();
-  });
-
-  it('sendAudio lança erro se não implementado', async () => {
-    await expect(port.sendAudio('jid', Buffer.from(''))).rejects.toThrow();
-  });
-
-  it('sendVideo lança erro se não implementado', async () => {
-    await expect(port.sendVideo('jid', Buffer.from(''))).rejects.toThrow();
+  it('sendMessage lança erro se não implementado', async () => {
+    await expect(port.sendMessage('jid', {})).rejects.toThrow('MessagingPort não implementou MessagingPort.sendMessage()');
   });
 
   it('react lança erro se não implementado', async () => {
-    await expect(port.react('jid', {}, '👍')).rejects.toThrow();
+    await expect(port.react('👍')).rejects.toThrow('MessagingPort não implementou MessagingPort.react()');
   });
 
   it('sendPresence lança erro se não implementado', async () => {
-    await expect(port.sendPresence('jid', 'composing')).rejects.toThrow();
+    await expect(port.sendPresence('composing')).rejects.toThrow('MessagingPort não implementou MessagingPort.sendPresence()');
   });
 
-  it('getBotJid lança erro se não implementado', () => {
-    expect(() => port.getBotJid()).toThrow();
+  it('getQuotedAdapter lança erro se não implementado', () => {
+    expect(() => port.getQuotedAdapter()).toThrow('MessagingPort não implementou MessagingPort.getQuotedAdapter()');
+  });
+
+  it('mensagem de erro inclui o nome da classe derivada', async () => {
+    class MeuAdapter extends MessagingPort {}
+    const meu = new MeuAdapter();
+    await expect(meu.reply('texto')).rejects.toThrow('MeuAdapter não implementou MessagingPort.reply()');
   });
 });
 

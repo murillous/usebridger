@@ -245,7 +245,7 @@ export class LumaHandler {
     for (const part of parts) {
       lastSent = !lastSent
         ? await bot.reply(part)
-        : await bot.socket.sendMessage(bot.jid, { text: part, quoted: lastSent });
+        : await bot.sendText(part, { quoted: lastSent });
     }
     return lastSent;
   }

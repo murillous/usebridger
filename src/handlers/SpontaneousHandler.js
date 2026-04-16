@@ -133,14 +133,9 @@ export class SpontaneousHandler {
   static async #sendPartsQuoted(bot, parts, lumaHandler) {
     let lastSent = null;
     for (const part of parts) {
-      if (!lastSent) {
-        lastSent = await bot.reply(part);
-      } else {
-        lastSent = await bot.socket.sendMessage(bot.jid, {
-          text: part,
-          quoted: lastSent,
-        });
-      }
+      lastSent = !lastSent
+        ? await bot.reply(part)
+        : await bot.sendText(part, { quoted: lastSent });
     }
     if (lastSent?.key?.id) lumaHandler.saveLastBotMessage(bot.jid, lastSent.key.id);
   }
@@ -149,10 +144,7 @@ export class SpontaneousHandler {
   static async #sendPartsStandalone(bot, parts, lumaHandler) {
     let lastSent = null;
     for (const part of parts) {
-      lastSent = await bot.socket.sendMessage(
-        bot.jid,
-        { text: part },
-      );
+      lastSent = await bot.sendText(part);
     }
     if (lastSent?.key?.id) lumaHandler.saveLastBotMessage(bot.jid, lastSent.key.id);
   }

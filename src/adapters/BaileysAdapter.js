@@ -1,16 +1,20 @@
 import { Logger } from "../utils/Logger.js";
+import { MessagingPort } from "../core/ports/MessagingPort.js";
 
 /**
- * Adaptador que normaliza as mensagens do Baileys para uso interno no bot.
- * Desempacota protocolos aninhados (ephemeral, viewOnce) transparentemente.
+ * Implementação do MessagingPort para o Baileys (WhatsApp Web via engenharia reversa).
+ *
+ * Encapsula o socket Baileys e a mensagem atual, expondo uma interface limpa
+ * para o restante do sistema. Para trocar de protocolo, crie um novo adapter
+ * que extends MessagingPort — nenhum handler ou plugin precisa mudar.
  */
-export class BaileysAdapter {
+export class BaileysAdapter extends MessagingPort {
   constructor(sock, message) {
+    super();
     this.sock = sock;
     this.message = message;
     this.key = message.key;
     this.remoteJid = message.key.remoteJid;
-    this.isFromMe = message.key.fromMe;
   }
 
   // --- Getters de Informação ---
@@ -25,6 +29,10 @@ export class BaileysAdapter {
 
   get jid() {
     return this.remoteJid;
+  }
+
+  get isFromMe() {
+    return this.message.key.fromMe;
   }
 
   get isGroup() {
@@ -231,6 +239,10 @@ export class BaileysAdapter {
     });
   }
 
+  async sendMessage(jid, content) {
+    return await this.sock.sendMessage(jid, content);
+  }
+
   // --- Métodos de Usuário/Grupo ---
 
   async getSenderNumber() {
@@ -245,7 +257,9 @@ export class BaileysAdapter {
         try {
           const [result] = await this.sock.onWhatsApp(jid);
           if (result && result.jid) jid = result.jid;
-        } catch (error) { }
+        } catch (error) {
+          Logger.warn(`⚠️ Não foi possível resolver LID para JID real: ${error.message}`);
+        }
       }
 
       let number = jid.split("@")[0];

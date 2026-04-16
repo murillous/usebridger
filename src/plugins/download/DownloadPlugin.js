@@ -34,7 +34,7 @@ export class DownloadPlugin {
       convertedPath = await VideoConverter.remuxForMobile(filePath);
 
       const videoBuffer = fs.readFileSync(convertedPath);
-      await bot.socket.sendMessage(bot.jid, { video: videoBuffer, caption: MESSAGES.VIDEO_SENT });
+      await bot.sendMessage(bot.jid, { video: videoBuffer, caption: MESSAGES.VIDEO_SENT });
 
       Logger.info("✅ Vídeo social enviado com sucesso.");
       DatabaseService.incrementMetric("videos_downloaded");
