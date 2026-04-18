@@ -501,6 +501,10 @@ body::after {
 .filter-btn:hover  { background: rgba(0,255,65,0.06); color: var(--c-green); }
 .filter-btn.active { background: rgba(0,255,65,0.09); color: var(--c-green); border-color: var(--c-border-bright); }
 
+.filter-btn.info            { border-color: rgba(68,238,255,0.2); color: rgba(68,238,255,0.45); }
+.filter-btn.info:hover      { background: rgba(68,238,255,0.06); color: var(--c-cyan); }
+.filter-btn.info.active     { background: rgba(68,238,255,0.09); color: var(--c-cyan); border-color: rgba(68,238,255,0.5); }
+
 .filter-btn.warn            { border-color: rgba(255,229,92,0.2); color: rgba(255,229,92,0.45); }
 .filter-btn.warn:hover      { background: rgba(255,229,92,0.06); color: var(--c-yellow); }
 .filter-btn.warn.active     { background: rgba(255,229,92,0.07); color: var(--c-yellow); border-color: rgba(255,229,92,0.5); }
