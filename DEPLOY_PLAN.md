@@ -31,7 +31,7 @@ Reiniciar só o processo filho (bot) preserva a URL pública do tunnel.
 | Falha no deploy | Bot segue com código antigo | Parar o bot, rollback | Disponibilidade > consistência |
 | Feedback | Apenas no log do dashboard | UI dedicada, notificações | YAGNI — log já existe |
 | `npm install` | Só se `package.json` ou `package-lock.json` mudou | Sempre, nunca | Equilíbrio entre segurança e velocidade |
-| Deploys paralelos | Git lock nativo resolve | Mutex, fila, debounce | Comportamento já correto sem código extra |
+| Deploys paralelos | Debounce de 5s no webhook | Mutex, fila, git lock nativo | Pushes em rajada viram um único deploy; só o estado mais recente importa |
 | Branch filter | Apenas `refs/heads/main` | Qualquer branch | Só produção faz deploy |
 
 ---
@@ -135,6 +135,12 @@ function verifyGitHubSignature(req) {
 }
 ```
 
+**Variável de debounce** (junto às constantes):
+```js
+let deployDebounceTimer = null;
+const DEPLOY_DEBOUNCE_MS = 5000;
+```
+
 **Função de deploy** (antes das rotas):
 ```js
 function runDeploy() {
@@ -157,6 +163,11 @@ function runDeploy() {
     pushLog(`❌ Deploy falhou: ${error.message}`, 'error');
   }
 }
+
+function scheduleDeploy() {
+  clearTimeout(deployDebounceTimer);
+  deployDebounceTimer = setTimeout(runDeploy, DEPLOY_DEBOUNCE_MS);
+}
 ```
 
 **Endpoint** (antes de `app.use(authMiddleware)` — tem auth própria):
@@ -176,8 +187,8 @@ app.post('/api/deploy', (req, res) => {
     return res.status(200).json({ ok: true, message: 'Branch ignorada' });
   }
 
-  res.status(200).json({ ok: true, message: 'Deploy iniciado' });
-  setImmediate(runDeploy);
+  res.status(200).json({ ok: true, message: 'Deploy agendado' });
+  scheduleDeploy();
 });
 ```
 
@@ -210,5 +221,5 @@ curl -X POST http://localhost:3000/api/deploy \
 | Risco | Probabilidade | Impacto | Mitigação |
 |-------|--------------|---------|-----------|
 | PC reinicia → URL do tunnel muda → webhook do GitHub aponta para URL antiga | Baixa (só em restart manual) | Médio | Atualizar webhook no GitHub após reiniciar o dashboard |
-| Dois pushes simultâneos | Muito baixa | Baixo | Git lock nativo: segundo pull falha, bot já tem código do primeiro |
+| Dois pushes simultâneos | Muito baixa | Baixo | Debounce de 5s: pushes em rajada reiniciam o timer, apenas o último deploy roda |
 | `npm install` lento bloqueia o bot durante install | Baixa | Baixo | Bot reinicia só depois do install — código antigo roda até lá |
