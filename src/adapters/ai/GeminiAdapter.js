@@ -16,6 +16,8 @@ export class GeminiAdapter extends AIPort {
    * @param {object} [options.genConfig] - Configurações de geração (temperature, tokens, etc.)
    * @param {Array} [options.tools] - Definições de ferramentas (tool calling)
    */
+  supportsVision = true;
+
   constructor({ apiKey, models, genConfig, tools } = {}) {
     super();
 

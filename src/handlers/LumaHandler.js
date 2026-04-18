@@ -20,9 +20,10 @@ export class LumaHandler {
    * @param {object} [deps.aiService] - Provider já instanciado (sobrescreve createAIProvider)
    * @param {ConversationHistory} [deps.history] - Instância já criada (sobrescreve new interno)
    */
-  constructor({ aiService, history } = {}) {
-    this.history         = history   ?? new ConversationHistory();
-    this.aiService       = aiService ?? createAIProvider(env);
+  constructor({ aiService, history, visionService } = {}) {
+    this.history         = history       ?? new ConversationHistory();
+    this.aiService       = aiService     ?? createAIProvider(env);
+    this.visionService   = visionService ?? this._createVisionService();
     this.lastBotMessages = new Map();
   }
 
@@ -44,8 +45,19 @@ export class LumaHandler {
 
     try {
       const personaConfig = PersonalityManager.getPersonaConfig(userJid);
-      const imageData     = message && sock ? await this._extractImage(message, sock) : null;
+      let imageData       = message && sock ? await this._extractImage(message, sock) : null;
       const historyText   = this.history.getText(userJid);
+
+      if (imageData && this.visionService) {
+        Logger.info('👁️ Provider sem visão — descrevendo imagem com Gemini...');
+        const description = await this._describeImageWithVision(imageData);
+        if (description) {
+          userMessage = userMessage
+            ? `${userMessage}\n\n[Descrição da imagem: ${description}]`
+            : `[O usuário enviou uma imagem. Descrição: ${description}]`;
+        }
+        imageData = null;
+      }
 
       const promptParts = buildPromptRequest({
         userMessage,
@@ -269,6 +281,28 @@ export class LumaHandler {
       return null;
     } catch (error) {
       Logger.error('❌ Erro ao extrair imagem:', error);
+      return null;
+    }
+  }
+
+  _createVisionService() {
+    if (this.aiService?.supportsVision !== false) return null;
+    if (!env.GEMINI_API_KEY) return null;
+    return createAIProvider({ AI_PROVIDER: 'gemini', GEMINI_API_KEY: env.GEMINI_API_KEY });
+  }
+
+  async _describeImageWithVision(imageData) {
+    try {
+      const result = await this.visionService.generateContent([{
+        role:  'user',
+        parts: [
+          { text: 'Descreva esta imagem de forma detalhada e objetiva em português.' },
+          imageData,
+        ],
+      }]);
+      return result.text?.trim() || null;
+    } catch (error) {
+      Logger.error('❌ Erro ao descrever imagem com Gemini:', error);
       return null;
     }
   }

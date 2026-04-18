@@ -10,9 +10,9 @@ vi.mock('../../../../src/config/lumaConfig.js', () => ({
   LUMA_CONFIG: { TOOLS: [{ functionDeclarations: [{ name: 'search_web' }] }] },
 }));
 
-vi.mock('../../../../src/services/AIService.js', () => ({
-  AIService: class {
-    constructor(apiKey) { this.apiKey = apiKey; }
+vi.mock('../../../../src/adapters/ai/GeminiAdapter.js', () => ({
+  GeminiAdapter: class {
+    constructor(opts) { this.opts = opts; }
     generateContent = vi.fn().mockResolvedValue({ text: 'ok', functionCalls: [] });
     getStats = vi.fn().mockReturnValue([]);
   },
@@ -51,7 +51,7 @@ function makeEnv(provider, overrides = {}) {
 // ── Gemini ─────────────────────────────────────────────────────────────────────
 
 describe('createAIProvider — provider gemini', () => {
-  it('retorna instância de AIService para gemini com API key válida', () => {
+  it('retorna instância de GeminiAdapter para gemini com API key válida', () => {
     const provider = createAIProvider(makeEnv('gemini'));
     expect(provider).not.toBeNull();
     expect(typeof provider.generateContent).toBe('function');

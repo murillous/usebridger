@@ -1,4 +1,4 @@
-import { AIService } from '../../services/AIService.js';
+import { GeminiAdapter } from '../../adapters/ai/GeminiAdapter.js';
 import { OpenAIAdapter } from '../../adapters/ai/OpenAIAdapter.js';
 import { WebSearchService } from '../../services/WebSearchService.js';
 import { LUMA_CONFIG } from '../../config/lumaConfig.js';
@@ -22,7 +22,7 @@ export function createAIProvider(env) {
         return null;
       }
       Logger.info(`✅ Luma Service inicializado com provider: ${provider}`);
-      return new AIService(apiKey);
+      return new GeminiAdapter({ apiKey });
     }
 
     if (provider === 'openai') {
@@ -53,7 +53,7 @@ export function createAIProvider(env) {
     Logger.error(`❌ Luma não configurada: AI_PROVIDER="${provider}" não reconhecido. Use gemini, openai ou deepseek.`);
     return null;
   } catch (error) {
-    Logger.error('❌ Falha crítica ao iniciar AIService:', error.message);
+    Logger.error('❌ Falha crítica ao iniciar GeminiAdapter:', error.message);
     return null;
   }
 }
@@ -67,6 +67,7 @@ export function createAIProvider(env) {
  */
 function _wrapOpenAIAdapter(adapter) {
   return {
+    supportsVision: false,
     async generateContent(contents) {
       let fullText = '';
       const mediaParts = [];

@@ -12,8 +12,8 @@ import { describe, it, expect, vi } from 'vitest';
  * Este arquivo mantém os testes usando os novos locais para evitar regressão.
  */
 
-vi.mock('../../src/services/AIService.js', () => ({
-  AIService: vi.fn().mockImplementation(() => ({
+vi.mock('../../src/adapters/ai/GeminiAdapter.js', () => ({
+  GeminiAdapter: vi.fn().mockImplementation(() => ({
     generateContent: vi.fn(),
     getStats: vi.fn().mockReturnValue([]),
   })),
