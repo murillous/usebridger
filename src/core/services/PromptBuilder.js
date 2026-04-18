@@ -32,10 +32,17 @@ export function buildPromptRequest({
 
   const hasHistory = historyText !== 'Nenhuma conversa anterior.';
 
+  const now = new Date().toLocaleString('pt-BR', {
+    timeZone:   'America/Sao_Paulo',
+    dateStyle:  'full',
+    timeStyle:  'short',
+  });
+
   const promptText = template
     .replace('{{PERSONALITY_CONTEXT}}', personaConfig.context)
     .replace('{{PERSONALITY_STYLE}}',   personaConfig.style)
     .replace('{{PERSONALITY_TRAITS}}',  traitsStr)
+    .replace('{{CURRENT_DATETIME}}',    now)
     .replace('{{HISTORY_PLACEHOLDER}}', hasHistory ? `CONVERSA ANTERIOR:\n${historyText}\n` : '')
     .replace('{{GROUP_CONTEXT_PLACEHOLDER}}', groupContextStr)
     .replace('{{USER_MESSAGE}}', `${senderName}: ${userMessage}`);

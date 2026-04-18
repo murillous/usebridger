@@ -43,6 +43,7 @@ export class LumaPlugin {
       case COMMANDS.LUMA_CLEAR_SHORT:
       case COMMANDS.LUMA_CLEAR_ALT:
         this.lumaHandler.clearHistory(bot.jid);
+        this.#groupBuffer.delete(bot.jid);
         await bot.reply("🗑️ Memória limpa nesta conversa!");
         break;
 
