@@ -28,16 +28,12 @@ export class ReconnectionPolicy {
       return this.qrRetries >= this.maxQrRetries ? 'qr_max_reached' : 'regenerate_qr';
     }
 
+    if (this.isAuthenticationError(statusCode) || statusCode === DisconnectReason.loggedOut) {
+      return 'clean_and_restart';
+    }
+
     if (statusCode === 503 || statusCode === 500 || errorMessage.includes('Connection Failure')) {
       return 'retry_connection';
-    }
-
-    if (this.isAuthenticationError(statusCode)) {
-      return 'clean_and_restart';
-    }
-
-    if (statusCode === DisconnectReason.loggedOut) {
-      return 'clean_and_restart';
     }
 
     return 'reconnect';
