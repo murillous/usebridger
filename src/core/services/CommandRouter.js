@@ -31,6 +31,7 @@ export class CommandRouter {
     if (lower.startsWith(COMMANDS.PERSONA))        return COMMANDS.PERSONA;
     if (lower.startsWith(COMMANDS.DOWNLOAD))       return COMMANDS.DOWNLOAD;
     if (lower.startsWith(COMMANDS.DOWNLOAD_SHORT)) return COMMANDS.DOWNLOAD;
+    if (lower.startsWith(COMMANDS.RESUMO))         return COMMANDS.RESUMO;
 
     return null;
   }

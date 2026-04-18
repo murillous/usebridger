@@ -45,6 +45,7 @@ export const COMMANDS = {
   LUMA_CLEAR_SHORT: "!lc",
   LUMA_CLEAR_ALT: "!clear",
   MY_NUMBER: "!meunumero",
+  RESUMO: "!resumo",
 };
 
 export const MENUS = {
@@ -62,6 +63,7 @@ export const MENUS = {
     "🛠️ *UTILITÁRIOS*\n" +
     "• *!download* (!d) - Baixa vídeo do Twitter/X ou Instagram\n" +
     "• *!meunumero* - Vê seu ID/Número\n" +
+    "• *!resumo* (ex: !resumo 30) - Resume as últimas mensagens da conversa\n" +
     "• *!help* - Mostra essa lista\n" +
     "• *@everyone* ou *@todos* - Marca todos os membros do grupo\n\n" +
     "👮 *AUTOR*\n" +
