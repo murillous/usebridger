@@ -107,10 +107,12 @@ export class ToolDispatcher {
         const jid = bot.jid;
         const groupMetadata = await sock.groupMetadata(jid);
         const cleanJid = (id) => (id ? id.split(":")[0].split("@")[0].replace(/\D/g, "") : null);
+        const senderJid = bot.raw.key.participant || bot.raw.key.remoteJid;
 
         // Tenta localizar o alvo por menção ou número
         let targetJid;
         let targetParticipant;
+        let wasRandom = false;
         const mentionedJidList = await bot.getMentionedJids();
 
         if (mentionedJidList.length > 0) {
@@ -125,8 +127,22 @@ export class ToolDispatcher {
         }
 
         if (!targetParticipant || !targetJid) {
-            await bot.reply(`⚠️ Não consegui encontrar quem é "${targetName}" no grupo. Mencione a pessoa ou passe o número certo.`);
-            return;
+            const selfClean   = cleanJid(sock.user?.id || sock.authState?.creds?.me?.id);
+            const senderClean = cleanJid(senderJid);
+            const eligible = groupMetadata.participants.filter((p) => {
+                const pClean = cleanJid(p.id);
+                return !p.admin && pClean !== selfClean && pClean !== senderClean;
+            });
+
+            if (eligible.length === 0) {
+                await bot.reply('😔 Queria dar um chute em alguém, mas não sobrou ninguém elegível...');
+                return;
+            }
+
+            const chosen      = eligible[Math.floor(Math.random() * eligible.length)];
+            targetJid         = chosen.id;
+            targetParticipant = chosen;
+            wasRandom         = true;
         }
 
         // Verifica se o bot é admin no grupo
@@ -152,7 +168,11 @@ export class ToolDispatcher {
 
         Logger.info(`Expulsando ${targetJid} do grupo ${jid} via comando natural da Luma.`);
         await sock.groupParticipantsUpdate(jid, [targetJid], "remove");
-        await bot.reply(`✅ Prontinho, @${targetJid.split("@")[0]} foi de arrasta pra cima!`, { mentions: [targetJid] });
+
+        const kickMsg = wasRandom
+            ? `Já sabia que era você, @${targetJid.split("@")[0]}. Tchau 👋`
+            : `✅ Prontinho, @${targetJid.split("@")[0]} foi de arrasta pra cima!`;
+        await bot.reply(kickMsg, { mentions: [targetJid] });
     }
 
     // --- Handlers de Mídia ---

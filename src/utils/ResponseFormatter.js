@@ -11,6 +11,7 @@ export function cleanResponseText(text) {
     .trim()
     .replace(/<think>[\s\S]*?<\/think>/gi, '')
     .replace(/^Luma:\s*/i, '')
+    .replace(/(.)\1{29,}/g, (_, char) => char.repeat(30))
     .trim();
 }
 
