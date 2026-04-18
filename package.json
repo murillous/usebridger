@@ -1,6 +1,6 @@
 {
   "name": "luma-bot",
-  "version": "6.0.0",
+  "version": "6.1.0",
   "description": "Assistente de IA multi-provider para WhatsApp com arquitetura hexagonal, plugin system e personalidades dinâmicas.",
   "type": "module",
   "main": "index.js",

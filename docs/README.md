@@ -1,6 +1,6 @@
 # Documentação Técnica — LumaBot
 
-Base de conhecimento do LumaBot v6.0. Implementa **Arquitetura Hexagonal (Ports & Adapters)** com **Plugin System** e **Injeção de Dependências**.
+Base de conhecimento do LumaBot v6.1. Implementa **Arquitetura Hexagonal (Ports & Adapters)** com **Plugin System** e **Injeção de Dependências**.
 
 > Antes de qualquer coisa, leia o [`CLAUDE.md`](../CLAUDE.md) na raiz do projeto — ele contém as convenções obrigatórias, a arquitetura em mapa e o que você não deve fazer.
 
