@@ -135,7 +135,7 @@ aggressive: {
 
 ```javascript
 // No chat do WhatsApp:
-Usuario: !setpersona aggressive
+Usuario: !persona
 
 // O que acontece:
 MessageHandler → CommandRouter → DatabaseService.setPersonality(groupJID, 'aggressive')
