@@ -189,6 +189,10 @@ export const LUMA_CONFIG = {
           description: "Limpa o seu histórico de conversas/memória atual com o usuário.",
         },
         {
+          name: "show_help",
+          description: "Exibe a lista completa de comandos e funcionalidades do bot. Use quando o usuário perguntar o que você faz, quais comandos existem, como usar o bot, ou pedir ajuda geral.",
+        },
+        {
           name: "search_web",
           description: "Busca informações atualizadas na internet. Use quando o usuário perguntar sobre notícias recentes, eventos atuais, preços, lançamentos, resultados de jogos, clima ou qualquer assunto que possa ter mudado após seu treinamento.",
           parameters: {
@@ -227,6 +231,7 @@ Você é capaz de executar algumas ações no WhatsApp (marcar todos, expulsar m
 - Quando o usuário expressar o desejo que você faça uma dessas coisas, CHAME A FUNÇÃO MANTENDO A SUA PERSONALIDADE.
 - Se o usuário pedir explicitamente para pesquisar, buscar, googlar ou procurar algo na internet, use search_web OBRIGATORIAMENTE — sem exceções.
 - Para perguntas sobre notícias recentes, eventos atuais, preços, lançamentos, resultados de jogos, clima ou qualquer coisa que possa ter mudado após 2024, use search_web ANTES de responder.
+- Quando o usuário perguntar o que você faz, quais são seus comandos, como te usar, ou pedir ajuda geral, use show_help OBRIGATORIAMENTE.
 - Você NÃO precisa justificar que chamou a função. Responda com uma pequena frase condizente com sua personalidade e a ação será tomada.
 - IMPORTANTE: NÃO ESCREVA O NOME DA FUNÇÃO NO TEXTO. Execute a ação pelo sistema (chamada de ferramenta da API). VOCÊ ESTÁ PROIBIDA DE ESCREVER CÓDIGO OU TEXTO IMITANDO CÓDIGO COMO "nome_da_funcao()". APENAS ENVIE TEXTO NORMAL PARA O USUÁRIO E ACIONE A FERRAMENTA DE FATO.
 
@@ -284,6 +289,7 @@ Você é capaz de executar algumas ações no WhatsApp (marcar todos, expulsar m
 - Quando o usuário expressar o desejo que você faça uma dessas coisas, CHAME A FUNÇÃO MANTENDO A SUA PERSONALIDADE.
 - Se o usuário pedir explicitamente para pesquisar, buscar, googlar ou procurar algo na internet, use search_web OBRIGATORIAMENTE — sem exceções.
 - Para perguntas sobre notícias recentes, eventos atuais, preços, lançamentos ou qualquer coisa que possa ter mudado após 2024, use search_web ANTES de responder.
+- Quando o usuário perguntar o que você faz, quais são seus comandos, como te usar, ou pedir ajuda geral, use show_help OBRIGATORIAMENTE.
 - Você NÃO precisa justificar que chamou a função. Responda com uma pequena frase condizente com sua personalidade e a ação será tomada.
 - IMPORTANTE: NÃO ESCREVA O NOME DA FUNÇÃO NO TEXTO. Execute a ação pelo sistema (chamada de ferramenta da API). VOCÊ ESTÁ PROIBIDA DE ESCREVER CÓDIGO OU TEXTO IMITANDO CÓDIGO COMO "nome_da_funcao()". APENAS ENVIE TEXTO NORMAL PARA O USUÁRIO E ACIONE A FERRAMENTA DE FATO.
 
