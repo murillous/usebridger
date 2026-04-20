@@ -29,8 +29,10 @@ export class CommandRouter {
     if (lower.includes(COMMANDS.EVERYONE.toLowerCase()) || lower === "@todos") return COMMANDS.EVERYONE;
     if (lower.includes(COMMANDS.HELP) || lower === "!menu") return COMMANDS.HELP;
     if (lower.startsWith(COMMANDS.PERSONA))        return COMMANDS.PERSONA;
-    if (lower.startsWith(COMMANDS.DOWNLOAD))       return COMMANDS.DOWNLOAD;
-    if (lower.startsWith(COMMANDS.DOWNLOAD_SHORT)) return COMMANDS.DOWNLOAD;
+    if (lower.startsWith(COMMANDS.AUDIO_DOWNLOAD))       return COMMANDS.AUDIO_DOWNLOAD;
+    if (lower.startsWith(COMMANDS.AUDIO_DOWNLOAD_SHORT)) return COMMANDS.AUDIO_DOWNLOAD;
+    if (lower.startsWith(COMMANDS.DOWNLOAD))        return COMMANDS.DOWNLOAD;
+    if (lower.startsWith(COMMANDS.DOWNLOAD_SHORT))  return COMMANDS.DOWNLOAD;
     if (lower.startsWith(COMMANDS.RESUMO))         return COMMANDS.RESUMO;
 
     return null;

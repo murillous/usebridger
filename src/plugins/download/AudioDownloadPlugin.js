@@ -6,7 +6,7 @@ import { Logger } from "../../utils/Logger.js";
 import fs from "fs";
 
 export class AudioDownloadPlugin {
-  static commands = [COMMANDS.AUDIO_DOWNLOAD];
+  static commands = [COMMANDS.AUDIO_DOWNLOAD, COMMANDS.AUDIO_DOWNLOAD_SHORT];
 
   async onCommand(command, bot) {
     const url = extractUrl(bot.body) || extractUrl(bot.quotedText);

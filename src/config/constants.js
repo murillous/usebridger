@@ -41,6 +41,7 @@ export const COMMANDS = {
   DOWNLOAD_SHORT: "!d",
   DOWNLOAD: "!download",
   AUDIO_DOWNLOAD: "!audio",
+  AUDIO_DOWNLOAD_SHORT: "!a",
   LUMA_STATS: "!luma stats",
   LUMA_STATS_SHORT: "!ls",
   LUMA_CLEAR: "!luma clear",
@@ -64,7 +65,7 @@ export const MENUS = {
     "• *!luma stats* (!ls) - Mostra estatísticas da Luma\n\n" +
     "🛠️ *UTILITÁRIOS*\n" +
     "• *!download* (!d) - Baixa vídeo do Twitter/X ou Instagram\n" +
-    "• *!audio* - Baixa somente o áudio (MP3) de qualquer link\n" +
+    "• *!audio* (!a) - Baixa somente o áudio (MP3) de qualquer link\n" +
     "• *!meunumero* - Vê seu ID/Número\n" +
     "• *!resumo* (ex: !resumo 30) - Resume as últimas mensagens da conversa\n" +
     "• *!help* - Mostra essa lista\n" +
@@ -113,7 +114,7 @@ export const MESSAGES = {
   VIDEO_TOO_LARGE: "❌ Vídeo muito grande para enviar (máx. ~50MB).",
   VIDEO_DOWNLOAD_ERROR: "❌ Não consegui baixar esse vídeo. O conteúdo pode ser privado ou a URL inválida.",
   VIDEO_NO_URL: "ℹ️ Cole o link do vídeo junto com o comando.\nEx: `!download https://x.com/...`",
-  AUDIO_NO_URL: "ℹ️ Cole o link junto com o comando.\nEx: `!audio https://x.com/...`",
+  AUDIO_NO_URL: "ℹ️ Cole o link junto com o comando.\nEx: `!audio https://youtu.be/...`",
   AUDIO_SENT: "🎵 Pronto!",
   AUDIO_DOWNLOAD_ERROR: "❌ Não consegui baixar o áudio. O conteúdo pode ser privado ou a URL inválida.",
   YTDLP_NOT_FOUND: "❌ Não foi possível baixar o yt-dlp. Verifique sua conexão e tente novamente.",
