@@ -8,6 +8,7 @@ import { env } from "../config/env.js";
 import { PluginManager } from "../plugins/PluginManager.js";
 import { MediaPlugin } from "../plugins/media/MediaPlugin.js";
 import { DownloadPlugin } from "../plugins/download/DownloadPlugin.js";
+import { AudioDownloadPlugin } from "../plugins/download/AudioDownloadPlugin.js";
 import { GroupToolsPlugin } from "../plugins/group-tools/GroupToolsPlugin.js";
 import { LumaPlugin } from "../plugins/luma/LumaPlugin.js";
 import { SpontaneousPlugin } from "../plugins/spontaneous/SpontaneousPlugin.js";
@@ -35,6 +36,7 @@ function buildPluginManager() {
   return new PluginManager()
     .register(new MediaPlugin())
     .register(new DownloadPlugin())
+    .register(new AudioDownloadPlugin())
     .register(new GroupToolsPlugin())
     .register(new LumaPlugin({ lumaHandler, audioTranscriber }))
     .register(new SpontaneousPlugin({ lumaHandler }))

@@ -126,4 +126,57 @@ export class VideoDownloader {
 
     return filePath;
   }
+
+  /**
+   * Baixa somente o áudio da URL usando yt-dlp e converte para MP3.
+   *
+   * @param {string} url - URL do vídeo
+   * @returns {Promise<string>} Caminho absoluto do arquivo MP3 gerado
+   */
+  static async downloadAudio(url) {
+    const ytdlp = await this.getBinaryPath();
+    const timestamp = Date.now();
+    const outputTemplate = path.join(
+      CONFIG.TEMP_DIR,
+      `ytdlp_audio_${timestamp}.%(ext)s`
+    );
+
+    const cmd = [
+      `"${ytdlp}"`,
+      `-x`,
+      `--audio-format mp3`,
+      `--audio-quality 0`,
+      `-o "${outputTemplate}"`,
+      `--no-playlist`,
+      `--no-warnings`,
+      `"${url}"`,
+    ].join(" ");
+
+    Logger.info(`📥 VideoDownloader (áudio): Iniciando download de ${url}`);
+
+    try {
+      await execAsync(cmd, { timeout: CONFIG.VIDEO_DOWNLOAD_TIMEOUT_MS });
+    } catch (error) {
+      Logger.warn(`⚠️ VideoDownloader (áudio): yt-dlp saiu com erro: ${error.message}`);
+    }
+
+    const tempFiles = fs
+      .readdirSync(CONFIG.TEMP_DIR)
+      .filter((f) => f.startsWith(`ytdlp_audio_${timestamp}.`))
+      .map((f) => path.join(CONFIG.TEMP_DIR, f));
+
+    if (tempFiles.length === 0) {
+      throw new Error(
+        "Arquivo de áudio não encontrado após download. Verifique se o conteúdo é público e a URL é válida."
+      );
+    }
+
+    const filePath = tempFiles[0];
+    const sizeKB = (fs.statSync(filePath).size / 1024).toFixed(1);
+    Logger.info(
+      `✅ VideoDownloader (áudio): Download concluído (${sizeKB} KB) → ${path.basename(filePath)}`
+    );
+
+    return filePath;
+  }
 }
