@@ -1,5 +1,43 @@
 # Changelog — LumaBot
 
+## [6.3.0] — 2026-04-20
+
+### Processamento paralelo por JID (`JidQueue`, `MessageRouter`)
+
+- Novo `src/infra/JidQueue.js` — fila de promises por JID: mensagens do mesmo chat são serializadas, chats diferentes processam em paralelo sem nenhum bloqueio global
+- `MessageRouter` substituiu o `await` serial por `queue.enqueue(botAdapter.jid, fn)` — cada JID avança na sua própria cadeia de promises independente
+- Erros em uma mensagem não bloqueiam as seguintes do mesmo JID: a cadeia usa `prev.catch(log).then(fn)`, garantindo continuidade mesmo em falha
+- Cleanup automático: o Map interno remove a entrada do JID assim que a fila drena, sem acúmulo de memória
+- `Promise.all(pending)` no `routeMessages` mantém a função awaitable (retrocompatibilidade com testes e integração)
+- Novo `tests/unit/infra/JidQueue.test.js` com 8 casos: paralelismo entre JIDs, serialização dentro do JID, resiliência a falhas, limpeza pós-drenagem
+- `tests/unit/infra/MessageRouter.test.js` atualizado: mock do `JidQueue` como passthrough + mock do `BaileysAdapter` com propriedade `jid`; adicionado caso `encaminha o jid correto para o BaileysAdapter`
+
+---
+
+## [6.2.0] — 2026-04-20
+
+### Download de Áudio (`AudioDownloadPlugin`, `VideoDownloader`, `CommandRouter`, `constants`)
+
+- Novo plugin `AudioDownloadPlugin` com comandos `!audio` e `!a`
+- Extrai URL do corpo da mensagem ou do texto citado (mesmo comportamento do `!download`)
+- Usa yt-dlp com `-x --audio-format mp3 --audio-quality 0` — funciona com qualquer URL suportada pelo yt-dlp (YouTube, Twitter/X, Instagram, etc.)
+- Thumbnail do vídeo embutida como cover art ID3 (APIC) via `--embed-thumbnail --convert-thumbnails jpg`; exibida pelo WhatsApp como artwork na bolha de áudio
+- Metadados (título, artista, álbum) embutidos via `--embed-metadata`
+- Título buscado em paralelo com o download (`--skip-download --print "%(title)s"`, timeout 15 s) — sem overhead de tempo
+- `fileName` da mensagem usa o título real do vídeo (máx. 100 chars, caracteres inválidos substituídos por `-`); fallback para `"audio.mp3"`
+- `VideoDownloader.downloadAudio()` retorna `{ filePath, title }` em vez de `string`
+- `VideoDownloader._fetchTitle()` — método privado de busca de metadados; falha silenciosa (retorna `null`)
+- Arquivos temporários limpos no `finally` independentemente de sucesso ou falha
+- Métrica `audios_downloaded` incrementada no SQLite a cada download bem-sucedido
+
+### Function Calling — `show_help` (`lumaConfig`)
+
+- Adicionada declaração da ferramenta `show_help` no array `LUMA_CONFIG.TOOLS` — o handler já existia no `ToolDispatcher` mas nunca era acionado por falta da declaração
+- Instrução obrigatória adicionada em `PROMPT_TEMPLATE` e `VISION_PROMPT_TEMPLATE`: quando o usuário perguntar o que a Luma faz ou quais comandos existem, `show_help` é chamada obrigatoriamente
+- Resultado: a Luma responde com uma frase na sua personalidade e envia o menu completo de comandos (`MENUS.HELP_TEXT`)
+
+---
+
 ## [6.1.0] — 2026-04-18
 
 ### Auto-Deploy via GitHub Webhook (`dashboard/server.js`)
