@@ -128,10 +128,11 @@ export class VideoDownloader {
   }
 
   /**
-   * Baixa somente o áudio da URL usando yt-dlp e converte para MP3.
+   * Baixa somente o áudio da URL usando yt-dlp, converte para MP3 e embute
+   * thumbnail (cover art) e metadados nas tags ID3.
    *
    * @param {string} url - URL do vídeo
-   * @returns {Promise<string>} Caminho absoluto do arquivo MP3 gerado
+   * @returns {Promise<{ filePath: string, title: string|null }>}
    */
   static async downloadAudio(url) {
     const ytdlp = await this.getBinaryPath();
@@ -141,11 +142,14 @@ export class VideoDownloader {
       `ytdlp_audio_${timestamp}.%(ext)s`
     );
 
-    const cmd = [
+    const downloadCmd = [
       `"${ytdlp}"`,
       `-x`,
       `--audio-format mp3`,
       `--audio-quality 0`,
+      `--embed-thumbnail`,
+      `--embed-metadata`,
+      `--convert-thumbnails jpg`,
       `-o "${outputTemplate}"`,
       `--no-playlist`,
       `--no-warnings`,
@@ -154,11 +158,12 @@ export class VideoDownloader {
 
     Logger.info(`📥 VideoDownloader (áudio): Iniciando download de ${url}`);
 
-    try {
-      await execAsync(cmd, { timeout: CONFIG.VIDEO_DOWNLOAD_TIMEOUT_MS });
-    } catch (error) {
-      Logger.warn(`⚠️ VideoDownloader (áudio): yt-dlp saiu com erro: ${error.message}`);
-    }
+    const [title] = await Promise.all([
+      this._fetchTitle(url, ytdlp),
+      execAsync(downloadCmd, { timeout: CONFIG.VIDEO_DOWNLOAD_TIMEOUT_MS }).catch((err) => {
+        Logger.warn(`⚠️ VideoDownloader (áudio): yt-dlp saiu com erro: ${err.message}`);
+      }),
+    ]);
 
     const tempFiles = fs
       .readdirSync(CONFIG.TEMP_DIR)
@@ -177,6 +182,21 @@ export class VideoDownloader {
       `✅ VideoDownloader (áudio): Download concluído (${sizeKB} KB) → ${path.basename(filePath)}`
     );
 
-    return filePath;
+    return { filePath, title };
+  }
+
+  /**
+   * Busca o título do vídeo sem baixá-lo. Falha silenciosa — retorna null.
+   */
+  static async _fetchTitle(url, ytdlp) {
+    try {
+      const { stdout } = await execAsync(
+        `"${ytdlp}" --skip-download --print "%(title)s" --no-warnings "${url}"`,
+        { timeout: 15000 }
+      );
+      return stdout.trim() || null;
+    } catch {
+      return null;
+    }
   }
 }

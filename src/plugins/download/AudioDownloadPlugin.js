@@ -23,13 +23,18 @@ export class AudioDownloadPlugin {
       await bot.react("⏳");
       Logger.info(`🎵 Iniciando download de áudio: ${url}`);
 
-      filePath = await VideoDownloader.downloadAudio(url);
+      const { filePath: fp, title } = await VideoDownloader.downloadAudio(url);
+      filePath = fp;
+
+      const fileName = title
+        ? `${title.replace(/[/\\?%*:|"<>]/g, "-").slice(0, 100)}.mp3`
+        : "audio.mp3";
 
       const audioBuffer = fs.readFileSync(filePath);
       await bot.sendMessage(bot.jid, {
         audio: audioBuffer,
         mimetype: "audio/mpeg",
-        fileName: "audio.mp3",
+        fileName,
       });
 
       Logger.info("✅ Áudio enviado com sucesso.");
