@@ -15,7 +15,16 @@ vi.mock('../../../src/adapters/BaileysAdapter.js', () => ({
     constructor(sock, msg) {
       this.sock    = sock;
       this.message = msg;
+      this.jid     = msg?.key?.remoteJid ?? 'unknown@s.whatsapp.net';
     }
+  },
+}));
+
+// JidQueue como passthrough: não altera o comportamento observável do roteador
+vi.mock('../../../src/infra/JidQueue.js', () => ({
+  JidQueue: class {
+    enqueue(_jid, fn) { return fn(); }
+    get activeQueues() { return 0; }
   },
 }));
 
@@ -30,9 +39,9 @@ function makeUpsert(messages, type = 'notify') {
   return { type, messages };
 }
 
-function makeMessage(withMessageField = true) {
+function makeMessage(withMessageField = true, jid = 'jid@s.whatsapp.net') {
   return {
-    key:     { remoteJid: 'jid@s.whatsapp.net', id: 'msg-id' },
+    key:     { remoteJid: jid, id: 'msg-id' },
     message: withMessageField ? { conversation: 'olá' } : undefined,
   };
 }
@@ -98,10 +107,19 @@ describe('routeMessages — roteamento de mensagens', () => {
 
     await routeMessages(mockSock, upsert);
 
-    // Verifica que process foi chamado com uma instância de BaileysAdapter
     const [adapterArg] = MessageHandler.process.mock.calls[0];
     expect(adapterArg).toBeInstanceOf(BaileysAdapter);
     expect(adapterArg.sock).toBe(mockSock);
     expect(adapterArg.message).toBe(msg);
+  });
+
+  it('encaminha o jid correto para o BaileysAdapter', async () => {
+    const msg    = makeMessage(true, 'grupo123@g.us');
+    const upsert = makeUpsert([msg]);
+
+    await routeMessages(mockSock, upsert);
+
+    const [adapterArg] = MessageHandler.process.mock.calls[0];
+    expect(adapterArg.jid).toBe('grupo123@g.us');
   });
 });
