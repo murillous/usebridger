@@ -75,7 +75,9 @@ export class ResumoPlugin {
       const response = await this._lumaHandler.aiService.generateContent([
         { role: 'user', parts: [{ text: RESUMO_PROMPT(conversationText, personaConfig) }] },
       ]);
-      const text = cleanResponseText(response.text);
+      const text = cleanResponseText(response.text)
+        .replace(/\[PARTE\]/g, '\n\n')
+        .trim();
       if (!text) {
         await bot.reply('❌ Não consegui gerar o resumo agora.');
         return;
