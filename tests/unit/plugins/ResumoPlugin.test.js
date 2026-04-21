@@ -1,19 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../../src/managers/PersonalityManager.js', () => ({
-  PersonalityManager: class {
-    static getPersonaConfig = vi.fn().mockReturnValue({
-      name: 'Luma Pensadora',
-      context: 'Você é a Luma, uma IA inteligente.',
-      style: 'informal, minúsculas',
-      traits: ['seja breve', 'use gírias brasileiras'],
-    });
-  },
-}));
-
-const { ResumoPlugin }        = await import('../../../src/plugins/resumo/ResumoPlugin.js');
-const { COMMANDS }            = await import('../../../src/config/constants.js');
-const { PersonalityManager }  = await import('../../../src/managers/PersonalityManager.js');
+const { ResumoPlugin } = await import('../../../src/plugins/resumo/ResumoPlugin.js');
+const { COMMANDS }     = await import('../../../src/config/constants.js');
 
 function makeLumaHandler(responseText = 'Rolou um papo bem animado.') {
   return {
@@ -137,19 +125,6 @@ describe('ResumoPlugin', () => {
       const [[promptParts]] = plugin._lumaHandler.aiService.generateContent.mock.calls;
       const promptText = promptParts[0].parts[0].text;
       expect(promptText).toMatch(/User\d:/);
-    });
-
-    it('injeta contexto e estilo da personalidade ativa no prompt', async () => {
-      const bot = makeBot({ body: '!resumo 5' });
-      await plugin.onCommand(COMMANDS.RESUMO, bot);
-
-      expect(PersonalityManager.getPersonaConfig).toHaveBeenCalledWith(bot.jid);
-
-      const [[promptParts]] = plugin._lumaHandler.aiService.generateContent.mock.calls;
-      const promptText = promptParts[0].parts[0].text;
-      expect(promptText).toContain('Você é a Luma, uma IA inteligente.');
-      expect(promptText).toContain('informal, minúsculas');
-      expect(promptText).toContain('seja breve');
     });
   });
 

@@ -1,25 +1,16 @@
 import { COMMANDS } from '../../config/constants.js';
 import { Logger } from '../../utils/Logger.js';
 import { cleanResponseText } from '../../utils/ResponseFormatter.js';
-import { PersonalityManager } from '../../managers/PersonalityManager.js';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 const BUFFER_SIZE = 200;
 
-const RESUMO_PROMPT = (conversationText, personaConfig) => {
-  const traitsStr = personaConfig.traits.map(t => `- ${t}`).join('\n');
-  return (
-    `Você é a Luma. ${personaConfig.context}\n` +
-    `Estilo de comunicação: ${personaConfig.style}\n` +
-    `Traços da sua personalidade:\n${traitsStr}\n\n` +
-    `Abaixo está um trecho recente da conversa deste chat. ` +
-    `Faça um resumo natural do que foi discutido, como se estivesse contando pra alguém o que rolou no papo. ` +
-    `Use seu jeito de falar, seja natural e não quebre o personagem. ` +
-    `O tamanho do resumo deve ser proporcional à quantidade de conteúdo discutido.\n\n` +
-    `Conversa:\n${conversationText}`
-  );
-};
+const RESUMO_PROMPT = (conversationText) =>
+  `Você é a Luma. Abaixo está um trecho recente da conversa deste chat.\n\n` +
+  `Faça um resumo natural e descontraído do que foi discutido, como se estivesse contando pra alguém o que rolou no papo. ` +
+  `Seja breve (máximo 5 linhas), use seu jeito de falar e não quebre o personagem.\n\n` +
+  `Conversa:\n${conversationText}`;
 
 /**
  * Plugin de resumo da conversa geral do chat.
@@ -69,16 +60,12 @@ export class ResumoPlugin {
     await bot.sendPresence('composing');
 
     const conversationText = slice.map(m => `${m.name}: ${m.text}`).join('\n');
-    const personaConfig = PersonalityManager.getPersonaConfig(bot.jid);
 
     try {
       const response = await this._lumaHandler.aiService.generateContent([
-        { role: 'user', parts: [{ text: RESUMO_PROMPT(conversationText, personaConfig) }] },
+        { role: 'user', parts: [{ text: RESUMO_PROMPT(conversationText) }] },
       ]);
-      const text = cleanResponseText(response.text)
-        .replace(/\[PARTE[^\]]*\]/g, '\n\n')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
+      const text = cleanResponseText(response.text);
       if (!text) {
         await bot.reply('❌ Não consegui gerar o resumo agora.');
         return;
