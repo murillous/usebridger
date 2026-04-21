@@ -1,16 +1,25 @@
 import { COMMANDS } from '../../config/constants.js';
 import { Logger } from '../../utils/Logger.js';
 import { cleanResponseText } from '../../utils/ResponseFormatter.js';
+import { PersonalityManager } from '../../managers/PersonalityManager.js';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 const BUFFER_SIZE = 200;
 
-const RESUMO_PROMPT = (conversationText) =>
-  `Você é a Luma. Abaixo está um trecho recente da conversa deste chat.\n\n` +
-  `Faça um resumo natural e descontraído do que foi discutido, como se estivesse contando pra alguém o que rolou no papo. ` +
-  `Seja breve (máximo 5 linhas), use seu jeito de falar e não quebre o personagem.\n\n` +
-  `Conversa:\n${conversationText}`;
+const RESUMO_PROMPT = (conversationText, personaConfig) => {
+  const traitsStr = personaConfig.traits.map(t => `- ${t}`).join('\n');
+  return (
+    `[IDENTIDADE]\n` +
+    `Seu nome é Luma. ${personaConfig.context}\n\n` +
+    `[ESTILO]\n${personaConfig.style}\n\n` +
+    `[TRAÇOS OBRIGATÓRIOS]\n${traitsStr}\n\n` +
+    `Abaixo está um trecho recente da conversa deste chat.\n` +
+    `Faça um resumo natural do que foi discutido, como se estivesse contando pra alguém o que rolou no papo. ` +
+    `Seja breve (máximo 5 linhas) e não quebre o personagem.\n\n` +
+    `Conversa:\n${conversationText}`
+  );
+};
 
 /**
  * Plugin de resumo da conversa geral do chat.
@@ -60,10 +69,11 @@ export class ResumoPlugin {
     await bot.sendPresence('composing');
 
     const conversationText = slice.map(m => `${m.name}: ${m.text}`).join('\n');
+    const personaConfig = PersonalityManager.getPersonaConfig(bot.jid);
 
     try {
       const response = await this._lumaHandler.aiService.generateContent([
-        { role: 'user', parts: [{ text: RESUMO_PROMPT(conversationText) }] },
+        { role: 'user', parts: [{ text: RESUMO_PROMPT(conversationText, personaConfig) }] },
       ]);
       const text = cleanResponseText(response.text);
       if (!text) {
