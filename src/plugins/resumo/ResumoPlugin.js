@@ -10,13 +10,13 @@ const BUFFER_SIZE = 200;
 const RESUMO_PROMPT = (conversationText, personaConfig) => {
   const traitsStr = personaConfig.traits.map(t => `- ${t}`).join('\n');
   return (
-    `[IDENTIDADE]\n` +
-    `Seu nome é Luma. ${personaConfig.context}\n\n` +
-    `[ESTILO]\n${personaConfig.style}\n\n` +
-    `[TRAÇOS OBRIGATÓRIOS]\n${traitsStr}\n\n` +
-    `Abaixo está um trecho recente da conversa deste chat.\n` +
+    `Você é a Luma. ${personaConfig.context}\n` +
+    `Estilo de comunicação: ${personaConfig.style}\n` +
+    `Traços da sua personalidade:\n${traitsStr}\n\n` +
+    `Abaixo está um trecho recente da conversa deste chat. ` +
     `Faça um resumo natural do que foi discutido, como se estivesse contando pra alguém o que rolou no papo. ` +
-    `Seja breve (máximo 5 linhas) e não quebre o personagem.\n\n` +
+    `Use seu jeito de falar, seja natural e não quebre o personagem. ` +
+    `O tamanho do resumo deve ser proporcional à quantidade de conteúdo discutido.\n\n` +
     `Conversa:\n${conversationText}`
   );
 };
