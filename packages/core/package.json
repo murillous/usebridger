@@ -1,0 +1,23 @@
+{
+  "name": "@bridger/core",
+  "version": "0.0.0",
+  "description": "Kernel do Bridger: bot de mensageria extensível por plugins.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "imports": {
+    "#*": "./src/*"
+  },
+  "exports": {
+    ".": {
+      "@bridger/source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown"
+  }
+}
