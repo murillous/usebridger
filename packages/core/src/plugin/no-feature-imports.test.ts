@@ -19,8 +19,14 @@ const specifiers = (code: string): string[] =>
 it('nenhum arquivo do core importa outro pacote @bridger/*', () => {
   const offenders = sources.flatMap((file) =>
     specifiers(readFileSync(file, 'utf8'))
-      // O teste de side effect importa o próprio pacote pelo nome.
-      .filter((specifier) => specifier.startsWith('@bridger/') && specifier !== '@bridger/core')
+      // O próprio pacote (e seus subpaths, ex. `@bridger/core/storage-contract`) pode aparecer:
+      // o teste de side effect o importa pelo nome, e a suíte de contrato o cita no JSDoc.
+      .filter(
+        (specifier) =>
+          specifier.startsWith('@bridger/') &&
+          specifier !== '@bridger/core' &&
+          !specifier.startsWith('@bridger/core/'),
+      )
       .map((specifier) => `${file}: ${specifier}`),
   );
   expect(sources.length).toBeGreaterThan(0);
