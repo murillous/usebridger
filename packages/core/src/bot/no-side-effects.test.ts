@@ -54,6 +54,18 @@ it('importar @bridger/core não tem side effect', async () => {
   expectNoSideEffect(before);
 });
 
+// ADR 0034: o mesmo vale para os outros pontos de entrada.
+it.each([
+  ['@bridger/core/adapter', () => import('@bridger/core/adapter')],
+  ['@bridger/core/storage-contract', () => import('@bridger/core/storage-contract')],
+])('importar %s não tem side effect', async (_entry, load) => {
+  vi.resetModules();
+  const before = snapshot();
+  const entry = await load();
+  expect(Object.keys(entry).length).toBeGreaterThan(0);
+  expectNoSideEffect(before);
+});
+
 it('createBot() não tem side effect até o start()', async () => {
   const { createBot } = await import('@bridger/core');
   const before = snapshot();
