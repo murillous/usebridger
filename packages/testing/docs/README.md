@@ -181,6 +181,16 @@ transport real. Um plugin que exige essa capability (`requires`) é ignorado no 
 
 O `self` é `null` até o `connect()` e depois vale `DEFAULT_SELF`, ou o `self` passado nas opções.
 
+## Fora do Vitest: `@bridger/testing/bot`
+
+O entry principal importa o `vitest` para registrar os matchers. Para subir o bot de teste fora de
+um teste, como num benchmark ou num script, importe de `@bridger/testing/bot`. Ele exporta o
+mesmo (`createTestBot`, `FakeTransport`, `fixtures`...), sem os matchers e sem carregar o Vitest.
+
+```ts
+import { createTestBot } from '@bridger/testing/bot';
+```
+
 ## Limites
 
 - O `settled()` não espera os jobs do scheduler. Para testar um job, chame o handler direto ou
