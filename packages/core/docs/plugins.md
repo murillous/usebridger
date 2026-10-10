@@ -9,6 +9,10 @@ decide quem carrega, ordena e roda `setup`/`teardown` com prazo
 
 ## Declarar um plugin
 
+Para começar um plugin em pacote próprio, com teste e build prontos, use o scaffold:
+`npm create bridger-plugin@latest bridger-plugin-<nome>`
+([create-bridger-plugin](../../create-plugin/docs/README.md)).
+
 ```ts
 import { command, definePlugin } from '@bridger/core';
 import { z } from 'zod';
