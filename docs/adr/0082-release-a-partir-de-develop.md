@@ -2,7 +2,8 @@
 
 **Status:** Aceito (2026-10-10) · Detalha **D27** ([ADR 0027](0027-releases-changesets.md)) · Usa a
 org `usebridger` do **D83** ([ADR 0083](0083-nome-bridger.md)) e atende o **D29**
-([ADR 0029](0029-open-core-repo-privado.md))
+([ADR 0029](0029-open-core-repo-privado.md)) · Branch de release: substituída pela `main` no
+[ADR 0085](0085-release-a-partir-da-main.md)
 
 ## Contexto
 

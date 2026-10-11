@@ -22,7 +22,7 @@ function harness(file: Record<string, Record<string, unknown>> = {}) {
   const echo = definePlugin({
     name: 'echo',
     version: '1.0.0',
-    engine: '^0.0.0',
+    engine: '>=0.0.0',
     config: z.object({
       greeting: z.string().default('oi'),
       token: secret(z.string().min(4)).default('tok-inicial'),
@@ -40,7 +40,7 @@ function harness(file: Record<string, Record<string, unknown>> = {}) {
   const other = definePlugin({
     name: 'other',
     version: '1.0.0',
-    engine: '^0.0.0',
+    engine: '>=0.0.0',
     setup: () => {
       calls.push('setup:other');
     },

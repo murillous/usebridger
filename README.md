@@ -115,13 +115,13 @@ e `catch` sem nenhuma instrução — inclusive só com comentário (plugin em
 ### Changesets
 
 PR que muda um pacote publicável leva um changeset (`pnpm changeset`) — ver
-[`.changeset/README.md`](.changeset/README.md). O workflow de release transforma os changesets
-de `develop` num PR de versão e publica no npm depois do merge dele: fluxo, segredos e como
-reverter em [`docs/release.md`](docs/release.md).
+[`.changeset/README.md`](.changeset/README.md). Os changesets se acumulam na `develop`; lançar é
+levá-los para a `main`, onde o workflow de release abre o PR de versão e publica no npm depois
+do merge dele: fluxo, segredos e como reverter em [`docs/release.md`](docs/release.md).
 
 ### CI
 
-Todo push e PR para `develop` roda o [`ci.yml`](.github/workflows/ci.yml), com os jobs
+Todo push e PR para `develop` ou `main` roda o [`ci.yml`](.github/workflows/ci.yml), com os jobs
 `Lint`, `Typecheck`, `Testes` e `Build` (os mesmos comandos da tabela acima) e o store do pnpm
 em cache. O job `Scaffold` gera um plugin com o `create-bridger-plugin` e confere que ele
 instala, testa e builda ([e2e](packages/create-plugin/docs/README.md#e2e)). O job `Testes` sobe
@@ -133,9 +133,9 @@ de performance e falha com piora > 10% sobre o baseline do commit-base, medido n
 O setup comum (Node do `.nvmrc`, pnpm do `packageManager`, `pnpm install --frozen-lockfile`)
 fica em [`.github/actions/setup`](.github/actions/setup/action.yml).
 
-O push em `develop` também roda o [`release.yml`](.github/workflows/release.yml), que abre o PR
-de versão ou publica os pacotes ([`docs/release.md`](docs/release.md),
-[ADR 0082](docs/adr/0082-release-a-partir-de-develop.md)).
+O push na `main` também roda o [`release.yml`](.github/workflows/release.yml), que abre o PR de
+versão ou publica os pacotes ([`docs/release.md`](docs/release.md),
+[ADR 0085](docs/adr/0085-release-a-partir-da-main.md)).
 
 ## Licença
 

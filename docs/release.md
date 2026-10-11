@@ -1,27 +1,33 @@
 # Release dos pacotes
 
 Como os pacotes publicáveis (`packages/*`, `plugins/*` sem `private`) saem para o npm. O porquê
-está no [ADR 0082](adr/0082-release-a-partir-de-develop.md); o changeset de cada PR, no
+está nos ADRs [0082](adr/0082-release-a-partir-de-develop.md) e
+[0085](adr/0085-release-a-partir-da-main.md); o changeset de cada PR, no
 [`.changeset/README.md`](../.changeset/README.md).
 
 ## Fluxo
 
-1. PR com changeset entra em `develop`, a branch padrão do repositório.
-2. O push em `develop` roda o [`release.yml`](../.github/workflows/release.yml). Com changesets
+1. PR com changeset entra na `develop`, a branch de integração.
+2. Para lançar, abra uma PR `develop` → `main` e faça o merge com **merge commit**, nunca squash:
+   com squash, as duas branches divergem a cada release e o merge seguinte conflita.
+3. O push na `main` roda o [`release.yml`](../.github/workflows/release.yml). Com changesets
    pendentes, ele abre ou atualiza o PR **`chore(release): versão dos pacotes`**, gerado pelo
    `pnpm version-packages`: versões novas, `CHANGELOG.md` de cada pacote e o `CORE_VERSION` do
    core sincronizado.
-3. Revise as versões e os changelogs e faça o merge do PR de versão. Ele roda o `ci.yml` como
+4. Revise as versões e os changelogs e faça o merge do PR de versão. Ele roda o `ci.yml` como
    qualquer PR.
-4. O push desse merge, já sem changesets, publica com `pnpm release` (`pnpm build && changeset
+5. O push desse merge, já sem changesets, publica com `pnpm release` (`pnpm build && changeset
    publish`) e cria as tags `<pacote>@<versão>` (ex.: `@usebridger/core@0.1.0`). Pacote cuja versão
    já está no npm é pulado.
+6. Depois de publicar, o workflow abre a PR **`chore(release): leva a main de volta para a
+   develop`**. Faça o merge dela, também com merge commit: ela devolve à `develop` as versões,
+   os changelogs, o `CORE_VERSION` e a remoção dos changesets consumidos.
 
 Antes da action, o job roda `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` e
 `pnpm check:packages` no mesmo commit: nada sai sem o gate verde. Execuções seguidas esperam a
 vez, sem cancelar a anterior.
 
-O `workflow_dispatch` roda o mesmo fluxo à mão, só a partir de `develop`.
+O `workflow_dispatch` roda o mesmo fluxo à mão, só a partir da `main`.
 
 ## Segredos e configuração
 
@@ -86,4 +92,5 @@ Nunca use `npm unpublish`: quebra quem já instalou e bloqueia o número da vers
    `npm deprecate @usebridger/<pacote>@<versão> "Quebrada: use <versão-corrigida>"`.
 2. Se a versão ruim virou a `latest`, volte a tag para a anterior:
    `npm dist-tag add @usebridger/<pacote>@<versão-boa> latest`.
-3. Corrija em `develop` com um changeset `patch`; o próximo release publica a versão corrigida.
+3. Corrija na `develop` com um changeset `patch` e leve para a `main`; o próximo release publica
+   a versão corrigida.
