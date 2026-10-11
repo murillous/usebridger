@@ -4,6 +4,7 @@
 
 import { commandInfo } from '#commands/catalog.ts';
 import type { CommandContext, CommandDefinition } from '#commands/command.ts';
+import { createConcurrencyLimit } from '#commands/concurrency.ts';
 import type { Prefixes } from '#commands/prefixes.ts';
 import { type RoleCheck, RoleTimeoutError } from '#commands/roles.ts';
 import type { CommandRouter } from '#commands/router.ts';
@@ -410,6 +411,12 @@ function wrapCommand(
 ): CommandDefinition {
   const { run, onReject, name } = definition;
   const timeoutMs = definition.timeoutMs ?? deps.commandTimeoutMs;
+  // Um por registro do comando: o reload cria outro, e os `run` antigos ainda vivos ocupam só o
+  // teto do registro anterior.
+  const limit =
+    definition.concurrency === undefined
+      ? undefined
+      : createConcurrencyLimit(definition.concurrency);
   const timed = <R>(stage: CommandStage, execute: (deadline: Deadline) => R): R => {
     const deadline = new Deadline(lifetime);
     return settleWithin(
@@ -420,7 +427,12 @@ function wrapCommand(
         deadline.expire(error);
         return error;
       },
-      (error) => deps.onLateCommandError(plugin, name, error),
+      (error) => {
+        // Rejeitar com o próprio erro do prazo (a espera por vaga, ou o `run` que repassa o
+        // `signal.reason`) não é falha nova: o prazo já foi reportado.
+        if (error === deadline.reason) return;
+        deps.onLateCommandError(plugin, name, error);
+      },
       deps.armed,
       deadline,
     ) as R;
@@ -429,8 +441,12 @@ function wrapCommand(
     ...definition,
     run: (ctx) =>
       timed('run', (deadline) => {
-        const view = views.run(ctx, deadline);
-        return replyWithResult(view, run(view));
+        const start = (): unknown => {
+          const view = views.run(ctx, deadline);
+          return replyWithResult(view, run(view));
+        };
+        // A espera por vaga fica dentro do prazo: o chat não fica preso além do `timeoutMs`.
+        return limit === undefined ? start() : limit.run(start, deadline.signal);
       }),
     ...(onReject && {
       onReject: (ctx, rejection) =>
