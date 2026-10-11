@@ -1,7 +1,8 @@
 # ADR 0040 — Ações e leituras do transport chegam ao plugin pela API pública
 
 **Status:** Aceito (2026-10-07) · Detalha **D16** ([ADR 0016](0016-manifesto-do-plugin.md)) e
-**D19** ([ADR 0019](0019-fila-de-saida-anti-ban.md))
+**D19** ([ADR 0019](0019-fila-de-saida-anti-ban.md)) · Atalho `react` sem a capability:
+substituído pelo [ADR 0093](0093-react-do-contexto-tolerante.md)
 
 ## Contexto
 

@@ -355,8 +355,12 @@ setup(ctx) {
   chave da mensagem criada, para editá-la ou apagá-la depois. Um texto longo que a fila dividiu
   devolve a chave da primeira parte ([Texto formatado](text.md#texto-longo)).
 - Sem a capability, a ação rejeita na hora com `UnsupportedError`. Para recurso opcional,
-  confira antes: `if (ctx.capabilities.has('reactions')) await c.react('👍'); else await c.reply('ok')`.
+  confira antes: `if (ctx.capabilities.has('message.edit')) await ctx.send.edit(key, 'ok')`.
   Para recurso obrigatório, declare em `requires`: no plugin, ou no comando que depende dele.
+- A exceção é o atalho `c.react(emoji)`: reação no contexto quase sempre é enfeite (⏳ ✅ ❌), então
+  sem `reactions` ele resolve sem reagir e registra em `debug`. Quem precisa saber que a reação
+  não saiu usa `ctx.send.react(c.message.key, emoji)`, que rejeita com `UnsupportedError`
+  ([ADR 0093](../../../docs/adr/0093-react-do-contexto-tolerante.md)).
 - O kernel não restringe `edit`/`delete` às mensagens do bot: o transport decide o que o canal
   permite.
 - `ctx.groups.metadata` não tem cache nem prazo próprio: o prazo da execução (comando, listener,

@@ -532,6 +532,7 @@ export function createBot(config: BotConfig): Bot {
   const contextDeps: MessageContextDeps = {
     sender: send,
     quote: hasCapability(transport, 'quoted'),
+    reactions: hasCapability(transport, 'reactions'),
     log: getLog,
     actions: prepareActions,
   };

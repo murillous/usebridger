@@ -20,6 +20,8 @@ export interface MessageContextDeps {
   readonly sender: Outbound;
   /** Responder citando: só se o transport tem a capability `quoted`. */
   readonly quote: boolean;
+  /** O transport tem a capability `reactions`; sem ela, `react` vira no-op (ADR 0093). */
+  readonly reactions: boolean;
   /** Logger raiz; o contexto cria o filho com `chatId` sob demanda. */
   readonly log: () => Logger;
   /**
@@ -78,8 +80,15 @@ class MessageContextImpl implements KernelMessageContext {
   }
 
   react(emoji: string | null): Promise<void> {
+    const { deps } = this[STATE];
+    // Reação aqui é enfeite de andamento: sem a capability, não falha. Quem precisa saber que
+    // não saiu usa o `ctx.send.react`, que continua estrito (ADR 0093).
+    if (!deps.reactions) {
+      this.log.debug('react ignorado: o transport não tem a capability "reactions"', { emoji });
+      return Promise.resolve();
+    }
     // Prioridade do `reply`: a reação responde a quem escreveu, como ele.
-    return this[STATE].deps.sender.react(this.message.key, emoji, { priority: 'high' });
+    return deps.sender.react(this.message.key, emoji, { priority: 'high' });
   }
 }
 
