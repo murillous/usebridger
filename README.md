@@ -133,7 +133,8 @@ em cache. O job `Scaffold` gera um plugin com o `create-bridger-plugin` e confer
 instala, testa e builda ([e2e](packages/create-plugin/docs/README.md#e2e)). O job `Testes` sobe
 um Postgres em container para o `@usebridger/storage-postgres`. O job `Benchmark` mede as metas
 de performance e falha com piora > 10% sobre o baseline do commit-base, medido no mesmo runner
-([ADR 0054](docs/adr/0054-baseline-do-benchmark.md)). O job `Pacotes` builda e roda o
+e intercalado com o commit testado ([ADR 0054](docs/adr/0054-baseline-do-benchmark.md),
+[ADR 0089](docs/adr/0089-benchmark-intercalado.md)). O job `Pacotes` builda e roda o
 `pnpm check:packages`, para um pacote que não publicaria quebrar no PR e não no release.
 
 O setup comum (Node do `.nvmrc`, pnpm do `packageManager`, `pnpm install --frozen-lockfile`)

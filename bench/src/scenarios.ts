@@ -12,7 +12,10 @@ export interface Scenario {
   readonly unit: string;
   /** A meta: `max` é teto (menor é melhor), `min` é piso (maior é melhor). */
   readonly target: { readonly max: number } | { readonly min: number };
-  /** Execuções, cada uma num processo; o resultado é a mediana. */
+  /**
+   * Execuções, cada uma num processo. A meta vale para a mediana; a comparação com o baseline usa
+   * o quartil bom (ADR 0089). Mais execuções onde cada uma é barata.
+   */
   readonly runs: number;
   /**
    * Se o CI barra piora > 10% sobre o baseline. Desligado onde a medida fica perto de zero e a
@@ -167,7 +170,7 @@ export const SCENARIOS: readonly Scenario[] = [
     description: 'Overhead do kernel por mensagem (p99)',
     unit: 'ms',
     target: { max: 1 },
-    runs: 3,
+    runs: 9,
     checksRegression: true,
     run: () => overhead(),
   },
@@ -176,7 +179,7 @@ export const SCENARIOS: readonly Scenario[] = [
     description: 'Vazão sintética em 500 chats',
     unit: 'msg/s',
     target: { min: 5_000 },
-    runs: 3,
+    runs: 5,
     checksRegression: true,
     run: () => throughput(),
   },
@@ -185,7 +188,7 @@ export const SCENARIOS: readonly Scenario[] = [
     description: 'Memória ociosa (RSS)',
     unit: 'MB',
     target: { max: 80 },
-    runs: 3,
+    runs: 15,
     checksRegression: true,
     run: idleMemory,
   },
@@ -205,7 +208,7 @@ export const SCENARIOS: readonly Scenario[] = [
     description: 'Boot com 20 plugins',
     unit: 'ms',
     target: { max: 500 },
-    runs: 5,
+    runs: 25,
     checksRegression: true,
     run: boot,
   },

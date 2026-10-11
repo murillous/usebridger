@@ -28,6 +28,7 @@ sendo a referência; um ADR novo entra nos dois.
 - [0026](0026-tooling.md) — Tooling: Node 24, pnpm, tsdown, Vitest, Biome
 - [0030](0030-metas-de-performance.md) — Metas de performance com benchmark no CI
 - [0054](0054-baseline-do-benchmark.md) — Baseline do benchmark medido no mesmo job, a partir do commit base (detalha D30)
+- [0089](0089-benchmark-intercalado.md) — Benchmark intercalado: base e commit testado se revezam, comparados pelo quartil bom (detalha D54)
 - [0034](0034-biblioteca-sem-runner.md) — Bridger é uma biblioteca, sem runner; API pública por público
 
 **Projeto: migração, licença, release e nome**
@@ -214,3 +215,4 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0086](0086-plugins-da-luma-no-lumabot.md) | D86 | Plugins da Luma no LumaBot: o kernel não publica plugins, e os do M4 e do M5 viram código do app sobre os pacotes do npm (substitui parte do D84 e o `plugins/*` do D01) | Aceito |
 | [0087](0087-comando-em-segundo-plano.md) | D87 | Comando em segundo plano: `background: true` tira o `run` da fila do chat e mantém o prazo, o `plugin.error`, o `command` e o `settled()` (detalha D42/D49) | Aceito |
 | [0088](0088-limite-de-concorrencia-por-comando.md) | D88 | Limite de concorrência por comando: `concurrency` põe um teto de `run` simultâneos no bot, a espera conta no prazo e a vaga só volta quando o `run` termina (detalha D05/D87) | Aceito |
+| [0089](0089-benchmark-intercalado.md) | D89 | Benchmark intercalado: base e commit testado se revezam no mesmo runner, a ordem inverte a cada rodada, e a comparação usa o quartil bom no sentido da meta (detalha D54) | Aceito |

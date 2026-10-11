@@ -85,7 +85,8 @@ jobs:
       - run: pnpm --filter create-bridger-plugin e2e
 
   # Metas do plano §7 e piora > 10% sobre o baseline (ADR 0054). O baseline é medido neste mesmo
-  # runner: entre máquinas diferentes, a variação passa dos 10%.
+  # runner, intercalado com o commit testado (ADR 0089): entre máquinas diferentes, ou mesmo entre
+  # dois momentos do runner, a variação passa dos 10%.
   benchmark:
     name: Benchmark
     runs-on: ubuntu-latest
@@ -97,7 +98,7 @@ jobs:
           fetch-depth: 2
       - uses: ./.github/actions/setup
 
-      - name: Baseline
+      - name: Build da base
         run: |
           git worktree add "$RUNNER_TEMP/base" HEAD^1
           cd "$RUNNER_TEMP/base"
@@ -107,14 +108,11 @@ jobs:
           fi
           pnpm install --frozen-lockfile
           pnpm build
-          # A base fora da meta ainda serve de régua; sem o relatório, o passo seguinte falha.
-          node bench/dist/main.mjs --out "$RUNNER_TEMP/base.json" ||
-            echo "::warning title=Benchmark::A base saiu com erro; veja o log deste passo."
 
       - name: Benchmark
         run: |
           if [ -f "$RUNNER_TEMP/base/bench/package.json" ]; then
-            pnpm bench --baseline "$RUNNER_TEMP/base.json"
+            pnpm bench --baseline "$RUNNER_TEMP/base"
           else
             pnpm bench
           fi
