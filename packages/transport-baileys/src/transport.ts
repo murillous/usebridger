@@ -13,6 +13,7 @@ import type {
   GroupMetadata,
   GroupParticipantAction,
   Logger,
+  LogLevel,
   Message,
   MessageKey,
   OutgoingContent,
@@ -48,6 +49,7 @@ import {
   type WAVersion,
 } from 'baileys';
 import { loadAuthState } from './auth-state.ts';
+import { routeLibsignalConsole } from './console.ts';
 import { toDisconnectReason } from './disconnect-reason.ts';
 import {
   ContactBook,
@@ -116,6 +118,8 @@ export interface BaileysDriver {
 export interface BaileysTransportOptions {
   readonly pairing: BaileysPairing;
   readonly driver: BaileysDriver;
+  /** Nível mínimo das linhas do próprio Baileys; sem ele, vale só o do bot. */
+  readonly logLevel?: LogLevel;
 }
 
 export class BaileysTransport implements Transport {
@@ -150,6 +154,9 @@ export class BaileysTransport implements Transport {
 
   readonly #pairing: BaileysPairing;
   readonly #driver: BaileysDriver;
+  readonly #logLevel: LogLevel | undefined;
+  /** Desliga o desvio do `console` do libsignal; presente enquanto há socket. */
+  #releaseConsole: (() => void) | undefined;
   readonly #deps: TransportDeps;
   readonly #events: TypedEmitter<TransportEvents>;
   #socket: BaileysSocket | null = null;
@@ -169,6 +176,7 @@ export class BaileysTransport implements Transport {
   constructor(options: BaileysTransportOptions, deps: TransportDeps) {
     this.#pairing = options.pairing;
     this.#driver = options.driver;
+    this.#logLevel = options.logLevel;
     this.#deps = deps;
     this.#events = new TypedEmitter<TransportEvents>((error, event) =>
       this.#log.error('handler de evento do transport falhou', { err: error, event }),
@@ -207,7 +215,7 @@ export class BaileysTransport implements Transport {
     // `connect()` duas vezes. Os eventos dele deixam de valer a partir daqui.
     this.#endSocket();
     const version = await this.#driver.version();
-    const logger = toBaileysLogger(this.#log.child({ lib: 'baileys' }));
+    const logger = toBaileysLogger(this.#log.child({ lib: 'baileys' }), this.#logLevel);
     const { state, saveCreds } = await loadAuthState(this.#deps.auth, logger);
     // `disconnect()` ou outro `connect()` enquanto as credenciais carregavam.
     if (attempt !== this.#attempt) return;
@@ -220,6 +228,7 @@ export class BaileysTransport implements Transport {
       cachedGroupMetadata: (jid) => this.#cachedGroup(jid),
     });
     this.#socket = socket;
+    this.#releaseConsole = routeLibsignalConsole(logger);
     const current = (): boolean => this.#socket === socket;
     // Gravações em fila: uma `creds.update` não pode sobrescrever a seguinte fora de ordem.
     let saving = Promise.resolve();
@@ -399,6 +408,8 @@ export class BaileysTransport implements Transport {
     const socket = this.#socket;
     if (socket === null) return;
     this.#socket = null;
+    this.#releaseConsole?.();
+    this.#releaseConsole = undefined;
     socket.end(undefined).catch((error: unknown) => {
       this.#log.warn('falha ao encerrar o socket do Baileys', { err: error });
     });

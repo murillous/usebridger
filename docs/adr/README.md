@@ -60,6 +60,7 @@ sendo a referência; um ADR novo entra nos dois.
 - [0045](0045-queda-de-rede-nao-limpa-sessao.md) — Queda de rede nunca limpa a sessão (detalha D03/D37)
 - [0048](0048-connect-resolve-ao-iniciar.md) — `connect()` resolve ao iniciar a tentativa; queda antes do fim não se perde (detalha D03/D39/D45)
 - [0050](0050-codigo-de-pareamento.md) — Código de pareamento chega por evento, como o QR (detalha D03/D13)
+- [0091](0091-log-legivel-e-baileys-em-warn.md) — Log legível no terminal e linhas do Baileys e do libsignal a partir de `warn` (detalha D13/D37)
 
 **Mensagem e identidade**
 
@@ -218,3 +219,4 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0088](0088-limite-de-concorrencia-por-comando.md) | D88 | Limite de concorrência por comando: `concurrency` põe um teto de `run` simultâneos no bot, a espera conta no prazo e a vaga só volta quando o `run` termina (detalha D05/D87) | Aceito |
 | [0089](0089-benchmark-intercalado.md) | D89 | Benchmark intercalado: base e commit testado se revezam no mesmo runner, a ordem inverte a cada rodada, e a comparação usa o quartil bom no sentido da meta (detalha D54) | Aceito |
 | [0090](0090-requires-por-comando.md) | D90 | `requires` por comando: sem a capability, o comando fica fora do roteador, do `ctx.commands.list()` e do menu nativo; o resto do plugin sobe (detalha D16/D64) | Aceito |
+| [0091](0091-log-legivel-e-baileys-em-warn.md) | D91 | Log legível no terminal (`format: 'pretty'`, formatador próprio sobre a linha já censurada) e linhas do Baileys e do `console` do libsignal a partir de `warn` (`baileys({ logLevel })`) (detalha D13/D37) | Aceito |

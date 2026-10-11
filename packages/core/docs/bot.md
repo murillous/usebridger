@@ -30,8 +30,9 @@ Só `transport` é obrigatório; `createBot({ transport })` sobe um bot sem plug
 | `env` | `process.env` | Ambiente lido pela config de plugin (`BRIDGER_*`) |
 | `owners` | `[]` | Donos: telefone, aceito com pontuação (`'+55 11 99999-9999'`), ou `{ id }` com o ID nativo do contato ([Config](config.md#owners)) — `BotConfigError` já no `createBot` se malformados |
 | `prefix` | `'!'` | Prefixo de comando: um texto para todo chat, ou `{ dm, group }` por tipo de chat; vazio é permitido ([Comandos](commands.md#prefixo-por-chat)) |
-| `logger` | criado pelo bot | `Logger` pronto. Sem ele, `createLogger({ level: logLevel, secrets })` no `start()` |
+| `logger` | criado pelo bot | `Logger` pronto. Sem ele, `createLogger({ level: logLevel, format: logFormat, secrets })` no `start()` |
 | `logLevel` | `'info'` | Nível do logger criado pelo bot |
+| `logFormat` | `'json'` | Formato do logger criado pelo bot; `'pretty'` para ler no terminal ([Logger](logger.md#saída-legível-em-dev)) |
 | `secrets` | um novo | `SecretSet` compartilhado entre a config de plugin e o logger (ver abaixo) |
 | `middlewares` | ver [Middlewares](#middlewares) | Oficiais ligados/desligados e os do app |
 | `inbound` | `{ maxPendingPerChat: 100 }` | [Fila de entrada](inbound-queue.md) |

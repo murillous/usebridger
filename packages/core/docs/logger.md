@@ -21,6 +21,7 @@ de `level`, `time`, `pid`, `hostname` e `msg`.
 | Opção | Padrão | O que faz |
 | --- | --- | --- |
 | `level` | `'info'` | Nível mínimo: `trace`, `debug`, `info`, `warn`, `error`, `fatal` ou `silent` |
+| `format` | `'json'` | `'pretty'` escreve texto para o terminal ([Saída legível em dev](#saída-legível-em-dev)) |
 | `destination` | stdout | Qualquer `{ write(line: string): void }` — recebe cada linha JSON com `\n` |
 | `bindings` | — | Campos presentes em toda linha deste logger e dos filhos |
 | `redact` | — | Caminhos de campos trocados por `[REDACTED]` (sintaxe do pino) |
@@ -100,8 +101,23 @@ censura por `secrets` roda só nas linhas emitidas e só quando há segredo conf
 
 ## Saída legível em dev
 
-O core não traz `pino-pretty`. Para ler os logs no terminal, o app pode encaminhar a saída:
+`format: 'pretty'` (no bot, `logFormat: 'pretty'`) troca o JSON por uma linha de texto
+([ADR 0091](../../../docs/adr/0091-log-legivel-e-baileys-em-warn.md)):
 
-```sh
-node app.js | npx pino-pretty
+```text
+14:03:22 INFO  conexão aberta
+14:03:25 WARN  [media] figurinha falhou chatId=1203@g.us
+    Error: ffmpeg saiu com 1
+        at ...
+    causa: Error: ENOENT
+        at ...
 ```
+
+- Hora local, nível, `[plugin]` quando houver, a mensagem e os demais campos em `chave=valor`
+  (texto com espaço entre aspas, objeto em JSON compacto). `pid` e `hostname` ficam de fora.
+- O `err` sai nas linhas seguintes, recuado: a stack e, em seguida, a de cada `causa`.
+- Colorido só no stdout de um terminal; `NO_COLOR` desliga. Com `destination` próprio, texto puro.
+- A conversão roda sobre a linha JSON já censurada: `secrets` e `redact` valem igual.
+
+O padrão segue `'json'`, que é o que agregadores e arquivos de log esperam. O core não depende de
+`pino-pretty`; quem prefere o dele pode encaminhar a saída JSON (`node app.js | npx pino-pretty`).

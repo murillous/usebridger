@@ -1,8 +1,10 @@
 // Entry `@usebridger/transport-baileys`: a fábrica que o app passa em `createBot({ transport })`
 // (ADR 0037). A classe fica interna: o transport precisa das dependências do bot.
 
+import type { LogLevel } from '@usebridger/core';
 import type { Transport, TransportDeps } from '@usebridger/core/adapter';
 import { Browsers, fetchLatestBaileysVersion, makeWASocket, type WAVersion } from 'baileys';
+import { isLogLevel } from './logger.ts';
 import { type BaileysDriver, type BaileysPairing, BaileysTransport } from './transport.ts';
 
 export type { BaileysPairing } from './transport.ts';
@@ -19,6 +21,12 @@ export interface BaileysOptions {
    * conexão e, se a busca falhar, usa a que vem com o Baileys.
    */
   readonly version?: WAVersion;
+  /**
+   * Nível mínimo das linhas do próprio Baileys (sincronização, pre-keys, protocolo), em inglês.
+   * Padrão: `'warn'`; o estado da conexão o bot já loga em PT. Use `'debug'` para investigar o
+   * Baileys. Vale o mais alto entre este e o nível do bot.
+   */
+  readonly logLevel?: LogLevel;
 }
 
 export function baileys(options: BaileysOptions = {}): (deps: TransportDeps) => Transport {
@@ -30,7 +38,12 @@ export function baileys(options: BaileysOptions = {}): (deps: TransportDeps) => 
       `baileys: pairing.phone deve ter só dígitos, com DDI (ex.: 5511999999999); recebido "${pairing.phone}"`,
     );
   }
-  return (deps) => new BaileysTransport({ pairing, driver: driver(options.version, deps) }, deps);
+  const logLevel = options.logLevel ?? 'warn';
+  if (!isLogLevel(logLevel)) {
+    throw new TypeError(`baileys: logLevel desconhecido "${String(logLevel)}"`);
+  }
+  return (deps) =>
+    new BaileysTransport({ pairing, logLevel, driver: driver(options.version, deps) }, deps);
 }
 
 function driver(fixed: WAVersion | undefined, deps: TransportDeps): BaileysDriver {

@@ -38,10 +38,19 @@ bot entrega a ela o auth state da sessão e o logger. Nada abre antes do `bot.st
 | Opção | Padrão | Efeito |
 | --- | --- | --- |
 | `pairing` | `'qr'` | `'qr'` emite `connection.qr`; `{ phone: '5511999999999' }` pede um código de pareamento para o número e emite `connection.pairing-code` |
+| `logLevel` | `'warn'` | Nível mínimo das linhas do próprio Baileys (`lib=baileys`) e do libsignal (ver abaixo): sincronização, pre-keys, sessões e protocolo, em inglês. O estado da conexão o bot já loga em PT. `'debug'` ou `'trace'` para investigar o Baileys; vale o mais alto entre este e o `logLevel` do bot |
 | `version` | a mais recente | Versão do WhatsApp Web a anunciar (`[2, 3000, 1023223821]`). Sem ela, o transport busca a mais recente na primeira conexão; se a busca falhar, loga em `warn` e usa a que vem com o Baileys |
 
 `pairing.phone` aceita só dígitos, com DDI (8 a 15). Um valor inválido faz o `createBot` lançar
-`BotConfigError`.
+`BotConfigError`. Um `logLevel` desconhecido faz o `baileys()` lançar `TypeError`.
+
+O libsignal, que o Baileys usa para a criptografia, escreve direto no `console`
+(`Closing session: SessionEntry {...}`). Enquanto há socket aberto, o transport desvia essas
+chamadas para o mesmo logger, com `source=libsignal`: em `debug` a rotina de abrir e fechar
+sessões, em `warn` o `console.error` dele. Por isso o `logLevel` também as alcança. Vão só os
+textos: os objetos de sessão carregam chaves e ficam de fora. O desvio olha o arquivo que chamou
+o `console`, então o `console` do app e dos plugins passa intacto, e o original volta quando o
+socket fecha.
 
 ## Pareamento
 
