@@ -1,5 +1,19 @@
 # @usebridger/storage-postgres
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [3cd9b93]
+- Updated dependencies [f5c2517]
+- Updated dependencies [8ec8937]
+- Updated dependencies [a4268bd]
+- Updated dependencies [ac67f62]
+- Updated dependencies [92e35c0]
+- Updated dependencies [e094a23]
+- Updated dependencies [b00d09a]
+  - @usebridger/core@0.3.0
+
 ## 0.2.1
 
 ### Patch Changes

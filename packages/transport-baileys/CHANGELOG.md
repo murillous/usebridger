@@ -1,5 +1,23 @@
 # @usebridger/transport-baileys
 
+## 0.3.0
+
+### Minor Changes
+
+- a4268bd: Log legível no terminal: `createLogger({ format: 'pretty' })` e `logFormat: 'pretty'` no bot escrevem hora, nível, `[plugin]`, a mensagem e os campos em `chave=valor`, com o `err` recuado nas linhas seguintes e cor no terminal. O padrão segue JSON. No `@usebridger/transport-baileys`, a opção `logLevel` (padrão `'warn'`) põe um piso nas linhas do próprio Baileys: a sincronização e o protocolo, em inglês, saem do `info`. O `console` do libsignal (`Closing session: SessionEntry {...}`) passa a ir para o mesmo logger, em `debug`, sem os objetos de sessão (ADR 0091).
+
+### Patch Changes
+
+- Updated dependencies [3cd9b93]
+- Updated dependencies [f5c2517]
+- Updated dependencies [8ec8937]
+- Updated dependencies [a4268bd]
+- Updated dependencies [ac67f62]
+- Updated dependencies [92e35c0]
+- Updated dependencies [e094a23]
+- Updated dependencies [b00d09a]
+  - @usebridger/core@0.3.0
+
 ## 0.2.1
 
 ### Patch Changes
