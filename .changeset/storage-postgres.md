@@ -1,5 +1,5 @@
 ---
-'@bridger/storage-postgres': minor
+'@usebridger/storage-postgres': minor
 ---
 
 Novo pacote: `await postgres({ connectionString, schema })` (#119). Adapter de storage para vários

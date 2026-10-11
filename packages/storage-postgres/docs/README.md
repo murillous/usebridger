@@ -1,16 +1,16 @@
-# @bridger/storage-postgres — documentação
+# @usebridger/storage-postgres — documentação
 
 Adapter de storage do Bridger para vários processos (ou máquinas) dividindo o mesmo banco. Ele
 implementa o `StoragePort` do core ([Storage](../../core/docs/storage.md)) e passa na mesma suíte
-de contrato do [`@bridger/storage-sqlite`](../../storage-sqlite/docs/README.md). O porquê do
+de contrato do [`@usebridger/storage-sqlite`](../../storage-sqlite/docs/README.md). O porquê do
 driver e do schema está no [ADR 0078](../../../docs/adr/0078-postgres-via-pg.md).
 
 ## Uso
 
 ```ts
-import { createBot } from '@bridger/core';
-import { postgres } from '@bridger/storage-postgres';
-import { baileys } from '@bridger/transport-baileys';
+import { createBot } from '@usebridger/core';
+import { postgres } from '@usebridger/storage-postgres';
+import { baileys } from '@usebridger/transport-baileys';
 
 const bot = createBot({
   transport: baileys(),

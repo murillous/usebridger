@@ -8,7 +8,7 @@ transport em `deps.http`. A porta só abre se houver rota.
 ## Ligar o servidor
 
 ```ts
-import { createBot, createHttp } from '@bridger/core';
+import { createBot, createHttp } from '@usebridger/core';
 
 const http = createHttp({ port: 3000 });
 const storage = sqlite({ path: 'data/bot.db' });

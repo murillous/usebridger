@@ -1,5 +1,5 @@
 ---
-'@bridger/core': minor
+'@usebridger/core': minor
 ---
 
 `owners` aceita `{ id }` além do telefone: `createBot({ owners: ['+55 11 99999-9999', { id: '123456789012345678' }] })`.

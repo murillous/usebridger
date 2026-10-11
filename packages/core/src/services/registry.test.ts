@@ -11,7 +11,7 @@ interface Counter {
 }
 
 // Nomes só destes testes; em runtime o registry não conhece tipos.
-declare module '@bridger/core' {
+declare module '@usebridger/core' {
   interface Services {
     'test.counter': Counter;
     'test.other': string;

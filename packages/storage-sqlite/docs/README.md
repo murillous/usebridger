@@ -1,4 +1,4 @@
-# @bridger/storage-sqlite — documentação
+# @usebridger/storage-sqlite — documentação
 
 Adapter de storage padrão do Bridger, sobre o SQLite que vem no próprio Node (`node:sqlite`). Ele
 implementa o `StoragePort` do core ([Storage](../../core/docs/storage.md)) e passa na suíte de
@@ -8,9 +8,9 @@ contrato. O porquê do driver e do schema está no
 ## Uso
 
 ```ts
-import { createBot } from '@bridger/core';
-import { sqlite } from '@bridger/storage-sqlite';
-import { baileys } from '@bridger/transport-baileys';
+import { createBot } from '@usebridger/core';
+import { sqlite } from '@usebridger/storage-sqlite';
+import { baileys } from '@usebridger/transport-baileys';
 
 const bot = createBot({
   transport: baileys(),

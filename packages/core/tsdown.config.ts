@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsdown';
 
-// Um entry por público (ADR 0034): plugin e app (`@bridger/core`), transports e storages
-// (`@bridger/core/adapter`) e a suíte de contrato de storage (`@bridger/core/storage-contract`),
+// Um entry por público (ADR 0034): plugin e app (`@usebridger/core`), transports e storages
+// (`@usebridger/core/adapter`) e a suíte de contrato de storage (`@usebridger/core/storage-contract`),
 // separada para que quem usa o kernel em produção não carregue código de teste.
 export default defineConfig({
   entry: {

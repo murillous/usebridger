@@ -1,5 +1,5 @@
 ---
-'@bridger/core': minor
+'@usebridger/core': minor
 ---
 
 O `Chat` ganha os campos opcionais `kind` (`'dm' | 'group' | 'channel' | 'thread'`, tipo

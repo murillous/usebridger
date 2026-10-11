@@ -10,7 +10,7 @@ detalhe está em [Eventos](../../packages/core/docs/events.md) e
 Listener fixo vai no `on` do manifesto, com o contexto do plugin no 2º argumento:
 
 ```ts
-import { definePlugin } from '@bridger/core';
+import { definePlugin } from '@usebridger/core';
 
 export const boasVindas = definePlugin({
   name: 'boas-vindas',
@@ -156,7 +156,7 @@ sem, e confira em `ctx.capabilities` o que é opcional ([Capabilities](capabilit
 ## Testar
 
 ```ts
-import { createTestBot, fixtures } from '@bridger/testing';
+import { createTestBot, fixtures } from '@usebridger/testing';
 
 const bot = await createTestBot({ plugins: [meuPlugin] });
 await bot.receive({ image: fixtures.image() });

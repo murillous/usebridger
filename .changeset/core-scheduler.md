@@ -1,5 +1,5 @@
 ---
-'@bridger/core': minor
+'@usebridger/core': minor
 ---
 
 Scheduler persistido (M1-11): `createSchedulerService({ storage, onError, onStorageError })`

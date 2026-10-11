@@ -1,5 +1,5 @@
 ---
-'@bridger/core': minor
+'@usebridger/core': minor
 ---
 
 Barramento de eventos (M1-7): `createEventBus()` com todos os eventos do §6.4 tipados, incluindo

@@ -9,7 +9,7 @@ os segredos e recarrega o plugin quando a config muda
 ## Declarar
 
 ```ts
-import { definePlugin, secret } from '@bridger/core';
+import { definePlugin, secret } from '@usebridger/core';
 import { z } from 'zod';
 
 export const ai = definePlugin({
@@ -82,7 +82,7 @@ O `Bot` faz isto no `start()` com `pluginConfig`, `storage`, `env` e `secrets` d
 expõe `setOverrides`/`describe`/`jsonSchema` em `bot.config`. Por dentro (interno do kernel, não exportado ([ADR 0034](../../../docs/adr/0034-biblioteca-sem-runner.md))):
 
 ```ts
-import { createLogger, createSecretSet } from '@bridger/core';
+import { createLogger, createSecretSet } from '@usebridger/core';
 import { createPluginConfigs } from '#config/plugin-configs.ts';
 
 const secrets = createSecretSet();

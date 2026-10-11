@@ -30,7 +30,7 @@ No fim, mostra os próximos passos no gerenciador que rodou o comando (`npm`, `p
 ```
 bridger-plugin-ola/
   src/index.ts          # o plugin, na forma curta (commands no manifesto)
-  src/index.test.ts     # teste com @bridger/testing nos quatro perfis
+  src/index.test.ts     # teste com @usebridger/testing nos quatro perfis
   package.json          # core como peer dependency; build, test, typecheck, changeset
   tsconfig.json         # strict + isolatedDeclarations
   tsdown.config.ts      # dist/ com JS e .d.ts
@@ -47,7 +47,7 @@ O exemplo responde `!ola` e ensina o plugin portátil:
 - **Teste em todos os perfis.** `describe.each(PROFILE_NAMES)` roda o mesmo teste como WhatsApp,
   Telegram, Discord e web.
 
-O `@bridger/core` entra como peer dependency (o plugin usa o core do bot) e como dev dependency
+O `@usebridger/core` entra como peer dependency (o plugin usa o core do bot) e como dev dependency
 (para o teste e o typecheck). A faixa é `<1.0.0` até o core chegar ao 1.0.
 
 ## Manter o template
@@ -70,7 +70,7 @@ pnpm build
 pnpm --filter create-bridger-plugin e2e
 ```
 
-Ele empacota o `@bridger/core`, o `@bridger/testing` e o próprio scaffold com `pnpm pack`, gera
+Ele empacota o `@usebridger/core`, o `@usebridger/testing` e o próprio scaffold com `pnpm pack`, gera
 o projeto pelo binário do tarball numa pasta temporária, aponta o core e o kit para os tarballs
 (`overrides`, enquanto não estão no npm) e roda `pnpm install`, `typecheck`, `test` e `build`. No
 CI, é o job `Scaffold`.

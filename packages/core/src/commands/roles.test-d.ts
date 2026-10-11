@@ -1,9 +1,9 @@
-// Papéis por declaration merging contra `@bridger/core`, como um plugin faz (ADR 0035).
-import type { CommandRole, PluginContext } from '@bridger/core';
+// Papéis por declaration merging contra `@usebridger/core`, como um plugin faz (ADR 0035).
+import type { CommandRole, PluginContext } from '@usebridger/core';
 import { describe, expectTypeOf, it } from 'vitest';
 import { command } from '#commands/command.ts';
 
-declare module '@bridger/core' {
+declare module '@usebridger/core' {
   interface Roles {
     'tipo.curador': true;
   }

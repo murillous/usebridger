@@ -1,5 +1,5 @@
 ---
-'@bridger/core': minor
+'@usebridger/core': minor
 ---
 
 Logger estruturado (M1-14): `createLogger(options)` sobre pino, com nível configurável (padrão

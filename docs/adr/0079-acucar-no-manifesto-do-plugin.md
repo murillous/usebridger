@@ -69,7 +69,7 @@ Alternativas consideradas:
 - O `ping` cai para uma linha de comando: `commands: { ping: { description, run: () => 'pong' } }`.
 - Um `run` que devolvia uma string por acaso passa a responder com ela. É mudança de
   comportamento antes do 1.0: entra no changeset.
-- Os tipos `PluginCommand`, `PluginListener` e `PluginListeners` saem em `@bridger/core`.
+- Os tipos `PluginCommand`, `PluginListener` e `PluginListeners` saem em `@usebridger/core`.
 - O caminho quente ganha um teste de tipo no retorno de cada comando. O benchmark não mostrou
   diferença fora do ruído.
 - Os guias do M3-4 (#122) e o template do #121 ainda não existem: nascem com a forma curta.

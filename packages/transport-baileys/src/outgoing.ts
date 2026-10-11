@@ -9,7 +9,7 @@ import {
   type OutgoingContent,
   type SendOptions,
   UnsupportedError,
-} from '@bridger/core';
+} from '@usebridger/core';
 import {
   type AnyMessageContent,
   type GroupMetadata as BaileysGroupMetadata,

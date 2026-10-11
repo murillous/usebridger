@@ -1,5 +1,5 @@
 ---
-'@bridger/core': minor
+'@usebridger/core': minor
 ---
 
 Contratos compartilhados do M1-7 ao M1-15 (só tipos): `PluginManifest`, `PluginDefinition` e

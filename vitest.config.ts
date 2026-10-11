@@ -16,10 +16,10 @@ const projects = globSync(['{packages,plugins,apps}/*/package.json', 'bench/pack
 );
 
 export default defineConfig({
-  // Resolve @bridger/* direto no src/ (condição de exports), sem build antes dos testes.
+  // Resolve @usebridger/* direto no src/ (condição de exports), sem build antes dos testes.
   // (resolve vale para ambientes de browser/jsdom; ssr para o ambiente node, o padrão).
-  resolve: { conditions: ['@bridger/source'] },
-  ssr: { resolve: { conditions: ['@bridger/source'] } },
+  resolve: { conditions: ['@usebridger/source'] },
+  ssr: { resolve: { conditions: ['@usebridger/source'] } },
   test: {
     passWithNoTests: true,
     // Sem pacotes ainda, não há o que rodar (e o include padrão pegaria os testes de legacy/).

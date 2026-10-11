@@ -23,18 +23,18 @@ config; manter um único ponto de entrada com tudo exportado e marcar internos c
 
 ## Decisão
 
-- **O Bridger é uma biblioteca.** O app importa `@bridger/core`, monta o bot com
+- **O Bridger é uma biblioteca.** O app importa `@usebridger/core`, monta o bot com
   `createBot({ transport, storage, plugins, ... })` e chama `start()`. Não há runner, CLI de
   execução, arquivo de config descoberto por convenção nem `defineConfig`. O `apps/lumabot` é
   um exemplo dessa composição, não um molde obrigatório.
 - **A API pública se organiza por público:**
-  - `@bridger/core` — o que o autor de plugin usa (`definePlugin`, `command`, `secret`, os
+  - `@usebridger/core` — o que o autor de plugin usa (`definePlugin`, `command`, `secret`, os
     tipos dos contextos, os erros que ele trata) e o pouco que o app usa para compor
     (`createBot` e sua config, middlewares oficiais, `createLogger`);
-  - `@bridger/core/adapter` — o que autores de transport e storage usam (contratos
+  - `@usebridger/core/adapter` — o que autores de transport e storage usam (contratos
     `Transport`/`StoragePort`, `TypedEmitter`, `createMessage`, `createMedia`,
     `ReconnectionPolicy`, normalização de consultas);
-  - `@bridger/core/storage-contract` — a suíte de contrato, como hoje.
+  - `@usebridger/core/storage-contract` — a suíte de contrato, como hoje.
   - Peças internas (host de plugins, barramento, filas, scheduler, ordenação, semver) deixam de
     ser exportadas.
 - Um runner pode surgir depois como pacote separado, construído sobre esta API pública, sem

@@ -14,7 +14,7 @@ Alternativas consideradas: fixar sempre o transporte no manifesto.
 Todo plugin declara ([plano §6.2](../../BRIDGER_PLAN.md#62-definição-de-plugin-manifesto)):
 
 - `name` e `version`;
-- `engine` — range semver do `@bridger/core`, **obrigatório**;
+- `engine` — range semver do `@usebridger/core`, **obrigatório**;
 - `requires` — capabilities do transport;
 - `transports` — opcional, fixa runner(s);
 - `dependsOn` — outros plugins com range semver.

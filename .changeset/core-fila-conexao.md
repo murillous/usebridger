@@ -1,5 +1,5 @@
 ---
-'@bridger/core': minor
+'@usebridger/core': minor
 ---
 
 A fila de saída espera a reconexão em vez de perder as respostas (#198, ADR 0039). Antes, numa

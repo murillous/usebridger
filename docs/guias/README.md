@@ -16,10 +16,10 @@ quando o detalhe importa.
 | [Capabilities](capabilities.md) | O que cada transport suporta, com matriz por transport | #124 |
 | [Portabilidade entre plataformas](portabilidade.md) | Formatação neutra, IDs e owners, botões, resposta esperada, tenant | #124 |
 | [Escape hatch](escape-hatch.md) | Objeto bruto da mensagem e do transport | #124 |
-| [Testes](testes.md) | `@bridger/testing` e os perfis de transport | #124 |
+| [Testes](testes.md) | `@usebridger/testing` e os perfis de transport | #124 |
 
 ## Outras referências
 
-- **Referência da API**: `pnpm docs` (ou `pnpm build`) gera em `docs/referencia/index.html`, com cada entrada pública (`@bridger/core`, `@bridger/core/adapter`, …) e os comentários do código.
+- **Referência da API**: `pnpm docs` (ou `pnpm build`) gera em `docs/referencia/index.html`, com cada entrada pública (`@usebridger/core`, `@usebridger/core/adapter`, …) e os comentários do código.
 - **Documentação do core** (como cada módulo funciona): [`packages/core/docs/`](../../packages/core/docs/README.md) (#126).
 - **O porquê das decisões**: [ADRs](../adr/README.md).

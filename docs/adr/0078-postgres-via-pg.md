@@ -7,7 +7,7 @@ e **D15** ([ADR 0015](0015-storage-kv-e-colecoes.md)), no molde do SQLite
 
 ## Contexto
 
-O `@bridger/storage-postgres` é o adapter oficial para vários processos dividindo o banco (D14),
+O `@usebridger/storage-postgres` é o adapter oficial para vários processos dividindo o banco (D14),
 e o segundo adapter real: é ele que mostra se o `StoragePort` vazou o SQLite (#119). Ele precisa
 de um driver, de um lugar para as tabelas dentro de um banco que pode ser de outros sistemas, e
 de um jeito de evoluir o schema com vários processos subindo ao mesmo tempo.

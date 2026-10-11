@@ -12,7 +12,7 @@ Alternativas consideradas: supervisor separado.
 
 ## Decisão
 
-O dashboard vira `@bridger/plugin-dashboard`, que lê o barramento de eventos e os
+O dashboard vira `@usebridger/plugin-dashboard`, que lê o barramento de eventos e os
 schemas de config e expõe a interface pelo HTTP do core
 ([ADR 0020](0020-http-unico-hono.md)). O protocolo via stdout acaba.
 

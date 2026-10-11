@@ -23,14 +23,14 @@
         "noDefaultExport": "error",
         // ...nenhum process.env fora da camada de config (ver overrides)...
         "noProcessEnv": "error",
-        // ...e imports entre pacotes pelo nome @bridger/*, nunca subindo diretórios.
+        // ...e imports entre pacotes pelo nome @usebridger/*, nunca subindo diretórios.
         "noRestrictedImports": {
           "level": "error",
           "options": {
             "patterns": [
               {
                 "group": ["../**", ".."],
-                "message": "Import relativo ascendente: importe pelo pacote (@bridger/*) ou reorganize o módulo."
+                "message": "Import relativo ascendente: importe pelo pacote (@usebridger/*) ou reorganize o módulo."
               }
             ]
           }

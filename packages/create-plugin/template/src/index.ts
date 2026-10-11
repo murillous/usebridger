@@ -1,4 +1,4 @@
-import { bold, definePlugin, fmt, type PluginDefinition } from '@bridger/core';
+import { bold, definePlugin, fmt, type PluginDefinition } from '@usebridger/core';
 
 /** `!ola` → cumprimenta quem chamou pelo nome, com uma reação onde a plataforma tem. */
 export const __export__: PluginDefinition = definePlugin({

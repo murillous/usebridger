@@ -1,5 +1,5 @@
 ---
-'@bridger/core': minor
+'@usebridger/core': minor
 ---
 
 Queda de rede nunca apaga as credenciais (#236, ADR 0045). Antes, `connection-lost`/`unknown`

@@ -1,11 +1,11 @@
 # Testes
 
-O [`@bridger/testing`](../../packages/testing/docs/README.md) sobe um bot de verdade (plugins,
+O [`@usebridger/testing`](../../packages/testing/docs/README.md) sobe um bot de verdade (plugins,
 filas, roteador, storage em memória) sobre um transport falso, sem rede. O teste manda mensagens e
 confere o que o bot enviou. O kit funciona com o [Vitest](https://vitest.dev).
 
 ```sh
-npm install -D @bridger/testing vitest
+npm install -D @usebridger/testing vitest
 ```
 
 O projeto criado pelo `create-bridger-plugin` já vem com o kit e um teste pronto.
@@ -13,7 +13,7 @@ O projeto criado pelo `create-bridger-plugin` já vem com o kit e um teste pront
 ## O primeiro teste
 
 ```ts
-import { createTestBot } from '@bridger/testing';
+import { createTestBot } from '@usebridger/testing';
 import { expect, it } from 'vitest';
 import { meuPlugin } from './index.ts';
 
@@ -38,7 +38,7 @@ it('responde ao !ping', async () => {
 O `receive()` recebe só o que importa para o teste; o resto vem com padrões:
 
 ```ts
-import { fixtures } from '@bridger/testing';
+import { fixtures } from '@usebridger/testing';
 
 await bot.receive({ text: 'oi' });
 await bot.receive({ text: '!s', image: fixtures.image() });           // imagem com legenda
@@ -66,7 +66,7 @@ outros detalhes, leia os registros: `bot.sent[0]?.content`, `bot.transport.react
 ## Donos, grupos e eventos
 
 ```ts
-import { DEFAULT_SENDER } from '@bridger/testing';
+import { DEFAULT_SENDER } from '@usebridger/testing';
 
 // O remetente padrão como dono do bot
 const bot = await createTestBot({ plugins: [admin], owners: [DEFAULT_SENDER.phone!] });
@@ -133,7 +133,7 @@ Os perfis são `whatsapp`, `telegram`, `discord` e `web`. A lista de cada um est
 ### O mesmo teste em todas as plataformas
 
 ```ts
-import { createTestBot, PROFILE_NAMES } from '@bridger/testing';
+import { createTestBot, PROFILE_NAMES } from '@usebridger/testing';
 import { describe, expect, it } from 'vitest';
 
 describe.each(PROFILE_NAMES)('no %s', (profile) => {
@@ -160,4 +160,4 @@ sem citar. Num perfil sem telefone, um dono por telefone não reconhece o remete
   a resposta.
 
 O resto do kit (`FakeTransport` à mão, anexos, chat de thread, claims e tenant) está na
-[documentação do `@bridger/testing`](../../packages/testing/docs/README.md).
+[documentação do `@usebridger/testing`](../../packages/testing/docs/README.md).

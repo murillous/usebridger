@@ -29,7 +29,7 @@ plugin e papéis nomeados juntos (mais API sem consumidor concreto); nenhum meca
   Os nomes são tipados por declaration merging, como os serviços (ADR 0018):
 
   ```ts
-  declare module '@bridger/core' {
+  declare module '@usebridger/core' {
     interface Roles { moderador: true }
   }
   ```

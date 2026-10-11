@@ -5,11 +5,11 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/murillous/LumaBot.git",
+    "url": "git+https://github.com/murillous/usebridger.git",
     "directory": "packages/create-plugin"
   },
-  "homepage": "https://github.com/murillous/LumaBot/tree/develop/packages/create-plugin/docs#readme",
-  "bugs": "https://github.com/murillous/LumaBot/issues",
+  "homepage": "https://github.com/murillous/usebridger/tree/develop/packages/create-plugin/docs#readme",
+  "bugs": "https://github.com/murillous/usebridger/issues",
   "type": "module",
   "imports": {
     "#*": "./src/*"

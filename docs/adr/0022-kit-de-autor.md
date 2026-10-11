@@ -13,7 +13,7 @@ Alternativas consideradas: só documentação.
 
 A v1 entrega:
 
-- `@bridger/testing` — `FakeTransport`, `createTestBot`, matchers
+- `@usebridger/testing` — `FakeTransport`, `createTestBot`, matchers
   ([plano §6.9](../../BRIDGER_PLAN.md#69-testes-de-plugin));
 - `create-bridger-plugin` — scaffold;
 - docs "primeiro plugin em 5 minutos" + referência gerada via TypeDoc.

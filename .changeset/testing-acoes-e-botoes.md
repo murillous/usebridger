@@ -1,5 +1,5 @@
 ---
-'@bridger/testing': minor
+'@usebridger/testing': minor
 ---
 
 Botões no kit (ADR 0062): o `FakeTransport` declara a capability `actions` por padrão e registra
