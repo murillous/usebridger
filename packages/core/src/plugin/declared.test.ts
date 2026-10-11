@@ -36,6 +36,11 @@ describe('manifestIssues: commands e on', () => {
       /aliases deve ser uma lista/,
     ],
     ['prazo inválido', { commands: { ping: { timeoutMs: 0, run } } }, /commands\["ping"\]: Prazo/],
+    [
+      'requires com capability desconhecida',
+      { commands: { ping: { requires: ['send.hologram'], run } } },
+      /commands\["ping"\]: requires/,
+    ],
     ['onReject que não é função', { commands: { ping: { onReject: 'não', run } } }, /onReject/],
     ['on que não é objeto', { on: () => undefined }, /on deve ser um objeto/],
     [

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Capability } from '#transport/capabilities.ts';
 import { type AcceptSpec, command } from './command.ts';
 import { CommandConflictError, createCommandRegistry } from './registry.ts';
 
@@ -45,6 +46,14 @@ describe('command', () => {
     }
     const valid: AcceptSpec[] = ['document:application/pdf', 'quoted:video:video/*', 'image'];
     expect(command({ name: 'pdf', accepts: valid, run: noop }).accepts).toEqual(valid);
+  });
+
+  it('recusa capability desconhecida em requires', () => {
+    const requires = ['send.hologram'] as unknown as Capability[];
+    expect(() => command({ name: 'fig', requires, run: noop })).toThrow(/send\.hologram/);
+    expect(command({ name: 'fig', requires: ['send.sticker'], run: noop }).requires).toEqual([
+      'send.sticker',
+    ]);
   });
 });
 

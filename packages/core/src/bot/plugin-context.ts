@@ -3,7 +3,11 @@
 // host de plugins só recebe a fábrica.
 
 import { commandInfo } from '#commands/catalog.ts';
-import type { CommandContext, CommandDefinition } from '#commands/command.ts';
+import {
+  assertCommandDefinition,
+  type CommandContext,
+  type CommandDefinition,
+} from '#commands/command.ts';
 import { createConcurrencyLimit } from '#commands/concurrency.ts';
 import type { Prefixes } from '#commands/prefixes.ts';
 import { type RoleCheck, RoleTimeoutError } from '#commands/roles.ts';
@@ -50,7 +54,7 @@ import type {
 } from '#storage/types.ts';
 import type { TenantScope } from '#tenant/scope.ts';
 import { isFormatted } from '#text/format.ts';
-import type { Capability } from '#transport/capabilities.ts';
+import { type Capability, missingCapabilities } from '#transport/capabilities.ts';
 import type { Unsubscribe } from '#transport/types.ts';
 import type { UnsafeAccess } from '#unsafe/access.ts';
 import {
@@ -190,6 +194,21 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
       commands: {
         add(definition: CommandDefinition): void {
           guard('commands.add');
+          // Comando que o transport não sustenta nem entra no registro: anunciá-lo no menu e
+          // no `list()` para recusar depois seria pior que não tê-lo (ADR 0090). A definição
+          // inválida lança mesmo assim, para o erro não depender do transport.
+          assertCommandDefinition(definition);
+          const missing = missingCapabilities(deps.transport, definition.requires ?? []);
+          if (missing.length > 0) {
+            log.info(
+              `comando "${definition.name}" não registrado: capability ausente no transport`,
+              {
+                command: definition.name,
+                missing,
+              },
+            );
+            return;
+          }
           deps.router.registry.add(
             name,
             wrapCommand(name, definition, commandViews, lifetime, deps),

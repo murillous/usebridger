@@ -50,7 +50,7 @@ problemas encontrados. Regras:
 | `name` | kebab-case minúsculo começando por letra (`/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/`), até 64 caracteres. Vira chave de `disabledPlugins`, namespace de storage e prefixo de rota, então não muda entre versões. |
 | `version` | semver exato (`1.2.0`, `1.0.0-beta.1`). |
 | `engine` | faixa semver, obrigatória, conferida contra `CORE_VERSION`. |
-| `requires` | capabilities de `CAPABILITIES`; o TypeScript já recusa nome errado. |
+| `requires` | capabilities de `CAPABILITIES`; o TypeScript já recusa nome errado. Para exigir só num comando, use o `requires` dele ([Comandos](commands.md#capability-por-comando)). |
 | `transports` | lista não vazia de nomes de transport. |
 | `dependsOn` | nome de plugin → faixa semver; não pode citar o próprio plugin. |
 | `after` | nomes de plugin; não pode citar o próprio plugin. |
@@ -104,7 +104,7 @@ export const saldo = definePlugin({
   como terminar com `await c.reply(texto)`. Isso vale para qualquer comando, também os do
   `setup`. Outro valor (`undefined`, a chave de um `c.reply(...)` devolvido) não responde nada.
 - **`send.text` vem implícito.** Declarar `commands` já exige a capability `send.text`. O que
-  depende de outra capability (mídia, reação) continua em `requires`.
+  depende de outra capability (mídia, reação) continua em `requires`, do plugin ou do comando.
 - **Um caminho só.** O kernel registra os declarados com `ctx.commands.add` e `ctx.events.on`
   antes do `setup`, então prazo, recusa, teardown e reload são os da forma longa. O `setup` já
   os vê em `ctx.commands.list()`, e um conflito de nome derruba o boot como sempre.
@@ -356,7 +356,7 @@ setup(ctx) {
   devolve a chave da primeira parte ([Texto formatado](text.md#texto-longo)).
 - Sem a capability, a ação rejeita na hora com `UnsupportedError`. Para recurso opcional,
   confira antes: `if (ctx.capabilities.has('reactions')) await c.react('👍'); else await c.reply('ok')`.
-  Para recurso obrigatório, declare em `requires`.
+  Para recurso obrigatório, declare em `requires`: no plugin, ou no comando que depende dele.
 - O kernel não restringe `edit`/`delete` às mensagens do bot: o transport decide o que o canal
   permite.
 - `ctx.groups.metadata` não tem cache nem prazo próprio: o prazo da execução (comando, listener,

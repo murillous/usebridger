@@ -1,6 +1,7 @@
 import type { BotMessageContext } from '#context.ts';
 import type { ExpectReply } from '#conversations/conversations.ts';
 import type { Media, MediaMessageType, Message, MessageType } from '#message/types.ts';
+import { type Capability, isCapability } from '#transport/capabilities.ts';
 import type { RoleName } from './roles.ts';
 
 /**
@@ -157,6 +158,12 @@ export interface CommandDefinition {
    * >= 1; padrão: sem limite.
    */
   readonly concurrency?: number;
+  /**
+   * Capabilities que o comando exige do transport (ADR 0090). No bot, sem alguma delas, o
+   * comando não é registrado: fica fora do roteador, do `ctx.commands.list()` e do menu nativo,
+   * como um plugin pulado pelo `requires` dele. O roteador solto ignora o campo.
+   */
+  readonly requires?: readonly Capability[];
 }
 
 /** Comando como os plugins o veem em `ctx.commands.list()` (ADR 0040): sem `run` nem `onReject`. */
@@ -183,8 +190,8 @@ function assertToken(token: string, what: string): void {
  * Lança `TypeError` se o nome ou algum alias for vazio ou tiver espaço (nunca casaria) e
  * `RangeError` se `timeoutMs` não for finito e > 0 (o `setTimeout` trataria `Infinity`/`NaN`
  * como 1 ms e o comando estouraria na hora) ou se `concurrency` não for inteiro >= 1 (0 nunca
- * rodaria). Entrada de `accepts` com mimetype mal formado, ou num tipo sem mídia, também lança
- * `TypeError`.
+ * rodaria). Entrada de `accepts` com mimetype mal formado, ou num tipo sem mídia, e capability
+ * desconhecida em `requires` também lançam `TypeError`.
  */
 export function assertCommandDefinition(definition: CommandDefinition): void {
   assertToken(definition.name, 'Nome');
@@ -206,6 +213,14 @@ export function assertCommandDefinition(definition: CommandDefinition): void {
       throw new TypeError(
         `accepts do comando "${definition.name}" inválido: ${JSON.stringify(spec)} (mimetype ` +
           'só em tipo com mídia, como "tipo/subtipo" ou "tipo/*")',
+      );
+    }
+  }
+  // O tipo já barra capability desconhecida; a checagem é para quem define em JS.
+  for (const capability of definition.requires ?? []) {
+    if (!isCapability(capability)) {
+      throw new TypeError(
+        `requires do comando "${definition.name}": capability desconhecida ${JSON.stringify(capability)}`,
       );
     }
   }
