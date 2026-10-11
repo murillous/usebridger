@@ -97,7 +97,9 @@ export const saldo = definePlugin({
 - **O nome vem da chave.** O resto é o mesmo `CommandDefinition` (`aliases`, `role`, `accepts`,
   `onReject`, `timeoutMs`...). `on` aceita um listener por evento, sem opções.
 - **O 2º argumento é o contexto do plugin**, o mesmo do `setup`: `storage`, `config`, `send`,
-  `log`, `services`... Com TypeScript, `config` sai tipado pelo schema.
+  `log`, `services`... Com TypeScript, `config` sai tipado pelo schema. No `onReject`, ele vem no
+  3º, depois da recusa, para o texto sair de `plugin.plugin.messages` e a config poder trocá-lo:
+  `onReject: (_c, _rejection, plugin) => plugin.plugin.messages.uso`.
 - **Devolver texto responde.** Um `run` que devolve string ou `fmt` responde citando a mensagem,
   como terminar com `await c.reply(texto)`. Isso vale para qualquer comando, também os do
   `setup`. Outro valor (`undefined`, a chave de um `c.reply(...)` devolvido) não responde nada.
