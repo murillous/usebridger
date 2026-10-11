@@ -1,5 +1,16 @@
 # @usebridger/testing
 
+## 0.2.0
+
+### Minor Changes
+
+- e190d3e: Release de teste do fluxo `develop` → `main` com Trusted Publishing (ADR 0085), sem mudança de API em relação à 0.1.0.
+
+### Patch Changes
+
+- Updated dependencies [e190d3e]
+  - @usebridger/core@0.2.0
+
 ## 0.1.0
 
 ### Minor Changes
