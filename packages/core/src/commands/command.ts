@@ -98,6 +98,13 @@ export interface CommandDefinition {
    * (ADR 0042), então o prazo maior vale só para ele.
    */
   readonly timeoutMs?: number;
+  /**
+   * O `run` roda fora da fila do chat (ADR 0087): a próxima mensagem do chat não espera por ele.
+   * Papel, `accepts` e `onReject` seguem na fila. O `run` mantém o contexto inteiro (`reply`,
+   * `signal` com o `timeoutMs`, `log`), e a falha vai para `plugin.error` quando ele termina.
+   * Duas execuções do mesmo chat podem terminar fora de ordem.
+   */
+  readonly background?: boolean;
 }
 
 /** Comando como os plugins o veem em `ctx.commands.list()` (ADR 0040): sem `run` nem `onReject`. */

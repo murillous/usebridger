@@ -501,6 +501,72 @@ describe('roteador: erros', () => {
   });
 });
 
+describe('roteador: background (ADR 0087)', () => {
+  const MATCHED = { plugin: 'media', name: 'baixar', invokedAs: 'baixar' };
+
+  it('devolve antes de o run terminar, e done assenta com ran', async () => {
+    const router = createCommandRouter();
+    let finish: () => void = () => undefined;
+    router.registry.add(
+      'media',
+      command({
+        name: 'baixar',
+        background: true,
+        run: () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          }),
+      }),
+    );
+
+    const result = await router.dispatch(ctxOf({ text: '!baixar' }));
+    expect(result).toMatchObject({ consumed: true, status: 'background', command: MATCHED });
+    if (result.status !== 'background') throw new Error('esperava background');
+
+    finish();
+    expect(await result.done).toEqual({ consumed: true, status: 'ran', command: MATCHED });
+  });
+
+  it('erro do run, síncrono ou não, assenta done com failed', async () => {
+    const router = createCommandRouter();
+    const boom = new Error('boom');
+    router.registry.add(
+      'media',
+      command({
+        name: 'baixar',
+        background: true,
+        run: () => {
+          throw boom;
+        },
+      }),
+    );
+
+    const result = await router.dispatch(ctxOf({ text: '!baixar' }));
+    if (result.status !== 'background') throw new Error('esperava background');
+    expect(await result.done).toEqual({
+      consumed: true,
+      status: 'failed',
+      command: MATCHED,
+      error: boom,
+    });
+  });
+
+  it('a recusa continua síncrona: não há run em segundo plano', async () => {
+    const router = createCommandRouter();
+    const run = vi.fn();
+    router.registry.add(
+      'media',
+      command({ name: 'baixar', background: true, role: 'owner', onReject: () => 'não', run }),
+    );
+
+    expect(await router.dispatch(ctxOf({ text: '!baixar' }))).toMatchObject({
+      status: 'rejected',
+      reply: 'não',
+    });
+    expect(run).not.toHaveBeenCalled();
+  });
+});
+
 describe('roteador: owners por telefone (M1-16.4)', () => {
   it('compara owners com sender.phone, não com sender.id', async () => {
     const router = createCommandRouter({ owners: ['5511999999999'] });
