@@ -39,7 +39,7 @@ Objetivos:
   fica no transport. Baileys no M2 e `transport-web` (chatbot dentro de sistemas próprios, como
   ERP e gestão escolar) no M3 validam o contrato antes do 1.0; Telegram e Discord vêm depois. API
   Oficial do WhatsApp (Cloud API), Twilio e Zenvia no futuro, para uso comercial.
-- **Open core**: kernel, plugins básicos e transports Baileys, web, Telegram e Discord públicos;
+- **Open core**: kernel e transports Baileys, web, Telegram e Discord públicos;
   transports comerciais de WhatsApp e integrações privadas.
 
 Analogia guia — **mods de Minecraft**: plugins (mods) são feitos pela comunidade e rodam sobre
@@ -47,7 +47,7 @@ diferentes *runners* (Fabric, Forge, NeoForge ↔ Baileys, web, Telegram, Discor
 roda em todo transporte, e o plugin declara o que precisa.
 
 O **LumaBot** deixa de ser o produto e passa a ser o **app de referência**: a Luma (IA com
-persona) vira um plugin do Bridger.
+persona) vira um plugin do Bridger, escrito no próprio `LumaBot` sobre os pacotes do npm (D86).
 
 ---
 
@@ -102,7 +102,7 @@ decisão anterior.
 
 | ID | Decisão | Alternativas descartadas | Motivo |
 |---|---|---|---|
-| D01 | **Monorepo** (pnpm workspaces): `packages/*`, `plugins/*`, `apps/lumabot`, `legacy/` (app e legacy saem para o `LumaBot` pelo D84) | Repo novo isolado; refatoração in-place | Kernel nasce limpo, LumaBot valida a API como consumidor real |
+| D01 | **Monorepo** (pnpm workspaces): `packages/*`, `plugins/*`, `apps/lumabot`, `legacy/` (app e legacy saem para o `LumaBot` pelo D84; `plugins/*` sai pelo D86) | Repo novo isolado; refatoração in-place | Kernel nasce limpo, LumaBot valida a API como consumidor real |
 | D02 | **TypeScript** no kernel, publicado com `.d.ts`; plugins em TS ou JS | JS + JSDoc; JS puro | O contrato tipado é a DX que permite plugar sem ler o código |
 | D03 | **`Transport` abstrato**, só Baileys na v1 (substituído por D55) | Multi-transporte já na v1; Baileys exposto | Abstração barata agora; Cloud API/Twilio/Zenvia viram adapters comerciais depois |
 | D04 | **Uma sessão por processo, zero estado global** | Multi-sessão nativa | Escala com processos; multi-sessão futura = instanciar `Bot` duas vezes |
@@ -185,8 +185,9 @@ decisão anterior.
 | D81 | **`create-bridger-plugin`** (detalha D22, sobre D73/D79): binário sem dependências e sem perguntas, com o nome do pacote como único argumento (pasta, `name` do manifesto e export saem dele); template em `template/` com o plugin portátil na forma curta, teste em `describe.each(PROFILE_NAMES)`, `isolatedDeclarations`, `tsdown` e changesets; core como peer e dev dependency em `<1.0.0`; aceite por e2e no CI sobre os tarballs de `pnpm pack` | Perguntas interativas; template em strings ou baixado na hora; versão do core lida no build; só teste unitário do gerador | Plugin novo em um comando, já portátil e testado nas quatro plataformas; o e2e prova o que o autor roda sobre os pacotes como sairiam no npm ([ADR 0081](docs/adr/0081-create-bridger-plugin.md)) |
 | D82 | **Release a partir de `develop`** (detalha D27, sobre D29/D83): `release.yml` com `changesets/action@v2`; changesets pendentes abrem o PR de versão pelo `pnpm version-packages`, o merge dele publica com `pnpm release` e cria as tags; lint, typecheck, testes, build e `pnpm check:packages` no mesmo job, sem cancelar execução em andamento; npm por Trusted Publishing com provenance, primeiro publish de cada pacote com `NPM_TOKEN` granular e temporário; PR de versão aberto pelo token de um GitHub App | Publicar da `main`; `NPM_TOKEN` permanente; PR de versão com `GITHUB_TOKEN` ou PAT | A `main` é do legacy; sem token de longa duração em regime; o PR de versão roda o `ci.yml` e não sai em nome do dono ([ADR 0082](docs/adr/0082-release-a-partir-de-develop.md)) |
 | D83 | **Nome: Bridger** (substitui o D31): pacotes no escopo `@usebridger/*`, scaffold `create-bridger-plugin` sem escopo, prefixo de plugin `bridger-plugin-`, variáveis `BRIDGER_*`, anotação `x-bridger-override` e schema Postgres `bridger` | Escopo `@bridger` (org com outro dono); `@bridger-js`, `@bridgerhq`, `@getbridger`, `@bridgerjs` | Kernel multiplataforma com público global; troca antes do primeiro publish não quebra ninguém ([ADR 0083](docs/adr/0083-nome-bridger.md)) |
-| D84 | **Repositórios separados** (substitui parte do D01, detalha D23): kernel, plugins oficiais, `bench/` e `tooling/` em `murillous/usebridger`, com histórico desde o M0-4.1; `apps/lumabot`, `legacy/`, deploy, stars e forks ficam em `murillous/LumaBot`, que usa os `@usebridger/*` do npm | Manter o monorepo; renomear o `LumaBot` para o kernel | Deploy da Luma e release dos pacotes deixam de dividir branches; as stars ficam com o bot ([ADR 0084](docs/adr/0084-repositorios-separados.md)) |
+| D84 | **Repositórios separados** (substitui parte do D01, detalha D23; plugins oficiais substituídos pelo D86): kernel, plugins oficiais, `bench/` e `tooling/` em `murillous/usebridger`, com histórico desde o M0-4.1; `apps/lumabot`, `legacy/`, deploy, stars e forks ficam em `murillous/LumaBot`, que usa os `@usebridger/*` do npm | Manter o monorepo; renomear o `LumaBot` para o kernel | Deploy da Luma e release dos pacotes deixam de dividir branches; as stars ficam com o bot ([ADR 0084](docs/adr/0084-repositorios-separados.md)) |
 | D85 | **Release a partir da `main`** (substitui a branch de release do D82, sobre o D84): `develop` integra as PRs; lançar é uma PR `develop` → `main`, cujo push abre o PR de versão contra a `main`; depois do publish, o `release.yml` abre a PR `main` → `develop`; merges entre as duas sempre com merge commit; `ci.yml` nas duas branches | Merge manual da `develop` na `main` a cada release; `release.yml` avançando a `main` sozinho | A `main` livre do legacy passa a apontar para o último código lançado ([ADR 0085](docs/adr/0085-release-a-partir-da-main.md)) |
+| D86 | **Plugins da Luma no LumaBot** (substitui os plugins oficiais do D84 e o `plugins/*` do D01): o kernel não publica plugins; os do M4 e do M5 viram código do app em `apps/lumabot/src/plugins/<nome>`, só com a API pública dos `@usebridger/*` do npm; lacuna de API vira issue no `usebridger` | Manter todos no kernel; levar só os do M5 | Prova que qualquer bot se monta com a biblioteca do npm, sem acesso ao código do core ([ADR 0086](docs/adr/0086-plugins-da-luma-no-lumabot.md)) |
 
 ---
 
@@ -206,9 +207,6 @@ bridger/
 │   ├── storage-postgres/     # @usebridger/storage-postgres
 │   ├── testing/              # @usebridger/testing — FakeTransport, createTestBot, matchers
 │   └── create-plugin/        # create-bridger-plugin — scaffold
-├── plugins/                  # plugins oficiais (públicos)
-│   ├── help/  everyone/  user-names/  media/  download/
-│   ├── reminders/  rank/  ai/  dashboard/
 ├── bench/                    # benchmarks do CI
 └── docs/
     ├── adr/                  # D01–D31
@@ -240,7 +238,7 @@ bridger/
 | HTTP | Hono sob demanda, `/health`, rotas namespaced |
 | Logger | pino estruturado com `plugin` no contexto |
 
-**Plugins oficiais**: help (gerado a partir dos comandos registrados), everyone (`@todos`),
+**Plugins da Luma** (no `LumaBot`, D86; o kernel não publica plugins): help (gerado a partir dos comandos registrados), everyone (`@todos`),
 user-names (resolução JID → nome/nick, provê service), media (sticker/imagem/GIF/PDF), download
 (vídeo/áudio), reminders (usa o Scheduler), rank, ai (Luma: IA, personas, tools, histórico,
 resumo, spontaneous, transcrição) e dashboard.
@@ -269,7 +267,7 @@ Transport (Baileys, web...) ── evento bruto
 - `core` não importa nenhum transport, storage concreto nem plugin.
 - Transports e storages dependem apenas de `core` (interfaces).
 - Plugins dependem apenas da API pública de `core` (e de services de outros plugins via `dependsOn`).
-- `apps/lumabot` só compõe: config + lista de plugins.
+- O app (`apps/lumabot`, no `LumaBot`) compõe config, transports e plugins próprios só com a API pública.
 - Nenhum módulo tem side effect em import (abrir banco, ler env, criar diretório).
 
 ---
@@ -499,7 +497,7 @@ Medidas no CI com `FakeTransport` (sem I/O de rede). PR falha se regredir mais d
 
 ## 8. Governança, licença e modelo comercial
 
-- **Licença**: Apache-2.0 para `packages/*`, `plugins/*`, `apps/*`; `legacy/` permanece MIT.
+- **Licença**: Apache-2.0 para `packages/*`; `legacy/` permanece MIT.
 - **Open core**: transports comerciais de WhatsApp (Cloud API, Twilio, Zenvia), dashboard
   multi-número e integrações (CRM, sistemas do dono como ERP e gestão escolar) vivem num **repo
   privado** que consome os pacotes publicados num registry privado (GitHub Packages). Se o
@@ -715,8 +713,8 @@ critérios de aceite. Toda issue herda os critérios gerais:
 
 ### M4 — Port dos plugins (ordem de complexidade)
 
-Cada plugin: código novo em `plugins/<nome>`, testes com `@usebridger/testing`, docs,
-changeset, item marcado na checklist de paridade (seção 10).
+Vive no `murillous/LumaBot` (D86). Cada plugin: código novo em `apps/lumabot/src/plugins/<nome>`,
+testes com `@usebridger/testing`, docs, item marcado na checklist de paridade (seção 10).
 
 - **#M4-1 `plugin-help`** — `!help`/`!menu` gerado dos comandos registrados
 - **#M4-2 `plugin-everyone`** — `@everyone`/`@todos` (requer `groups`, `mentions`)
@@ -732,6 +730,8 @@ changeset, item marcado na checklist de paridade (seção 10).
 ---
 
 ### M5 — Luma e dashboard
+
+Vive no `murillous/LumaBot` (D86), como o M4.
 
 - **#M5-1 `plugin-ai` (Luma)**
   - Providers Gemini/OpenAI/DeepSeek com fallback; provê service `ai`
@@ -757,6 +757,8 @@ changeset, item marcado na checklist de paridade (seção 10).
 ---
 
 ### v1.0 — Virada
+
+V1-1, V1-2 e V1-4 vivem no `murillous/LumaBot` (D84/D86); o V1-3 fica no `usebridger`.
 
 - **#V1-1 Checklist de paridade completa** (seção 10)
 - **#V1-2 Período de produção paralela** e virada do deploy para `apps/lumabot`
