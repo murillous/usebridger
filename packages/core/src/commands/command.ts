@@ -1,6 +1,6 @@
 import type { BotMessageContext } from '#context.ts';
 import type { ExpectReply } from '#conversations/conversations.ts';
-import type { Media, Message, MessageType } from '#message/types.ts';
+import type { Media, MediaMessageType, Message, MessageType } from '#message/types.ts';
 import type { RoleName } from './roles.ts';
 
 /**
@@ -11,9 +11,54 @@ export type CommandRole = 'owner' | 'group-admin' | 'everyone' | RoleName;
 
 /**
  * O que o comando aceita: o tipo da própria mensagem (`'image'`) ou da mensagem citada
- * (`'quoted:image'`).
+ * (`'quoted:image'`). Um tipo com mídia pode restringir o mimetype depois de mais um `:`, exato
+ * (`'document:application/pdf'`) ou com curinga no subtipo (`'quoted:video:video/*'`).
  */
-export type AcceptSpec = MessageType | `quoted:${MessageType}`;
+export type AcceptSpec =
+  | MessageType
+  | `quoted:${MessageType}`
+  | `${MediaMessageType}:${string}/${string}`
+  | `quoted:${MediaMessageType}:${string}/${string}`;
+
+/** Entrada de `accepts` decomposta. */
+export interface ParsedAccept {
+  readonly quoted: boolean;
+  readonly type: string;
+  /** Mimetype em minúsculas (`application/pdf`, `video/*`); `null` aceita qualquer um. */
+  readonly mimetype: string | null;
+}
+
+/** Decompõe a entrada sem validar; a validação fica em `assertCommandDefinition`. */
+export function parseAccept(spec: AcceptSpec): ParsedAccept {
+  const quoted = spec.startsWith('quoted:');
+  const rest = quoted ? spec.slice('quoted:'.length) : spec;
+  const colon = rest.indexOf(':');
+  if (colon === -1) return { quoted, type: rest, mimetype: null };
+  return { quoted, type: rest.slice(0, colon), mimetype: rest.slice(colon + 1).toLowerCase() };
+}
+
+/**
+ * O mimetype da mídia casa com o da entrada. Compara só a essência: `audio/ogg; codecs=opus`
+ * casa com `audio/ogg`, porque os parâmetros variam por plataforma.
+ */
+export function mimetypeMatches(mimetype: string, pattern: string): boolean {
+  const essence = mimetype.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+  if (pattern.endsWith('/*')) return essence.startsWith(pattern.slice(0, -1));
+  return essence === pattern;
+}
+
+// Só estes tipos têm `media`; a lista acompanha `MediaMessageType`.
+const MEDIA_TYPES: ReadonlySet<string> = new Set<MediaMessageType>([
+  'image',
+  'video',
+  'audio',
+  'voice',
+  'sticker',
+  'document',
+]);
+
+/** `tipo/subtipo` ou `tipo/*`, nos caracteres que o RFC 6838 permite. */
+const MIMETYPE = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/(\*|[a-z0-9][a-z0-9!#$&^_.+-]*)$/;
 
 /** Entrada de `accepts` que casou e a mensagem (própria ou citada) a que ela se refere. */
 export interface AcceptedMessage {
@@ -138,7 +183,8 @@ function assertToken(token: string, what: string): void {
  * Lança `TypeError` se o nome ou algum alias for vazio ou tiver espaço (nunca casaria) e
  * `RangeError` se `timeoutMs` não for finito e > 0 (o `setTimeout` trataria `Infinity`/`NaN`
  * como 1 ms e o comando estouraria na hora) ou se `concurrency` não for inteiro >= 1 (0 nunca
- * rodaria).
+ * rodaria). Entrada de `accepts` com mimetype mal formado, ou num tipo sem mídia, também lança
+ * `TypeError`.
  */
 export function assertCommandDefinition(definition: CommandDefinition): void {
   assertToken(definition.name, 'Nome');
@@ -152,6 +198,16 @@ export function assertCommandDefinition(definition: CommandDefinition): void {
     throw new RangeError(
       `Limite de concorrência do comando "${definition.name}" inválido: ${concurrency}`,
     );
+  }
+  for (const spec of definition.accepts ?? []) {
+    const { type, mimetype } = parseAccept(spec);
+    if (mimetype === null) continue;
+    if (!MEDIA_TYPES.has(type) || !MIMETYPE.test(mimetype)) {
+      throw new TypeError(
+        `accepts do comando "${definition.name}" inválido: ${JSON.stringify(spec)} (mimetype ` +
+          'só em tipo com mídia, como "tipo/subtipo" ou "tipo/*")',
+      );
+    }
   }
 }
 

@@ -2,14 +2,16 @@ import type { BotOwner } from '#config/owners.ts';
 import type { BotMessageContext, MessageContext } from '#context.ts';
 import type { Chat, Contact, Media, Message } from '#message/types.ts';
 import { parseArgs } from './args.ts';
-import type {
-  AcceptedMessage,
-  AcceptSpec,
-  CommandContext,
-  CommandDefinition,
-  CommandRejection,
-  CommandRole,
-  RejectContext,
+import {
+  type AcceptedMessage,
+  type AcceptSpec,
+  type CommandContext,
+  type CommandDefinition,
+  type CommandRejection,
+  type CommandRole,
+  mimetypeMatches,
+  parseAccept,
+  type RejectContext,
 } from './command.ts';
 import { DEFAULT_PREFIX, validatePrefix } from './prefixes.ts';
 import { type CommandRegistry, createCommandRegistry, type RegisteredCommand } from './registry.ts';
@@ -153,13 +155,17 @@ function mediaOf(message: Message | null): Media | null {
   return message !== null && 'media' in message ? message.media : null;
 }
 
-/** Primeira entrada de `accepts` que casa, na ordem declarada. */
+/** Primeira entrada de `accepts` que casa (tipo e, se houver, mimetype), na ordem declarada. */
 function resolveAccepts(message: Message, accepts: readonly AcceptSpec[]): AcceptedMessage | null {
   for (const spec of accepts) {
-    const quoted = spec.startsWith('quoted:');
+    const { quoted, type, mimetype } = parseAccept(spec);
     const target = quoted ? message.quoted : message;
-    const type = quoted ? spec.slice('quoted:'.length) : spec;
-    if (target !== null && target.type === type) return { spec, message: target };
+    if (target === null || target.type !== type) continue;
+    if (mimetype !== null) {
+      const media = mediaOf(target);
+      if (media === null || !mimetypeMatches(media.mimetype, mimetype)) continue;
+    }
+    return { spec, message: target };
   }
   return null;
 }
