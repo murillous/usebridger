@@ -62,6 +62,7 @@ Qualquer opção pode ser sobrescrita, por exemplo `pluginConfig`, `owners`, `pr
 | `click(sent, label, options?)` | Clica no botão de rótulo `label` de um envio e espera o bot assentar ([botões](#botões)) |
 | `emit(event, payload)` | Simula outro evento do transport (`reaction`, `group.joined`...) e espera o bot assentar |
 | `sent` | Os envios, na ordem (`SentMessage[]`) |
+| `sentMedia(type)` | Os envios de mídia do tipo, na ordem, com os bytes ([abaixo](#bytes-enviados-sentmedia)) |
 | `transport` | O `FakeTransport`, com os outros registros |
 | `bot` | O `Bot` (`plugins()`, `stats()`, `config`...) |
 | `stop()` | Para o bot |
@@ -234,6 +235,8 @@ await bot.receive({ document: fixtures.document(), fileName: 'a.pdf' });
 | `audio()` | MP3 mono, 1 s de silêncio | `audio/mpeg` |
 | `voice()` | OGG/Opus mono, 1 s de silêncio | `audio/ogg; codecs=opus` |
 | `sticker()` | WebP 512×512 | `image/webp` |
+| `animatedSticker()` | WebP animado 512×512, 2 quadros de 500 ms em loop | `image/webp` |
+| `gif()` | GIF animado 16×16, 2 quadros de 500 ms em loop | `image/gif` |
 | `document()` | PDF de uma página em branco | `application/pdf` |
 
 Cada chamada devolve `{ data, mimetype }` com um `Buffer` novo, então alterar os bytes num teste
@@ -248,6 +251,20 @@ ffmpeg -f lavfi -i color=c=0x3366cc:s=512x512 -frames:v 1 -c:v libwebp -lossless
 ffmpeg -f lavfi -i color=c=0x3366cc:s=16x16:r=1 -t 1 -c:v libx264 -pix_fmt yuv420p -movflags +faststart video.mp4
 ffmpeg -f lavfi -i anullsrc=r=8000:cl=mono -t 1 -c:a libmp3lame -b:a 8k audio.mp3
 ffmpeg -f lavfi -i anullsrc=r=48000:cl=mono -t 1 -c:a libopus -b:a 6k voice.ogg
+```
+
+As animadas saem do sharp, juntando dois quadros de cores diferentes:
+
+```js
+const frame = (size, background) =>
+  sharp({ create: { width: size, height: size, channels: 3, background } }).png().toBuffer();
+const frames = async (size) => [await frame(size, '#3366cc'), await frame(size, '#cc6633')];
+const animated = { join: { animated: true } };
+
+await sharp(await frames(512), animated)
+  .webp({ lossless: true, loop: 0, delay: [500, 500] })
+  .toFile('animated-sticker.webp');
+await sharp(await frames(16), animated).gif({ loop: 0, delay: [500, 500] }).toFile('animated.gif');
 ```
 
 Para testar um comando `role: 'owner'`, passe `owners: [DEFAULT_SENDER.phone]` ao
@@ -284,6 +301,9 @@ Os matchers recebem `bot.sent` ou o próprio `TestBot`:
 | `toContainText(text?)` | Algum envio é texto. Com `text`, o texto é igual à string ou casa com a RegExp |
 | `toContainSticker()` | Algum envio é figurinha |
 | `toContainImage()` | Algum envio é imagem |
+| `toContainVideo()` | Algum envio é vídeo |
+| `toContainAudio()` | Algum envio é áudio (`audio`; a nota de voz é `voice`, outro tipo) |
+| `toContainDocument({ fileName?, mimetype? })` | Algum envio é documento. Com `fileName` ou `mimetype`, iguais à string ou casando com a RegExp |
 | `toHaveReplied(text?)` | Algum envio cita uma mensagem, como faz o `ctx.reply`. Com `text`, é uma resposta de texto com esse conteúdo |
 
 Todos funcionam com `.not`. Quando um matcher falha, a mensagem lista o que foi enviado:
@@ -295,6 +315,28 @@ esperava enviar uma figurinha; enviados:
 
 Para conferir outros detalhes, use os registros direto:
 `expect(bot.sent[0]?.content).toEqual({ type: 'sticker', media })`.
+
+Os matchers olham o envio avulso; uma mídia dentro de um álbum (`type: 'album'`) não conta.
+
+### Bytes enviados: `sentMedia()`
+
+`bot.sentMedia(type)` devolve os envios de `image`, `video`, `audio`, `voice`, `sticker` ou
+`document`, na ordem, cada um com o registro, o conteúdo já do tipo pedido e os bytes:
+
+```ts
+await bot.receive({ text: '!mergepdf' });
+const [pdf] = bot.sentMedia('document');
+expect(pdf?.content.fileName).toBe('juntos.pdf');
+expect(pdf?.bytes?.subarray(0, 5).toString()).toBe('%PDF-');
+```
+
+| Campo | Conteúdo |
+| --- | --- |
+| `sent` | O `SentMessage` (`chatId`, `quoted`, `key`...) |
+| `content` | O conteúdo, com `fileName` e `mimetype` no documento |
+| `bytes` | O `Buffer` enviado; `null` para mídia por URL (`{ url }`), que o transport falso não baixa |
+
+Mídia dentro de álbum fica de fora, como nos matchers.
 
 ## `FakeTransport`
 
