@@ -1,6 +1,6 @@
 {
   "name": "create-bridger-plugin",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Cria um plugin do Bridger pronto para desenvolver, testar e publicar.",
   "license": "Apache-2.0",
   "repository": {
