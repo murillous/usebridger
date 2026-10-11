@@ -272,6 +272,7 @@ mensagem.
 | `ran` | `true` | `command` |
 | `rejected` | `true` | `command`, `rejection`, `reply` |
 | `failed` | `true` | `command`, `error` (de `run`, `onReject` ou `isGroupAdmin`, ou o prazo de um deles no bot) |
+| `background` | `true` | `command`, `done` (comando com `background: true`: resolve com `ran` ou `failed` quando o `run` termina, nunca rejeita) |
 
 `command` é `{ plugin, name, invokedAs }`. Quem chama decide o destino do erro de `failed`; no
 bot, vira `plugin.error` (`phase: 'command'`) e log em `error`.
@@ -299,10 +300,35 @@ command({
 ```
 
 Enquanto roda, o comando segura o chat dele ([ADR 0042](../../../docs/adr/0042-handler-lento-segura-o-chat.md)):
-um prazo de 5 min deixa as mensagens seguintes daquele chat esperando até 5 min. Se o grupo não
-deve esperar, responda "baixando…" e solte o trabalho do `run`, como no
-[padrão dos listeners](events.md#trabalho-longo-solte-o-chat). A consulta de admin e os papéis
-custom seguem com o `commandMs`.
+um prazo de 5 min deixa as mensagens seguintes daquele chat esperando até 5 min. A consulta de
+admin e os papéis custom seguem com o `commandMs`.
+
+### Comando em segundo plano
+
+Se o grupo não deve esperar, declare `background: true`
+([ADR 0087](../../../docs/adr/0087-comando-em-segundo-plano.md)). Papel, `accepts` e `onReject`
+continuam na fila do chat; o `run` começa ali e a próxima mensagem do chat segue sem esperá-lo:
+
+```ts
+command({
+  name: 'download',
+  background: true,
+  timeoutMs: 240_000,
+  run: async (c) => {
+    await c.reply('baixando…');
+    const video = await baixar(c.rawArgs, { signal: c.signal });
+    await c.reply.video(video); // cita a mensagem original
+  },
+});
+```
+
+O `run` mantém tudo o que teria na fila: `reply`, `react`, `log`, `expectReply` e o `signal` com o
+`timeoutMs`. A falha, inclusive o prazo, vai para `plugin.error`, e o evento `command` sai quando o
+`run` termina, com `ran` ou `failed`. O `bot.settled()` espera o `run`. No reload ou no `stop()`, o
+`signal` aborta quando o plugin desce; o `run` não é drenado.
+
+Em troca, o `run` não tem ordem com as mensagens seguintes, e duas execuções do mesmo chat podem
+terminar fora de ordem. Quem guarda estado por conversa e precisa de ordem não usa `background`.
 
 Para perguntar algo e tratar a resposta, o `run` não espera a próxima mensagem: ela está na fila
 atrás dele. Ele envia a pergunta, chama `c.expectReply(passo)` e termina, e a resposta vai ao

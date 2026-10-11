@@ -107,7 +107,8 @@ expect(transport.sent).toHaveLength(1);
 
 O que entra e o que fica de fora:
 
-- **Entra**: mensagens e edições (fila de entrada, middlewares, comando, listeners), eventos
+- **Entra**: mensagens e edições (fila de entrada, middlewares, comando, listeners), o `run` de
+  comandos com `background: true` ([ADR 0087](../../../docs/adr/0087-comando-em-segundo-plano.md)), eventos
   diretos (`reaction`, grupos, `contact.updated`; ADR 0038), `plugin.error`, `connection.*` e
   tudo o que já está na fila de saída, inclusive em espera de re-tentativa.
 - **Fica de fora**: jobs do scheduler (não foram recebidos; dispare o job e espere o efeito dele)

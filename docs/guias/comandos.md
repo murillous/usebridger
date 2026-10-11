@@ -136,8 +136,24 @@ commands: {
 ```
 
 Enquanto roda, o comando segura o chat: a próxima mensagem daquele chat espera. Para não segurar,
-responda "baixando…" e solte o trabalho, como em
-[trabalho longo](eventos-e-midia.md#trabalho-longo).
+declare `background: true`. O `run` roda fora da fila do chat, com o mesmo `c.reply`, `c.signal` e
+prazo, e a falha continua indo para `plugin.error`:
+
+```ts
+commands: {
+  baixar: {
+    background: true, // o grupo segue conversando enquanto baixa
+    timeoutMs: 300_000,
+    run: async (c) => {
+      await c.reply('baixando…');
+      // ...
+    },
+  },
+},
+```
+
+Em troca, as respostas podem sair fora de ordem com as das mensagens seguintes. Mais em
+[Comando em segundo plano](../../packages/core/docs/commands.md#comando-em-segundo-plano).
 
 ## Perguntar e esperar a resposta
 

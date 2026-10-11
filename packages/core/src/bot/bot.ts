@@ -241,8 +241,8 @@ export interface Bot {
   stats(): BotStats;
   /**
    * Resolve quando o bot terminou de processar o que recebeu: fila de entrada vazia, nenhum
-   * listener em andamento (inclusive de eventos diretos e `plugin.error`) e fila de saída vazia,
-   * as três ao mesmo tempo (ADR 0044). Chamado durante o boot, espera o boot assentar. Não
+   * comando em segundo plano (ADR 0087) nem listener em andamento (inclusive de eventos diretos e
+   * `plugin.error`) e fila de saída vazia, tudo ao mesmo tempo (ADR 0044). Chamado durante o boot, espera o boot assentar. Não
    * espera jobs do scheduler; com a fila de saída pausada (conexão caída), espera a reconexão ou
    * o `maxPauseMs`. Resolve na hora antes do `start()` e depois do `stop()`; nunca rejeita.
    */
@@ -429,6 +429,25 @@ export function createBot(config: BotConfig): Bot {
   // Prazos de comando, papel, consulta de admin e listener: o shutdown desarma os de handlers
   // presos (`abandonInternals`).
   const armed = new ArmedTimers();
+  // `run` de comandos com `background: true` em andamento (ADR 0087): fora da fila do chat, mas
+  // dentro do `settled()`. O shutdown os solta (`abandonInternals`): quem ignora o `signal`
+  // abortado e tem o prazo desarmado nunca assenta.
+  const background = new Set<Promise<void>>();
+  const backgroundWaiters: (() => void)[] = [];
+  const releaseBackgroundWaiters = (): void => {
+    for (const resolve of backgroundWaiters.splice(0)) resolve();
+  };
+  const trackBackground = (task: Promise<void>): void => {
+    background.add(task);
+    void task.finally(() => {
+      background.delete(task);
+      if (background.size === 0) releaseBackgroundWaiters();
+    });
+  };
+  const backgroundIdle = (): Promise<void> =>
+    background.size === 0
+      ? Promise.resolve()
+      : new Promise((resolve) => backgroundWaiters.push(resolve));
   const bus = createEventBus({
     listenerTimeoutMs: timeouts.listenerMs,
     armed,
@@ -619,6 +638,21 @@ export function createBot(config: BotConfig): Bot {
     result: Extract<DispatchResult, { readonly consumed: true }>,
   ): Promise<void> {
     const { message } = ctx;
+    if (result.status === 'background') {
+      // O chat já está livre; a falha e o `command` saem quando o `run` terminar (ADR 0087).
+      trackBackground(
+        result.done
+          .then((outcome) => afterCommand(ctx, outcome))
+          .catch((error: unknown) =>
+            ctx.log.error('falha ao concluir o comando em segundo plano', {
+              plugin: result.command.plugin,
+              command: result.command.name,
+              err: error,
+            }),
+          ),
+      );
+      return;
+    }
     if (result.status === 'rejected' && result.reply !== null) {
       // Sem await: a resposta espera a taxa da fila de saída, e o chat não precisa esperar.
       ctx.reply(result.reply).catch((error: unknown) =>
@@ -975,6 +1009,9 @@ export function createBot(config: BotConfig): Bot {
     // Depois do descarte dos plugins, que já expirou o `Deadline` dos handlers presos (o
     // `signal` aborta, o `reply` é recusado): sobra só o timer do prazo de cada um.
     armed.disarmAll();
+    // Comando em segundo plano preso fica sem prazo e não assentaria: o `settled()` não o espera.
+    background.clear();
+    releaseBackgroundWaiters();
     // O `dispose` de cada plugin já tirou as esperas dele; isto garante que nenhum timer de TTL
     // sobreviva ao `stop()` e que um passo atrasado não registre outra.
     conversations.close();
@@ -1237,8 +1274,16 @@ export function createBot(config: BotConfig): Bot {
   async function settled(): Promise<void> {
     // Eventos diretos que chegam no boot esperam o `readyPromise` fora do barramento.
     if (state === 'starting') await readyPromise;
-    while (!(inbound.stats().activeChats === 0 && bus.idle && outbound.stats().activeChats === 0)) {
+    while (
+      !(
+        inbound.stats().activeChats === 0 &&
+        background.size === 0 &&
+        bus.idle &&
+        outbound.stats().activeChats === 0
+      )
+    ) {
       await inbound.onIdle();
+      await backgroundIdle();
       await bus.onIdle();
       await outbound.onIdle();
     }

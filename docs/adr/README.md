@@ -74,6 +74,7 @@ sendo a referência; um ADR novo entra nos dois.
 - [0042](0042-handler-lento-segura-o-chat.md) — Comando e listener lentos seguram o chat (detalha D05/D12)
 - [0043](0043-prazo-de-middleware.md) — Middleware do app tem prazo, contado fora do `next()` (detalha D12)
 - [0049](0049-evento-de-comando.md) — Evento `command`: o plugin observa o comando que consumiu a mensagem (detalha D12/D40)
+- [0087](0087-comando-em-segundo-plano.md) — Comando em segundo plano: `background: true` tira o `run` da fila do chat (detalha D42/D49)
 
 **Plugins: carga, config, services e execução**
 
@@ -211,3 +212,4 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0084](0084-repositorios-separados.md) | D84 | Kernel em `murillous/usebridger` e LumaBot (`apps/lumabot`, `legacy/`, deploy) em `murillous/LumaBot`; o app usa os pacotes do npm (substitui parte do D01, detalha D23) | Aceito (plugins oficiais: ADR 0086) |
 | [0085](0085-release-a-partir-da-main.md) | D85 | Release a partir da `main`: PR `develop` → `main`, PR de versão contra a `main` e PR de volta aberta pelo `release.yml`, sempre com merge commit (substitui parte do D82) | Aceito |
 | [0086](0086-plugins-da-luma-no-lumabot.md) | D86 | Plugins da Luma no LumaBot: o kernel não publica plugins, e os do M4 e do M5 viram código do app sobre os pacotes do npm (substitui parte do D84 e o `plugins/*` do D01) | Aceito |
+| [0087](0087-comando-em-segundo-plano.md) | D87 | Comando em segundo plano: `background: true` tira o `run` da fila do chat e mantém o prazo, o `plugin.error`, o `command` e o `settled()` (detalha D42/D49) | Aceito |
