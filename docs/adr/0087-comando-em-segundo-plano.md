@@ -45,5 +45,5 @@ Alternativas consideradas:
 - Comando longo libera o chat sem perder prazo, destino do erro, `command` nem `settled()`.
 - Duas execuções do mesmo chat podem terminar fora de ordem, e o `run` em segundo plano não tem
   ordem com as mensagens que chegam depois. Quem precisa de ordem não usa `background`.
-- Não há teto de execuções em segundo plano por chat: o limite de concorrência por comando é a
-  #50.
+- Não há teto de execuções em segundo plano por chat: o limite de concorrência por comando é o
+  [ADR 0088](0088-limite-de-concorrencia-por-comando.md).

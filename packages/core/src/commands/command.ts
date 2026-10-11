@@ -105,6 +105,13 @@ export interface CommandDefinition {
    * Duas execuções do mesmo chat podem terminar fora de ordem.
    */
   readonly background?: boolean;
+  /**
+   * Máximo de `run` simultâneos deste comando no bot, somando todos os chats (ADR 0088). A
+   * execução excedente espera a vez em ordem de chegada, e a espera conta no prazo
+   * (`timeoutMs`). A vaga volta quando o `run` termina de fato, mesmo depois do prazo. Inteiro
+   * >= 1; padrão: sem limite.
+   */
+  readonly concurrency?: number;
 }
 
 /** Comando como os plugins o veem em `ctx.commands.list()` (ADR 0040): sem `run` nem `onReject`. */
@@ -130,7 +137,8 @@ function assertToken(token: string, what: string): void {
 /**
  * Lança `TypeError` se o nome ou algum alias for vazio ou tiver espaço (nunca casaria) e
  * `RangeError` se `timeoutMs` não for finito e > 0 (o `setTimeout` trataria `Infinity`/`NaN`
- * como 1 ms e o comando estouraria na hora).
+ * como 1 ms e o comando estouraria na hora) ou se `concurrency` não for inteiro >= 1 (0 nunca
+ * rodaria).
  */
 export function assertCommandDefinition(definition: CommandDefinition): void {
   assertToken(definition.name, 'Nome');
@@ -139,10 +147,16 @@ export function assertCommandDefinition(definition: CommandDefinition): void {
   if (timeoutMs !== undefined && !(Number.isFinite(timeoutMs) && timeoutMs > 0)) {
     throw new RangeError(`Prazo do comando "${definition.name}" inválido: ${timeoutMs}`);
   }
+  const { concurrency } = definition;
+  if (concurrency !== undefined && !(Number.isInteger(concurrency) && concurrency >= 1)) {
+    throw new RangeError(
+      `Limite de concorrência do comando "${definition.name}" inválido: ${concurrency}`,
+    );
+  }
 }
 
 /**
- * Define um comando. Valida nome, aliases e prazo na definição, para o erro apontar o plugin que
+ * Define um comando. Valida nome, aliases, prazo e limite na definição, para o erro apontar o plugin que
  * declarou e não aparecer só quando alguém digitar o comando.
  */
 export function command(definition: CommandDefinition): CommandDefinition {

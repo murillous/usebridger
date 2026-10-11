@@ -27,7 +27,8 @@ const sticker = command({
 `command()` valida nome e aliases na hora (não vazios, sem espaço) e devolve a definição.
 `registry.add` (e o `ctx.commands.add` do plugin) repete a validação, então uma definição literal
 que não passou por `command()` também falha no boot com `TypeError`, em vez de nunca casar. Um
-`timeoutMs` que não seja finito e > 0 falha do mesmo jeito, com `RangeError`.
+`timeoutMs` que não seja finito e > 0 falha do mesmo jeito, com `RangeError`, assim como um
+`concurrency` que não seja inteiro >= 1.
 O nome vai **sem** o prefixo.
 
 No bot, o `run` que devolve texto (string ou `fmt`) responde com ele, citando a mensagem: o mesmo
@@ -329,6 +330,36 @@ O `run` mantém tudo o que teria na fila: `reply`, `react`, `log`, `expectReply`
 
 Em troca, o `run` não tem ordem com as mensagens seguintes, e duas execuções do mesmo chat podem
 terminar fora de ordem. Quem guarda estado por conversa e precisa de ordem não usa `background`.
+
+### Limite de concorrência
+
+O rate limit de entrada conta mensagens, não custo, e a fila paraleliza entre chats: dez chats
+mandando `!download` sobem dez yt-dlp juntos. `concurrency` põe um teto de `run` simultâneos do
+comando no bot, somando todos os chats
+([ADR 0088](../../../docs/adr/0088-limite-de-concorrencia-por-comando.md)):
+
+```ts
+command({
+  name: 'download',
+  background: true,
+  concurrency: 2, // no máximo dois downloads ao mesmo tempo
+  timeoutMs: 240_000,
+  run: async (c) => {
+    const video = await baixar(c.rawArgs, { signal: c.signal });
+    await c.reply.video(video);
+  },
+});
+```
+
+A execução excedente espera a vez em ordem de chegada, depois do papel e do `accepts`. A espera
+conta no `timeoutMs`: estourado na fila, o `run` nem começa, e sai o `plugin.error` com
+`CommandTimeoutError` de sempre. A vaga volta quando o `run` termina de fato, não quando o prazo
+estoura: um `run` que ignora o `signal` continua ocupando a CPU e a vaga. Sem `background`, quem
+espera segura o chat dele, como o `run` seguraria; com `background`, a espera também sai da fila
+do chat.
+
+O teto é por registro do comando: no reload, o plugin novo começa com o teto inteiro, e os `run`
+antigos ainda vivos não contam nele. O roteador solto ignora `concurrency`, como o `timeoutMs`.
 
 Para perguntar algo e tratar a resposta, o `run` não espera a próxima mensagem: ela está na fila
 atrás dele. Ele envia a pergunta, chama `c.expectReply(passo)` e termina, e a resposta vai ao

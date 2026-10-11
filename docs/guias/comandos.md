@@ -155,6 +155,24 @@ commands: {
 Em troca, as respostas podem sair fora de ordem com as das mensagens seguintes. Mais em
 [Comando em segundo plano](../../packages/core/docs/commands.md#comando-em-segundo-plano).
 
+Comando pesado (FFmpeg, yt-dlp) declara também `concurrency`, o máximo de execuções ao mesmo tempo
+no bot, somando os chats. A excedente espera a vez, e a espera conta no `timeoutMs`:
+
+```ts
+commands: {
+  baixar: {
+    background: true,
+    concurrency: 2, // dez pedidos em chats diferentes não sobem dez yt-dlp
+    timeoutMs: 300_000,
+    run: async (c) => {
+      // ...
+    },
+  },
+},
+```
+
+Mais em [Limite de concorrência](../../packages/core/docs/commands.md#limite-de-concorrência).
+
 ## Perguntar e esperar a resposta
 
 O `run` não espera a próxima mensagem: ela está na fila atrás dele. Ele pergunta, registra o passo

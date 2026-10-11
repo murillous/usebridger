@@ -22,6 +22,13 @@ describe('command', () => {
     }
     expect(command({ name: 'baixar', timeoutMs: 300_000, run: noop }).timeoutMs).toBe(300_000);
   });
+
+  it('recusa concurrency que não seja inteiro >= 1', () => {
+    for (const concurrency of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => command({ name: 'baixar', concurrency, run: noop })).toThrow(RangeError);
+    }
+    expect(command({ name: 'baixar', concurrency: 2, run: noop }).concurrency).toBe(2);
+  });
 });
 
 describe('createCommandRegistry', () => {
