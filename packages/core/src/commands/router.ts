@@ -146,10 +146,10 @@ export interface CommandMatch {
 const FIRST_WHITESPACE = /\s/;
 
 /**
- * O contexto recebido, com o `signal` e o `expectReply` que o Bot (ou quem chama `dispatch`)
- * fornece.
+ * O contexto recebido, com o `signal`, o `expectReply` e o `t` que o Bot (ou quem chama
+ * `dispatch`) fornece.
  */
-type SignalContext = BotMessageContext & Pick<RejectContext, 'signal' | 'expectReply'>;
+type SignalContext = BotMessageContext & Pick<RejectContext, 'signal' | 'expectReply' | 't'>;
 
 function mediaOf(message: Message | null): Media | null {
   return message !== null && 'media' in message ? message.media : null;

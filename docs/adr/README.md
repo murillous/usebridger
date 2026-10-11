@@ -35,6 +35,7 @@ sendo a referência; um ADR novo entra nos dois.
 
 - [0023](0023-migracao-incremental-legacy.md) — Migração incremental (`legacy/`)
 - [0025](0025-sem-i18n-objeto-messages.md) — Sem i18n formal na v1; objeto `messages`
+- [0092](0092-placeholders-nas-messages.md) — Placeholders nas `messages` e `ctx.t` (substitui em parte D25)
 - [0027](0027-releases-changesets.md) — Releases com Changesets
 - [0082](0082-release-a-partir-de-develop.md) — Release a partir de `develop`, Trusted Publishing no npm e PR de versão por GitHub App (detalha D27)
 - [0028](0028-licenca-apache-2.md) — Licença Apache-2.0
@@ -153,7 +154,7 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0022](0022-kit-de-autor.md) | D22 | Kit de autor na v1 | Aceito |
 | [0023](0023-migracao-incremental-legacy.md) | D23 | Migração incremental (`legacy/`) | Aceito |
 | [0024](0024-papeis-no-core.md) | D24 | Papéis no core | Aceito (papéis custom: ADR 0035) |
-| [0025](0025-sem-i18n-objeto-messages.md) | D25 | Sem i18n formal na v1; objeto `messages` | Aceito |
+| [0025](0025-sem-i18n-objeto-messages.md) | D25 | Sem i18n formal na v1; objeto `messages` | Aceito (placeholders: ADR 0092) |
 | [0026](0026-tooling.md) | D26 | Tooling: Node 24, pnpm, tsdown, Vitest, Biome | Aceito |
 | [0027](0027-releases-changesets.md) | D27 | Releases com Changesets | Aceito |
 | [0028](0028-licenca-apache-2.md) | D28 | Licença Apache-2.0 | Aceito |
@@ -217,6 +218,7 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0086](0086-plugins-da-luma-no-lumabot.md) | D86 | Plugins da Luma no LumaBot: o kernel não publica plugins, e os do M4 e do M5 viram código do app sobre os pacotes do npm (substitui parte do D84 e o `plugins/*` do D01) | Aceito |
 | [0087](0087-comando-em-segundo-plano.md) | D87 | Comando em segundo plano: `background: true` tira o `run` da fila do chat e mantém o prazo, o `plugin.error`, o `command` e o `settled()` (detalha D42/D49) | Aceito |
 | [0088](0088-limite-de-concorrencia-por-comando.md) | D88 | Limite de concorrência por comando: `concurrency` põe um teto de `run` simultâneos no bot, a espera conta no prazo e a vaga só volta quando o `run` termina (detalha D05/D87) | Aceito |
+| [0092](0092-placeholders-nas-messages.md) | D92 | Placeholders nas `messages` e `ctx.t`: `{prefix}` do chat e valores do plugin, sobrescrita validada contra o texto padrão (substitui em parte D25, detalha D63) | Aceito |
 | [0089](0089-benchmark-intercalado.md) | D89 | Benchmark intercalado: base e commit testado se revezam no mesmo runner, a ordem inverte a cada rodada, e a comparação usa o quartil bom no sentido da meta (detalha D54) | Aceito |
 | [0090](0090-requires-por-comando.md) | D90 | `requires` por comando: sem a capability, o comando fica fora do roteador, do `ctx.commands.list()` e do menu nativo; o resto do plugin sobe (detalha D16/D64) | Aceito |
 | [0091](0091-log-legivel-e-baileys-em-warn.md) | D91 | Log legível no terminal (`format: 'pretty'`, formatador próprio sobre a linha já censurada) e linhas do Baileys e do `console` do libsignal a partir de `warn` (`baileys({ logLevel })`) (detalha D13/D37) | Aceito |

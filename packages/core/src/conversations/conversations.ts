@@ -5,6 +5,7 @@
 
 import type { BotMessageContext } from '#context.ts';
 import { ExecutionTimeoutError } from '#deadline.ts';
+import type { MessageText } from '#plugin/messages.ts';
 import type { JsonValue } from '#storage/types.ts';
 
 /** Validade padrão de uma espera: 5 minutos. */
@@ -41,6 +42,8 @@ export interface StepContext extends BotMessageContext {
   readonly signal: AbortSignal;
   /** Encadeia a pergunta seguinte do fluxo (ver `ExpectReply`). */
   readonly expectReply: ExpectReply;
+  /** Texto de `messages` do plugin com os placeholders preenchidos (ver `CommandContext.t`). */
+  readonly t: MessageText;
 }
 
 export type StepHandler = (ctx: StepContext) => unknown;

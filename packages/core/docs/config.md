@@ -205,6 +205,35 @@ sobrescreve textos do manifesto, com a mesma precedência dos campos. O resultad
 `ctx.plugin.messages` (congelado). Chave que o manifesto não declara, ou valor que não é texto,
 é `PluginConfigError` com a lista de chaves válidas.
 
+### Placeholders
+
+O texto pode ter placeholders `{nome}`, preenchidos na hora de usar pelo `t` do contexto de
+comando, de passo ou de listener de mensagem
+([ADR 0092](../../../docs/adr/0092-placeholders-nas-messages.md)):
+
+```ts
+messages: {
+  uso: 'Use {prefix}sticker respondendo uma imagem',
+  adicionado: '📎 PDF adicionado ({count}).',
+},
+setup(ctx) {
+  ctx.commands.add(command({ name: 'sticker', run: (c) => c.t('uso') }));
+  ctx.commands.add(command({ name: 'merge', run: ({ t }) => t('adicionado', { count: 2 }) }));
+},
+```
+
+- `{prefix}` é do kernel: o prefixo de comando do chat da mensagem, lido a cada chamada, então
+  acompanha um `ctx.prefixes.set` ([Comandos](commands.md#prefixo-por-chat)).
+- Os outros vêm de `values` (texto ou número). Placeholder sem valor, ou chave que o plugin não
+  declara, lança `TypeError`: é erro do plugin.
+- Só `{identificador}` é placeholder; `{ ok }` ou JSON ficam como texto.
+- A sobrescrita só pode usar os placeholders do texto padrão, mais `{prefix}`: ela muda onde os
+  valores entram e pode tirá-los, mas um placeholder novo é `PluginConfigError`
+  (`placeholder desconhecido {total}; a mensagem aceita {count}, {prefix}`), em vez de um
+  `TypeError` na hora de responder.
+- `ctx.plugin.messages` segue com o texto cru, para o código fora de uma mensagem (`setup`,
+  job): ali não há chat para o `{prefix}`.
+
 ## Reload
 
 ```ts

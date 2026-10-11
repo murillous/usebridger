@@ -1,6 +1,7 @@
 import type { BotMessageContext } from '#context.ts';
 import type { ExpectReply } from '#conversations/conversations.ts';
 import type { Media, MediaMessageType, Message, MessageType } from '#message/types.ts';
+import type { MessageText } from '#plugin/messages.ts';
 import { type Capability, isCapability } from '#transport/capabilities.ts';
 import type { RoleName } from './roles.ts';
 
@@ -95,6 +96,11 @@ export interface CommandContext extends BotMessageContext {
    * `Bot`, como o `signal`.
    */
   readonly expectReply: ExpectReply;
+  /**
+   * Texto de `messages` do plugin com os placeholders preenchidos: `{prefix}` com o prefixo
+   * deste chat, os outros com `values` (ADR 0092). Montado pelo `Bot`, como o `signal`.
+   */
+  readonly t: MessageText;
   /** Entrada de `accepts` que casou; `null` se o comando não declara `accepts`. */
   readonly accepted: AcceptedMessage | null;
   /**

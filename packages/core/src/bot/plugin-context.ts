@@ -38,6 +38,7 @@ import type { Logger } from '#logger/types.ts';
 import type { Contact } from '#message/types.ts';
 import type { Outbound } from '#outbound/types.ts';
 import { type PluginContextFactory, PluginHostStateError } from '#plugin/host.ts';
+import { formatMessage } from '#plugin/messages.ts';
 import type { PluginContext } from '#plugin/types.ts';
 import type { SchedulerService } from '#scheduler/service.ts';
 import type { Scheduler } from '#scheduler/types.ts';
@@ -63,6 +64,7 @@ import {
   type KernelMessageContext,
   listenerViewFactory,
   type PluginExpect,
+  type PluginText,
   roleViewFactory,
   stepViewFactory,
 } from './message-context.ts';
@@ -171,9 +173,12 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
     // A espera é sempre do plugin dono do contexto: ele só aponta para os próprios passos.
     const expect: PluginExpect = (message, step, options) =>
       deps.conversations.expect(name, message.chat.id, message.sender.id, step, options);
-    const commandViews = commandViewFactory(name, log, expect);
-    const listenerView = listenerViewFactory(name, log, expect);
-    const stepView = stepViewFactory(name, log, expect);
+    // `{prefix}` lido a cada chamada: um `ctx.prefixes.set` vale já para a mensagem seguinte.
+    const text: PluginText = (message, key, values) =>
+      formatMessage(messages, key, values, deps.prefixes.get(message.chat));
+    const commandViews = commandViewFactory(name, log, expect, text);
+    const listenerView = listenerViewFactory(name, log, expect, text);
+    const stepView = stepViewFactory(name, log, expect, text);
     const roleView = roleViewFactory(log);
     // Nos eventos de mensagem, cada listener recebe a visão com `message`/`text`/`reply`/`log`
     // do plugin; o barramento a cria (uma por listener) e pendura nela o `Deadline`.
