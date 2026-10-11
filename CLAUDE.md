@@ -14,8 +14,9 @@ registradas; para mudar uma, proponha um ADR novo que a substitua.
 
 ## Git
 
-Branch a partir de `develop` e PR com `--base develop`, a branch padrão e a do release
-([ADR 0082](docs/adr/0082-release-a-partir-de-develop.md)). Commits em Conventional Commits, descrição em PT-BR, com o ID do roadmap:
+Branch a partir de `develop` e PR com `--base develop`, a branch de integração e a do release
+([ADR 0082](docs/adr/0082-release-a-partir-de-develop.md)); a `main` é a padrão do GitHub.
+Commits em Conventional Commits, descrição em PT-BR, com o ID do roadmap:
 `feat(core): roteador de comandos (M1-2.1)`. `Closes #N` no commit ou PR de cada issue.
 
 ## Convenções

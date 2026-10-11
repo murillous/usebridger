@@ -17,8 +17,8 @@ novo para a Luma (as stars iriam para a biblioteca).
 ## Decisão
 
 - O kernel, os plugins oficiais, o `bench/` e o `tooling/` vivem em **`murillous/usebridger`**,
-  com histórico a partir da criação do monorepo (M0-4.1). A `develop` é a branch padrão e a do
-  release.
+  com histórico a partir da criação do monorepo (M0-4.1). A `develop` é a branch de integração
+  e a do release; a `main` é a padrão do GitHub.
 - O **`murillous/LumaBot`** fica com o app da Luma (`apps/lumabot`), o `legacy/`, o deploy de
   produção, as stars e os forks. O app passa a depender dos `@usebridger/*` publicados no npm.
 - Issues e PRs anteriores à separação continuam no `LumaBot`; as do kernel em aberto são
