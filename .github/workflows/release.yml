@@ -1,10 +1,11 @@
 name: Release
 
-# Fluxo e segredos em docs/release.md; decisão no ADR 0082. Com changesets pendentes em `develop`,
-# abre ou atualiza o PR de versão; depois do merge dele, sem changesets, publica no npm.
+# Fluxo e segredos em docs/release.md; decisões nos ADRs 0082 e 0085. Com changesets pendentes na
+# `main`, abre ou atualiza o PR de versão; depois do merge dele, sem changesets, publica no npm e
+# abre a PR de volta para a `develop`.
 on:
   push:
-    branches: [develop]
+    branches: [main]
   workflow_dispatch:
 
 # Sem cancel-in-progress: um publish nunca é cortado no meio. Pushes seguidos esperam a vez.
@@ -21,7 +22,7 @@ jobs:
   release:
     name: Release
     # Fork ou branch errada no workflow_dispatch não publicam.
-    if: github.repository == 'murillous/usebridger' && github.ref == 'refs/heads/develop'
+    if: github.repository == 'murillous/usebridger' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # O mesmo Postgres do ci.yml: o gate roda a suíte inteira.
     services:
@@ -68,6 +69,7 @@ jobs:
           fi
 
       - uses: changesets/action@v2
+        id: changesets
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           # Nunca o `changeset version` direto: o script também sincroniza o CORE_VERSION.
@@ -80,3 +82,15 @@ jobs:
         env:
           # O pnpm só lê config de env com o prefixo dele; NPM_CONFIG_PROVENANCE seria ignorado.
           PNPM_CONFIG_PROVENANCE: true
+
+      # Devolve à `develop` as versões, os changelogs e os changesets consumidos (ADR 0085). Se a
+      # PR já existe, o `gh` falha com "already exists" e o passo segue: ela recebe o push sozinha.
+      - name: PR de volta para a develop
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh pr create --base develop --head main \
+            --title 'chore(release): leva a main de volta para a develop' \
+            --body 'Versões, changelogs e changesets consumidos do último release. Merge commit, sem squash (ADR 0085).' \
+            || gh pr view main --json url --jq .url
