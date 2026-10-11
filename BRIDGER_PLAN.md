@@ -102,7 +102,7 @@ decisão anterior.
 
 | ID | Decisão | Alternativas descartadas | Motivo |
 |---|---|---|---|
-| D01 | **Monorepo** (pnpm workspaces): `packages/*`, `plugins/*`, `apps/lumabot`, `legacy/` | Repo novo isolado; refatoração in-place | Kernel nasce limpo, LumaBot valida a API como consumidor real |
+| D01 | **Monorepo** (pnpm workspaces): `packages/*`, `plugins/*`, `apps/lumabot`, `legacy/` (app e legacy saem para o `LumaBot` pelo D84) | Repo novo isolado; refatoração in-place | Kernel nasce limpo, LumaBot valida a API como consumidor real |
 | D02 | **TypeScript** no kernel, publicado com `.d.ts`; plugins em TS ou JS | JS + JSDoc; JS puro | O contrato tipado é a DX que permite plugar sem ler o código |
 | D03 | **`Transport` abstrato**, só Baileys na v1 (substituído por D55) | Multi-transporte já na v1; Baileys exposto | Abstração barata agora; Cloud API/Twilio/Zenvia viram adapters comerciais depois |
 | D04 | **Uma sessão por processo, zero estado global** | Multi-sessão nativa | Escala com processos; multi-sessão futura = instanciar `Bot` duas vezes |
@@ -185,6 +185,7 @@ decisão anterior.
 | D81 | **`create-bridger-plugin`** (detalha D22, sobre D73/D79): binário sem dependências e sem perguntas, com o nome do pacote como único argumento (pasta, `name` do manifesto e export saem dele); template em `template/` com o plugin portátil na forma curta, teste em `describe.each(PROFILE_NAMES)`, `isolatedDeclarations`, `tsdown` e changesets; core como peer e dev dependency em `<1.0.0`; aceite por e2e no CI sobre os tarballs de `pnpm pack` | Perguntas interativas; template em strings ou baixado na hora; versão do core lida no build; só teste unitário do gerador | Plugin novo em um comando, já portátil e testado nas quatro plataformas; o e2e prova o que o autor roda sobre os pacotes como sairiam no npm ([ADR 0081](docs/adr/0081-create-bridger-plugin.md)) |
 | D82 | **Release a partir de `develop`** (detalha D27, sobre D29/D83): `release.yml` com `changesets/action@v2`; changesets pendentes abrem o PR de versão pelo `pnpm version-packages`, o merge dele publica com `pnpm release` e cria as tags; lint, typecheck, testes, build e `pnpm check:packages` no mesmo job, sem cancelar execução em andamento; npm por Trusted Publishing com provenance, primeiro publish de cada pacote com `NPM_TOKEN` granular e temporário; PR de versão aberto pelo token de um GitHub App | Publicar da `main`; `NPM_TOKEN` permanente; PR de versão com `GITHUB_TOKEN` ou PAT | A `main` é do legacy; sem token de longa duração em regime; o PR de versão roda o `ci.yml` e não sai em nome do dono ([ADR 0082](docs/adr/0082-release-a-partir-de-develop.md)) |
 | D83 | **Nome: Bridger** (substitui o D31): pacotes no escopo `@usebridger/*`, scaffold `create-bridger-plugin` sem escopo, prefixo de plugin `bridger-plugin-`, variáveis `BRIDGER_*`, anotação `x-bridger-override` e schema Postgres `bridger` | Escopo `@bridger` (org com outro dono); `@bridger-js`, `@bridgerhq`, `@getbridger`, `@bridgerjs` | Kernel multiplataforma com público global; troca antes do primeiro publish não quebra ninguém ([ADR 0083](docs/adr/0083-nome-bridger.md)) |
+| D84 | **Repositórios separados** (substitui parte do D01, detalha D23): kernel, plugins oficiais, `bench/` e `tooling/` em `murillous/usebridger`, com histórico desde o M0-4.1 e `develop` como branch padrão; `apps/lumabot`, `legacy/`, deploy, stars e forks ficam em `murillous/LumaBot`, que usa os `@usebridger/*` do npm | Manter o monorepo; renomear o `LumaBot` para o kernel | Deploy da Luma e release dos pacotes deixam de dividir branches; as stars ficam com o bot ([ADR 0084](docs/adr/0084-repositorios-separados.md)) |
 
 ---
 
@@ -207,9 +208,6 @@ bridger/
 ├── plugins/                  # plugins oficiais (públicos)
 │   ├── help/  everyone/  user-names/  media/  download/
 │   ├── reminders/  rank/  ai/  dashboard/
-├── apps/
-│   └── lumabot/              # app de referência: config + seleção de plugins
-├── legacy/                   # LumaBot atual (MIT), em produção até a paridade
 ├── bench/                    # benchmarks do CI
 └── docs/
     ├── adr/                  # D01–D31

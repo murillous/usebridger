@@ -40,6 +40,7 @@ sendo a referência; um ADR novo entra nos dois.
 - [0029](0029-open-core-repo-privado.md) — Open core com repo privado
 - [0031](0031-nome-do-kernel.md) — Nome do kernel (substituído pelo D83)
 - [0083](0083-nome-bridger.md) — Nome: Bridger, no escopo `@usebridger` (substitui D31)
+- [0084](0084-repositorios-separados.md) — Kernel e LumaBot em repositórios separados (substitui parte do D01)
 
 **Bot, sessão e escopo do core**
 
@@ -205,3 +206,4 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0081](0081-create-bridger-plugin.md) | D81 | `create-bridger-plugin`: scaffold sem dependências, template com o plugin portátil na forma curta e aceite por e2e sobre os tarballs (detalha D22) | Aceito |
 | [0082](0082-release-a-partir-de-develop.md) | D82 | Release a partir de `develop`: gate no mesmo job, Trusted Publishing no npm com bootstrap por token e PR de versão aberto por GitHub App (detalha D27) | Aceito |
 | [0083](0083-nome-bridger.md) | D83 | Nome: Bridger, no escopo `@usebridger/*`, com `create-bridger-plugin`, `BRIDGER_*` e schema Postgres `bridger` (substitui D31) | Aceito |
+| [0084](0084-repositorios-separados.md) | D84 | Kernel em `murillous/usebridger` e LumaBot (`apps/lumabot`, `legacy/`, deploy) em `murillous/LumaBot`; o app usa os pacotes do npm (substitui parte do D01, detalha D23) | Aceito |

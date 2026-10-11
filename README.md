@@ -5,17 +5,16 @@ Plano, decisões e marcos: [`BRIDGER_PLAN.md`](BRIDGER_PLAN.md).
 O porquê de cada decisão (`DNN` no plano, `ADR 00NN`) está nos ADRs em [`docs/adr/`](docs/adr/README.md).
 Para escrever um plugin, comece pelos [guias do autor](docs/guias/README.md).
 
-O LumaBot atual (em produção até a paridade) vive em [`legacy/`](legacy/README.md); a versão
-sobre o kernel, em [`apps/lumabot/`](apps/lumabot/docs/README.md).
+O LumaBot, app de referência que usa o Bridger, vive em
+[`murillous/LumaBot`](https://github.com/murillous/LumaBot).
 
 Quer contribuir? Veja o [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Desenvolvimento
 
-Monorepo pnpm (`packages/*`, `plugins/*`, `apps/*`, `bench/` e `tooling/typedoc/`). A versão do
+Monorepo pnpm (`packages/*`, `plugins/*`, `bench/` e `tooling/typedoc/`). A versão do
 pnpm vem de `packageManager` no `package.json` — com `corepack enable`, basta rodar
 `pnpm install` na raiz.
-O `legacy/` fica fora do workspace e continua usando npm.
 
 Requer Node 24+ (`engines` na raiz; `.nvmrc` para `nvm use`/`fnm use`).
 
@@ -122,17 +121,14 @@ reverter em [`docs/release.md`](docs/release.md).
 
 ### CI
 
-Todo push e PR para `main`/`develop` roda dois workflows:
-
-- [`ci.yml`](.github/workflows/ci.yml) — kernel: jobs `Lint`, `Typecheck`, `Testes` e `Build`
-  (os mesmos comandos da tabela acima), com o store do pnpm em cache. O job `Scaffold` gera um
-  plugin com o `create-bridger-plugin` e confere que ele instala, testa e builda
-  ([e2e](packages/create-plugin/docs/README.md#e2e)). O job `Testes` sobe um
-  Postgres em container para o `@usebridger/storage-postgres`. O job `Benchmark` mede as metas
-  de performance e falha com piora > 10% sobre o baseline do commit-base, medido no mesmo
-  runner ([ADR 0054](docs/adr/0054-baseline-do-benchmark.md)). O job `Pacotes` builda e roda o
-  `pnpm check:packages`, para um pacote que não publicaria quebrar no PR e não no release.
-- [`legacy-ci.yml`](.github/workflows/legacy-ci.yml) — suíte do `legacy/`, sem alteração.
+Todo push e PR para `develop` roda o [`ci.yml`](.github/workflows/ci.yml), com os jobs
+`Lint`, `Typecheck`, `Testes` e `Build` (os mesmos comandos da tabela acima) e o store do pnpm
+em cache. O job `Scaffold` gera um plugin com o `create-bridger-plugin` e confere que ele
+instala, testa e builda ([e2e](packages/create-plugin/docs/README.md#e2e)). O job `Testes` sobe
+um Postgres em container para o `@usebridger/storage-postgres`. O job `Benchmark` mede as metas
+de performance e falha com piora > 10% sobre o baseline do commit-base, medido no mesmo runner
+([ADR 0054](docs/adr/0054-baseline-do-benchmark.md)). O job `Pacotes` builda e roda o
+`pnpm check:packages`, para um pacote que não publicaria quebrar no PR e não no release.
 
 O setup comum (Node do `.nvmrc`, pnpm do `packageManager`, `pnpm install --frozen-lockfile`)
 fica em [`.github/actions/setup`](.github/actions/setup/action.yml).
@@ -143,5 +139,4 @@ de versão ou publica os pacotes ([`docs/release.md`](docs/release.md),
 
 ## Licença
 
-[Apache-2.0](LICENSE) para `packages/*`, `plugins/*` e `apps/*` ([ADR 0028](docs/adr/0028-licenca-apache-2.md)).
-O `legacy/` continua sob [MIT](legacy/LICENSE).
+[Apache-2.0](LICENSE) ([ADR 0028](docs/adr/0028-licenca-apache-2.md)).

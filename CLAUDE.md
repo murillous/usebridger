@@ -1,22 +1,21 @@
 # CLAUDE.md
 
 Monorepo do **Bridger**, kernel de bot de mensageria extraído do LumaBot. Plano e roadmap:
-`BRIDGER_PLAN.md`; o porquê de cada decisão (D01–D31): `docs/adr/`. Siga as decisões
+`BRIDGER_PLAN.md`; o porquê de cada decisão: `docs/adr/`. Siga as decisões
 registradas; para mudar uma, proponha um ADR novo que a substitua.
 
 ## Onde você está
 
-- **Kernel** (`packages/*`, `plugins/*`, `apps/*`): pnpm workspace, TypeScript, Node 24+.
-  Setup, comandos, layout de pacote, imports e regras do Biome estão no `README.md` — leia
-  antes de criar ou mexer num pacote.
-- **`legacy/`**: o LumaBot em produção até a paridade, fora do workspace (npm, JS). Antes de
-  tocar nele, leia `legacy/CLAUDE.md` e rode os comandos (`npm ci`, `npx vitest run`) a partir
-  de `legacy/`.
+- **Kernel** (`packages/*`, `plugins/*`): pnpm workspace, TypeScript, Node 24+. Setup,
+  comandos, layout de pacote, imports e regras do Biome estão no `README.md` — leia antes de
+  criar ou mexer num pacote.
+- O LumaBot (app de referência e `legacy/`) vive em `murillous/LumaBot` e usa os pacotes do npm
+  ([ADR 0084](docs/adr/0084-repositorios-separados.md)).
 
 ## Git
 
-Branch a partir de `develop` e PR com `--base develop`: a `main` alimenta a produção do
-legacy. Commits em Conventional Commits, descrição em PT-BR, com o ID do roadmap:
+Branch a partir de `develop` e PR com `--base develop`, a branch padrão e a do release
+([ADR 0082](docs/adr/0082-release-a-partir-de-develop.md)). Commits em Conventional Commits, descrição em PT-BR, com o ID do roadmap:
 `feat(core): roteador de comandos (M1-2.1)`. `Closes #N` no commit ou PR de cada issue.
 
 ## Convenções

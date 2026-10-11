@@ -6,8 +6,7 @@ está no [ADR 0082](adr/0082-release-a-partir-de-develop.md); o changeset de cad
 
 ## Fluxo
 
-1. PR com changeset entra em `develop`. A `main` alimenta a produção do `legacy/` e fica fora
-   do release.
+1. PR com changeset entra em `develop`, a branch padrão do repositório.
 2. O push em `develop` roda o [`release.yml`](../.github/workflows/release.yml). Com changesets
    pendentes, ele abre ou atualiza o PR **`chore(release): versão dos pacotes`**, gerado pelo
    `pnpm version-packages`: versões novas, `CHANGELOG.md` de cada pacote e o `CORE_VERSION` do

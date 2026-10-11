@@ -4,7 +4,7 @@ Obrigado pelo interesse! O Bridger é um kernel de bot de mensageria extensível
 extraído do LumaBot. Antes de começar, vale ler:
 
 - [`BRIDGER_PLAN.md`](BRIDGER_PLAN.md) — visão, arquitetura e roadmap;
-- [`docs/adr/`](docs/adr/README.md) — o porquê de cada decisão (D01–D31);
+- [`docs/adr/`](docs/adr/README.md) — o porquê de cada decisão;
 - [`README.md`](README.md) — setup, comandos e convenções de pacote.
 
 Ao participar, você concorda com o [Código de Conduta](CODE_OF_CONDUCT.md).
@@ -24,7 +24,7 @@ Ao participar, você concorda com o [Código de Conduta](CODE_OF_CONDUCT.md).
 1. Faça fork e crie uma branch a partir de **`develop`** (ex.: `m1-2-router`, `fix-quoted-media`).
 2. Commits em [Conventional Commits](https://www.conventionalcommits.org/pt-br/), descrição em
    PT-BR e o ID da issue do roadmap quando houver: `feat(core): roteador de comandos (M1-2.1)`.
-3. Abra o PR contra **`develop`** — nunca contra `main`, que alimenta a produção do legacy.
+3. Abra o PR contra **`develop`**.
    Referencie a issue (`Closes #123`) e preencha o checklist do template.
 
 ## Definição de pronto
@@ -53,13 +53,6 @@ Codificadas no Biome e verificadas no CI (detalhes no [README](README.md#regras-
 
 A menor solução que resolve é a melhor: sem abstração ou configuração que a tarefa não exige.
 
-## `legacy/`
-
-O LumaBot atual vive em `legacy/`, em produção até a paridade, com ferramentas próprias (npm,
-`npx vitest run`) rodadas a partir de `legacy/`. Leia [`legacy/CLAUDE.md`](legacy/CLAUDE.md)
-antes de mexer nele.
-
 ## Licença
 
-Contribuições ao monorepo entram sob [Apache-2.0](LICENSE), a mesma licença do projeto; as
-feitas em `legacy/` seguem [MIT](legacy/LICENSE). Não há CLA.
+Contribuições entram sob [Apache-2.0](LICENSE), a mesma licença do projeto. Não há CLA.

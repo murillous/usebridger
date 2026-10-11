@@ -1,11 +1,10 @@
 name: CI
 
-# Kernel Bridger (workspace pnpm). O legacy/ tem o próprio workflow (legacy-ci.yml).
 on:
   push:
-    branches: [main, develop]
+    branches: [develop]
   pull_request:
-    branches: [main, develop]
+    branches: [develop]
 
 permissions:
   contents: read

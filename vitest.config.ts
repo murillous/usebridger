@@ -22,7 +22,7 @@ export default defineConfig({
   ssr: { resolve: { conditions: ['@usebridger/source'] } },
   test: {
     passWithNoTests: true,
-    // Sem pacotes ainda, não há o que rodar (e o include padrão pegaria os testes de legacy/).
+    // Sem pacotes, não há o que rodar.
     ...(projects.length > 0 ? { projects } : { include: [] }),
   },
 });

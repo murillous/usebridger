@@ -1,6 +1,6 @@
 # ADR 0023 — Migração incremental (`legacy/`)
 
-**Status:** Aceito (2026-10-06) · Decisão **D23** do [plano](../../BRIDGER_PLAN.md#4-decisões)
+**Status:** Aceito (2026-10-06) · Decisão **D23** do [plano](../../BRIDGER_PLAN.md#4-decisões) · Desde o [ADR 0084](0084-repositorios-separados.md), a migração segue no repositório `murillous/LumaBot`
 
 ## Contexto
 

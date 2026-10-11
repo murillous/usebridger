@@ -188,28 +188,6 @@ importers:
         specifier: ^5.0.3
         version: 5.0.3(@types/node@24.19.1)(vite@8.3.2(@types/node@24.19.1)(yaml@2.9.1))
 
-  apps/lumabot:
-    dependencies:
-      '@usebridger/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@usebridger/storage-sqlite':
-        specifier: workspace:*
-        version: link:../../packages/storage-sqlite
-      '@usebridger/transport-baileys':
-        specifier: workspace:*
-        version: link:../../packages/transport-baileys
-      qrcode-terminal:
-        specifier: ^0.12.0
-        version: 0.12.0
-    devDependencies:
-      '@types/qrcode-terminal':
-        specifier: ^0.12.2
-        version: 0.12.2
-      '@usebridger/testing':
-        specifier: workspace:*
-        version: link:../../packages/testing
-
   bench:
     dependencies:
       '@usebridger/core':
@@ -843,9 +821,6 @@ packages:
 
   '@types/pg@8.23.1':
     resolution: {integrity: sha512-fKVHpikPdg4GKks3JuLEhvwSyvwzF23hnabPy6DD8ljVbC7+6J5dQzdv4arV6jqq57djnMgs1HKBxX4P8aBI3A==}
-
-  '@types/qrcode-terminal@0.12.2':
-    resolution: {integrity: sha512-v+RcIEJ+Uhd6ygSQ0u5YYY7ZM+la7GgPbs0V/7l/kFs2uO4S8BcIUEMoP7za4DNIqNnUD5npf0A/7kBhrCKG5Q==}
 
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
@@ -1569,10 +1544,6 @@ packages:
   qified@0.10.1:
     resolution: {integrity: sha512-+Owyggi9IxT1ePKGafcI87ubSmxol6smwJ+RAHDQlx9+9cPwFWDiKFFCPuWhr9ignlGpZ9vDQLw67N4dcTVFEA==}
     engines: {node: '>=20'}
-
-  qrcode-terminal@0.12.0:
-    resolution: {integrity: sha512-EXtzRZmC+YGmGlDFbXKxQiMZNwCLEO6BANKXG4iCtSIM0yqc/pappSx3RIKr4r0uh5JsBckOXeKrB3Iz7mdQpQ==}
-    hasBin: true
 
   quansync@1.0.0:
     resolution: {integrity: sha512-5xZacEEufv3HSTPQuchrvV6soaiACMFnq1H8wkVioctoH3TRha9Sz66lOxRwPK/qZj7HPiSveih9yAyh98gvqA==}
@@ -2357,8 +2328,6 @@ snapshots:
       pg-protocol: 1.16.1
       pg-types: 2.2.0
 
-  '@types/qrcode-terminal@0.12.2': {}
-
   '@types/unist@3.0.3': {}
 
   '@types/ws@8.18.2':
@@ -2892,8 +2861,6 @@ snapshots:
   qified@0.10.1:
     dependencies:
       hookified: 2.2.0
-
-  qrcode-terminal@0.12.0: {}
 
   quansync@1.0.0: {}
 
