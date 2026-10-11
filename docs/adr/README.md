@@ -76,6 +76,7 @@ sendo a referência; um ADR novo entra nos dois.
 - [0043](0043-prazo-de-middleware.md) — Middleware do app tem prazo, contado fora do `next()` (detalha D12)
 - [0049](0049-evento-de-comando.md) — Evento `command`: o plugin observa o comando que consumiu a mensagem (detalha D12/D40)
 - [0087](0087-comando-em-segundo-plano.md) — Comando em segundo plano: `background: true` tira o `run` da fila do chat (detalha D42/D49)
+- [0090](0090-requires-por-comando.md) — `requires` por comando: sem a capability, o comando não é registrado (detalha D16/D64)
 
 **Plugins: carga, config, services e execução**
 
@@ -215,4 +216,5 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0086](0086-plugins-da-luma-no-lumabot.md) | D86 | Plugins da Luma no LumaBot: o kernel não publica plugins, e os do M4 e do M5 viram código do app sobre os pacotes do npm (substitui parte do D84 e o `plugins/*` do D01) | Aceito |
 | [0087](0087-comando-em-segundo-plano.md) | D87 | Comando em segundo plano: `background: true` tira o `run` da fila do chat e mantém o prazo, o `plugin.error`, o `command` e o `settled()` (detalha D42/D49) | Aceito |
 | [0088](0088-limite-de-concorrencia-por-comando.md) | D88 | Limite de concorrência por comando: `concurrency` põe um teto de `run` simultâneos no bot, a espera conta no prazo e a vaga só volta quando o `run` termina (detalha D05/D87) | Aceito |
+| [0090](0090-requires-por-comando.md) | D90 | `requires` por comando: sem a capability, o comando fica fora do roteador, do `ctx.commands.list()` e do menu nativo; o resto do plugin sobe (detalha D16/D64) | Aceito |
 | [0089](0089-benchmark-intercalado.md) | D89 | Benchmark intercalado: base e commit testado se revezam no mesmo runner, a ordem inverte a cada rodada, e a comparação usa o quartil bom no sentido da meta (detalha D54) | Aceito |

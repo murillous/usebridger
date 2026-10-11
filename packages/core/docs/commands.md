@@ -29,7 +29,8 @@ const sticker = command({
 que não passou por `command()` também falha no boot com `TypeError`, em vez de nunca casar. Um
 `timeoutMs` que não seja finito e > 0 falha do mesmo jeito, com `RangeError`, assim como um
 `concurrency` que não seja inteiro >= 1. Uma entrada de `accepts` com mimetype inválido falha com
-`TypeError` ([`accepts` e `ctx.media`](#accepts-e-ctxmedia)).
+`TypeError` ([`accepts` e `ctx.media`](#accepts-e-ctxmedia)), assim como uma capability
+desconhecida em `requires`.
 O nome vai **sem** o prefixo.
 
 No bot, o `run` que devolve texto (string ou `fmt`) responde com ele, citando a mensagem: o mesmo
@@ -379,6 +380,27 @@ do chat.
 
 O teto é por registro do comando: no reload, o plugin novo começa com o teto inteiro, e os `run`
 antigos ainda vivos não contam nele. O roteador solto ignora `concurrency`, como o `timeoutMs`.
+
+### Capability por comando
+
+O `requires` do plugin vale para ele inteiro: num plugin com comandos que enviam tipos diferentes,
+exigir tudo derruba os que funcionariam. `requires` no comando exige a capability só dele
+([ADR 0090](../../../docs/adr/0090-requires-por-comando.md)):
+
+```ts
+ctx.commands.add(command({
+  name: 'figurinha',
+  requires: ['send.sticker'],
+  run: async (c) => { /* ... */ },
+}));
+```
+
+Sem alguma delas, o comando não é registrado: não casa no roteador, fica fora do
+`ctx.commands.list()` e do menu nativo da plataforma, e o resto do plugin sobe normalmente. Um log
+`info` com `command` e `missing` registra o comando deixado de fora. Quem digita o comando recebe
+o mesmo que receberia de um comando que não existe. A definição continua validada mesmo sem a
+capability, então um nome inválido falha em qualquer transport. O roteador solto ignora
+`requires`, como o `timeoutMs`.
 
 Para perguntar algo e tratar a resposta, o `run` não espera a próxima mensagem: ela está na fila
 atrás dele. Ele envia a pergunta, chama `c.expectReply(passo)` e termina, e a resposta vai ao
