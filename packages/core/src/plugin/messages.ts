@@ -25,7 +25,8 @@ export function placeholders(text: string): string[] {
 /** Preenche os placeholders de `text`; `key` só entra na mensagem de erro. */
 export function fillMessage(text: string, values: MessageValues, key: string): string {
   return text.replaceAll(PLACEHOLDER, (_match, name: string) => {
-    const value = values[name];
+    // `hasOwn`: um `{constructor}` sem valor não pode cair no método herdado do `Object`.
+    const value = Object.hasOwn(values, name) ? values[name] : undefined;
     if (value === undefined) {
       throw new TypeError(`mensagem "${key}": falta o valor do placeholder {${name}}`);
     }

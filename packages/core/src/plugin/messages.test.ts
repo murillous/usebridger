@@ -24,6 +24,12 @@ describe('fillMessage', () => {
       'mensagem "added": falta o valor do placeholder {total}',
     );
   });
+
+  it('placeholder com nome de método do Object não usa o herdado', () => {
+    expect(() => fillMessage('{constructor} e {toString}', {}, 'added')).toThrow(
+      'mensagem "added": falta o valor do placeholder {constructor}',
+    );
+  });
 });
 
 describe('formatMessage', () => {
