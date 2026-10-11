@@ -1,12 +1,13 @@
-import { globSync, readFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, globSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { publint } from 'publint';
 import { formatMessage } from 'publint/utils';
 
 /**
  * Confere os pacotes publicáveis antes do publish (#246): o que o publint pega no tarball
- * (`exports`, `types` e `files` apontando para arquivos que existem) e os metadados que o npm e o
- * pnpm exigem do release. Roda depois do `pnpm build`, porque o publint empacota com `pnpm pack`.
+ * (`exports`, `types` e `files` apontando para arquivos que existem), os metadados que o npm e o
+ * pnpm exigem do release e o `README.md` na raiz do pacote. Roda depois do `pnpm build`, porque o
+ * publint empacota com `pnpm pack`.
  */
 interface Manifest {
   readonly name: string;
@@ -29,6 +30,8 @@ function metadataProblems(dir: string, manifest: Manifest): string[] {
   }
   if (manifest.publishConfig?.access !== 'public')
     problems.push('publishConfig.access não é public');
+  // A página do npm mostra só o README da raiz do pacote; o `docs/README.md` não entra no tarball.
+  if (!existsSync(join(dir, 'README.md'))) problems.push('sem README.md na raiz do pacote');
   // `workspace:*` vira a versão exata no publish: com o core num patch acima, quem instala fica
   // com duas cópias dele. `workspace:^` vira `^versão`.
   for (const deps of [manifest.dependencies, manifest.peerDependencies]) {

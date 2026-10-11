@@ -30,7 +30,7 @@ Requer Node 24+ (`engines` na raiz; `.nvmrc` para `nvm use`/`fnm use`).
 | `pnpm bench` | Build e benchmark das metas de performance ([`bench/`](bench/docs/README.md)) |
 | `pnpm changeset` | Registra a mudança de um pacote publicável |
 | `pnpm version-packages` | Consome os changesets (versões e changelogs) e sincroniza o `CORE_VERSION` |
-| `pnpm check:packages` | Confere os pacotes publicáveis depois do build: publint no tarball e metadados do publish |
+| `pnpm check:packages` | Confere os pacotes publicáveis depois do build: publint no tarball, metadados do publish e `README.md` na raiz |
 | `pnpm release` | Build e `changeset publish`; quem roda é o workflow de release ([`docs/release.md`](docs/release.md)) |
 
 ### Novo pacote
@@ -39,8 +39,14 @@ Requer Node 24+ (`engines` na raiz; `.nvmrc` para `nvm use`/`fnm use`).
 packages/<nome>/
   package.json
   tsconfig.json
+  README.md
   src/index.ts
+  docs/README.md
 ```
+
+O `README.md` da raiz é a página do pacote no npm, que só lê esse arquivo: descrição, instalação,
+um exemplo curto e links absolutos para o `docs/` no GitHub. O COMO completo fica em `docs/`, que
+não vai para o tarball.
 
 `package.json`:
 

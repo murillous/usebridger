@@ -90,7 +90,7 @@ Para conferir o que sairia, sem publicar:
 ```sh
 pnpm version-packages          # numa cópia descartável (git worktree): consome os changesets
 pnpm build
-pnpm check:packages            # publint e metadados de cada pacote publicável
+pnpm check:packages            # publint, metadados e README de cada pacote publicável
 pnpm -r --filter "./packages/*" publish --dry-run --no-git-checks
 ```
 
