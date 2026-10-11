@@ -30,7 +30,7 @@ import { createGroups } from '#groups/groups.ts';
 import { sessionHttp } from '#http/server.ts';
 import type { HttpServer } from '#http/types.ts';
 import { createDeferredLogger } from '#logger/deferred.ts';
-import { createLogger, createNoopLogger } from '#logger/logger.ts';
+import { createLogger, createNoopLogger, type LoggerOptions } from '#logger/logger.ts';
 import { createSecretSet, type SecretSet } from '#logger/secrets.ts';
 import type { Logger, LogLevel } from '#logger/types.ts';
 import { createMessage } from '#message/create.ts';
@@ -195,6 +195,11 @@ export interface BotConfig {
   readonly logger?: Logger;
   /** Nível do logger criado pelo bot. Padrão: `'info'`. */
   readonly logLevel?: LogLevel;
+  /**
+   * Formato do logger criado pelo bot: `'json'` (padrão) ou `'pretty'`, legível no terminal
+   * (ver `LoggerOptions.format`).
+   */
+  readonly logFormat?: LoggerOptions['format'];
   /** Fonte de segredos compartilhada entre a config de plugin e o logger. Padrão: uma nova. */
   readonly secrets?: SecretSet;
   readonly middlewares?: BotMiddlewaresConfig;
@@ -1121,7 +1126,13 @@ export function createBot(config: BotConfig): Bot {
 
   async function runStart(): Promise<void> {
     try {
-      log = config.logger ?? createLogger({ level: config.logLevel ?? 'info', secrets });
+      log =
+        config.logger ??
+        createLogger({
+          level: config.logLevel ?? 'info',
+          ...(config.logFormat && { format: config.logFormat }),
+          secrets,
+        });
       transportLog = log.child({ transport: transport.name });
       // Antes de `booted`: um bot recusado aqui não fecha o storage do bot que usa a sessão.
       releaseSession = claimSession(storage, session);
