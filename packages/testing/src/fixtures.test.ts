@@ -57,7 +57,7 @@ describe('fixtures', () => {
     expect(data.toString('latin1', 0, 4)).toBe('RIFF');
     expect(data.toString('latin1', 8, 16)).toBe('WEBPVP8X');
     // VP8X: bit de animação nas flags; largura-1 e altura-1 do canvas em 24 bits cada.
-    expect(data[20] as number & 0x02).toBe(0x02);
+    expect((data[20] as number) & 0x02).toBe(0x02);
     expect(data.readUIntLE(24, 3) + 1).toBe(512);
     expect(data.readUIntLE(27, 3) + 1).toBe(512);
     expect(data.includes('ANIM')).toBe(true);
