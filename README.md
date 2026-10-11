@@ -12,7 +12,7 @@ Quer contribuir? Veja o [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Desenvolvimento
 
-Monorepo pnpm (`packages/*`, `plugins/*`, `bench/` e `tooling/typedoc/`). A versão do
+Monorepo pnpm (`packages/*`, `bench/` e `tooling/typedoc/`). A versão do
 pnpm vem de `packageManager` no `package.json` — com `corepack enable`, basta rodar
 `pnpm install` na raiz.
 

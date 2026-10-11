@@ -42,7 +42,7 @@ function metadataProblems(dir: string, manifest: Manifest): string[] {
 }
 
 let failed = false;
-for (const file of globSync('{packages,plugins}/*/package.json')) {
+for (const file of globSync('packages/*/package.json')) {
   const manifest = JSON.parse(readFileSync(file, 'utf8')) as Manifest;
   if (manifest.private === true) continue;
   const dir = dirname(file).replaceAll('\\', '/');

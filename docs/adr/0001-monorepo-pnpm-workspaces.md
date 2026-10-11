@@ -1,6 +1,6 @@
 # ADR 0001 — Monorepo com pnpm workspaces
 
-**Status:** Aceito (2026-10-06) · Decisão **D01** do [plano](../../BRIDGER_PLAN.md#4-decisões) · `apps/lumabot` e `legacy/` no mesmo repositório: substituído pelo [ADR 0084](0084-repositorios-separados.md)
+**Status:** Aceito (2026-10-06) · Decisão **D01** do [plano](../../BRIDGER_PLAN.md#4-decisões) · `apps/lumabot` e `legacy/` no mesmo repositório: substituído pelo [ADR 0084](0084-repositorios-separados.md) · `plugins/*`: substituído pelo [ADR 0086](0086-plugins-da-luma-no-lumabot.md)
 
 ## Contexto
 

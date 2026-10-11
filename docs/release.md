@@ -1,6 +1,6 @@
 # Release dos pacotes
 
-Como os pacotes publicáveis (`packages/*`, `plugins/*` sem `private`) saem para o npm. O porquê
+Como os pacotes publicáveis (`packages/*` sem `private`) saem para o npm. O porquê
 está nos ADRs [0082](adr/0082-release-a-partir-de-develop.md) e
 [0085](adr/0085-release-a-partir-da-main.md); o changeset de cada PR, no
 [`.changeset/README.md`](../.changeset/README.md).
@@ -91,7 +91,7 @@ Para conferir o que sairia, sem publicar:
 pnpm version-packages          # numa cópia descartável (git worktree): consome os changesets
 pnpm build
 pnpm check:packages            # publint e metadados de cada pacote publicável
-pnpm -r --filter "./packages/*" --filter "./plugins/*" publish --dry-run --no-git-checks
+pnpm -r --filter "./packages/*" publish --dry-run --no-git-checks
 ```
 
 Descarte a cópia depois: o PR de versão real sai do workflow.
