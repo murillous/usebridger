@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { command } from './command.ts';
+import { type AcceptSpec, command } from './command.ts';
 import { CommandConflictError, createCommandRegistry } from './registry.ts';
 
 const noop = (): void => undefined;
@@ -28,6 +28,23 @@ describe('command', () => {
       expect(() => command({ name: 'baixar', concurrency, run: noop })).toThrow(RangeError);
     }
     expect(command({ name: 'baixar', concurrency: 2, run: noop }).concurrency).toBe(2);
+  });
+
+  it('recusa mimetype mal formado ou em tipo sem mídia', () => {
+    const invalid = [
+      'document:pdf',
+      'image:image/',
+      'text:text/plain',
+      'quoted:poll:a/b',
+      'video:*/*',
+    ];
+    for (const spec of invalid) {
+      expect(() => command({ name: 'pdf', accepts: [spec as AcceptSpec], run: noop })).toThrow(
+        /accepts do comando "pdf" inválido/,
+      );
+    }
+    const valid: AcceptSpec[] = ['document:application/pdf', 'quoted:video:video/*', 'image'];
+    expect(command({ name: 'pdf', accepts: valid, run: noop }).accepts).toEqual(valid);
   });
 });
 

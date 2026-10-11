@@ -28,7 +28,8 @@ const sticker = command({
 `registry.add` (e o `ctx.commands.add` do plugin) repete a validação, então uma definição literal
 que não passou por `command()` também falha no boot com `TypeError`, em vez de nunca casar. Um
 `timeoutMs` que não seja finito e > 0 falha do mesmo jeito, com `RangeError`, assim como um
-`concurrency` que não seja inteiro >= 1.
+`concurrency` que não seja inteiro >= 1. Uma entrada de `accepts` com mimetype inválido falha com
+`TypeError` ([`accepts` e `ctx.media`](#accepts-e-ctxmedia)).
 O nome vai **sem** o prefixo.
 
 No bot, o `run` que devolve texto (string ou `fmt`) responde com ele, citando a mensagem: o mesmo
@@ -180,6 +181,24 @@ Cada entrada é um `MessageType` da própria mensagem (`'image'`) ou da citada
 (`'quoted:image'`). A **primeira entrada que casar, na ordem declarada**, vence e define
 `ctx.accepted` e `ctx.media` (a mídia daquela mensagem; `null` para tipos sem mídia, como
 `'quoted:text'`). Para preferir a mídia própria, liste os tipos próprios antes dos `quoted:*`.
+
+Um tipo com mídia (`image`, `video`, `audio`, `voice`, `sticker`, `document`) pode restringir o
+mimetype depois de mais um `:`, exato ou com curinga no subtipo:
+
+```ts
+command({
+  name: 'mergepdf',
+  accepts: ['document:application/pdf', 'quoted:document:application/pdf'],
+  onReject: () => 'Mande ou responda um PDF',
+  run: async (ctx) => { /* ctx.media é um PDF */ },
+});
+// 'video:video/*', 'image:image/gif', 'quoted:audio:audio/ogg'
+```
+
+A comparação usa só a essência do mimetype, sem diferenciar caixa: `audio/ogg; codecs=opus` casa
+com `'audio:audio/ogg'`. A mídia de outro mimetype não casa aquela entrada, e o roteador tenta a
+próxima; se nenhuma casar, a recusa vai ao `onReject` como sempre. Mimetype mal formado, ou num
+tipo sem mídia (`'text:text/plain'`), falha na definição com `TypeError`.
 
 Sem `accepts`, qualquer mensagem passa; `ctx.media` é a mídia própria ou, na falta dela, a da
 citada.
