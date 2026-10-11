@@ -3,7 +3,13 @@
 // (M1-16). Os campos do contexto vêm dos contratos de cada módulo.
 
 import type { z } from 'zod';
-import type { CommandContext, CommandDefinition, CommandInfo } from '#commands/command.ts';
+import type {
+  CommandContext,
+  CommandDefinition,
+  CommandInfo,
+  CommandRejection,
+  RejectContext,
+} from '#commands/command.ts';
 import type { Prefixes } from '#commands/prefixes.ts';
 import type { RoleCheck, RoleName } from '#commands/roles.ts';
 import type { Conversations } from '#conversations/conversations.ts';
@@ -126,7 +132,7 @@ export interface PluginContext<
  * `commands`. O kernel o registra com `ctx.commands.add` antes do `setup`.
  */
 export interface PluginCommand<TConfig = unknown, TMessages extends PluginMessages = PluginMessages>
-  extends Omit<CommandDefinition, 'name' | 'run'> {
+  extends Omit<CommandDefinition, 'name' | 'run' | 'onReject'> {
   // Sintaxe de método de propósito: parâmetro bivariante, para `PluginDefinition<Schema>` caber
   // na anotação larga `: PluginDefinition` que o `isolatedDeclarations` exige.
   /**
@@ -134,6 +140,15 @@ export interface PluginCommand<TConfig = unknown, TMessages extends PluginMessag
    * argumento. Devolver texto responde, como em qualquer comando.
    */
   run(ctx: CommandContext, plugin: PluginContext<TConfig, TMessages>): unknown;
+  /**
+   * O `onReject` do comando, com o contexto do plugin no 3º argumento: a recusa pode usar
+   * `plugin.plugin.messages`, que a config sobrescreve (ADR 0025).
+   */
+  onReject?(
+    ctx: RejectContext,
+    rejection: CommandRejection,
+    plugin: PluginContext<TConfig, TMessages>,
+  ): ReturnType<NonNullable<CommandDefinition['onReject']>>;
 }
 
 /** Listener declarado no manifesto: o de `ctx.events.on`, com o contexto do plugin no 2º argumento. */

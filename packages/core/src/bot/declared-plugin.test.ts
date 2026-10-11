@@ -120,6 +120,34 @@ describe('commands no manifesto', () => {
     expect(sentTexts(transport)).toEqual(['1', '11']);
   });
 
+  it('o onReject recebe o contexto do plugin, com as messages da config', async () => {
+    const plugin = definePlugin({
+      name: 'midia',
+      version: '1.0.0',
+      engine: ENGINE,
+      messages: { uso: 'Mande uma figurinha' },
+      commands: {
+        imagem: {
+          accepts: ['sticker', 'quoted:sticker'],
+          onReject: (c, rejection, { plugin: { messages } }) =>
+            `${messages.uso} (${rejection.reason}, ${c.command})`,
+          run: () => 'convertida',
+        },
+      },
+    });
+    const transport = new RecordingTransport();
+    const b = bot({
+      transport,
+      env: { BRIDGER_MIDIA__MESSAGES__USO: 'Responda uma figurinha' },
+      plugins: [plugin],
+    });
+    await b.start();
+
+    await send(b, transport, '!imagem');
+
+    expect(sentTexts(transport)).toEqual(['Responda uma figurinha (accepts, imagem)']);
+  });
+
   it('setup que falha desfaz os comandos e listeners declarados', async () => {
     const seen: string[] = [];
     const plugin = definePlugin({

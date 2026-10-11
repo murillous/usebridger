@@ -9,8 +9,13 @@ import type { PluginContext, PluginDefinition, PluginListener } from './types.ts
 /** Registra os `commands` e o `on` do manifesto. Chamado pelo host antes do `setup`. */
 export function installDeclared(definition: PluginDefinition, ctx: PluginContext): void {
   for (const [name, declared] of Object.entries(definition.commands ?? {})) {
-    const { run, ...rest } = declared;
-    ctx.commands.add({ ...rest, name, run: (c) => run.call(declared, c, ctx) });
+    const { run, onReject, ...rest } = declared;
+    ctx.commands.add({
+      ...rest,
+      name,
+      run: (c) => run.call(declared, c, ctx),
+      ...(onReject && { onReject: (c, rejection) => onReject.call(declared, c, rejection, ctx) }),
+    });
   }
   for (const [event, listener] of Object.entries(definition.on ?? {}) as [
     BotEventName,

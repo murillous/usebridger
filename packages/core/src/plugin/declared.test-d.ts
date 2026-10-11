@@ -1,7 +1,7 @@
 // Tipos de `commands` e `on` no manifesto (ADR 0079), verificados pelo `pnpm typecheck`.
 import { describe, expectTypeOf, it } from 'vitest';
 import { z } from 'zod';
-import type { CommandContext } from '#commands/command.ts';
+import type { CommandContext, CommandRejection, RejectContext } from '#commands/command.ts';
 import type { TextMessage } from '#message/types.ts';
 import { definePlugin } from './define.ts';
 import type { PluginDefinition } from './types.ts';
@@ -31,6 +31,27 @@ describe('definePlugin com commands e on', () => {
         },
         'connection.qr': (e) => {
           expectTypeOf(e.payload.qr).toEqualTypeOf<string>();
+        },
+      },
+    });
+  });
+
+  it('o onReject recebe o contexto do plugin no 3º argumento', () => {
+    definePlugin({
+      name: 'midia',
+      version: '1.0.0',
+      engine: '*',
+      messages: { uso: 'Mande uma figurinha' },
+      commands: {
+        imagem: {
+          accepts: ['sticker'],
+          onReject(c, rejection, plugin) {
+            expectTypeOf(c).toEqualTypeOf<RejectContext>();
+            expectTypeOf(rejection).toEqualTypeOf<CommandRejection>();
+            expectTypeOf(plugin.plugin.messages.uso).toEqualTypeOf<string>();
+            return plugin.plugin.messages.uso;
+          },
+          run: () => undefined,
         },
       },
     });
