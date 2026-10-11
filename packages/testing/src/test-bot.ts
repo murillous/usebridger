@@ -5,7 +5,9 @@ import {
   type Contact,
   createBot,
   createLogger,
+  type MediaInput,
   type Message,
+  type OutgoingContent,
 } from '@usebridger/core';
 import type { Interaction, TransportEvents } from '@usebridger/core/adapter';
 import { FakeTransport, type SentMessage } from './fake-transport.ts';
@@ -32,12 +34,30 @@ export interface TestBotOptions extends Omit<BotConfig, 'transport'> {
   readonly profile?: ProfileName;
 }
 
+/** Tipo de envio que carrega uma mídia. */
+export type SentMediaType = Extract<OutgoingContent, { readonly media: MediaInput }>['type'];
+
+/** Um envio de mídia com os bytes, como o `sentMedia()` devolve. */
+export interface SentMedia<T extends SentMediaType = SentMediaType> {
+  /** O registro do envio em `sent`, com `chatId`, `quoted` e o resto. */
+  readonly sent: SentMessage;
+  /** O conteúdo enviado, já do tipo pedido (`fileName` e `mimetype` no documento). */
+  readonly content: Extract<OutgoingContent, { readonly media: MediaInput }> & { readonly type: T };
+  /** Os bytes; `null` quando a mídia foi por URL (`{ url }`), que o transport falso não baixa. */
+  readonly bytes: Buffer | null;
+}
+
 /** Bot rodando sobre um `FakeTransport`; cada ação espera o bot assentar antes de resolver. */
 export interface TestBot {
   readonly bot: Bot;
   readonly transport: FakeTransport;
   /** O que o bot enviou, na ordem (o mesmo array de `transport.sent`). */
   readonly sent: readonly SentMessage[];
+  /**
+   * Os envios do tipo `type`, na ordem, com os bytes: `const [video] = bot.sentMedia('video')`.
+   * Mídia dentro de álbum fica de fora, como nos matchers.
+   */
+  sentMedia<T extends SentMediaType>(type: T): SentMedia<T>[];
   /**
    * Entrega uma mensagem ao bot e resolve quando ele terminou de processá-la, com os envios que
    * ela causou já em `sent`. Devolve a mensagem entregue.
@@ -87,6 +107,7 @@ export async function createTestBot(options: TestBotOptions = {}): Promise<TestB
     bot,
     transport,
     sent: transport.sent,
+    sentMedia: (type) => sentMediaOf(transport.sent, type),
     async receive(input) {
       const message = buildMessage(input, build);
       registerRaw(transport, message, input);
@@ -130,4 +151,16 @@ function registerRaw(transport: FakeTransport, message: Message, input: Incoming
   if (quoted !== undefined && !('is' in quoted) && message.quoted !== null) {
     registerRaw(transport, message.quoted, quoted);
   }
+}
+
+function sentMediaOf<T extends SentMediaType>(
+  sent: readonly SentMessage[],
+  type: T,
+): SentMedia<T>[] {
+  return sent.flatMap((record) => {
+    const { content } = record;
+    if (content.type !== type || !('media' in content)) return [];
+    const bytes = Buffer.isBuffer(content.media) ? content.media : null;
+    return [{ sent: record, content: content as SentMedia<T>['content'], bytes }];
+  });
 }

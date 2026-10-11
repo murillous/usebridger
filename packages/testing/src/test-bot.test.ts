@@ -1,6 +1,7 @@
 import { bold, command, definePlugin, fmt, type Message } from '@usebridger/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FakeTransport } from './fake-transport.ts';
+import { fixtures } from './fixtures.ts';
 import { DEFAULT_CHAT, DEFAULT_SENDER } from './incoming.ts';
 import { createTestBot, type TestBot } from './test-bot.ts';
 // Registra os matchers, como o import do pacote faz para o autor de plugin.
@@ -440,5 +441,41 @@ describe('createTestBot: objeto bruto no ctx.unsafe.raw() (ADR 0066)', () => {
     await bot.emit('interaction', interaction);
 
     expect(seen).toEqual([{ raw: { token: 'tok' }, quoted: null }]);
+  });
+});
+
+describe('createTestBot: sentMedia()', () => {
+  it('sentMedia() devolve os envios do tipo com os bytes, e null para URL', async () => {
+    const pdf = fixtures.document();
+    const plugin = definePlugin({
+      name: 'midias',
+      version: '1.0.0',
+      engine: ENGINE,
+      setup(ctx) {
+        ctx.commands.add(
+          command({
+            name: 'tudo',
+            run: async (c) => {
+              await c.reply.video(fixtures.video().data);
+              await c.reply.document(pdf.data, { fileName: 'a.pdf', mimetype: pdf.mimetype });
+              await c.reply.video({ url: 'https://exemplo.com/v.mp4' });
+            },
+          }),
+        );
+      },
+    });
+    const bot = await testBot({ plugins: [plugin] });
+    await bot.receive({ text: '!tudo' });
+
+    const videos = bot.sentMedia('video');
+    expect(videos.map((v) => v.bytes?.equals(fixtures.video().data) ?? null)).toEqual([true, null]);
+    expect(videos[1]?.content.media).toEqual({ url: 'https://exemplo.com/v.mp4' });
+    const [document] = bot.sentMedia('document');
+    expect(document?.content.fileName).toBe('a.pdf');
+    expect(document?.bytes?.equals(pdf.data)).toBe(true);
+    expect(document?.sent.quoted?.text).toBe('!tudo');
+    expect(bot.sentMedia('audio')).toEqual([]);
+    expect(bot).toContainVideo();
+    expect(bot).toContainDocument({ fileName: 'a.pdf', mimetype: 'application/pdf' });
   });
 });

@@ -39,6 +39,28 @@ describe('matchers', () => {
     expect([sent({ type: 'image', media })]).toContainImage();
   });
 
+  it('toContainVideo e toContainAudio olham o tipo; a nota de voz não é áudio', () => {
+    expect([sent({ type: 'video', media })]).toContainVideo();
+    expect([sent({ type: 'audio', media })]).toContainAudio();
+    expect([sent({ type: 'voice', media })]).not.toContainAudio();
+    expect([sent({ type: 'image', media })]).not.toContainVideo();
+  });
+
+  it('toContainDocument filtra por fileName e mimetype, texto ou RegExp', () => {
+    const records = [
+      sent({ type: 'document', media, fileName: 'juntos.pdf', mimetype: 'application/pdf' }),
+    ];
+
+    expect(records).toContainDocument();
+    expect(records).toContainDocument({ fileName: 'juntos.pdf' });
+    expect(records).toContainDocument({ fileName: /\.pdf$/, mimetype: 'application/pdf' });
+    expect(records).not.toContainDocument({ mimetype: 'application/zip' });
+    expect(() => expect(records).toContainDocument({ fileName: 'a.pdf' })).toThrow(
+      'esperava enviar um documento com fileName "a.pdf"; enviados:\n' +
+        '  - <document "juntos.pdf" application/pdf>',
+    );
+  });
+
   it('toHaveReplied exige citação; com texto, o conteúdo também', () => {
     expect([text('pong')]).not.toHaveReplied();
     expect([text('pong', true)]).toHaveReplied();
