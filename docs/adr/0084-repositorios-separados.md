@@ -1,7 +1,8 @@
 # ADR 0084 — Kernel e LumaBot em repositórios separados
 
 **Status:** Aceito (2026-10-10) · Substitui parte do **D01** ([ADR 0001](0001-monorepo-pnpm-workspaces.md)) ·
-Detalha o **D23** ([ADR 0023](0023-migracao-incremental-legacy.md))
+Detalha o **D23** ([ADR 0023](0023-migracao-incremental-legacy.md)) · Plugins oficiais no kernel:
+substituído pelo [ADR 0086](0086-plugins-da-luma-no-lumabot.md)
 
 ## Contexto
 

@@ -6,11 +6,12 @@ registradas; para mudar uma, proponha um ADR novo que a substitua.
 
 ## Onde você está
 
-- **Kernel** (`packages/*`, `plugins/*`): pnpm workspace, TypeScript, Node 24+. Setup,
-  comandos, layout de pacote, imports e regras do Biome estão no `README.md` — leia antes de
-  criar ou mexer num pacote.
-- O LumaBot (app de referência e `legacy/`) vive em `murillous/LumaBot` e usa os pacotes do npm
-  ([ADR 0084](docs/adr/0084-repositorios-separados.md)).
+- **Kernel** (`packages/*`): pnpm workspace, TypeScript, Node 24+. Setup, comandos, layout de
+  pacote, imports e regras do Biome estão no `README.md` — leia antes de criar ou mexer num
+  pacote.
+- O LumaBot (app de referência, plugins da Luma e `legacy/`) vive em `murillous/LumaBot` e usa
+  os pacotes do npm ([ADR 0084](docs/adr/0084-repositorios-separados.md),
+  [ADR 0086](docs/adr/0086-plugins-da-luma-no-lumabot.md)). O kernel não publica plugins.
 
 ## Git
 

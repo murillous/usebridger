@@ -1,6 +1,6 @@
 # Release dos pacotes
 
-Como os pacotes publicáveis (`packages/*`, `plugins/*` sem `private`) saem para o npm. O porquê
+Como os pacotes publicáveis (`packages/*` sem `private`) saem para o npm. O porquê
 está nos ADRs [0082](adr/0082-release-a-partir-de-develop.md) e
 [0085](adr/0085-release-a-partir-da-main.md); o changeset de cada PR, no
 [`.changeset/README.md`](../.changeset/README.md).
@@ -35,7 +35,7 @@ O `workflow_dispatch` roda o mesmo fluxo à mão, só a partir da `main`.
 | --- | --- | --- |
 | Variável do repositório | `RELEASE_APP_ID` | ID do GitHub App que abre o PR de versão |
 | Secret do repositório | `RELEASE_APP_PRIVATE_KEY` | Chave privada (`.pem`) do App |
-| Secret do repositório | `NPM_TOKEN` | **Só no bootstrap** de um pacote novo; apague depois |
+| Secret do repositório | `NPM_TOKEN` | **Só no bootstrap** de um pacote novo, com bypass de 2FA; apague depois |
 | Settings → Actions → General | "Allow GitHub Actions to create and approve pull requests" | Exigido pela `changesets/action` |
 
 ### GitHub App
@@ -64,12 +64,24 @@ O Trusted Publishing não cria pacote: só publica num pacote que já existe.
 Vale para a primeira publicação do repositório e para cada pacote novo depois dela.
 
 1. No npm, crie um token **granular** com permissão de publish só nos pacotes do release
-   (`@usebridger/*` e `create-bridger-plugin`) e validade curta. Salve-o como o secret `NPM_TOKEN`.
+   (`@usebridger/*` e `create-bridger-plugin`), validade curta e **Bypass two-factor
+   authentication (2FA)** marcado. Salve-o como o secret `NPM_TOKEN`.
 2. Faça o merge do PR de versão. O workflow escreve o token no `~/.npmrc` do runner e publica.
 3. Configure o Trusted Publisher em cada pacote recém-criado (seção acima).
 4. Apague o secret `NPM_TOKEN` e revogue o token no npm.
 
 Sem o secret, o passo do token não faz nada e o publish segue pelo OIDC.
+
+O bypass vem desmarcado por padrão. Sem ele, numa conta com 2FA, o publish falha com
+`ERR_PNPM_OTP_NON_INTERACTIVE`: o npm pede o código e o runner não tem como responder. Para
+corrigir, crie outro token com o bypass, troque o secret e rode de novo só o job que falhou
+(`gh run rerun <id> --failed`), sem novo merge.
+
+O GitHub anunciou que, a partir de janeiro de 2027, tokens com bypass de 2FA deixam de publicar
+direto: só preparam um publish, que um mantenedor aprova com 2FA
+([changelog](https://github.blog/changelog/2026-07-31-restricting-npm-bypass-2fa-granular-access-tokens)).
+Daí em diante, o bootstrap de um pacote novo pede essa aprovação manual. Em regime, nada muda,
+porque o Trusted Publishing não usa token.
 
 ## Ensaio local
 
@@ -78,8 +90,8 @@ Para conferir o que sairia, sem publicar:
 ```sh
 pnpm version-packages          # numa cópia descartável (git worktree): consome os changesets
 pnpm build
-pnpm check:packages            # publint e metadados de cada pacote publicável
-pnpm -r --filter "./packages/*" --filter "./plugins/*" publish --dry-run --no-git-checks
+pnpm check:packages            # publint, metadados e README de cada pacote publicável
+pnpm -r --filter "./packages/*" publish --dry-run --no-git-checks
 ```
 
 Descarte a cópia depois: o PR de versão real sai do workflow.

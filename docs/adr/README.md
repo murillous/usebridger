@@ -42,6 +42,7 @@ sendo a referência; um ADR novo entra nos dois.
 - [0083](0083-nome-bridger.md) — Nome: Bridger, no escopo `@usebridger` (substitui D31)
 - [0084](0084-repositorios-separados.md) — Kernel e LumaBot em repositórios separados (substitui parte do D01)
 - [0085](0085-release-a-partir-da-main.md) — Release a partir da `main`, com `develop` como integração (substitui parte do D82)
+- [0086](0086-plugins-da-luma-no-lumabot.md) — Plugins da Luma no LumaBot; o kernel não publica plugins (substitui parte do D84)
 
 **Bot, sessão e escopo do core**
 
@@ -207,5 +208,6 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0081](0081-create-bridger-plugin.md) | D81 | `create-bridger-plugin`: scaffold sem dependências, template com o plugin portátil na forma curta e aceite por e2e sobre os tarballs (detalha D22) | Aceito |
 | [0082](0082-release-a-partir-de-develop.md) | D82 | Release a partir de `develop`: gate no mesmo job, Trusted Publishing no npm com bootstrap por token e PR de versão aberto por GitHub App (detalha D27) | Aceito |
 | [0083](0083-nome-bridger.md) | D83 | Nome: Bridger, no escopo `@usebridger/*`, com `create-bridger-plugin`, `BRIDGER_*` e schema Postgres `bridger` (substitui D31) | Aceito |
-| [0084](0084-repositorios-separados.md) | D84 | Kernel em `murillous/usebridger` e LumaBot (`apps/lumabot`, `legacy/`, deploy) em `murillous/LumaBot`; o app usa os pacotes do npm (substitui parte do D01, detalha D23) | Aceito |
+| [0084](0084-repositorios-separados.md) | D84 | Kernel em `murillous/usebridger` e LumaBot (`apps/lumabot`, `legacy/`, deploy) em `murillous/LumaBot`; o app usa os pacotes do npm (substitui parte do D01, detalha D23) | Aceito (plugins oficiais: ADR 0086) |
 | [0085](0085-release-a-partir-da-main.md) | D85 | Release a partir da `main`: PR `develop` → `main`, PR de versão contra a `main` e PR de volta aberta pelo `release.yml`, sempre com merge commit (substitui parte do D82) | Aceito |
+| [0086](0086-plugins-da-luma-no-lumabot.md) | D86 | Plugins da Luma no LumaBot: o kernel não publica plugins, e os do M4 e do M5 viram código do app sobre os pacotes do npm (substitui parte do D84 e o `plugins/*` do D01) | Aceito |
