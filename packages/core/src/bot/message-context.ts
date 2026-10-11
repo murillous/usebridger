@@ -11,6 +11,7 @@ import type { Message } from '#message/types.ts';
 import type { SanitizedContext, SanitizedFields } from '#middleware/sanitize.ts';
 import { createReply, type PrepareActions } from '#outbound/reply.ts';
 import type { Outbound, Reply } from '#outbound/types.ts';
+import type { MessageText, MessageValues } from '#plugin/messages.ts';
 import type { JsonValue } from '#storage/types.ts';
 import type { MessageKey } from '#transport/types.ts';
 
@@ -19,6 +20,8 @@ export interface MessageContextDeps {
   readonly sender: Outbound;
   /** Responder citando: só se o transport tem a capability `quoted`. */
   readonly quote: boolean;
+  /** O transport tem a capability `reactions`; sem ela, `react` vira no-op (ADR 0093). */
+  readonly reactions: boolean;
   /** Logger raiz; o contexto cria o filho com `chatId` sob demanda. */
   readonly log: () => Logger;
   /**
@@ -77,8 +80,15 @@ class MessageContextImpl implements KernelMessageContext {
   }
 
   react(emoji: string | null): Promise<void> {
+    const { deps } = this[STATE];
+    // Reação aqui é enfeite de andamento: sem a capability, não falha. Quem precisa saber que
+    // não saiu usa o `ctx.send.react`, que continua estrito (ADR 0093).
+    if (!deps.reactions) {
+      this.log.debug('react ignorado: o transport não tem a capability "reactions"', { emoji });
+      return Promise.resolve();
+    }
     // Prioridade do `reply`: a reação responde a quem escreveu, como ele.
-    return this[STATE].deps.sender.react(this.message.key, emoji, { priority: 'high' });
+    return deps.sender.react(this.message.key, emoji, { priority: 'high' });
   }
 }
 
@@ -289,18 +299,39 @@ export interface CommandViews {
   run<C extends object>(ctx: C, deadline: Deadline): C;
 }
 
+/** Texto das `messages` do plugin para o chat de uma mensagem (ADR 0092). */
+export type PluginText = (message: Message, key: string, values?: MessageValues) => string;
+
 /**
- * Descritores comuns às execuções que respondem a uma mensagem (comando e passo): `log` do
+ * Descritor do `t`: a função presa à mensagem da visão, criada no primeiro acesso e fixada, para
+ * `({ t }) => ...` funcionar desestruturado.
+ */
+function textDescriptor(text: PluginText): PropertyDescriptor {
+  return {
+    configurable: true,
+    get(this: { readonly message: Message }): MessageText {
+      const { message } = this;
+      const t: MessageText = (key, values) => text(message, key, values);
+      Object.defineProperty(this, 't', { value: t });
+      return t;
+    },
+  };
+}
+
+/**
+ * Descritores comuns às execuções que respondem a uma mensagem (comando e passo): `log` e `t` do
  * plugin, `signal`, e `reply`, `react` e `expectReply` presos ao prazo.
  */
 function executionDescriptors<V extends ExpiringView & { readonly message: Message }>(
   plugin: string,
   pluginLog: Logger,
   expect: PluginExpect,
+  text: PluginText,
   scope: Scope<V>,
 ): PropertyDescriptorMap {
   return {
     log: pluginLogDescriptor(pluginLog),
+    t: textDescriptor(text),
     signal: signalDescriptor,
     reply: expiringReplyDescriptor<V>(
       plugin,
@@ -327,13 +358,14 @@ export function commandViewFactory(
   plugin: string,
   pluginLog: Logger,
   expect: PluginExpect,
+  text: PluginText,
 ): CommandViews {
   type View = ExpiringView & { readonly command: string; readonly message: Message };
   const scope: Scope<View> = (view) => ({
     label: `comando "${view.command}"`,
     fields: { command: view.command },
   });
-  const runDescriptors = executionDescriptors<View>(plugin, pluginLog, expect, scope);
+  const runDescriptors = executionDescriptors<View>(plugin, pluginLog, expect, text, scope);
   return {
     run(ctx, deadline) {
       const view = Object.create(ctx, runDescriptors) as { [DEADLINE]?: Deadline };
@@ -351,13 +383,14 @@ export function stepViewFactory(
   plugin: string,
   pluginLog: Logger,
   expect: PluginExpect,
+  text: PluginText,
 ): <C extends object>(ctx: C, deadline: Deadline, step: string, data: JsonValue) => C {
   type View = ExpiringView & { readonly step: string; readonly message: Message };
   const scope: Scope<View> = (view) => ({
     label: `passo "${view.step}"`,
     fields: { step: view.step },
   });
-  const descriptors = executionDescriptors<View>(plugin, pluginLog, expect, scope);
+  const descriptors = executionDescriptors<View>(plugin, pluginLog, expect, text, scope);
   return (ctx, deadline, step, data) => {
     const view = Object.create(ctx, descriptors) as { [DEADLINE]?: Deadline };
     Object.assign(view, { step, data });
@@ -394,6 +427,7 @@ export function listenerViewFactory(
   plugin: string,
   pluginLog: Logger,
   expect: PluginExpect,
+  text: PluginText,
 ): <C extends object>(ctx: C) => C {
   type View = Partial<WithKernelContext> &
     ExpiringView & {
@@ -429,6 +463,7 @@ export function listenerViewFactory(
     react: expiringReactDescriptor<View>(plugin, kernel, scope),
     expectReply: expectReplyDescriptor<View>(plugin, expect, scope),
     log: pluginLogDescriptor(pluginLog),
+    t: textDescriptor(text),
   } satisfies Record<keyof MessageListenerFields, PropertyDescriptor>;
   return (ctx) => Object.create(ctx, descriptors);
 }

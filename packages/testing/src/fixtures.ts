@@ -43,6 +43,18 @@ export const fixtures = {
       'image/webp',
       'UklGRi4AAABXRUJQVlA4TCIAAAAv/8F/AAdQs8p0uf8BgUCyv/cMRfQ/4z//+c9//vOf//wf',
     ),
+  /** WebP animado 512×512, 2 quadros de 500 ms em loop: a figurinha animada do WhatsApp. */
+  animatedSticker: (): MediaFixture =>
+    fixture(
+      'image/webp',
+      'UklGRqgAAABXRUJQVlA4WAoAAAACAAAA/wEA/wEAQU5JTQYAAAD/////AABBTk1GOgAAAAAAAAAAAP8BAP8BAPQBAAJWUDhMIgAAAC//wX8AB1CzzpS5/wGBQLK/9wxF9D/jP//5z3/+85///B9BTk1GOgAAAAAAAAAAAP8BAP8BAPQBAABWUDhMIgAAAC//wX8AB1CzMnem/wGBQLK/9wxF9D/jP//5z3/+85///B8=',
+    ),
+  /** GIF animado 16×16, 2 quadros de 500 ms em loop. */
+  gif: (): MediaFixture =>
+    fixture(
+      'image/gif',
+      'R0lGODlhEAAQAIAAAExpcTNmzCH/C05FVFNDQVBFMi4wAwEAAAAh+QQFMgAAACwAAAAAEAAQAAACDoyPqcvtD6OctNqLsz4FACH5BAUyAAAALAAAAAAQABAAgExpccxmMwIOjI+py+0Po5y02ouzPgUAOw==',
+    ),
   /** PDF de uma página em branco. */
   document: (): MediaFixture =>
     fixture(

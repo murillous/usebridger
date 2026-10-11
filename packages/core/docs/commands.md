@@ -27,7 +27,10 @@ const sticker = command({
 `command()` valida nome e aliases na hora (não vazios, sem espaço) e devolve a definição.
 `registry.add` (e o `ctx.commands.add` do plugin) repete a validação, então uma definição literal
 que não passou por `command()` também falha no boot com `TypeError`, em vez de nunca casar. Um
-`timeoutMs` que não seja finito e > 0 falha do mesmo jeito, com `RangeError`.
+`timeoutMs` que não seja finito e > 0 falha do mesmo jeito, com `RangeError`, assim como um
+`concurrency` que não seja inteiro >= 1. Uma entrada de `accepts` com mimetype inválido falha com
+`TypeError` ([`accepts` e `ctx.media`](#accepts-e-ctxmedia)), assim como uma capability
+desconhecida em `requires`.
 O nome vai **sem** o prefixo.
 
 No bot, o `run` que devolve texto (string ou `fmt`) responde com ele, citando a mensagem: o mesmo
@@ -156,6 +159,7 @@ O contexto do `run` (`CommandContext`) estende `MessageContext` com:
 | `text` | Texto de trabalho que casou (ver [Match](#match)) |
 | `reply` | Responde no chat, citando a mensagem, pela fila de saída |
 | `log` | Logger com `plugin` (o dono do comando) e `chatId` |
+| `t` | Texto de `messages` do plugin com os placeholders preenchidos: `{prefix}` do chat e os valores passados ([Config](config.md#placeholders)) |
 | `command` | Nome canônico do comando casado |
 | `invokedAs` | Token digitado (nome ou alias), em minúsculas |
 | `args` | Argumentos já quebrados (ver abaixo) |
@@ -179,6 +183,24 @@ Cada entrada é um `MessageType` da própria mensagem (`'image'`) ou da citada
 (`'quoted:image'`). A **primeira entrada que casar, na ordem declarada**, vence e define
 `ctx.accepted` e `ctx.media` (a mídia daquela mensagem; `null` para tipos sem mídia, como
 `'quoted:text'`). Para preferir a mídia própria, liste os tipos próprios antes dos `quoted:*`.
+
+Um tipo com mídia (`image`, `video`, `audio`, `voice`, `sticker`, `document`) pode restringir o
+mimetype depois de mais um `:`, exato ou com curinga no subtipo:
+
+```ts
+command({
+  name: 'mergepdf',
+  accepts: ['document:application/pdf', 'quoted:document:application/pdf'],
+  onReject: () => 'Mande ou responda um PDF',
+  run: async (ctx) => { /* ctx.media é um PDF */ },
+});
+// 'video:video/*', 'image:image/gif', 'quoted:audio:audio/ogg'
+```
+
+A comparação usa só a essência do mimetype, sem diferenciar caixa: `audio/ogg; codecs=opus` casa
+com `'audio:audio/ogg'`. A mídia de outro mimetype não casa aquela entrada, e o roteador tenta a
+próxima; se nenhuma casar, a recusa vai ao `onReject` como sempre. Mimetype mal formado, ou num
+tipo sem mídia (`'text:text/plain'`), falha na definição com `TypeError`.
 
 Sem `accepts`, qualquer mensagem passa; `ctx.media` é a mídia própria ou, na falta dela, a da
 citada.
@@ -272,6 +294,7 @@ mensagem.
 | `ran` | `true` | `command` |
 | `rejected` | `true` | `command`, `rejection`, `reply` |
 | `failed` | `true` | `command`, `error` (de `run`, `onReject` ou `isGroupAdmin`, ou o prazo de um deles no bot) |
+| `background` | `true` | `command`, `done` (comando com `background: true`: resolve com `ran` ou `failed` quando o `run` termina, nunca rejeita) |
 
 `command` é `{ plugin, name, invokedAs }`. Quem chama decide o destino do erro de `failed`; no
 bot, vira `plugin.error` (`phase: 'command'`) e log em `error`.
@@ -299,10 +322,86 @@ command({
 ```
 
 Enquanto roda, o comando segura o chat dele ([ADR 0042](../../../docs/adr/0042-handler-lento-segura-o-chat.md)):
-um prazo de 5 min deixa as mensagens seguintes daquele chat esperando até 5 min. Se o grupo não
-deve esperar, responda "baixando…" e solte o trabalho do `run`, como no
-[padrão dos listeners](events.md#trabalho-longo-solte-o-chat). A consulta de admin e os papéis
-custom seguem com o `commandMs`.
+um prazo de 5 min deixa as mensagens seguintes daquele chat esperando até 5 min. A consulta de
+admin e os papéis custom seguem com o `commandMs`.
+
+### Comando em segundo plano
+
+Se o grupo não deve esperar, declare `background: true`
+([ADR 0087](../../../docs/adr/0087-comando-em-segundo-plano.md)). Papel, `accepts` e `onReject`
+continuam na fila do chat; o `run` começa ali e a próxima mensagem do chat segue sem esperá-lo:
+
+```ts
+command({
+  name: 'download',
+  background: true,
+  timeoutMs: 240_000,
+  run: async (c) => {
+    await c.reply('baixando…');
+    const video = await baixar(c.rawArgs, { signal: c.signal });
+    await c.reply.video(video); // cita a mensagem original
+  },
+});
+```
+
+O `run` mantém tudo o que teria na fila: `reply`, `react`, `log`, `expectReply` e o `signal` com o
+`timeoutMs`. A falha, inclusive o prazo, vai para `plugin.error`, e o evento `command` sai quando o
+`run` termina, com `ran` ou `failed`. O `bot.settled()` espera o `run`. No reload ou no `stop()`, o
+`signal` aborta quando o plugin desce; o `run` não é drenado.
+
+Em troca, o `run` não tem ordem com as mensagens seguintes, e duas execuções do mesmo chat podem
+terminar fora de ordem. Quem guarda estado por conversa e precisa de ordem não usa `background`.
+
+### Limite de concorrência
+
+O rate limit de entrada conta mensagens, não custo, e a fila paraleliza entre chats: dez chats
+mandando `!download` sobem dez yt-dlp juntos. `concurrency` põe um teto de `run` simultâneos do
+comando no bot, somando todos os chats
+([ADR 0088](../../../docs/adr/0088-limite-de-concorrencia-por-comando.md)):
+
+```ts
+command({
+  name: 'download',
+  background: true,
+  concurrency: 2, // no máximo dois downloads ao mesmo tempo
+  timeoutMs: 240_000,
+  run: async (c) => {
+    const video = await baixar(c.rawArgs, { signal: c.signal });
+    await c.reply.video(video);
+  },
+});
+```
+
+A execução excedente espera a vez em ordem de chegada, depois do papel e do `accepts`. A espera
+conta no `timeoutMs`: estourado na fila, o `run` nem começa, e sai o `plugin.error` com
+`CommandTimeoutError` de sempre. A vaga volta quando o `run` termina de fato, não quando o prazo
+estoura: um `run` que ignora o `signal` continua ocupando a CPU e a vaga. Sem `background`, quem
+espera segura o chat dele, como o `run` seguraria; com `background`, a espera também sai da fila
+do chat.
+
+O teto é por registro do comando: no reload, o plugin novo começa com o teto inteiro, e os `run`
+antigos ainda vivos não contam nele. O roteador solto ignora `concurrency`, como o `timeoutMs`.
+
+### Capability por comando
+
+O `requires` do plugin vale para ele inteiro: num plugin com comandos que enviam tipos diferentes,
+exigir tudo derruba os que funcionariam. `requires` no comando exige a capability só dele
+([ADR 0090](../../../docs/adr/0090-requires-por-comando.md)):
+
+```ts
+ctx.commands.add(command({
+  name: 'figurinha',
+  requires: ['send.sticker'],
+  run: async (c) => { /* ... */ },
+}));
+```
+
+Sem alguma delas, o comando não é registrado: não casa no roteador, fica fora do
+`ctx.commands.list()` e do menu nativo da plataforma, e o resto do plugin sobe normalmente. Um log
+`info` com `command` e `missing` registra o comando deixado de fora. Quem digita o comando recebe
+o mesmo que receberia de um comando que não existe. A definição continua validada mesmo sem a
+capability, então um nome inválido falha em qualquer transport. O roteador solto ignora
+`requires`, como o `timeoutMs`.
 
 Para perguntar algo e tratar a resposta, o `run` não espera a próxima mensagem: ela está na fila
 atrás dele. Ele envia a pergunta, chama `c.expectReply(passo)` e termina, e a resposta vai ao

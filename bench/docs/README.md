@@ -11,7 +11,7 @@ Na raiz:
 pnpm bench                              # todos os cenários (~3 min)
 pnpm bench --only overhead,boot         # só alguns
 pnpm bench --out resultado.json         # grava o resultado em JSON (caminho relativo a bench/)
-pnpm bench --baseline base.json         # compara com o --out de outra execução
+pnpm bench --baseline ../../base        # compara com um checkout buildado da base, intercalado
 ```
 
 O `pnpm bench` faz o build do workspace e roda `bench/dist/main.mjs`. O benchmark mede o código
@@ -20,15 +20,15 @@ que soma ~14 MB de RSS e estoura a meta de memória ociosa sem ter nada a ver co
 de mudar o core, rode o `pnpm bench` da raiz (que refaz o build), e não o script do pacote.
 
 Cada execução de cenário roda num processo novo: memória e boot dependem de o processo não ter
-carregado nada antes. O valor reportado é a mediana das execuções. Se algum cenário fica fora da
-meta, o comando sai com código 1.
+carregado nada antes. O valor reportado é a mediana das execuções, e é ela que vale para a meta.
+Se algum cenário fica fora da meta, o comando sai com código 1.
 
 ```
-overhead       0.215 ms (meta < 1; execuções: 0.221, 0.215, 0.211) ok
-throughput     12693 msg/s (meta ≥ 5000; execuções: 12693, 12883, 12546) ok
-idle-memory    73.8 MB (meta < 80; execuções: 73.9, 73.8, 73.7) ok
-memory-growth  -0.231 MB (meta < 5; execuções: -0.231) ok
-boot           29.6 ms (meta < 500; execuções: 28.5, 25.0, 31.4, 29.6, 39.0) ok
+overhead       0.158 ms (meta < 1; execuções: 0.171, 0.147, 0.161, 0.211, 0.159, 0.149, 0.158, 0.144, 0.156) ok
+throughput     13763 msg/s (meta ≥ 5000; execuções: 13774, 13756, 13971, 13763, 13664) ok
+idle-memory    74.1 MB (meta < 80; execuções: 74.3, 74.3, 74.2, 74.0, 74.0, 73.9, 74.0, 74.3, 74.2, 74.2, 73.7, 74.0, 73.7, 74.1, 74.2) ok
+memory-growth  -0.202 MB (meta < 5; execuções: -0.202) ok
+boot           27.2 ms (meta < 500; execuções: 32.7, 29.5, 25.8, 27.1, 27.7, 27.2, 27.4, 26.9, 26.7, 27.1, 27.6, 29.4, 28.3, 26.9, 27.3, 26.9, 27.6, 26.1, 26.4, 26.2, 27.6, 27.2, 29.5, 28.2, 26.0) ok
 ```
 
 ## Bot de referência
@@ -74,49 +74,84 @@ Como ler as metas:
   10 MB acima do medido no Windows.
 - **`overhead`** inclui o custo do `settled()`, então é um teto do overhead real.
 
-O ruído de máquina compartilhada é compensado pelas execuções repetidas (mediana) e pela margem
-de 10% do job de CI.
+O `boot` mede também o primeiro uso do Zod pelas configs dos plugins, como num processo de
+produção. Por isso o runner não cria schema Zod ao carregar: aquecido antes da medida, o Zod
+tirava ~3 ms (12%) do `boot`.
 
 ## Comparar com um baseline
 
-Com `--baseline <arquivo>`, o runner lê o JSON gravado pelo `--out` de outra execução e, depois
-de medir, compara cada cenário com a mesma medida no baseline. O comando sai com código 1 se um
-cenário piorou mais de 10%. A piora é medida no sentido da meta: subir num teto (`overhead`,
-`idle-memory`, `boot`), cair num piso (`throughput`).
+Com `--baseline <dir>`, o runner recebe um checkout da base já buildado (`pnpm install` e
+`pnpm build` nele) e roda o `bench/dist/main.mjs` dela junto com o seu, intercalados: em cada
+cenário, base e commit testado se revezam execução a execução, e a ordem dentro do par inverte a
+cada rodada (base, testado; testado, base; ...). Um aquecimento da máquina, um vizinho no runner
+ou uma mudança de frequência da CPU no meio do benchmark pesam igual nos dois lados, em vez de
+cair inteiros num deles ([ADR 0089](../../docs/adr/0089-benchmark-intercalado.md)).
+
+A comparação usa o **quartil bom** de cada lado, no sentido da meta: o p25 num teto (`overhead`,
+`idle-memory`, `boot`), o p75 num piso (`throughput`). O ruído da máquina puxa a medida para o lado
+ruim, e a mediana carrega ele. A melhor execução também não serve: uma execução rápida demais
+aparece num lado e não no outro. A mediana continua valendo para a meta. O comando sai com código
+1 se um cenário piorou mais de 10%.
 
 ```
-Comparação com o baseline (tolerância 10%):
-overhead       0.293 → 0.290 (-1.1% melhor) ok
-boot           24.3 → 25.1 (+3.3% pior) ok
-idle-memory    70.2 → 70.6 (+0.5% pior) ok
-memory-growth  -0.231 → 0.104 (vale só a meta)
-throughput     11233 (sem baseline)
+Comparação com o baseline, pelo quartil bom (tolerância 10%):
+overhead       0.151 → 0.149 (-1.2% melhor; base: 0.168, 0.169, 0.156, 0.151, 0.163, 0.177, 0.156, 0.145, 0.141) ok
+throughput     13884 → 13774 (+0.8% pior; base: 14059, 13800, 13884, 13825, 13686) ok
+idle-memory    73.9 → 74.0 (+0.1% pior; base: 74.1, 74.1, 74.2, 74.0, 73.9, 74.0, 73.9, 73.5, 74.1, 73.8, 74.1, 74.0, 73.7, 73.9, 74.3) ok
+memory-growth  -0.202 (vale só a meta)
+boot           26.7 → 26.9 (+0.7% pior; base: 29.5, 28.6, 28.7, 28.1, 26.8, 25.6, 26.7, 27.2, 27.0, 27.0, 27.0, 26.7, 27.1, 25.9, 27.3, 27.1, 26.6, 27.3, 26.1, 26.7, 26.8, 26.8, 28.8, 27.7, 26.6) ok
 ```
 
-- O `memory-growth` não entra na comparação (`checksRegression: false`). Perto de zero, 10% do
-  baseline é menos que o ruído do heap. A meta de < 5 MB é a régua dele.
-- Um cenário que o baseline não tem passa sem comparação.
-- O arquivo é lido antes de medir: um caminho errado falha na hora.
+- O `memory-growth` não entra na comparação (`checksRegression: false`), e a base nem roda nele.
+  Perto de zero, 10% do baseline é menos que o ruído do heap. A meta de < 5 MB é a régua dele.
+- Um cenário que a base não conhece passa sem comparação (`sem baseline`).
+- O caminho é conferido antes de medir: sem o `bench/dist/main.mjs` na base, falha na hora.
+- Um PR que muda o próprio runner compara o runner novo com o antigo. Se a mudança mexe no que
+  roda antes da medida (como um import que aquece o Zod), a comparação daquele PR mede isso, e
+  não o kernel.
 
-Para medir o efeito de uma mudança na sua máquina, grave o baseline antes dela e compare depois:
+Para medir o efeito de uma mudança na sua máquina, monte a base num `git worktree`:
 
 ```sh
-git stash && pnpm bench --out base.json && git stash pop
-pnpm bench --baseline base.json
+git worktree add ../base develop
+(cd ../base && pnpm install --frozen-lockfile && pnpm build)
+pnpm bench --baseline ../../base     # relativo a bench/
+git worktree remove ../base
 ```
+
+## Medir localmente
+
+O intercalado compensa a mudança da máquina ao longo do benchmark, mas não o ruído de cada
+execução. Num notebook ou desktop em uso, prepare a máquina antes de medir:
+
+- **Governador de CPU em `performance`**: no `powersave`, a frequência varia com a carga e a
+  primeira execução de cada par sai mais lenta. `sudo cpupower frequency-set -g performance` (e
+  volte para o anterior depois; `cpupower frequency-info` mostra qual é).
+- **Um núcleo para o benchmark**: `taskset -c 3 pnpm bench --baseline ../../base`. Fixar o
+  núcleo evita a migração entre núcleos, mas não tira outros processos dele. Só o `isolcpus` (no
+  boot do kernel) reserva o núcleo de fato; `docker run --cpuset-cpus` tem a mesma limitação do
+  `taskset`.
+- **Feche o que pesa**: navegador, IDE indexando, build, sincronização de arquivos. Com o
+  notebook, ligue na tomada.
+
+Com a máquina preparada, duas comparações com o mesmo código na base e no commit testado ficam
+dentro de ±5% em todos os cenários com `checksRegression`. Se não ficarem, o ruído da máquina
+ainda é maior que o que você quer medir.
 
 ## No CI
 
 O job `Benchmark` (`.github/workflows/ci.yml`) mede o baseline no próprio runner
-([ADR 0054](../../docs/adr/0054-baseline-do-benchmark.md)). Entre máquinas diferentes, a
+([ADR 0054](../../docs/adr/0054-baseline-do-benchmark.md)), intercalado com o commit testado
+([ADR 0089](../../docs/adr/0089-benchmark-intercalado.md)). Entre máquinas diferentes, a
 variação passa dos 10%, então um baseline versionado ou de outro job não serviria.
 
-1. Faz o build do primeiro pai do commit testado num `git worktree` e roda o benchmark com
-   `--out`. No PR, o primeiro pai do merge commit é a ponta da base; no push, é o commit anterior.
-2. Roda `pnpm bench --baseline` no commit testado.
+1. `Build da base`: faz o build do primeiro pai do commit testado num `git worktree`. No PR, o
+   primeiro pai do merge commit é a ponta da base; no push, é o commit anterior.
+2. `Benchmark`: roda `pnpm bench --baseline` com o worktree da base.
 
 O job falha se algum cenário ficar fora da meta ou piorar mais de 10%. Se a base não tem `bench/`,
-vale só a meta. O log do passo `Benchmark` mostra a tabela da comparação.
+vale só a meta. O log do passo `Benchmark` mostra a tabela da comparação, com as execuções da
+base.
 
 Se o job falhar com uma piora que você não esperava, rode a mesma comparação localmente (acima)
 antes de concluir que é ruído.

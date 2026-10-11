@@ -31,6 +31,8 @@ interface FakeMessage {
   chatId?: string;
   isGroup?: boolean;
   quoted?: Message | null;
+  /** Mimetype da mídia; padrão `<tipo>/x`. */
+  mimetype?: string;
 }
 
 // O roteador só lê type/text/chat/sender/quoted/media; o resto da union não importa aqui.
@@ -42,6 +44,7 @@ function fakeMessage({
   chatId = 'chat',
   isGroup = false,
   quoted = null,
+  mimetype = `${type}/x`,
 }: FakeMessage): Message {
   const message = {
     type,
@@ -57,7 +60,7 @@ function fakeMessage({
     isViewOnce: false,
     isEdited: false,
     is: (t: MessageType) => t === type,
-    ...(MEDIA_TYPES.has(type) ? { media: fakeMedia(`${type}/x`) } : {}),
+    ...(MEDIA_TYPES.has(type) ? { media: fakeMedia(mimetype) } : {}),
   };
   return message as unknown as Message;
 }
@@ -303,6 +306,54 @@ describe('roteador: accepts e media', () => {
     expect(calls[0]?.media).toBeNull();
   });
 
+  it('com mimetype, casa só a mídia dele, inclusive na citada', async () => {
+    const router = createCommandRouter();
+    const onReject = vi.fn(() => 'Mande um PDF');
+    const { def, calls } = spyCommand({
+      accepts: ['document:application/pdf', 'quoted:document:application/pdf'],
+      onReject,
+    });
+    router.registry.add('media', def);
+    const pdf = fakeMessage({ type: 'document', mimetype: 'application/pdf' });
+
+    await router.dispatch(ctxOf({ type: 'document', mimetype: 'application/pdf', text: '!s' }));
+    await router.dispatch(ctxOf({ text: '!s', quoted: pdf }));
+    const zip = await router.dispatch(
+      ctxOf({ type: 'document', mimetype: 'application/zip', text: '!s' }),
+    );
+
+    expect(calls.map((c) => c.accepted?.spec)).toEqual([
+      'document:application/pdf',
+      'quoted:document:application/pdf',
+    ]);
+    expect(calls[1]?.media?.mimetype).toBe('application/pdf');
+    expect(zip).toMatchObject({ status: 'rejected', reply: 'Mande um PDF' });
+  });
+
+  it('mimetype com curinga, sem diferenciar caixa e ignorando os parâmetros', async () => {
+    const router = createCommandRouter();
+    const { def, calls } = spyCommand({ accepts: ['video:video/*', 'audio:audio/ogg'] });
+    router.registry.add('media', def);
+
+    await router.dispatch(ctxOf({ type: 'video', mimetype: 'VIDEO/MP4', text: '!s' }));
+    await router.dispatch(ctxOf({ type: 'audio', mimetype: 'audio/ogg; codecs=opus', text: '!s' }));
+    await router.dispatch(ctxOf({ type: 'audio', mimetype: 'audio/oggx', text: '!s' }));
+    await router.dispatch(ctxOf({ type: 'image', mimetype: 'video/mp4', text: '!s' }));
+
+    expect(calls.map((c) => c.accepted?.spec)).toEqual(['video:video/*', 'audio:audio/ogg']);
+  });
+
+  it('a primeira entrada que casa ganha, com ou sem mimetype', async () => {
+    const router = createCommandRouter();
+    const { def, calls } = spyCommand({ accepts: ['image:image/gif', 'image'] });
+    router.registry.add('media', def);
+
+    await router.dispatch(ctxOf({ type: 'image', mimetype: 'image/jpeg', text: '!s' }));
+    await router.dispatch(ctxOf({ type: 'image', mimetype: 'image/gif', text: '!s' }));
+
+    expect(calls.map((c) => c.accepted?.spec)).toEqual(['image', 'image:image/gif']);
+  });
+
   it('sem accepts, resolve a mídia própria e, na falta, a citada', async () => {
     const router = createCommandRouter();
     const { def, calls } = spyCommand();
@@ -498,6 +549,72 @@ describe('roteador: erros', () => {
       status: 'failed',
       error: boom,
     });
+  });
+});
+
+describe('roteador: background (ADR 0087)', () => {
+  const MATCHED = { plugin: 'media', name: 'baixar', invokedAs: 'baixar' };
+
+  it('devolve antes de o run terminar, e done assenta com ran', async () => {
+    const router = createCommandRouter();
+    let finish: () => void = () => undefined;
+    router.registry.add(
+      'media',
+      command({
+        name: 'baixar',
+        background: true,
+        run: () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          }),
+      }),
+    );
+
+    const result = await router.dispatch(ctxOf({ text: '!baixar' }));
+    expect(result).toMatchObject({ consumed: true, status: 'background', command: MATCHED });
+    if (result.status !== 'background') throw new Error('esperava background');
+
+    finish();
+    expect(await result.done).toEqual({ consumed: true, status: 'ran', command: MATCHED });
+  });
+
+  it('erro do run, síncrono ou não, assenta done com failed', async () => {
+    const router = createCommandRouter();
+    const boom = new Error('boom');
+    router.registry.add(
+      'media',
+      command({
+        name: 'baixar',
+        background: true,
+        run: () => {
+          throw boom;
+        },
+      }),
+    );
+
+    const result = await router.dispatch(ctxOf({ text: '!baixar' }));
+    if (result.status !== 'background') throw new Error('esperava background');
+    expect(await result.done).toEqual({
+      consumed: true,
+      status: 'failed',
+      command: MATCHED,
+      error: boom,
+    });
+  });
+
+  it('a recusa continua síncrona: não há run em segundo plano', async () => {
+    const router = createCommandRouter();
+    const run = vi.fn();
+    router.registry.add(
+      'media',
+      command({ name: 'baixar', background: true, role: 'owner', onReject: () => 'não', run }),
+    );
+
+    expect(await router.dispatch(ctxOf({ text: '!baixar' }))).toMatchObject({
+      status: 'rejected',
+      reply: 'não',
+    });
+    expect(run).not.toHaveBeenCalled();
   });
 });
 

@@ -211,6 +211,29 @@ describe('createPluginConfigs: messages (ADR 0025)', () => {
     ]);
     expect(error.message).toContain('mensagem desconhecida; o plugin declara "needMedia", "done"');
   });
+
+  it('a sobrescrita só usa os placeholders do texto padrão, mais {prefix} (ADR 0092)', async () => {
+    const merge = plugin('merge', { messages: { added: 'PDF adicionado ({count}).' } });
+    const ok = await setup({
+      plugins: [merge],
+      env: { BRIDGER_MERGE__MESSAGES__ADDED: '{count} PDF(s); {prefix}mergepdf para juntar' },
+    });
+    expect((await ok.configs.resolve('merge')).messages['added']).toBe(
+      '{count} PDF(s); {prefix}mergepdf para juntar',
+    );
+
+    const bad = await setup({
+      plugins: [merge],
+      file: { merge: { messages: { added: 'PDF {total} adicionado ({count}), { ok }' } } },
+    });
+    const error = await configError(bad.configs.resolve('merge'));
+    expect(error.issues).toEqual([
+      expect.objectContaining({ path: 'messages.added', source: 'file' }),
+    ]);
+    expect(error.message).toContain(
+      'placeholder desconhecido {total}; a mensagem aceita {count}, {prefix}',
+    );
+  });
 });
 
 describe('createPluginConfigs: secrets', () => {

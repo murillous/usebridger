@@ -28,12 +28,14 @@ sendo a referência; um ADR novo entra nos dois.
 - [0026](0026-tooling.md) — Tooling: Node 24, pnpm, tsdown, Vitest, Biome
 - [0030](0030-metas-de-performance.md) — Metas de performance com benchmark no CI
 - [0054](0054-baseline-do-benchmark.md) — Baseline do benchmark medido no mesmo job, a partir do commit base (detalha D30)
+- [0089](0089-benchmark-intercalado.md) — Benchmark intercalado: base e commit testado se revezam, comparados pelo quartil bom (detalha D54)
 - [0034](0034-biblioteca-sem-runner.md) — Bridger é uma biblioteca, sem runner; API pública por público
 
 **Projeto: migração, licença, release e nome**
 
 - [0023](0023-migracao-incremental-legacy.md) — Migração incremental (`legacy/`)
 - [0025](0025-sem-i18n-objeto-messages.md) — Sem i18n formal na v1; objeto `messages`
+- [0092](0092-placeholders-nas-messages.md) — Placeholders nas `messages` e `ctx.t` (substitui em parte D25)
 - [0027](0027-releases-changesets.md) — Releases com Changesets
 - [0082](0082-release-a-partir-de-develop.md) — Release a partir de `develop`, Trusted Publishing no npm e PR de versão por GitHub App (detalha D27)
 - [0028](0028-licenca-apache-2.md) — Licença Apache-2.0
@@ -59,6 +61,7 @@ sendo a referência; um ADR novo entra nos dois.
 - [0045](0045-queda-de-rede-nao-limpa-sessao.md) — Queda de rede nunca limpa a sessão (detalha D03/D37)
 - [0048](0048-connect-resolve-ao-iniciar.md) — `connect()` resolve ao iniciar a tentativa; queda antes do fim não se perde (detalha D03/D39/D45)
 - [0050](0050-codigo-de-pareamento.md) — Código de pareamento chega por evento, como o QR (detalha D03/D13)
+- [0091](0091-log-legivel-e-baileys-em-warn.md) — Log legível no terminal e linhas do Baileys e do libsignal a partir de `warn` (detalha D13/D37)
 
 **Mensagem e identidade**
 
@@ -74,6 +77,8 @@ sendo a referência; um ADR novo entra nos dois.
 - [0042](0042-handler-lento-segura-o-chat.md) — Comando e listener lentos seguram o chat (detalha D05/D12)
 - [0043](0043-prazo-de-middleware.md) — Middleware do app tem prazo, contado fora do `next()` (detalha D12)
 - [0049](0049-evento-de-comando.md) — Evento `command`: o plugin observa o comando que consumiu a mensagem (detalha D12/D40)
+- [0087](0087-comando-em-segundo-plano.md) — Comando em segundo plano: `background: true` tira o `run` da fila do chat (detalha D42/D49)
+- [0090](0090-requires-por-comando.md) — `requires` por comando: sem a capability, o comando não é registrado (detalha D16/D64)
 
 **Plugins: carga, config, services e execução**
 
@@ -93,6 +98,7 @@ sendo a referência; um ADR novo entra nos dois.
 - [0019](0019-fila-de-saida-anti-ban.md) — Fila de saída anti-ban no core
 - [0039](0039-fila-de-saida-e-conexao.md) — Fila de saída pausa com a conexão caída e tem prazo por envio (detalha D19)
 - [0040](0040-acoes-do-transport-no-plugin.md) — Ações e leituras do transport chegam ao plugin pela API pública (detalha D16/D19)
+- [0093](0093-react-do-contexto-tolerante.md) — `react` do contexto sem a capability não faz nada e registra em `debug` (substitui em parte D40)
 - [0047](0047-espera-na-fila-de-saida-fora-do-prazo.md) — A espera na fila de saída não conta no prazo do handler (detalha D19/D33/D42)
 
 **Storage**
@@ -149,7 +155,7 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0022](0022-kit-de-autor.md) | D22 | Kit de autor na v1 | Aceito |
 | [0023](0023-migracao-incremental-legacy.md) | D23 | Migração incremental (`legacy/`) | Aceito |
 | [0024](0024-papeis-no-core.md) | D24 | Papéis no core | Aceito (papéis custom: ADR 0035) |
-| [0025](0025-sem-i18n-objeto-messages.md) | D25 | Sem i18n formal na v1; objeto `messages` | Aceito |
+| [0025](0025-sem-i18n-objeto-messages.md) | D25 | Sem i18n formal na v1; objeto `messages` | Aceito (placeholders: ADR 0092) |
 | [0026](0026-tooling.md) | D26 | Tooling: Node 24, pnpm, tsdown, Vitest, Biome | Aceito |
 | [0027](0027-releases-changesets.md) | D27 | Releases com Changesets | Aceito |
 | [0028](0028-licenca-apache-2.md) | D28 | Licença Apache-2.0 | Aceito |
@@ -164,7 +170,7 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0037](0037-transport-por-fabrica.md) | D37 | Transport recebe as dependências do bot por fábrica (detalha D03) | Aceito |
 | [0038](0038-filtro-de-eventos-no-kernel.md) | D38 | chatFilter e ignoreSelf valem para os eventos que não são mensagem (detalha D24) | Aceito |
 | [0039](0039-fila-de-saida-e-conexao.md) | D39 | Fila de saída pausa com a conexão caída e tem prazo por envio (detalha D19) | Aceito |
-| [0040](0040-acoes-do-transport-no-plugin.md) | D40 | Ações e leituras do transport chegam ao plugin pela API pública (detalha D16/D19) | Aceito |
+| [0040](0040-acoes-do-transport-no-plugin.md) | D40 | Ações e leituras do transport chegam ao plugin pela API pública (detalha D16/D19) | Aceito (atalho `react`: ADR 0093) |
 | [0041](0041-reload-em-cascata.md) | D41 | Reload de plugin em cascata pelos dependentes (detalha D17/D18) | Aceito |
 | [0042](0042-handler-lento-segura-o-chat.md) | D42 | Comando e listener lentos seguram o chat (detalha D05/D12) | Aceito |
 | [0043](0043-prazo-de-middleware.md) | D43 | Middleware do app tem prazo, contado fora do `next()` (detalha D12) | Aceito |
@@ -211,3 +217,10 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0084](0084-repositorios-separados.md) | D84 | Kernel em `murillous/usebridger` e LumaBot (`apps/lumabot`, `legacy/`, deploy) em `murillous/LumaBot`; o app usa os pacotes do npm (substitui parte do D01, detalha D23) | Aceito (plugins oficiais: ADR 0086) |
 | [0085](0085-release-a-partir-da-main.md) | D85 | Release a partir da `main`: PR `develop` → `main`, PR de versão contra a `main` e PR de volta aberta pelo `release.yml`, sempre com merge commit (substitui parte do D82) | Aceito |
 | [0086](0086-plugins-da-luma-no-lumabot.md) | D86 | Plugins da Luma no LumaBot: o kernel não publica plugins, e os do M4 e do M5 viram código do app sobre os pacotes do npm (substitui parte do D84 e o `plugins/*` do D01) | Aceito |
+| [0087](0087-comando-em-segundo-plano.md) | D87 | Comando em segundo plano: `background: true` tira o `run` da fila do chat e mantém o prazo, o `plugin.error`, o `command` e o `settled()` (detalha D42/D49) | Aceito |
+| [0088](0088-limite-de-concorrencia-por-comando.md) | D88 | Limite de concorrência por comando: `concurrency` põe um teto de `run` simultâneos no bot, a espera conta no prazo e a vaga só volta quando o `run` termina (detalha D05/D87) | Aceito |
+| [0089](0089-benchmark-intercalado.md) | D89 | Benchmark intercalado: base e commit testado se revezam no mesmo runner, a ordem inverte a cada rodada, e a comparação usa o quartil bom no sentido da meta (detalha D54) | Aceito |
+| [0090](0090-requires-por-comando.md) | D90 | `requires` por comando: sem a capability, o comando fica fora do roteador, do `ctx.commands.list()` e do menu nativo; o resto do plugin sobe (detalha D16/D64) | Aceito |
+| [0091](0091-log-legivel-e-baileys-em-warn.md) | D91 | Log legível no terminal (`format: 'pretty'`, formatador próprio sobre a linha já censurada) e linhas do Baileys e do `console` do libsignal a partir de `warn` (`baileys({ logLevel })`) (detalha D13/D37) | Aceito |
+| [0092](0092-placeholders-nas-messages.md) | D92 | Placeholders nas `messages` e `ctx.t`: `{prefix}` do chat e valores do plugin, sobrescrita validada contra o texto padrão (substitui em parte D25, detalha D63) | Aceito |
+| [0093](0093-react-do-contexto-tolerante.md) | D93 | `react` do contexto tolerante: sem a capability `reactions`, resolve sem reagir e registra em `debug`; o `ctx.send.react` continua estrito (substitui em parte D40) | Aceito |

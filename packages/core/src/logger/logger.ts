@@ -2,6 +2,7 @@
 // `Logger`/`LoggerOptions`, para trocar a implementação sem quebrar plugins.
 
 import { type Logger as PinoLogger, pino, stdSerializers } from 'pino';
+import { prettyDestination } from './pretty.ts';
 import type { SecretSource } from './secrets.ts';
 import type { LogFields, Logger, LogLevel } from './types.ts';
 
@@ -13,6 +14,13 @@ export interface LogDestination {
 export interface LoggerOptions {
   /** Nível mínimo emitido. Padrão: `'info'`. */
   readonly level?: LogLevel;
+  /**
+   * `'json'` (padrão): uma linha JSON por chamada, para agregador. Com `'pretty'`, cada linha
+   * sai como `14:03:22 INFO  [plugin] mensagem chave=valor`, com o `err` (stack e causas) nas
+   * linhas seguintes, e colorida quando vai ao stdout de um terminal. Os segredos são censurados
+   * igual.
+   */
+  readonly format?: 'json' | 'pretty';
   /** Destino das linhas. Padrão: stdout do processo. */
   readonly destination?: LogDestination;
   /** Campos presentes em toda linha deste logger e dos filhos (ex.: `{ app: 'meu-bot' }`). */
@@ -48,7 +56,7 @@ export const MIN_SECRET_LENGTH = 4;
  * campo `err` é serializado com `message`, `stack` e `cause`.
  */
 export function createLogger(options: LoggerOptions = {}): Logger {
-  const destination = withSecretsCensored(options.destination, options.secrets);
+  const destination = withSecretsCensored(formatted(options), options.secrets);
   const root = pino(
     {
       level: options.level ?? 'info',
@@ -62,6 +70,14 @@ export function createLogger(options: LoggerOptions = {}): Logger {
     destination,
   );
   return wrap(options.bindings ? root.child(options.bindings) : root);
+}
+
+// O `pretty` converte a linha que sai da censura: os segredos são achados no JSON, onde a forma
+// escapada é conhecida, e o texto final nunca os vê.
+function formatted(options: LoggerOptions): LogDestination | undefined {
+  if (options.format !== 'pretty') return options.destination;
+  // Cor só no stdout padrão: um destino próprio (arquivo, teste) recebe texto puro.
+  return prettyDestination(options.destination ?? pino.destination(1), !options.destination);
 }
 
 // Censura por valor no texto já serializado: pega o segredo onde quer que ele apareça, o que a

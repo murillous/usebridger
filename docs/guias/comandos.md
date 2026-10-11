@@ -136,8 +136,42 @@ commands: {
 ```
 
 Enquanto roda, o comando segura o chat: a próxima mensagem daquele chat espera. Para não segurar,
-responda "baixando…" e solte o trabalho, como em
-[trabalho longo](eventos-e-midia.md#trabalho-longo).
+declare `background: true`. O `run` roda fora da fila do chat, com o mesmo `c.reply`, `c.signal` e
+prazo, e a falha continua indo para `plugin.error`:
+
+```ts
+commands: {
+  baixar: {
+    background: true, // o grupo segue conversando enquanto baixa
+    timeoutMs: 300_000,
+    run: async (c) => {
+      await c.reply('baixando…');
+      // ...
+    },
+  },
+},
+```
+
+Em troca, as respostas podem sair fora de ordem com as das mensagens seguintes. Mais em
+[Comando em segundo plano](../../packages/core/docs/commands.md#comando-em-segundo-plano).
+
+Comando pesado (FFmpeg, yt-dlp) declara também `concurrency`, o máximo de execuções ao mesmo tempo
+no bot, somando os chats. A excedente espera a vez, e a espera conta no `timeoutMs`:
+
+```ts
+commands: {
+  baixar: {
+    background: true,
+    concurrency: 2, // dez pedidos em chats diferentes não sobem dez yt-dlp
+    timeoutMs: 300_000,
+    run: async (c) => {
+      // ...
+    },
+  },
+},
+```
+
+Mais em [Limite de concorrência](../../packages/core/docs/commands.md#limite-de-concorrência).
 
 ## Perguntar e esperar a resposta
 

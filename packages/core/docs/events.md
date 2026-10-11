@@ -39,9 +39,10 @@ Em `message`, `message:<tipo>` e `message.edited`, o contexto traz também
 | `message` | a mesma mensagem de `payload` |
 | `text` | o texto de trabalho, depois dos middlewares (ex.: truncado pelo `sanitize`) |
 | `reply` | responde no chat, citando a mensagem, pela fila de saída |
-| `react` | reage à mensagem (capability `reactions`) |
+| `react` | reage à mensagem (capability `reactions`; sem ela, não faz nada e registra em `debug`) |
 | `expectReply` | manda a próxima mensagem do remetente, neste chat, a um passo do plugin ([Conversas](conversations.md)) |
 | `log` | logger com `plugin` e `chatId` |
+| `t` | texto de `messages` do plugin com os placeholders preenchidos ([Config](config.md#placeholders)) |
 
 ```ts
 ctx.events.on('message', async (e) => {

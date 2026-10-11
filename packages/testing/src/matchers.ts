@@ -8,6 +8,12 @@ import type { SentMessage } from './fake-transport.ts';
 
 type TextPattern = string | RegExp;
 
+/** Filtro do `toContainDocument`. */
+export interface DocumentExpectation {
+  readonly fileName?: TextPattern;
+  readonly mimetype?: TextPattern;
+}
+
 declare module 'vitest' {
   // Os parâmetros repetem os da declaração do Vitest, como o merge de interfaces exige.
   interface Matchers<R extends void | Promise<void> = void | Promise<void>, T = unknown> {
@@ -17,6 +23,15 @@ declare module 'vitest' {
     toContainSticker(): R;
     /** Algum envio de imagem. */
     toContainImage(): R;
+    /** Algum envio de vídeo. */
+    toContainVideo(): R;
+    /** Algum envio de áudio (`audio`; a nota de voz é `voice`, outro tipo). */
+    toContainAudio(): R;
+    /**
+     * Algum envio de documento; com `fileName` ou `mimetype`, um documento com esses valores
+     * (texto igual ou casando com a RegExp).
+     */
+    toContainDocument(expected?: DocumentExpectation): R;
     /**
      * Alguma resposta (envio citando uma mensagem, como faz o `ctx.reply`); com `text`, uma
      * resposta de texto com esse conteúdo.
@@ -38,15 +53,39 @@ function sentOf(received: unknown): readonly SentMessage[] {
 }
 
 function textMatches(content: OutgoingContent, text: TextPattern | undefined): boolean {
-  if (content.type !== 'text') return false;
-  if (text === undefined) return true;
-  return typeof text === 'string' ? content.text === text : text.test(content.text);
+  return content.type === 'text' && patternMatches(content.text, text);
+}
+
+function patternMatches(value: string, pattern: TextPattern | undefined): boolean {
+  if (pattern === undefined) return true;
+  return typeof pattern === 'string' ? value === pattern : pattern.test(value);
+}
+
+function documentMatches(content: OutgoingContent, expected: DocumentExpectation): boolean {
+  return (
+    content.type === 'document' &&
+    patternMatches(content.fileName, expected.fileName) &&
+    patternMatches(content.mimetype, expected.mimetype)
+  );
+}
+
+function documentLabel({ fileName, mimetype }: DocumentExpectation): string {
+  const parts = [
+    ...(fileName === undefined ? [] : [`fileName${label(fileName)}`]),
+    ...(mimetype === undefined ? [] : [`mimetype${label(mimetype)}`]),
+  ];
+  return parts.length === 0 ? '' : ` com ${parts.join(' e ')}`;
 }
 
 function describeSent(sent: readonly SentMessage[]): string {
   if (sent.length === 0) return 'nada foi enviado';
   const lines = sent.map(({ content, quoted }) => {
-    const body = content.type === 'text' ? JSON.stringify(content.text) : `<${content.type}>`;
+    const body =
+      content.type === 'text'
+        ? JSON.stringify(content.text)
+        : content.type === 'document'
+          ? `<document ${JSON.stringify(content.fileName)} ${content.mimetype}>`
+          : `<${content.type}>`;
     return `  - ${body}${quoted ? ' (resposta)' : ''}`;
   });
   return `enviados:\n${lines.join('\n')}`;
@@ -91,6 +130,30 @@ expect.extend({
       this.isNot,
       'enviar uma imagem',
       ({ content }) => content.type === 'image',
+    );
+  },
+  toContainVideo(received: unknown) {
+    return check(
+      received,
+      this.isNot,
+      'enviar um vídeo',
+      ({ content }) => content.type === 'video',
+    );
+  },
+  toContainAudio(received: unknown) {
+    return check(
+      received,
+      this.isNot,
+      'enviar um áudio',
+      ({ content }) => content.type === 'audio',
+    );
+  },
+  toContainDocument(received: unknown, expected: DocumentExpectation = {}) {
+    return check(
+      received,
+      this.isNot,
+      `enviar um documento${documentLabel(expected)}`,
+      ({ content }) => documentMatches(content, expected),
     );
   },
   toHaveReplied(received: unknown, text?: TextPattern) {

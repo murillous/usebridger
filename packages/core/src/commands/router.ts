@@ -2,14 +2,16 @@ import type { BotOwner } from '#config/owners.ts';
 import type { BotMessageContext, MessageContext } from '#context.ts';
 import type { Chat, Contact, Media, Message } from '#message/types.ts';
 import { parseArgs } from './args.ts';
-import type {
-  AcceptedMessage,
-  AcceptSpec,
-  CommandContext,
-  CommandDefinition,
-  CommandRejection,
-  CommandRole,
-  RejectContext,
+import {
+  type AcceptedMessage,
+  type AcceptSpec,
+  type CommandContext,
+  type CommandDefinition,
+  type CommandRejection,
+  type CommandRole,
+  mimetypeMatches,
+  parseAccept,
+  type RejectContext,
 } from './command.ts';
 import { DEFAULT_PREFIX, validatePrefix } from './prefixes.ts';
 import { type CommandRegistry, createCommandRegistry, type RegisteredCommand } from './registry.ts';
@@ -62,13 +64,27 @@ export interface MatchedCommand {
   readonly invokedAs: string;
 }
 
+/** Como terminou o `run` de um comando: rodou ou falhou. */
+export type CommandOutcome =
+  | { readonly consumed: true; readonly status: 'ran'; readonly command: MatchedCommand }
+  | {
+      readonly consumed: true;
+      readonly status: 'failed';
+      readonly command: MatchedCommand;
+      /**
+       * Erro de `run`, `onReject` ou `isGroupAdmin` (no bot, também o prazo estourado de cada
+       * um); quem chamou registra/reporta.
+       */
+      readonly error: unknown;
+    };
+
 /**
  * Resultado de `dispatch`. `consumed` diz se a mensagem para aqui (não vai aos listeners):
  * basta o token casar, mesmo que o comando seja recusado ou falhe.
  */
 export type DispatchResult =
   | { readonly consumed: false; readonly status: 'no-match' }
-  | { readonly consumed: true; readonly status: 'ran'; readonly command: MatchedCommand }
+  | CommandOutcome
   | {
       readonly consumed: true;
       readonly status: 'rejected';
@@ -79,13 +95,11 @@ export type DispatchResult =
     }
   | {
       readonly consumed: true;
-      readonly status: 'failed';
+      /** Comando com `background: true`: o `run` começou e `dispatch` não o espera (ADR 0087). */
+      readonly status: 'background';
       readonly command: MatchedCommand;
-      /**
-       * Erro de `run`, `onReject` ou `isGroupAdmin` (no bot, também o prazo estourado de cada
-       * um); quem chamou registra/reporta.
-       */
-      readonly error: unknown;
+      /** Assenta quando o `run` termina, com `ran` ou `failed`. Nunca rejeita. */
+      readonly done: Promise<CommandOutcome>;
     };
 
 export interface CommandRouter {
@@ -132,24 +146,42 @@ export interface CommandMatch {
 const FIRST_WHITESPACE = /\s/;
 
 /**
- * O contexto recebido, com o `signal` e o `expectReply` que o Bot (ou quem chama `dispatch`)
- * fornece.
+ * O contexto recebido, com o `signal`, o `expectReply` e o `t` que o Bot (ou quem chama
+ * `dispatch`) fornece.
  */
-type SignalContext = BotMessageContext & Pick<RejectContext, 'signal' | 'expectReply'>;
+type SignalContext = BotMessageContext & Pick<RejectContext, 'signal' | 'expectReply' | 't'>;
 
 function mediaOf(message: Message | null): Media | null {
   return message !== null && 'media' in message ? message.media : null;
 }
 
-/** Primeira entrada de `accepts` que casa, na ordem declarada. */
+/** Primeira entrada de `accepts` que casa (tipo e, se houver, mimetype), na ordem declarada. */
 function resolveAccepts(message: Message, accepts: readonly AcceptSpec[]): AcceptedMessage | null {
   for (const spec of accepts) {
-    const quoted = spec.startsWith('quoted:');
+    const { quoted, type, mimetype } = parseAccept(spec);
     const target = quoted ? message.quoted : message;
-    const type = quoted ? spec.slice('quoted:'.length) : spec;
-    if (target !== null && target.type === type) return { spec, message: target };
+    if (target === null || target.type !== type) continue;
+    if (mimetype !== null) {
+      const media = mediaOf(target);
+      if (media === null || !mimetypeMatches(media.mimetype, mimetype)) continue;
+    }
+    return { spec, message: target };
   }
   return null;
+}
+
+/** Roda o `run`; o erro, síncrono ou não, vira `failed`. Nunca rejeita. */
+async function runCommand(
+  definition: CommandDefinition,
+  ctx: CommandContext,
+  command: MatchedCommand,
+): Promise<CommandOutcome> {
+  try {
+    await definition.run(ctx);
+    return { consumed: true, status: 'ran', command };
+  } catch (error) {
+    return { consumed: true, status: 'failed', command, error };
+  }
 }
 
 export function createCommandRouter(options: CommandRouterOptions = {}): CommandRouter {
@@ -297,8 +329,9 @@ export function createCommandRouter(options: CommandRouterOptions = {}): Command
 
         // `signal` vem do Bot, na visão do comando (ADR 0033); solto, do contexto recebido.
         const commandCtx = Object.assign(base, { accepted, media }) as CommandContext;
-        await definition.run(commandCtx);
-        return { consumed: true, status: 'ran', command };
+        const done = runCommand(definition, commandCtx, command);
+        if (definition.background) return { consumed: true, status: 'background', command, done };
+        return await done;
       } catch (error) {
         return { consumed: true, status: 'failed', command, error };
       }

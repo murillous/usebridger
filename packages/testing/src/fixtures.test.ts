@@ -51,6 +51,28 @@ describe('fixtures', () => {
     expect(((bits >> 14) & 0x3fff) + 1).toBe(512);
   });
 
+  it('a figurinha animada é um WebP 512×512 com animação e 2 quadros', () => {
+    const { data, mimetype } = fixtures.animatedSticker();
+    expect(mimetype).toBe('image/webp');
+    expect(data.toString('latin1', 0, 4)).toBe('RIFF');
+    expect(data.toString('latin1', 8, 16)).toBe('WEBPVP8X');
+    // VP8X: bit de animação nas flags; largura-1 e altura-1 do canvas em 24 bits cada.
+    expect((data[20] as number) & 0x02).toBe(0x02);
+    expect(data.readUIntLE(24, 3) + 1).toBe(512);
+    expect(data.readUIntLE(27, 3) + 1).toBe(512);
+    expect(data.includes('ANIM')).toBe(true);
+    expect(data.toString('latin1').split('ANMF')).toHaveLength(3);
+  });
+
+  it('o GIF é animado, com loop e 2 quadros', () => {
+    const { data, mimetype } = fixtures.gif();
+    expect(mimetype).toBe('image/gif');
+    expect(data.toString('latin1', 0, 6)).toBe('GIF89a');
+    expect(data.includes('NETSCAPE2.0')).toBe(true);
+    // Um bloco de controle gráfico (0x21 0xF9) por quadro.
+    expect(data.toString('latin1').split('\x21\xf9')).toHaveLength(3);
+  });
+
   it('o receive() entrega os bytes e o mimetype da fixture', async () => {
     const received: { mimetype: string; data: Buffer }[] = [];
     const plugin = definePlugin({

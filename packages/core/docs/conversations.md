@@ -48,7 +48,7 @@ setup(ctx) {
     passa de 2³¹−1 ms (~24,8 dias), lança `RangeError`.
   - O plugin só aponta para os próprios passos.
 - **O passo** recebe o contexto da mensagem que respondeu (`message`, `text`, `reply`, `react`,
-  `log`), mais `step`, `data`, `signal` e `expectReply`.
+  `log`, `t`), mais `step`, `data`, `signal` e `expectReply`.
 
 Para encadear perguntas, o passo chama `expectReply` de novo:
 

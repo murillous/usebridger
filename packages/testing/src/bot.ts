@@ -14,6 +14,8 @@ export {
   type IncomingMedia,
   type IncomingMessage,
 } from './incoming.ts';
+// Só o tipo: o entry segue sem carregar o Vitest.
+export type { DocumentExpectation } from './matchers.ts';
 export {
   DEFAULT_SELF,
   DEFAULT_SENDER,
@@ -25,6 +27,8 @@ export {
 export {
   type ClickOptions,
   createTestBot,
+  type SentMedia,
+  type SentMediaType,
   type TestBot,
   type TestBotOptions,
 } from './test-bot.ts';

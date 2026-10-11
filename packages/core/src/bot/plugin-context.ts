@@ -3,7 +3,12 @@
 // host de plugins só recebe a fábrica.
 
 import { commandInfo } from '#commands/catalog.ts';
-import type { CommandContext, CommandDefinition } from '#commands/command.ts';
+import {
+  assertCommandDefinition,
+  type CommandContext,
+  type CommandDefinition,
+} from '#commands/command.ts';
+import { createConcurrencyLimit } from '#commands/concurrency.ts';
 import type { Prefixes } from '#commands/prefixes.ts';
 import { type RoleCheck, RoleTimeoutError } from '#commands/roles.ts';
 import type { CommandRouter } from '#commands/router.ts';
@@ -33,6 +38,7 @@ import type { Logger } from '#logger/types.ts';
 import type { Contact } from '#message/types.ts';
 import type { Outbound } from '#outbound/types.ts';
 import { type PluginContextFactory, PluginHostStateError } from '#plugin/host.ts';
+import { formatMessage } from '#plugin/messages.ts';
 import type { PluginContext } from '#plugin/types.ts';
 import type { SchedulerService } from '#scheduler/service.ts';
 import type { Scheduler } from '#scheduler/types.ts';
@@ -49,7 +55,7 @@ import type {
 } from '#storage/types.ts';
 import type { TenantScope } from '#tenant/scope.ts';
 import { isFormatted } from '#text/format.ts';
-import type { Capability } from '#transport/capabilities.ts';
+import { type Capability, missingCapabilities } from '#transport/capabilities.ts';
 import type { Unsubscribe } from '#transport/types.ts';
 import type { UnsafeAccess } from '#unsafe/access.ts';
 import {
@@ -58,6 +64,7 @@ import {
   type KernelMessageContext,
   listenerViewFactory,
   type PluginExpect,
+  type PluginText,
   roleViewFactory,
   stepViewFactory,
 } from './message-context.ts';
@@ -166,9 +173,12 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
     // A espera é sempre do plugin dono do contexto: ele só aponta para os próprios passos.
     const expect: PluginExpect = (message, step, options) =>
       deps.conversations.expect(name, message.chat.id, message.sender.id, step, options);
-    const commandViews = commandViewFactory(name, log, expect);
-    const listenerView = listenerViewFactory(name, log, expect);
-    const stepView = stepViewFactory(name, log, expect);
+    // `{prefix}` lido a cada chamada: um `ctx.prefixes.set` vale já para a mensagem seguinte.
+    const text: PluginText = (message, key, values) =>
+      formatMessage(messages, key, values, deps.prefixes.get(message.chat));
+    const commandViews = commandViewFactory(name, log, expect, text);
+    const listenerView = listenerViewFactory(name, log, expect, text);
+    const stepView = stepViewFactory(name, log, expect, text);
     const roleView = roleViewFactory(log);
     // Nos eventos de mensagem, cada listener recebe a visão com `message`/`text`/`reply`/`log`
     // do plugin; o barramento a cria (uma por listener) e pendura nela o `Deadline`.
@@ -189,6 +199,21 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
       commands: {
         add(definition: CommandDefinition): void {
           guard('commands.add');
+          // Comando que o transport não sustenta nem entra no registro: anunciá-lo no menu e
+          // no `list()` para recusar depois seria pior que não tê-lo (ADR 0090). A definição
+          // inválida lança mesmo assim, para o erro não depender do transport.
+          assertCommandDefinition(definition);
+          const missing = missingCapabilities(deps.transport, definition.requires ?? []);
+          if (missing.length > 0) {
+            log.info(
+              `comando "${definition.name}" não registrado: capability ausente no transport`,
+              {
+                command: definition.name,
+                missing,
+              },
+            );
+            return;
+          }
           deps.router.registry.add(
             name,
             wrapCommand(name, definition, commandViews, lifetime, deps),
@@ -410,6 +435,12 @@ function wrapCommand(
 ): CommandDefinition {
   const { run, onReject, name } = definition;
   const timeoutMs = definition.timeoutMs ?? deps.commandTimeoutMs;
+  // Um por registro do comando: o reload cria outro, e os `run` antigos ainda vivos ocupam só o
+  // teto do registro anterior.
+  const limit =
+    definition.concurrency === undefined
+      ? undefined
+      : createConcurrencyLimit(definition.concurrency);
   const timed = <R>(stage: CommandStage, execute: (deadline: Deadline) => R): R => {
     const deadline = new Deadline(lifetime);
     return settleWithin(
@@ -420,7 +451,12 @@ function wrapCommand(
         deadline.expire(error);
         return error;
       },
-      (error) => deps.onLateCommandError(plugin, name, error),
+      (error) => {
+        // Rejeitar com o próprio erro do prazo (a espera por vaga, ou o `run` que repassa o
+        // `signal.reason`) não é falha nova: o prazo já foi reportado.
+        if (error === deadline.reason) return;
+        deps.onLateCommandError(plugin, name, error);
+      },
       deps.armed,
       deadline,
     ) as R;
@@ -429,8 +465,12 @@ function wrapCommand(
     ...definition,
     run: (ctx) =>
       timed('run', (deadline) => {
-        const view = views.run(ctx, deadline);
-        return replyWithResult(view, run(view));
+        const start = (): unknown => {
+          const view = views.run(ctx, deadline);
+          return replyWithResult(view, run(view));
+        };
+        // A espera por vaga fica dentro do prazo: o chat não fica preso além do `timeoutMs`.
+        return limit === undefined ? start() : limit.run(start, deadline.signal);
       }),
     ...(onReject && {
       onReject: (ctx, rejection) =>

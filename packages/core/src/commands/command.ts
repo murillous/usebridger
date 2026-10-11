@@ -1,6 +1,8 @@
 import type { BotMessageContext } from '#context.ts';
 import type { ExpectReply } from '#conversations/conversations.ts';
-import type { Media, Message, MessageType } from '#message/types.ts';
+import type { Media, MediaMessageType, Message, MessageType } from '#message/types.ts';
+import type { MessageText } from '#plugin/messages.ts';
+import { type Capability, isCapability } from '#transport/capabilities.ts';
 import type { RoleName } from './roles.ts';
 
 /**
@@ -11,9 +13,54 @@ export type CommandRole = 'owner' | 'group-admin' | 'everyone' | RoleName;
 
 /**
  * O que o comando aceita: o tipo da própria mensagem (`'image'`) ou da mensagem citada
- * (`'quoted:image'`).
+ * (`'quoted:image'`). Um tipo com mídia pode restringir o mimetype depois de mais um `:`, exato
+ * (`'document:application/pdf'`) ou com curinga no subtipo (`'quoted:video:video/*'`).
  */
-export type AcceptSpec = MessageType | `quoted:${MessageType}`;
+export type AcceptSpec =
+  | MessageType
+  | `quoted:${MessageType}`
+  | `${MediaMessageType}:${string}/${string}`
+  | `quoted:${MediaMessageType}:${string}/${string}`;
+
+/** Entrada de `accepts` decomposta. */
+export interface ParsedAccept {
+  readonly quoted: boolean;
+  readonly type: string;
+  /** Mimetype em minúsculas (`application/pdf`, `video/*`); `null` aceita qualquer um. */
+  readonly mimetype: string | null;
+}
+
+/** Decompõe a entrada sem validar; a validação fica em `assertCommandDefinition`. */
+export function parseAccept(spec: AcceptSpec): ParsedAccept {
+  const quoted = spec.startsWith('quoted:');
+  const rest = quoted ? spec.slice('quoted:'.length) : spec;
+  const colon = rest.indexOf(':');
+  if (colon === -1) return { quoted, type: rest, mimetype: null };
+  return { quoted, type: rest.slice(0, colon), mimetype: rest.slice(colon + 1).toLowerCase() };
+}
+
+/**
+ * O mimetype da mídia casa com o da entrada. Compara só a essência: `audio/ogg; codecs=opus`
+ * casa com `audio/ogg`, porque os parâmetros variam por plataforma.
+ */
+export function mimetypeMatches(mimetype: string, pattern: string): boolean {
+  const essence = mimetype.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+  if (pattern.endsWith('/*')) return essence.startsWith(pattern.slice(0, -1));
+  return essence === pattern;
+}
+
+// Só estes tipos têm `media`; a lista acompanha `MediaMessageType`.
+const MEDIA_TYPES: ReadonlySet<string> = new Set<MediaMessageType>([
+  'image',
+  'video',
+  'audio',
+  'voice',
+  'sticker',
+  'document',
+]);
+
+/** `tipo/subtipo` ou `tipo/*`, nos caracteres que o RFC 6838 permite. */
+const MIMETYPE = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/(\*|[a-z0-9][a-z0-9!#$&^_.+-]*)$/;
 
 /** Entrada de `accepts` que casou e a mensagem (própria ou citada) a que ela se refere. */
 export interface AcceptedMessage {
@@ -49,6 +96,11 @@ export interface CommandContext extends BotMessageContext {
    * `Bot`, como o `signal`.
    */
   readonly expectReply: ExpectReply;
+  /**
+   * Texto de `messages` do plugin com os placeholders preenchidos: `{prefix}` com o prefixo
+   * deste chat, os outros com `values` (ADR 0092). Montado pelo `Bot`, como o `signal`.
+   */
+  readonly t: MessageText;
   /** Entrada de `accepts` que casou; `null` se o comando não declara `accepts`. */
   readonly accepted: AcceptedMessage | null;
   /**
@@ -98,6 +150,26 @@ export interface CommandDefinition {
    * (ADR 0042), então o prazo maior vale só para ele.
    */
   readonly timeoutMs?: number;
+  /**
+   * O `run` roda fora da fila do chat (ADR 0087): a próxima mensagem do chat não espera por ele.
+   * Papel, `accepts` e `onReject` seguem na fila. O `run` mantém o contexto inteiro (`reply`,
+   * `signal` com o `timeoutMs`, `log`), e a falha vai para `plugin.error` quando ele termina.
+   * Duas execuções do mesmo chat podem terminar fora de ordem.
+   */
+  readonly background?: boolean;
+  /**
+   * Máximo de `run` simultâneos deste comando no bot, somando todos os chats (ADR 0088). A
+   * execução excedente espera a vez em ordem de chegada, e a espera conta no prazo
+   * (`timeoutMs`). A vaga volta quando o `run` termina de fato, mesmo depois do prazo. Inteiro
+   * >= 1; padrão: sem limite.
+   */
+  readonly concurrency?: number;
+  /**
+   * Capabilities que o comando exige do transport (ADR 0090). No bot, sem alguma delas, o
+   * comando não é registrado: fica fora do roteador, do `ctx.commands.list()` e do menu nativo,
+   * como um plugin pulado pelo `requires` dele. O roteador solto ignora o campo.
+   */
+  readonly requires?: readonly Capability[];
 }
 
 /** Comando como os plugins o veem em `ctx.commands.list()` (ADR 0040): sem `run` nem `onReject`. */
@@ -123,7 +195,9 @@ function assertToken(token: string, what: string): void {
 /**
  * Lança `TypeError` se o nome ou algum alias for vazio ou tiver espaço (nunca casaria) e
  * `RangeError` se `timeoutMs` não for finito e > 0 (o `setTimeout` trataria `Infinity`/`NaN`
- * como 1 ms e o comando estouraria na hora).
+ * como 1 ms e o comando estouraria na hora) ou se `concurrency` não for inteiro >= 1 (0 nunca
+ * rodaria). Entrada de `accepts` com mimetype mal formado, ou num tipo sem mídia, e capability
+ * desconhecida em `requires` também lançam `TypeError`.
  */
 export function assertCommandDefinition(definition: CommandDefinition): void {
   assertToken(definition.name, 'Nome');
@@ -132,10 +206,34 @@ export function assertCommandDefinition(definition: CommandDefinition): void {
   if (timeoutMs !== undefined && !(Number.isFinite(timeoutMs) && timeoutMs > 0)) {
     throw new RangeError(`Prazo do comando "${definition.name}" inválido: ${timeoutMs}`);
   }
+  const { concurrency } = definition;
+  if (concurrency !== undefined && !(Number.isInteger(concurrency) && concurrency >= 1)) {
+    throw new RangeError(
+      `Limite de concorrência do comando "${definition.name}" inválido: ${concurrency}`,
+    );
+  }
+  for (const spec of definition.accepts ?? []) {
+    const { type, mimetype } = parseAccept(spec);
+    if (mimetype === null) continue;
+    if (!MEDIA_TYPES.has(type) || !MIMETYPE.test(mimetype)) {
+      throw new TypeError(
+        `accepts do comando "${definition.name}" inválido: ${JSON.stringify(spec)} (mimetype ` +
+          'só em tipo com mídia, como "tipo/subtipo" ou "tipo/*")',
+      );
+    }
+  }
+  // O tipo já barra capability desconhecida; a checagem é para quem define em JS.
+  for (const capability of definition.requires ?? []) {
+    if (!isCapability(capability)) {
+      throw new TypeError(
+        `requires do comando "${definition.name}": capability desconhecida ${JSON.stringify(capability)}`,
+      );
+    }
+  }
 }
 
 /**
- * Define um comando. Valida nome, aliases e prazo na definição, para o erro apontar o plugin que
+ * Define um comando. Valida nome, aliases, prazo e limite na definição, para o erro apontar o plugin que
  * declarou e não aparecer só quando alguém digitar o comando.
  */
 export function command(definition: CommandDefinition): CommandDefinition {

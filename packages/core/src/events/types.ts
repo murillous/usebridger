@@ -5,6 +5,7 @@ import type { ExpectReply } from '#conversations/conversations.ts';
 import type { Logger } from '#logger/types.ts';
 import type { Message, MessageOf, MessageType } from '#message/types.ts';
 import type { Reply } from '#outbound/types.ts';
+import type { MessageText } from '#plugin/messages.ts';
 import type { TransportEvents, Unsubscribe } from '#transport/types.ts';
 
 /** Falha isolada de um plugin; o kernel emite e segue rodando os demais (ADR 0005). */
@@ -115,6 +116,8 @@ export interface MessageListenerFields<M extends Message = Message> {
   readonly expectReply: ExpectReply;
   /** Logger com `plugin` e `chatId` no contexto. */
   readonly log: Logger;
+  /** Texto de `messages` do plugin com os placeholders preenchidos (ver `CommandContext.t`). */
+  readonly t: MessageText;
 }
 
 /**
