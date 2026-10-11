@@ -1,5 +1,18 @@
 # @usebridger/core
 
+## 0.3.0
+
+### Minor Changes
+
+- 3cd9b93: `accepts` restringe o mimetype na própria entrada: `'document:application/pdf'`, `'quoted:video:video/*'`. A comparação usa a essência do mimetype, sem diferenciar caixa, e a mídia de outro mimetype vai ao `onReject` como qualquer recusa. Entrada sem mimetype não muda.
+- f5c2517: Comando com `background: true` roda o `run` fora da fila do chat: a próxima mensagem não espera por ele, e o `run` mantém `reply`, `signal` com o `timeoutMs`, a falha em `plugin.error`, o evento `command` e o `bot.settled()` (ADR 0087).
+- 8ec8937: Comando com `concurrency: n` roda no máximo `n` execuções do `run` ao mesmo tempo no bot, somando todos os chats. A excedente espera a vez em ordem de chegada, a espera conta no `timeoutMs`, e a vaga só volta quando o `run` termina de fato (ADR 0088).
+- a4268bd: Log legível no terminal: `createLogger({ format: 'pretty' })` e `logFormat: 'pretty'` no bot escrevem hora, nível, `[plugin]`, a mensagem e os campos em `chave=valor`, com o `err` recuado nas linhas seguintes e cor no terminal. O padrão segue JSON. No `@usebridger/transport-baileys`, a opção `logLevel` (padrão `'warn'`) põe um piso nas linhas do próprio Baileys: a sincronização e o protocolo, em inglês, saem do `info`. O `console` do libsignal (`Closing session: SessionEntry {...}`) passa a ir para o mesmo logger, em `debug`, sem os objetos de sessão (ADR 0091).
+- ac67f62: Placeholders nas `messages` do plugin: `c.t('chave', { count: 2 })` no comando, no passo e no listener de mensagem preenche `{count}` e o `{prefix}` do chat. A sobrescrita pela config só pode usar os placeholders do texto padrão, mais `{prefix}`; um placeholder novo é `PluginConfigError` (ADR 0092).
+- 92e35c0: No comando declarado no manifesto (`commands`), o `onReject` recebe o contexto do plugin no 3º argumento, como o `run` no 2º: a recusa pode usar `plugin.plugin.messages`, que a config sobrescreve. O `CommandDefinition` solto não muda.
+- e094a23: `ctx.react` no contexto de mensagem (middleware, comando, passo e listener) não rejeita mais num transport sem a capability `reactions`: resolve sem reagir e registra em `debug`. O `ctx.send.react` continua rejeitando com `UnsupportedError` (ADR 0093).
+- b00d09a: Comando com `requires: [...]` exige as capabilities só dele. No bot, sem alguma delas, o comando não é registrado: fica fora do roteador, do `ctx.commands.list()` e do menu nativo, com um log `info`, e o resto do plugin sobe normalmente (ADR 0090).
+
 ## 0.2.1
 
 ### Patch Changes
