@@ -10,6 +10,7 @@ import { createNoopLogger, MIN_SECRET_LENGTH } from '#logger/logger.ts';
 import type { SecretSet } from '#logger/secrets.ts';
 import type { Logger } from '#logger/types.ts';
 import type { PluginReloadResult } from '#plugin/host.ts';
+import { PREFIX_PLACEHOLDER, placeholders } from '#plugin/messages.ts';
 import type { PluginDefinition, PluginMessages } from '#plugin/types.ts';
 import { kernelStorage } from '#storage/namespace.ts';
 import type { JsonObject, StoragePort } from '#storage/types.ts';
@@ -98,6 +99,18 @@ export interface PluginConfigs {
 }
 
 const MESSAGES_KEY = 'messages';
+
+/**
+ * Problema da sobrescrita que usa placeholder que o texto padrão não tem (o `{prefix}` vale
+ * sempre); `null` se está tudo certo.
+ */
+function placeholderIssue(text: string, base: string): string | null {
+  const allowed = [...placeholders(base), PREFIX_PLACEHOLDER];
+  const unknown = placeholders(text).filter((name) => !allowed.includes(name));
+  if (unknown.length === 0) return null;
+  const show = (names: string[]): string => names.map((name) => `{${name}}`).join(', ');
+  return `placeholder desconhecido ${show(unknown)}; a mensagem aceita ${show(allowed)}`;
+}
 const SECRETS_OWNER = (plugin: string): string => `plugin:${plugin}`;
 
 type PlainObject = Record<string, unknown>;
@@ -417,8 +430,15 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
         } else if (typeof text !== 'string') {
           issues.push({ ...at, message: 'deve ser texto' });
         } else {
-          messages[key] = text;
-          messageSources[at.path] = at.source;
+          // O plugin só passa os valores do texto padrão: um placeholder a mais na sobrescrita
+          // faria o `ctx.t` lançar na hora de usar, longe da config (ADR 0092).
+          const problem = placeholderIssue(text, base[key] as string);
+          if (problem !== null) {
+            issues.push({ ...at, message: problem });
+          } else {
+            messages[key] = text;
+            messageSources[at.path] = at.source;
+          }
         }
       }
     }

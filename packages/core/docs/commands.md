@@ -159,6 +159,7 @@ O contexto do `run` (`CommandContext`) estende `MessageContext` com:
 | `text` | Texto de trabalho que casou (ver [Match](#match)) |
 | `reply` | Responde no chat, citando a mensagem, pela fila de saída |
 | `log` | Logger com `plugin` (o dono do comando) e `chatId` |
+| `t` | Texto de `messages` do plugin com os placeholders preenchidos: `{prefix}` do chat e os valores passados ([Config](config.md#placeholders)) |
 | `command` | Nome canônico do comando casado |
 | `invokedAs` | Token digitado (nome ou alias), em minúsculas |
 | `args` | Argumentos já quebrados (ver abaixo) |

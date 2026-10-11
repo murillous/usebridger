@@ -42,6 +42,7 @@ Em `message`, `message:<tipo>` e `message.edited`, o contexto traz também
 | `react` | reage à mensagem (capability `reactions`) |
 | `expectReply` | manda a próxima mensagem do remetente, neste chat, a um passo do plugin ([Conversas](conversations.md)) |
 | `log` | logger com `plugin` e `chatId` |
+| `t` | texto de `messages` do plugin com os placeholders preenchidos ([Config](config.md#placeholders)) |
 
 ```ts
 ctx.events.on('message', async (e) => {
