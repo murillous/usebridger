@@ -1,5 +1,13 @@
 # @usebridger/transport-web
 
+## 0.2.1
+
+### Patch Changes
+
+- 4e846ec: README na raiz do pacote, para a página do npm mostrar descrição, instalação, um exemplo e os links da documentação.
+- Updated dependencies [4e846ec]
+  - @usebridger/core@0.2.1
+
 ## 0.2.0
 
 ### Minor Changes
