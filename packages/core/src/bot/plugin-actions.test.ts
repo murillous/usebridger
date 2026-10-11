@@ -249,6 +249,46 @@ describe('atalho react no contexto de mensagem', () => {
     ]);
   });
 
+  it('sem a capability, resolve sem reagir e registra em debug', async () => {
+    const transport = new ActionTransport(['send.text']);
+    const logger = recordingLogger();
+    const results: string[] = [];
+    const plugin = definePlugin({
+      name: 'reator',
+      version: '1.0.0',
+      engine: ENGINE,
+      setup(ctx) {
+        ctx.commands.add(
+          command({
+            name: 'ok',
+            run: async (c) => {
+              await c.react('⏳');
+              results.push('comando');
+            },
+          }),
+        );
+        ctx.events.on('message', async (e) => {
+          if (e.text !== 'oi') return;
+          await e.react('👋');
+          results.push('listener');
+        });
+      },
+    });
+    const b = bot({ transport, plugins: [plugin], logger });
+    await b.start();
+    transport.emit('message', message('!ok'));
+    transport.emit('message', message('oi'));
+    await expect.poll(() => results.toSorted()).toEqual(['comando', 'listener']);
+    expect(transport.actions).toEqual([]);
+    const skipped = logger.lines.filter((line) => line.message.startsWith('react ignorado'));
+    expect(skipped.map((line) => [line.level, line.fields['emoji']])).toEqual(
+      expect.arrayContaining([
+        ['debug', '⏳'],
+        ['debug', '👋'],
+      ]),
+    );
+  });
+
   it('react depois do prazo do comando é recusado com ContextExpiredError', async () => {
     const transport = new ActionTransport(ALL);
     const gate = deferred();

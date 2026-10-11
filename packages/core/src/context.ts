@@ -27,7 +27,8 @@ export interface BotMessageContext extends MessageContext {
   readonly reply: Reply;
   /**
    * Reage à mensagem pela fila de saída, com prioridade `'high'`; `null` remove a reação
-   * (capability `reactions`, ADR 0040).
+   * (capability `reactions`, ADR 0040). Sem a capability, resolve sem reagir e registra em
+   * `debug`; para saber que a reação não saiu, use `ctx.send.react` (ADR 0093).
    */
   react(emoji: string | null): Promise<void>;
   /** Logger com `chatId` (e `plugin`, em comandos e listeners) no contexto. */

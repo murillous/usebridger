@@ -98,6 +98,7 @@ sendo a referência; um ADR novo entra nos dois.
 - [0019](0019-fila-de-saida-anti-ban.md) — Fila de saída anti-ban no core
 - [0039](0039-fila-de-saida-e-conexao.md) — Fila de saída pausa com a conexão caída e tem prazo por envio (detalha D19)
 - [0040](0040-acoes-do-transport-no-plugin.md) — Ações e leituras do transport chegam ao plugin pela API pública (detalha D16/D19)
+- [0093](0093-react-do-contexto-tolerante.md) — `react` do contexto sem a capability não faz nada e registra em `debug` (substitui em parte D40)
 - [0047](0047-espera-na-fila-de-saida-fora-do-prazo.md) — A espera na fila de saída não conta no prazo do handler (detalha D19/D33/D42)
 
 **Storage**
@@ -169,7 +170,7 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0037](0037-transport-por-fabrica.md) | D37 | Transport recebe as dependências do bot por fábrica (detalha D03) | Aceito |
 | [0038](0038-filtro-de-eventos-no-kernel.md) | D38 | chatFilter e ignoreSelf valem para os eventos que não são mensagem (detalha D24) | Aceito |
 | [0039](0039-fila-de-saida-e-conexao.md) | D39 | Fila de saída pausa com a conexão caída e tem prazo por envio (detalha D19) | Aceito |
-| [0040](0040-acoes-do-transport-no-plugin.md) | D40 | Ações e leituras do transport chegam ao plugin pela API pública (detalha D16/D19) | Aceito |
+| [0040](0040-acoes-do-transport-no-plugin.md) | D40 | Ações e leituras do transport chegam ao plugin pela API pública (detalha D16/D19) | Aceito (atalho `react`: ADR 0093) |
 | [0041](0041-reload-em-cascata.md) | D41 | Reload de plugin em cascata pelos dependentes (detalha D17/D18) | Aceito |
 | [0042](0042-handler-lento-segura-o-chat.md) | D42 | Comando e listener lentos seguram o chat (detalha D05/D12) | Aceito |
 | [0043](0043-prazo-de-middleware.md) | D43 | Middleware do app tem prazo, contado fora do `next()` (detalha D12) | Aceito |
@@ -222,3 +223,4 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0090](0090-requires-por-comando.md) | D90 | `requires` por comando: sem a capability, o comando fica fora do roteador, do `ctx.commands.list()` e do menu nativo; o resto do plugin sobe (detalha D16/D64) | Aceito |
 | [0091](0091-log-legivel-e-baileys-em-warn.md) | D91 | Log legível no terminal (`format: 'pretty'`, formatador próprio sobre a linha já censurada) e linhas do Baileys e do `console` do libsignal a partir de `warn` (`baileys({ logLevel })`) (detalha D13/D37) | Aceito |
 | [0092](0092-placeholders-nas-messages.md) | D92 | Placeholders nas `messages` e `ctx.t`: `{prefix}` do chat e valores do plugin, sobrescrita validada contra o texto padrão (substitui em parte D25, detalha D63) | Aceito |
+| [0093](0093-react-do-contexto-tolerante.md) | D93 | `react` do contexto tolerante: sem a capability `reactions`, resolve sem reagir e registra em `debug`; o `ctx.send.react` continua estrito (substitui em parte D40) | Aceito |
