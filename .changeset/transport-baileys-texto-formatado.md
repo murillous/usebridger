@@ -1,5 +1,5 @@
 ---
-'@bridger/transport-baileys': minor
+'@usebridger/transport-baileys': minor
 ---
 
 Texto formatado neutro do core na marcação do WhatsApp (ADR 0061): `*negrito*`, `_itálico_`,

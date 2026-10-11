@@ -49,7 +49,7 @@ try {
   // core, e o projeto fica com uma cópia só de cada pacote, como no registry.
   writeFileSync(
     join(project, 'pnpm-workspace.yaml'),
-    `overrides:\n  '@bridger/core': 'file:${core}'\n  '@bridger/testing': 'file:${testing}'\n`,
+    `overrides:\n  '@usebridger/core': 'file:${core}'\n  '@usebridger/testing': 'file:${testing}'\n`,
   );
   sh('pnpm install', project);
   sh('pnpm run typecheck', project);

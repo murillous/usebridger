@@ -1,5 +1,5 @@
 ---
-'@bridger/core': minor
+'@usebridger/core': minor
 ---
 
 Loader e lifecycle de plugins (M1-8): `definePlugin` com config tipada pelo schema Zod e

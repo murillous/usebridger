@@ -14,7 +14,7 @@ Alternativas consideradas: pastas privadas no monorepo.
 
 Plugins e transports comerciais vivem num **repo privado** na org `thera-org` do
 GitHub, publicados como pacotes privados na org npm da Thera, consumindo os pacotes
-**públicos** `@bridger/*`.
+**públicos** `@usebridger/*`.
 
 ## Consequências
 

@@ -1,5 +1,5 @@
 ---
-'@bridger/core': minor
+'@usebridger/core': minor
 ---
 
 Completa o contrato `Transport` (eventos normalizados, envio, reações, edição, grupos e

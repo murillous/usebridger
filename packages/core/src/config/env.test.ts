@@ -8,9 +8,7 @@ describe('envName', () => {
     expect(toEnvSegment('openAIKey')).toBe('OPEN_AI_KEY');
     expect(toEnvSegment('user-names')).toBe('USER_NAMES');
     expect(envName('sticker', ['quality'])).toBe('BRIDGER_STICKER__QUALITY');
-    expect(envName('user-names', ['openai', 'apiKey'])).toBe(
-      'BRIDGER_USER_NAMES__OPENAI__API_KEY',
-    );
+    expect(envName('user-names', ['openai', 'apiKey'])).toBe('BRIDGER_USER_NAMES__OPENAI__API_KEY');
   });
 });
 

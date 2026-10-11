@@ -1,5 +1,5 @@
 ---
-'@bridger/core': minor
+'@usebridger/core': minor
 ---
 
 Timeouts tipados e menos ruído no log (ADRs 0032 e 0033). O `signal` de listener e de job aborta

@@ -14,7 +14,7 @@ interface Contador {
   incrementa(): Promise<number>;
 }
 
-declare module '@bridger/core' {
+declare module '@usebridger/core' {
   interface Services {
     contador: Contador;
   }

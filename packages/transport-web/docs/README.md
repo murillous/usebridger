@@ -1,4 +1,4 @@
-# @bridger/transport-web
+# @usebridger/transport-web
 
 Transport do Bridger para o chatbot dentro de um sistema web próprio (ERP, gestão escolar). O
 sistema emite um JWT para o widget, e o widget conversa com o bot por WebSocket. As decisões estão
@@ -7,8 +7,8 @@ no [ADR 0077](../../../docs/adr/0077-transport-web.md).
 ## Uso
 
 ```ts
-import { createBot, createHttp } from '@bridger/core';
-import { web } from '@bridger/transport-web';
+import { createBot, createHttp } from '@usebridger/core';
+import { web } from '@usebridger/transport-web';
 
 const http = createHttp({ port: 3000 });
 
@@ -175,11 +175,11 @@ limitar mensagens por usuário, use o middleware `rateLimit` do kernel, que cont
 
 ## Cliente de referência
 
-`@bridger/transport-web/client` implementa o protocolo sobre o `WebSocket` e o `fetch` globais
+`@usebridger/transport-web/client` implementa o protocolo sobre o `WebSocket` e o `fetch` globais
 (navegador e Node 24), sem o core nem o `jose`:
 
 ```ts
-import { connectWebChat } from '@bridger/transport-web/client';
+import { connectWebChat } from '@usebridger/transport-web/client';
 
 const chat = await connectWebChat({
   url: 'wss://bot.exemplo.com/transports/web/chat',

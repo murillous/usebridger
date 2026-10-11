@@ -18,7 +18,7 @@ import type {
   Transport,
   TypingKind,
   Unsubscribe,
-} from '@bridger/core';
+} from '@usebridger/core';
 import {
   assertCanSend,
   assertCapability,
@@ -29,7 +29,7 @@ import {
   type TransportEventName,
   type TransportEvents,
   TypedEmitter,
-} from '@bridger/core/adapter';
+} from '@usebridger/core/adapter';
 import {
   DEFAULT_SELF,
   PROFILE_NAMES,

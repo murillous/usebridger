@@ -19,8 +19,8 @@
     "erasableSyntaxOnly": true,
     "allowImportingTsExtensions": true,
 
-    // Aliases @bridger/*: cada pacote exporta o fonte sob esta condição (ver README).
-    "customConditions": ["@bridger/source"],
+    // Aliases @usebridger/*: cada pacote exporta o fonte sob esta condição (ver README).
+    "customConditions": ["@usebridger/source"],
 
     "strict": true,
     "noUncheckedIndexedAccess": true,

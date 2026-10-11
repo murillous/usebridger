@@ -1,5 +1,5 @@
 ---
-'@bridger/core': minor
+'@usebridger/core': minor
 ---
 
 Texto formatado neutro, menções portáteis e limites de tamanho (ADR 0061).

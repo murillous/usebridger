@@ -1,5 +1,5 @@
 ---
-'@bridger/transport-baileys': minor
+'@usebridger/transport-baileys': minor
 ---
 
 Novo pacote: transport do WhatsApp sobre o Baileys (#103). `baileys({ pairing, version })`

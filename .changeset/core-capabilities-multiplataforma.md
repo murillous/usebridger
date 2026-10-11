@@ -1,5 +1,5 @@
 ---
-'@bridger/core': minor
+'@usebridger/core': minor
 ---
 
 Capabilities multiplataforma (ADR 0070). **Quebra de API antes do 1.0.**

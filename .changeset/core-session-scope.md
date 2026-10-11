@@ -1,5 +1,5 @@
 ---
-'@bridger/core': minor
+'@usebridger/core': minor
 ---
 
 Escopo de sessão (M1-20, ADR 0036). `createBot({ session })` (padrão `'default'`, kebab-case)

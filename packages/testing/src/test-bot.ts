@@ -6,8 +6,8 @@ import {
   createBot,
   createLogger,
   type Message,
-} from '@bridger/core';
-import type { Interaction, TransportEvents } from '@bridger/core/adapter';
+} from '@usebridger/core';
+import type { Interaction, TransportEvents } from '@usebridger/core/adapter';
 import { FakeTransport, type SentMessage } from './fake-transport.ts';
 import { buildMessage, type IncomingMessage } from './incoming.ts';
 import { DEFAULT_SENDER, PROFILES, type ProfileName } from './profiles.ts';

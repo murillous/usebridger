@@ -39,7 +39,7 @@ Três perguntas ficaram para decidir:
   `capabilities.has('reactions')`, resposta com `fmt` e `bold`, teste em
   `describe.each(PROFILE_NAMES)`. O projeto traz `tsconfig` strict com `isolatedDeclarations`,
   `tsdown` para o `dist/` e o changesets configurado.
-- **Core como peer dependency e dev dependency, faixa `<1.0.0`** (também no `@bridger/testing` e
+- **Core como peer dependency e dev dependency, faixa `<1.0.0`** (também no `@usebridger/testing` e
   no `engine`). Um teste confere que a faixa aceita a versão atual do core e que `tsdown`,
   `typescript`, `vitest` e `@changesets/cli` têm as versões da raiz. Na 1.0, a faixa vira `^1.0.0`.
 - **Aceite por e2e, fora do `pnpm test`.** `scripts/e2e.ts` empacota core, kit e scaffold com

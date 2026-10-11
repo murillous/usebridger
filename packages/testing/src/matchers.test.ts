@@ -1,4 +1,4 @@
-import type { MessageKey, OutgoingContent } from '@bridger/core';
+import type { MessageKey, OutgoingContent } from '@usebridger/core';
 import { describe, expect, it } from 'vitest';
 import type { SentMessage } from './fake-transport.ts';
 import { buildMessage } from './incoming.ts';

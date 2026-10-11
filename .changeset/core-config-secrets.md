@@ -1,5 +1,5 @@
 ---
-'@bridger/core': minor
+'@usebridger/core': minor
 ---
 
 Segredos não entram mais por override de config (M1-13): `setOverrides` recusa qualquer campo

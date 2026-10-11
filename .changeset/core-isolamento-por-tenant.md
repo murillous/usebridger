@@ -1,5 +1,5 @@
 ---
-'@bridger/core': minor
+'@usebridger/core': minor
 ---
 
 Isolamento automático por tenant (ADR 0072): o transport marca o cliente verificado em

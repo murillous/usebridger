@@ -1,5 +1,5 @@
 ---
-'@bridger/core': minor
+'@usebridger/core': minor
 ---
 
 `LocationMessage.location.address`, opcional: o endereço, quando a plataforma informa (o `venue`

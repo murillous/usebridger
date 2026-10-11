@@ -7,7 +7,7 @@ O detalhe está em [Config no core](../../packages/core/docs/config.md).
 ## Declarar
 
 ```ts
-import { definePlugin, secret } from '@bridger/core';
+import { definePlugin, secret } from '@usebridger/core';
 import { z } from 'zod';
 
 export const clima = definePlugin({

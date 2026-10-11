@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { defineStorageContract } from '@bridger/core/storage-contract';
+import { defineStorageContract } from '@usebridger/core/storage-contract';
 import { describe, it } from 'vitest';
 import { sqlite } from './index.ts';
 

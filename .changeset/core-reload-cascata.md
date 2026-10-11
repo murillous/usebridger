@@ -1,5 +1,5 @@
 ---
-'@bridger/core': minor
+'@usebridger/core': minor
 ---
 
 Recarregar um plugin que provê serviço não quebra mais quem depende dele (#226, ADR 0041).

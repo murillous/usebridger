@@ -14,7 +14,7 @@ Alternativas consideradas: só SQLite; só Postgres; armazenamento em memória.
 ## Decisão
 
 O core define o `StoragePort`. A v1 entrega dois adapters oficiais:
-`@bridger/storage-sqlite` (padrão) e `@bridger/storage-postgres`. O auth state do
+`@usebridger/storage-sqlite` (padrão) e `@usebridger/storage-postgres`. O auth state do
 WhatsApp é guardado no mesmo port.
 
 ## Consequências

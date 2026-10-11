@@ -19,7 +19,7 @@ import type {
   SendOptions,
   TypingKind,
   Unsubscribe,
-} from '@bridger/core';
+} from '@usebridger/core';
 import {
   type Interaction,
   type Transport,
@@ -28,7 +28,7 @@ import {
   type TransportEventName,
   type TransportEvents,
   TypedEmitter,
-} from '@bridger/core/adapter';
+} from '@usebridger/core/adapter';
 import {
   type AnyMessageContent,
   type AuthenticationState,

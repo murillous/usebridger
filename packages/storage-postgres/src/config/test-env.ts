@@ -4,9 +4,7 @@
 const url = process.env['BRIDGER_TEST_POSTGRES_URL'];
 
 if (url === undefined && process.env['CI'] === 'true') {
-  throw new Error(
-    'BRIDGER_TEST_POSTGRES_URL não definida: o CI roda os testes contra o Postgres.',
-  );
+  throw new Error('BRIDGER_TEST_POSTGRES_URL não definida: o CI roda os testes contra o Postgres.');
 }
 
 /** URL do banco de testes, ou `undefined` para pular os testes que precisam dele. */

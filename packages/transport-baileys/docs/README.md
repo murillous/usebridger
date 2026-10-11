@@ -1,4 +1,4 @@
-# @bridger/transport-baileys — documentação
+# @usebridger/transport-baileys — documentação
 
 Transport do WhatsApp sobre o [Baileys](https://github.com/WhiskeySockets/Baileys). Implementa o
 contrato `Transport` do core ([Transport](../../core/docs/transport.md)). O porquê das decisões
@@ -11,8 +11,8 @@ está nos [ADRs](../../../docs/adr/README.md).
 ## Uso
 
 ```ts
-import { createBot, definePlugin } from '@bridger/core';
-import { baileys } from '@bridger/transport-baileys';
+import { createBot, definePlugin } from '@usebridger/core';
+import { baileys } from '@usebridger/transport-baileys';
 
 // Quem exibe o QR é um plugin: o evento chega pelo barramento.
 const telaDePareamento = definePlugin({

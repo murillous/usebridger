@@ -113,7 +113,7 @@ export async function migrate(pool: Pool, schema: string): Promise<void> {
     if (current > SCHEMA_VERSION) {
       throw new Error(
         `storage-postgres: o schema ${schema} está na versão ${current}, mais nova que a deste ` +
-          `adapter (${SCHEMA_VERSION}). Atualize o @bridger/storage-postgres.`,
+          `adapter (${SCHEMA_VERSION}). Atualize o @usebridger/storage-postgres.`,
       );
     }
     for (let version = current; version < SCHEMA_VERSION; version++) {

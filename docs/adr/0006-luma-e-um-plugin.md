@@ -12,7 +12,7 @@ Alternativas consideradas: IA embutida no kernel.
 
 ## Decisão
 
-A IA **não entra no core**. A Luma vira o plugin `@bridger/plugin-ai`, entregue no M5.
+A IA **não entra no core**. A Luma vira o plugin `@usebridger/plugin-ai`, entregue no M5.
 
 ## Consequências
 

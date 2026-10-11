@@ -1,5 +1,5 @@
 ---
-'@bridger/core': patch
+'@usebridger/core': patch
 ---
 
 `role: 'group-admin'` reconhece o admin também pelo telefone (#238, ADR 0046). No WhatsApp, o

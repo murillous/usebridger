@@ -1,5 +1,5 @@
 ---
-'@bridger/core': minor
+'@usebridger/core': minor
 ---
 
 Config por plugin (M1-13): `createPluginConfigs()` valida a config de cada plugin com o schema

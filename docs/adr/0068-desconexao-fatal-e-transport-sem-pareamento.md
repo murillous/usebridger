@@ -39,9 +39,9 @@ O mesmo padrão nos caminhos vizinhos:
 - O Baileys não reconecta sozinho: cada fechamento do socket é terminal para ele, e o adapter já
   emite um `closed` por socket.
 
-Sobre ampliar as uniões: `DisconnectReason` sai em `@bridger/core` (plugins o leem no
+Sobre ampliar as uniões: `DisconnectReason` sai em `@usebridger/core` (plugins o leem no
 `connection.status`), e `ReconnectionDecision` e a causa do `stop` saem em
-`@bridger/core/adapter`. Um `switch` exaustivo com `never` no `default` deixa de compilar quando
+`@usebridger/core/adapter`. Um `switch` exaustivo com `never` no `default` deixa de compilar quando
 a união ganha membro; sem `default`, o membro novo passa reto em runtime. No repositório, o único
 `switch` sobre o motivo é o da própria política, e nenhum sobre a causa do `stop` fora do
 executor. É o mesmo problema que o #272 trata para `MessageType` e `OutgoingContent`.

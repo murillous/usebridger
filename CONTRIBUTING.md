@@ -45,7 +45,7 @@ Todo PR precisa:
 Codificadas no Biome e verificadas no CI (detalhes no [README](README.md#regras-do-biome)):
 
 - TypeScript, ESM, **named exports apenas**;
-- imports entre pacotes pelo nome (`@bridger/*`); dentro do pacote, nada de `../` — use o
+- imports entre pacotes pelo nome (`@usebridger/*`); dentro do pacote, nada de `../` — use o
   alias `#` do próprio pacote;
 - nunca engolir erros: trate, relance ou registre;
 - nenhum `process.env` fora da camada de config;

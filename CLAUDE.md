@@ -26,7 +26,7 @@ O Biome barra default export, `../`, `process.env` fora da config e `catch` vazi
 - Comentários em PT-BR explicando o **porquê**; o óbvio fica sem comentário.
 - Erro sempre tem destino: tratado, relançado ou registrado com fallback explícito.
 - A menor solução que resolve: abstração e configuração só quando a tarefa atual exige.
-- Plugins conversam com o core pela API pública (`@bridger/*`). Se faltar algo, a lacuna é
+- Plugins conversam com o core pela API pública (`@usebridger/*`). Se faltar algo, a lacuna é
   do core — resolva lá ([ADR 0029](docs/adr/0029-open-core-repo-privado.md)).
 
 ## Definição de pronto
