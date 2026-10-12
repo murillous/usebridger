@@ -1,37 +1,25 @@
-import {
-  ActionRegistry,
-  type ActionTarget,
-  type MessageAction,
-  numberedMenu,
-  pickChoice,
-} from '#actions/actions.ts';
+import { ActionRegistry } from '#actions/actions.ts';
 import { createCommandCatalog } from '#commands/catalog.ts';
 import { createPrefixStore } from '#commands/prefixes.ts';
 import { CommandConflictError, createCommandRegistry } from '#commands/registry.ts';
 import { RoleConflictError } from '#commands/roles.ts';
-import { createCommandRouter, type DispatchResult } from '#commands/router.ts';
+import { createCommandRouter } from '#commands/router.ts';
 import { BotConfigError, normalizeOwners } from '#config/owners.ts';
 import { createPluginConfigs, type PluginConfigs } from '#config/plugin-configs.ts';
-import {
-  ConversationRegistry,
-  type PendingReply,
-  StepTimeoutError,
-} from '#conversations/conversations.ts';
+import { ConversationRegistry } from '#conversations/conversations.ts';
 import { ArmedTimers, ContextExpiredError } from '#deadline.ts';
 import { createEventBus } from '#events/bus.ts';
-import type { BotEvents, ListenerExtras, PluginErrorEvent } from '#events/types.ts';
+import type { BotEvents, PluginErrorEvent } from '#events/types.ts';
 import { createGroups } from '#groups/groups.ts';
 import { sessionHttp } from '#http/server.ts';
 import { createDeferredLogger } from '#logger/deferred.ts';
 import { createLogger, createNoopLogger } from '#logger/logger.ts';
 import { createSecretSet } from '#logger/secrets.ts';
 import type { Logger } from '#logger/types.ts';
-import { createMessage } from '#message/create.ts';
 import type { Message } from '#message/types.ts';
 import { chatAllowed } from '#middleware/chat-filter.ts';
 import { createOutbound, enqueueAction } from '#outbound/actions.ts';
 import { OutboundQueue } from '#outbound/queue.ts';
-import type { PrepareActions } from '#outbound/reply.ts';
 import { PLUGIN_NAME_PATTERN } from '#plugin/define.ts';
 import { createPluginHost, type PluginHost, type PluginReloadResult } from '#plugin/host.ts';
 import type { PluginLifecycleError, PluginReportEntry } from '#plugin/report.ts';
@@ -44,26 +32,17 @@ import { DEFAULT_SESSION, sessionStorage, sharedStorage } from '#storage/namespa
 import { TenantScope } from '#tenant/scope.ts';
 import { type Capability, hasCapability } from '#transport/capabilities.ts';
 import { transportIssues } from '#transport/methods.ts';
-import type {
-  CommandInteraction,
-  Interaction,
-  Transport,
-  TransportDeps,
-} from '#transport/types.ts';
+import type { Interaction, Transport, TransportDeps } from '#transport/types.ts';
 import { createUnsafeAccess } from '#unsafe/access.ts';
 import { BackgroundTasks } from './background-tasks.ts';
 import type { Bot, BotConfig, BotPluginConfigs, BotState, BotStats } from './config.ts';
 import { BotStateError } from './config.ts';
 import { DIRECT_EVENTS, type DirectEvent } from './direct-events.ts';
-import { GroupAdminTimeoutError, groupAdminPort } from './group-admin.ts';
-import {
-  createMessageContext,
-  type KernelMessageContext,
-  type MessageContextDeps,
-  messageExtras,
-} from './message-context.ts';
+import { groupAdminPort } from './group-admin.ts';
+import { createInboundFlow } from './inbound-flow.ts';
+import type { KernelMessageContext } from './message-context.ts';
 import { createPipeline } from './middlewares.ts';
-import { CommandTimeoutError, createPluginContextFactory } from './plugin-context.ts';
+import { createPluginContextFactory } from './plugin-context.ts';
 import { createReconnector, type Reconnector } from './reconnect.ts';
 import { claimSession, type ReleaseSession } from './session.ts';
 import { acquireSessionLease, type SessionLease } from './session-lease.ts';
@@ -98,14 +77,8 @@ const STOP_TIMEOUTS = {
   outbound: 3000,
 } as const;
 
-/**
- * Dono e passo da espera do menu numerado (ADR 0062). O nome não é kebab-case: nenhum plugin o
- * usa.
- */
-const MENU_OWNER = '#menu';
 // Dono das rotas do transport na tabela HTTP da sessão; nome de plugin não tem `$`.
 const TRANSPORT_ROUTE_OWNER = '$transport';
-const MENU_STEP = 'choice';
 
 /**
  * Cria um bot. Valida a config e monta as peças sem efeito colateral (sem conexão, timer,
@@ -211,16 +184,10 @@ export function createBot(config: BotConfig): Bot {
       ),
   });
   const conversations = new ConversationRegistry<KernelMessageContext>();
-  // O menu numerado espera a resposta pelo mesmo registro dos plugins, então um comando digitado
-  // ou outra espera também o cancelam. O passo nunca roda: o `dispatchMessage` trata a escolha.
-  conversations.define(MENU_OWNER, MENU_STEP, () => undefined);
   const actions = new ActionRegistry();
-  // Mensagem montada pelo kernel a partir de um clique ou comando nativo -> a interação de origem,
-  // para o `ctx.unsafe.raw()` pedir ao transport o objeto bruto dela (ADR 0066). Por bot, e some
-  // com a mensagem.
-  const interactions = new WeakMap<Message, Interaction>();
-  const buttons = hasCapability(transport, 'actions');
-  const maxButtons = buttonLimit(transport);
+  // Validado mesmo sem a capability: `limits.actions` malformado é erro de config de todo jeito.
+  const buttonMax = buttonLimit(transport);
+  const maxButtons = hasCapability(transport, 'actions') ? buttonMax : 0;
   const pipeline = createPipeline(
     config.middlewares ?? {},
     timeouts.middlewareMs ?? DEFAULT_MIDDLEWARE_TIMEOUT_MS,
@@ -257,13 +224,23 @@ export function createBot(config: BotConfig): Bot {
     onLateError: (event) => logPluginError(event),
     onStorageError: (error) => log.error('scheduler: falha no storage', { err: error }),
   });
-  const contextDeps: MessageContextDeps = {
-    sender: send,
-    quote: hasCapability(transport, 'quoted'),
-    reactions: hasCapability(transport, 'reactions'),
-    log: getLog,
-    actions: prepareActions,
-  };
+  const flow = createInboundFlow({
+    router,
+    conversations,
+    actions,
+    bus,
+    pipeline,
+    context: {
+      sender: send,
+      quote: hasCapability(transport, 'quoted'),
+      reactions: hasCapability(transport, 'reactions'),
+      log: getLog,
+    },
+    maxButtons,
+    ready: () => ready || readyPromise,
+    reportPluginError,
+    background,
+  });
   const reconnector: Reconnector | undefined =
     config.reconnection === false
       ? undefined
@@ -328,277 +305,7 @@ export function createBot(config: BotConfig): Bot {
     });
   }
 
-  // --- Fluxo de uma mensagem (plano §5.3) -------------------------------------------------
-
-  /**
-   * Barreiras comuns à mensagem nova e à edição: espera o fim do boot e roda os middlewares em
-   * volta de `handle`, que só roda se a mensagem atravessar a cadeia. A volta da cebola espera
-   * `handle` terminar (ADR 0012).
-   */
-  async function admit(
-    message: Message,
-    handle: (ctx: KernelMessageContext) => Promise<void>,
-  ): Promise<void> {
-    if (!ready && !(await readyPromise)) return;
-    await pipeline.run(createMessageContext(message, contextDeps), handle);
-  }
-
-  function handleMessage(message: Message): Promise<void> {
-    return admit(message, dispatchMessage);
-  }
-
-  async function dispatchMessage(ctx: KernelMessageContext): Promise<void> {
-    const { message } = ctx;
-    // A espera vem antes do roteador (ADR 0060). Retirada aqui de todo jeito: um comando digitado
-    // no meio da conversa a cancela e segue para o roteador.
-    const pending = conversations.take(message.chat.id, message.sender.id);
-    if (pending !== undefined && router.match(message, ctx.text) === null) {
-      if (pending.plugin !== MENU_OWNER) {
-        await runStep(ctx, pending);
-        return;
-      }
-      // Um número do menu roda a ação, como o clique; outro texto segue o fluxo normal (ADR 0062).
-      const target = menuChoice(ctx, pending.data);
-      if (target !== undefined) {
-        await runAction(ctx, target);
-        return;
-      }
-    }
-    const result = await router.dispatch(ctx);
-    if (!result.consumed) {
-      await bus.emit('message', message, listenerExtras(ctx));
-      return;
-    }
-    await afterCommand(ctx, result);
-  }
-
-  /** Recusa, falha e evento `command` do comando que consumiu a mensagem ou o clique. */
-  async function afterCommand(
-    ctx: KernelMessageContext,
-    result: Extract<DispatchResult, { readonly consumed: true }>,
-  ): Promise<void> {
-    const { message } = ctx;
-    if (result.status === 'background') {
-      // O chat já está livre; a falha e o `command` saem quando o `run` terminar (ADR 0087).
-      background.track(
-        result.done
-          .then((outcome) => afterCommand(ctx, outcome))
-          .catch((error: unknown) =>
-            ctx.log.error('falha ao concluir o comando em segundo plano', {
-              plugin: result.command.plugin,
-              command: result.command.name,
-              err: error,
-            }),
-          ),
-      );
-      return;
-    }
-    if (result.status === 'rejected' && result.reply !== null) {
-      // Sem await: a resposta espera a taxa da fila de saída, e o chat não precisa esperar.
-      ctx.reply(result.reply).catch((error: unknown) =>
-        ctx.log.warn('falha ao enviar a recusa do comando', {
-          plugin: result.command.plugin,
-          command: result.command.name,
-          err: error,
-        }),
-      );
-    } else if (result.status === 'failed') {
-      const event: PluginErrorEvent = {
-        plugin: result.command.plugin,
-        phase: 'command',
-        event: result.command.name,
-        error: result.error,
-        timedOut:
-          result.error instanceof CommandTimeoutError ||
-          result.error instanceof GroupAdminTimeoutError,
-      };
-      reportPluginError(event);
-    }
-    // Com await, como o `message`: o observador segura o chat e entra no `settled()` (ADR 0049).
-    const { plugin, name, invokedAs } = result.command;
-    await bus.emit('command', { plugin, name, invokedAs, status: result.status, message });
-  }
-
-  /**
-   * Roda o passo que esperava esta mensagem. Ela para aqui: não vai ao roteador, a `message` nem
-   * a `command`. A falha vira `plugin.error` com `phase: 'step'`.
-   */
-  async function runStep(
-    ctx: KernelMessageContext,
-    pending: PendingReply<KernelMessageContext>,
-  ): Promise<void> {
-    try {
-      await pending.run(ctx, pending.data);
-    } catch (error) {
-      const event: PluginErrorEvent = {
-        plugin: pending.plugin,
-        phase: 'step',
-        event: pending.step,
-        error,
-        timedOut: error instanceof StepTimeoutError,
-      };
-      reportPluginError(event);
-    }
-  }
-
-  // --- Ações e botões (ADR 0062) -------------------------------------------------------------
-
-  /**
-   * Resolve as ações de um `reply`: guarda o alvo de cada uma sob um ID e devolve os botões ou,
-   * sem a capability ou acima do limite, o texto com o menu numerado e a espera do remetente.
-   */
-  function prepareActions(owner: string | null, message: Message): PrepareActions {
-    return (text, list) => {
-      const targets = list.map((action) => actionTarget(owner, action));
-      const chatId = message.chat.id;
-      const ids = targets.map((target) => actions.register(chatId, target));
-      const labels = targets.map(({ label }) => label);
-      if (buttons && ids.length <= maxButtons) {
-        return { text, actions: ids.map((id, index) => ({ id, label: labels[index] as string })) };
-      }
-      conversations.expect(MENU_OWNER, chatId, message.sender.id, MENU_STEP, { data: ids });
-      return { text: numberedMenu(text, labels) };
-    };
-  }
-
-  /** Valida a ação e devolve o alvo: o erro sai na chamada do `reply`, não no clique. */
-  function actionTarget(owner: string | null, action: MessageAction): ActionTarget {
-    const label: unknown = action?.label;
-    if (typeof label !== 'string' || label.trim().length === 0) {
-      throw new TypeError('ação sem `label`');
-    }
-    if ('command' in action) {
-      if (router.registry.find(action.command) === undefined) {
-        throw new TypeError(`ação "${label}": comando "${action.command}" não registrado`);
-      }
-      return {
-        kind: 'command',
-        label,
-        command: action.command,
-        args: Object.freeze([...(action.args ?? [])]),
-      };
-    }
-    if ('step' in action) {
-      if (owner === null) {
-        throw new TypeError(`ação "${label}": passo só no contexto de um plugin`);
-      }
-      if (conversations.find(owner, action.step) === undefined) {
-        throw new TypeError(
-          `ação "${label}": plugin "${owner}" sem o passo "${action.step}"; defina-o com ` +
-            'ctx.conversations.define',
-        );
-      }
-      return { kind: 'step', label, plugin: owner, step: action.step, data: action.data ?? null };
-    }
-    throw new TypeError(`ação "${label}" sem \`command\` nem \`step\``);
-  }
-
-  /** O alvo que a resposta ao menu numerado escolhe, se ela for um número da lista. */
-  function menuChoice(ctx: KernelMessageContext, data: unknown): ActionTarget | undefined {
-    const ids = data as readonly string[];
-    const index = pickChoice(ctx.text, ids.length);
-    if (index === null) return undefined;
-    return actions.resolve(ids[index] as string, ctx.message.chat.id);
-  }
-
-  /**
-   * O clique num botão: passa pela fila do chat e pelos middlewares como uma mensagem de texto com
-   * o `label`, e roda o comando ou o passo da ação. Vencido, desconhecido ou de outro chat, é
-   * descartado.
-   */
-  async function handleInteraction(interaction: Interaction): Promise<void> {
-    if (interaction.command !== undefined) return handleNativeCommand(interaction);
-    const { chat, sender, actionId } = interaction;
-    const target = actions.resolve(actionId, chat.id);
-    if (target === undefined) {
-      log.debug('clique em botão vencido ou desconhecido; descartado', { chatId: chat.id });
-      return;
-    }
-    const message = createMessage({
-      type: 'text',
-      id: interaction.id,
-      chat,
-      sender,
-      text: target.label,
-      timestamp: interaction.timestamp,
-      fromMe: false,
-    });
-    interactions.set(message, interaction);
-    await admit(message, async (ctx) => {
-      // O clique é um comando: cancela a espera do remetente, como o comando digitado (ADR 0060).
-      conversations.take(chat.id, sender.id);
-      await runAction(ctx, target);
-    });
-  }
-
-  /**
-   * Comando nativo da plataforma (ADR 0064): roda como o clique num botão de comando, com o texto
-   * livre interpretado como o que vem depois do comando digitado.
-   */
-  async function handleNativeCommand(interaction: CommandInteraction): Promise<void> {
-    const { chat, sender, command, args } = interaction;
-    const message = createMessage({
-      type: 'text',
-      id: interaction.id,
-      chat,
-      sender,
-      // O texto que a plataforma mostra para o comando: quem lê a mensagem (middlewares, log) vê
-      // o que a pessoa chamou.
-      text: args.trim() === '' ? `/${command}` : `/${command} ${args.trimStart()}`,
-      timestamp: interaction.timestamp,
-      fromMe: false,
-    });
-    interactions.set(message, interaction);
-    await admit(message, async (ctx) => {
-      // Comando cancela a espera do remetente, como o digitado (ADR 0060).
-      conversations.take(chat.id, sender.id);
-      const result = await router.dispatch(ctx, { command, rawArgs: args });
-      if (!result.consumed) {
-        ctx.log.debug('comando nativo que não existe mais; descartado', { command });
-        return;
-      }
-      await afterCommand(ctx, result);
-    });
-  }
-
-  /** Roda o alvo da ação. Comando ou passo que não existe mais (plugin desligado) é descartado. */
-  async function runAction(ctx: KernelMessageContext, target: ActionTarget): Promise<void> {
-    if (target.kind === 'command') {
-      const result = await router.dispatch(ctx, { command: target.command, args: target.args });
-      if (!result.consumed) {
-        ctx.log.debug('botão de comando que não existe mais; descartado', {
-          command: target.command,
-        });
-        return;
-      }
-      await afterCommand(ctx, result);
-      return;
-    }
-    const run = conversations.find(target.plugin, target.step);
-    if (run === undefined) {
-      ctx.log.debug('botão de passo que não existe mais; descartado', {
-        plugin: target.plugin,
-        step: target.step,
-      });
-      return;
-    }
-    await runStep(ctx, { plugin: target.plugin, step: target.step, data: target.data, run });
-  }
-
-  /** Extras dos eventos de mensagem: os campos chegam aos listeners pela visão de cada plugin. */
-  function listenerExtras(ctx: KernelMessageContext): ListenerExtras<'message'> {
-    return messageExtras(ctx) as unknown as ListenerExtras<'message'>;
-  }
-
-  /**
-   * Edição passa pelas mesmas barreiras da mensagem nova (fila do chat, boot, middlewares — o
-   * `rateLimit` a conta), mas não dispara comando: só os listeners de `message.edited`.
-   */
-  function handleEdited(message: Message): Promise<void> {
-    return admit(message, async (ctx) => {
-      await bus.emit('message.edited', ctx.message, listenerExtras(ctx));
-    });
-  }
+  // --- Entrada do transport ----------------------------------------------------------------
 
   /**
    * Põe a mensagem (nova ou editada) ou o clique na fila do chat dele: o mesmo chat anda em
@@ -651,9 +358,9 @@ export function createBot(config: BotConfig): Bot {
   /** Assina todos os eventos do transport; devolve a função que desfaz. */
   function subscribeTransport(): () => void {
     const offs: (() => void)[] = [
-      transport.on('message', (message) => enqueue(message, handleMessage)),
-      transport.on('message.edited', (message) => enqueue(message, handleEdited)),
-      transport.on('interaction', (interaction) => enqueue(interaction, handleInteraction)),
+      transport.on('message', (message) => enqueue(message, flow.handleMessage)),
+      transport.on('message.edited', (message) => enqueue(message, flow.handleEdited)),
+      transport.on('interaction', (interaction) => enqueue(interaction, flow.handleInteraction)),
       transport.on('connection.status', (status) => {
         // Com a conexão caída, o envio falharia e esgotaria o retry antes da reconexão (#198).
         if (status.status === 'closed') outbound.pause();
@@ -799,7 +506,7 @@ export function createBot(config: BotConfig): Bot {
       unsafe: createUnsafeAccess({
         transport,
         log,
-        interactionOf: (message) => interactions.get(message),
+        interactionOf: flow.interactionOf,
       }),
       commandTimeoutMs,
       armed,

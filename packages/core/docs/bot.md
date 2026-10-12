@@ -144,6 +144,11 @@ transport 'message' ou 'message.edited'
 ctx.reply()/ctx.send → fila de saída → transport
 ```
 
+O `createBot` (`src/bot/bot.ts`) só põe a mensagem na fila do chat. O que vem depois dela —
+middlewares, resposta esperada, roteador, listeners, cliques, comandos nativos e a resolução das
+ações do `reply` — mora em `src/bot/inbound-flow.ts` (`createInboundFlow`), separado do boot e do
+shutdown.
+
 - Cada mensagem ganha um contexto (`BotMessageContext`): `message`, `text` (o texto de
   trabalho), `reply` e `log` (com `chatId`). `reply` e `log` só são criados se alguém os ler.
 - **`ctx.text`** começa igual a `message.text`. Um middleware pode reescrevê-lo — o `sanitize`
