@@ -3,7 +3,7 @@ import { assertCommandDefinition, type CommandDefinition } from '#commands/comma
 import { isBotEventName } from '#events/names.ts';
 import { isCapability } from '#transport/capabilities.ts';
 import { isValidRange, parseVersion } from './semver.ts';
-import type { PluginDefinition, PluginMessages } from './types.ts';
+import type { PluginAccepts, PluginDefinition, PluginMessages } from './types.ts';
 
 /**
  * Nome de plugin: kebab-case minúsculo, começando por letra. É estável porque vira chave de
@@ -220,7 +220,10 @@ export function assertPluginDefinition(
 export function definePlugin<
   TSchema extends z.ZodType = z.ZodType,
   TMessages extends PluginMessages = PluginMessages,
->(definition: PluginDefinition<TSchema, TMessages>): PluginDefinition<TSchema, TMessages> {
+  const TAccepts extends PluginAccepts = PluginAccepts,
+>(
+  definition: PluginDefinition<TSchema, TMessages, TAccepts>,
+): PluginDefinition<TSchema, TMessages, TAccepts> {
   assertPluginDefinition(definition);
   return definition;
 }

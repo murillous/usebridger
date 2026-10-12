@@ -202,8 +202,34 @@ com `'audio:audio/ogg'`. A mídia de outro mimetype não casa aquela entrada, e 
 próxima; se nenhuma casar, a recusa vai ao `onReject` como sempre. Mimetype mal formado, ou num
 tipo sem mídia (`'text:text/plain'`), falha na definição com `TypeError`.
 
+`'args'` casa quando há texto depois do comando (`ctx.rawArgs` não vazio). É o que serve para
+"mídia **ou** um argumento": `'text'` não ajuda, porque o próprio comando é texto e casaria sempre.
+Com `!sticker` declarando `['sticker', 'quoted:sticker', 'args']`, `!s https://...` roda com
+`ctx.accepted.spec === 'args'` e `ctx.media` nulo, e o `!s` sozinho, sem mídia, cai no `onReject`.
+`'args'` é só da própria mensagem: `'quoted:args'` ou `'args'` com mimetype falham com `TypeError`.
+
 Sem `accepts`, qualquer mensagem passa; `ctx.media` é a mídia própria ou, na falta dela, a da
 citada.
+
+### `ctx.media` garantido
+
+`command()` e o `commands` do `definePlugin` inferem o `accepts` declarado. Quando **toda**
+entrada tem mídia, o `run` recebe um `MediaCommandContext`: `ctx.media` é `Media` e
+`ctx.accepted` é `AcceptedMessage`, sem `null`, porque o roteador só chega ao `run` depois de
+casar uma delas. Basta uma entrada sem mídia (`'args'`, `'quoted:text'`) para voltar ao
+`CommandContext`, com `Media | null`.
+
+```ts
+command({
+  name: 'image',
+  accepts: ['sticker', 'quoted:sticker'],
+  run: async (ctx) => ctx.media.download(), // sem `!` nem checagem
+});
+```
+
+O estreitamento vem do literal: um `accepts` guardado numa variável tipada `AcceptSpec[]`, ou um
+comando passado direto a `ctx.commands.add` sem `command()`, fica com o contexto largo. Um helper
+fora do `run` pode receber `MediaCommandContext`.
 
 ## `role`
 

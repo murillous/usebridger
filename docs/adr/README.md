@@ -79,6 +79,7 @@ sendo a referência; um ADR novo entra nos dois.
 - [0049](0049-evento-de-comando.md) — Evento `command`: o plugin observa o comando que consumiu a mensagem (detalha D12/D40)
 - [0087](0087-comando-em-segundo-plano.md) — Comando em segundo plano: `background: true` tira o `run` da fila do chat (detalha D42/D49)
 - [0090](0090-requires-por-comando.md) — `requires` por comando: sem a capability, o comando não é registrado (detalha D16/D64)
+- [0094](0094-accepts-estreita-o-contexto-e-args.md) — `accepts` estreita o `ctx.media` do `run` e ganha `'args'` (detalha D12)
 
 **Plugins: carga, config, services e execução**
 
@@ -224,3 +225,4 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0091](0091-log-legivel-e-baileys-em-warn.md) | D91 | Log legível no terminal (`format: 'pretty'`, formatador próprio sobre a linha já censurada) e linhas do Baileys e do `console` do libsignal a partir de `warn` (`baileys({ logLevel })`) (detalha D13/D37) | Aceito |
 | [0092](0092-placeholders-nas-messages.md) | D92 | Placeholders nas `messages` e `ctx.t`: `{prefix}` do chat e valores do plugin, sobrescrita validada contra o texto padrão (substitui em parte D25, detalha D63) | Aceito |
 | [0093](0093-react-do-contexto-tolerante.md) | D93 | `react` do contexto tolerante: sem a capability `reactions`, resolve sem reagir e registra em `debug`; o `ctx.send.react` continua estrito (substitui em parte D40) | Aceito |
+| [0094](0094-accepts-estreita-o-contexto-e-args.md) | D94 | `accepts` estreita o contexto do `run` (`ctx.media` como `Media` quando toda entrada tem mídia) e ganha `'args'`, que casa só com texto depois do comando (detalha D12) | Aceito |
