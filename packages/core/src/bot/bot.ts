@@ -51,6 +51,7 @@ import type {
   TransportDeps,
 } from '#transport/types.ts';
 import { createUnsafeAccess } from '#unsafe/access.ts';
+import { BackgroundTasks } from './background-tasks.ts';
 import type { Bot, BotConfig, BotPluginConfigs, BotState, BotStats } from './config.ts';
 import { BotStateError } from './config.ts';
 import { DIRECT_EVENTS, type DirectEvent } from './direct-events.ts';
@@ -181,25 +182,8 @@ export function createBot(config: BotConfig): Bot {
   // Prazos de comando, papel, consulta de admin e listener: o shutdown desarma os de handlers
   // presos (`abandonInternals`).
   const armed = new ArmedTimers();
-  // `run` de comandos com `background: true` em andamento (ADR 0087): fora da fila do chat, mas
-  // dentro do `settled()`. O shutdown os solta (`abandonInternals`): quem ignora o `signal`
-  // abortado e tem o prazo desarmado nunca assenta.
-  const background = new Set<Promise<void>>();
-  const backgroundWaiters: (() => void)[] = [];
-  const releaseBackgroundWaiters = (): void => {
-    for (const resolve of backgroundWaiters.splice(0)) resolve();
-  };
-  const trackBackground = (task: Promise<void>): void => {
-    background.add(task);
-    void task.finally(() => {
-      background.delete(task);
-      if (background.size === 0) releaseBackgroundWaiters();
-    });
-  };
-  const backgroundIdle = (): Promise<void> =>
-    background.size === 0
-      ? Promise.resolve()
-      : new Promise((resolve) => backgroundWaiters.push(resolve));
+  // Comandos com `background: true` em andamento: entram no `settled()`, o shutdown os solta.
+  const background = new BackgroundTasks();
   const bus = createEventBus({
     listenerTimeoutMs: timeouts.listenerMs,
     armed,
@@ -269,10 +253,7 @@ export function createBot(config: BotConfig): Bot {
     storage: scoped,
     tenants,
     jobTimeoutMs: timeouts.jobMs,
-    onError: (event) => {
-      logPluginError(event);
-      void bus.emit('plugin.error', event);
-    },
+    onError: (event) => reportPluginError(event),
     onLateError: (event) => logPluginError(event),
     onStorageError: (error) => log.error('scheduler: falha no storage', { err: error }),
   });
@@ -327,6 +308,12 @@ export function createBot(config: BotConfig): Bot {
       timedOut: event.timedOut,
       err: event.error,
     });
+  }
+
+  /** Falha de handler de plugin: vai ao log e aos observadores de `plugin.error`. */
+  function reportPluginError(event: PluginErrorEvent): void {
+    logPluginError(event);
+    void bus.emit('plugin.error', event);
   }
 
   /** Erros de ciclo de vida do host viram `plugin.error` (o host já os logou). */
@@ -393,7 +380,7 @@ export function createBot(config: BotConfig): Bot {
     const { message } = ctx;
     if (result.status === 'background') {
       // O chat já está livre; a falha e o `command` saem quando o `run` terminar (ADR 0087).
-      trackBackground(
+      background.track(
         result.done
           .then((outcome) => afterCommand(ctx, outcome))
           .catch((error: unknown) =>
@@ -425,8 +412,7 @@ export function createBot(config: BotConfig): Bot {
           result.error instanceof CommandTimeoutError ||
           result.error instanceof GroupAdminTimeoutError,
       };
-      logPluginError(event);
-      void bus.emit('plugin.error', event);
+      reportPluginError(event);
     }
     // Com await, como o `message`: o observador segura o chat e entra no `settled()` (ADR 0049).
     const { plugin, name, invokedAs } = result.command;
@@ -451,8 +437,7 @@ export function createBot(config: BotConfig): Bot {
         error,
         timedOut: error instanceof StepTimeoutError,
       };
-      logPluginError(event);
-      void bus.emit('plugin.error', event);
+      reportPluginError(event);
     }
   }
 
@@ -764,7 +749,6 @@ export function createBot(config: BotConfig): Bot {
     armed.disarmAll();
     // Comando em segundo plano preso fica sem prazo e não assentaria: o `settled()` não o espera.
     background.clear();
-    releaseBackgroundWaiters();
     // O `dispose` de cada plugin já tirou as esperas dele; isto garante que nenhum timer de TTL
     // sobreviva ao `stop()` e que um passo atrasado não registre outra.
     conversations.close();
@@ -804,10 +788,7 @@ export function createBot(config: BotConfig): Bot {
       send,
       groups,
       http,
-      onHttpError: (event) => {
-        logPluginError(event);
-        void bus.emit('plugin.error', event);
-      },
+      onHttpError: (event) => reportPluginError(event),
       transport: {
         name: transport.name,
         capabilities,
@@ -822,10 +803,7 @@ export function createBot(config: BotConfig): Bot {
       }),
       commandTimeoutMs,
       armed,
-      onRoleError: (event) => {
-        logPluginError(event);
-        void bus.emit('plugin.error', event);
-      },
+      onRoleError: (event) => reportPluginError(event),
       onLateCommandError: (plugin, command, error) => {
         // A recusa de um contexto expirado já foi logada quando aconteceu (ADR 0033).
         if (error instanceof ContextExpiredError) return;
@@ -1042,7 +1020,7 @@ export function createBot(config: BotConfig): Bot {
       )
     ) {
       await inbound.onIdle();
-      await backgroundIdle();
+      await background.idle();
       await bus.onIdle();
       await outbound.onIdle();
     }
