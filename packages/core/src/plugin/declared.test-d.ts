@@ -1,8 +1,13 @@
 // Tipos de `commands` e `on` no manifesto (ADR 0079), verificados pelo `pnpm typecheck`.
 import { describe, expectTypeOf, it } from 'vitest';
 import { z } from 'zod';
-import type { CommandContext, CommandRejection, RejectContext } from '#commands/command.ts';
-import type { TextMessage } from '#message/types.ts';
+import type {
+  CommandContext,
+  CommandRejection,
+  MediaCommandContext,
+  RejectContext,
+} from '#commands/command.ts';
+import type { Media, TextMessage } from '#message/types.ts';
 import { definePlugin } from './define.ts';
 import type { PluginDefinition } from './types.ts';
 
@@ -55,6 +60,30 @@ describe('definePlugin com commands e on', () => {
         },
       },
     });
+  });
+
+  it('estreita o contexto do run pelo accepts de cada comando', () => {
+    const plugin: PluginDefinition = definePlugin({
+      name: 'midia',
+      version: '1.0.0',
+      engine: '*',
+      config: z.object({ moeda: z.string() }),
+      commands: {
+        imagem: {
+          accepts: ['sticker', 'quoted:sticker'],
+          run(c, plugin) {
+            expectTypeOf(c).toEqualTypeOf<MediaCommandContext>();
+            expectTypeOf(plugin.config.moeda).toEqualTypeOf<string>();
+          },
+        },
+        sticker: {
+          accepts: ['image', 'args'],
+          run: (c) => expectTypeOf(c.media).toEqualTypeOf<Media | null>(),
+        },
+        ping: { run: (c) => expectTypeOf(c).toEqualTypeOf<CommandContext>() },
+      },
+    });
+    expectTypeOf(plugin).toEqualTypeOf<PluginDefinition>();
   });
 
   it('cabe na anotação larga que o isolatedDeclarations exige', () => {

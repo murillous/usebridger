@@ -141,6 +141,7 @@ const entries: Record<string, { file: string; load: () => Promise<object> } & En
       'Logger',
       'LoggerOptions',
       'Media',
+      'MediaCommandContext',
       'MediaInput',
       'MediaMessageType',
       'MentionTarget',

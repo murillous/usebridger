@@ -11,16 +11,21 @@ import type { RoleName } from './roles.ts';
  */
 export type CommandRole = 'owner' | 'group-admin' | 'everyone' | RoleName;
 
+/** Entrada de `accepts` que só casa com mensagem que tem mídia. */
+export type MediaAcceptSpec =
+  | MediaMessageType
+  | `quoted:${MediaMessageType}`
+  | `${MediaMessageType}:${string}/${string}`
+  | `quoted:${MediaMessageType}:${string}/${string}`;
+
 /**
  * O que o comando aceita: o tipo da própria mensagem (`'image'`) ou da mensagem citada
  * (`'quoted:image'`). Um tipo com mídia pode restringir o mimetype depois de mais um `:`, exato
- * (`'document:application/pdf'`) ou com curinga no subtipo (`'quoted:video:video/*'`).
+ * (`'document:application/pdf'`) ou com curinga no subtipo (`'quoted:video:video/*'`). `'args'`
+ * casa quando há texto depois do comando: `'text'` casaria sempre, porque o próprio comando é
+ * texto.
  */
-export type AcceptSpec =
-  | MessageType
-  | `quoted:${MessageType}`
-  | `${MediaMessageType}:${string}/${string}`
-  | `quoted:${MediaMessageType}:${string}/${string}`;
+export type AcceptSpec = MessageType | `quoted:${MessageType}` | MediaAcceptSpec | 'args';
 
 /** Entrada de `accepts` decomposta. */
 export interface ParsedAccept {
@@ -110,6 +115,22 @@ export interface CommandContext extends BotMessageContext {
   readonly media: Media | null;
 }
 
+/** Contexto do `run` cujo `accepts` só lista entradas com mídia: o roteador já garantiu as duas. */
+export interface MediaCommandContext extends CommandContext {
+  readonly accepted: AcceptedMessage;
+  readonly media: Media;
+}
+
+/**
+ * Contexto do `run` para o `accepts` declarado: `MediaCommandContext` quando toda entrada tem
+ * mídia. As tuplas evitam a distribuição sobre a união das entradas.
+ */
+export type CommandContextFor<A extends readonly AcceptSpec[]> = [A[number]] extends [
+  MediaAcceptSpec,
+]
+  ? MediaCommandContext
+  : CommandContext;
+
 /** Por que o roteador recusou rodar o comando. */
 export type CommandRejection =
   | { readonly reason: 'role'; readonly required: CommandRole }
@@ -121,7 +142,11 @@ export type CommandRejection =
  */
 export type RejectContext = Omit<CommandContext, 'accepted' | 'media'>;
 
-export interface CommandDefinition {
+/**
+ * `A` é o `accepts` declarado: `command()` o infere para tipar o contexto do `run`
+ * (`CommandContextFor`). O padrão, a lista larga, dá o `CommandContext`.
+ */
+export interface CommandDefinition<A extends readonly AcceptSpec[] = readonly AcceptSpec[]> {
   /** Nome sem o prefixo (`'sticker'`, não `'!sticker'`). Casado sem diferenciar caixa. */
   readonly name: string;
   readonly aliases?: readonly string[];
@@ -129,7 +154,7 @@ export interface CommandDefinition {
   /** Padrão: `'everyone'`. */
   readonly role?: CommandRole;
   /** A primeira entrada que casar, na ordem declarada, define `ctx.media`. */
-  readonly accepts?: readonly AcceptSpec[];
+  readonly accepts?: A;
   /**
    * Texto de resposta quando o comando é recusado (papel ou `accepts`). Sem `onReject`, ou
    * retornando `null`/`undefined`, a recusa é silenciosa.
@@ -143,7 +168,7 @@ export interface CommandDefinition {
    * `await ctx.reply(texto)` (ADR 0079). Outro valor é ignorado. O tipo segue `unknown` para
    * `run: (c) => c.reply('x')` continuar valendo.
    */
-  readonly run: (ctx: CommandContext) => unknown;
+  readonly run: (ctx: CommandContextFor<A>) => unknown;
   /**
    * Prazo do `run` e do `onReject` no bot, em ms. Padrão: `timeouts.commandMs` do bot. Para o
    * comando que legitimamente demora (download, conversão): enquanto roda, ele segura o chat
@@ -196,7 +221,7 @@ function assertToken(token: string, what: string): void {
  * Lança `TypeError` se o nome ou algum alias for vazio ou tiver espaço (nunca casaria) e
  * `RangeError` se `timeoutMs` não for finito e > 0 (o `setTimeout` trataria `Infinity`/`NaN`
  * como 1 ms e o comando estouraria na hora) ou se `concurrency` não for inteiro >= 1 (0 nunca
- * rodaria). Entrada de `accepts` com mimetype mal formado, ou num tipo sem mídia, e capability
+ * rodaria). Entrada de `accepts` com mimetype mal formado, ou num tipo sem mídia, `'quoted:args'` e capability
  * desconhecida em `requires` também lançam `TypeError`.
  */
 export function assertCommandDefinition(definition: CommandDefinition): void {
@@ -213,7 +238,13 @@ export function assertCommandDefinition(definition: CommandDefinition): void {
     );
   }
   for (const spec of definition.accepts ?? []) {
-    const { type, mimetype } = parseAccept(spec);
+    const { quoted, type, mimetype } = parseAccept(spec);
+    // O tipo já barra; a checagem é para quem define em JS. Os argumentos são só do comando.
+    if (quoted && type === 'args') {
+      throw new TypeError(
+        `accepts do comando "${definition.name}" inválido: "quoted:args" (args é só da própria mensagem)`,
+      );
+    }
     if (mimetype === null) continue;
     if (!MEDIA_TYPES.has(type) || !MIMETYPE.test(mimetype)) {
       throw new TypeError(
@@ -234,9 +265,13 @@ export function assertCommandDefinition(definition: CommandDefinition): void {
 
 /**
  * Define um comando. Valida nome, aliases, prazo e limite na definição, para o erro apontar o plugin que
- * declarou e não aparecer só quando alguém digitar o comando.
+ * declarou e não aparecer só quando alguém digitar o comando. Infere o `accepts` para tipar o
+ * contexto do `run` (ver `CommandContextFor`).
  */
-export function command(definition: CommandDefinition): CommandDefinition {
+export function command<const A extends readonly AcceptSpec[] = readonly AcceptSpec[]>(
+  definition: CommandDefinition<A>,
+): CommandDefinition {
   assertCommandDefinition(definition);
-  return definition;
+  // O `run` estreitado recebe só o contexto que o roteador monta para este `accepts`.
+  return definition as unknown as CommandDefinition;
 }

@@ -105,7 +105,7 @@ commands: {
     accepts: ['image', 'quoted:image'],
     onReject: () => 'Mande ou responda uma imagem.',
     run: async (c) => {
-      const bytes = await c.media!.download();
+      const bytes = await c.media.download();
       return `${bytes.length} bytes`;
     },
   },
@@ -113,7 +113,9 @@ commands: {
 ```
 
 Se o papel ou o `accepts` não fecham, o comando é recusado: o `onReject` responde, e sem ele a
-recusa é silenciosa. O `!` em `c.media!` é seguro aqui porque o `accepts` só tem tipos com mídia.
+recusa é silenciosa. Como o `accepts` só tem tipos com mídia, `c.media` já vem tipado como `Media`,
+sem `null`. Para aceitar mídia **ou** um argumento (`!sticker https://...`), ponha `'args'` no fim:
+ele casa só quando há texto depois do comando ([`accepts` e `ctx.media`](../../packages/core/docs/commands.md#accepts-e-ctxmedia)).
 
 ## Comando que demora
 

@@ -354,6 +354,22 @@ describe('roteador: accepts e media', () => {
     expect(calls.map((c) => c.accepted?.spec)).toEqual(['image', 'image:image/gif']);
   });
 
+  it("'args' casa só com texto depois do comando", async () => {
+    const router = createCommandRouter();
+    const onReject = vi.fn(() => 'Mande uma figurinha ou um link');
+    const { def, calls } = spyCommand({ accepts: ['sticker', 'quoted:sticker', 'args'], onReject });
+    router.registry.add('media', def);
+
+    const bare = await router.dispatch(ctxOf({ text: '!s   ' }));
+    await router.dispatch(ctxOf({ text: '!s https://exemplo.com/a.png' }));
+    await router.dispatch(ctxOf({ text: '!s', quoted: fakeMessage({ type: 'sticker' }) }));
+
+    expect(bare).toMatchObject({ status: 'rejected', reply: 'Mande uma figurinha ou um link' });
+    expect(calls.map((c) => c.accepted?.spec)).toEqual(['args', 'quoted:sticker']);
+    expect(calls[0]?.accepted?.message).toBe(calls[0]?.message);
+    expect(calls[0]?.media).toBeNull();
+  });
+
   it('sem accepts, resolve a mídia própria e, na falta, a citada', async () => {
     const router = createCommandRouter();
     const { def, calls } = spyCommand();

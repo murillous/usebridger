@@ -27,6 +27,7 @@ export type {
   CommandInfo,
   CommandRejection,
   CommandRole,
+  MediaCommandContext,
   RejectContext,
 } from '#commands/command.ts';
 export { command } from '#commands/command.ts';
