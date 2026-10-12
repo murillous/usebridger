@@ -492,6 +492,40 @@ remove(); // desfaz o registro, se o recurso for liberado antes
   `PluginLifecycleError` dos teardowns); os erros do `disconnect()` e do `close()` vão como
   vieram.
 
+## Onde mora o código
+
+O `createBot` (`src/bot/bot.ts`) é o ponto de composição: monta as peças e conduz o ciclo de
+vida. O que tem dono próprio saiu para módulos vizinhos em `src/bot/`:
+
+| Módulo | O que faz |
+| --- | --- |
+| `config.ts` | Tipos públicos do bot (`BotConfig`, `Bot`, `BotState`) e o `BotStateError` |
+| `inbound-flow.ts` | O [fluxo de uma mensagem](#fluxo-de-uma-mensagem) depois da fila do chat: middlewares, resposta esperada, roteador, listeners, cliques, comandos nativos e ações do `reply` |
+| `direct-events.ts` | De onde vem o chat de cada [evento que não é mensagem](#eventos-que-não-são-mensagem) |
+| `group-admin.ts` | Consulta de admin do grupo, com prazo, para o papel `group-admin` |
+| `middlewares.ts` | Pipeline com os middlewares oficiais ligados pela config |
+| `background-tasks.ts` | Comandos com `background: true` em andamento, para o `settled()` e o shutdown |
+| `message-context.ts` / `plugin-context.ts` | O `ctx` da mensagem e o do plugin |
+| `reconnect.ts`, `session.ts`, `session-lease.ts`, `stop-hooks.ts` | Reconexão, sessão no processo, trava entre processos e ganchos de parada |
+
+**Boot e shutdown ficam no `createBot`, de propósito.** `registerInternalHooks`,
+`abandonInternals`, `bootPlugins`, `reload`, `runStart`, `failBoot`, `runShutdown` e `settled`
+não foram extraídos, por três motivos:
+
+- **São sensíveis à ordem.** A trava da sessão vem antes dos plugins, os plugins antes da porta
+  HTTP e a porta antes do `connect()`. Os ganchos internos são empilhados para o LIFO do
+  [shutdown](#shutdown-gracioso-stop) descer na ordem certa, e o storage fecha por último. Lida
+  de cima a baixo num lugar só, essa ordem é o que se revisa.
+- **Dependem do estado mutável da closure:** `ready`/`readyPromise`, `booted`, `connectCalled`,
+  `httpAttached`, `unsubscribe`, `stopRequested`, `host` e `configs`. Separar as funções
+  espalharia esse estado por vários arquivos em vez de simplificar.
+- **É o trabalho do ponto de composição.** Feitas as outras extrações, é o que sobra no
+  `bot.ts`, e os comentários do código explicam cada passo.
+
+Vale reavaliar se o ciclo de vida ganhar etapas novas ou se a ordem passar a ser configurável.
+Nesse caso, a forma provável é uma lista declarativa de etapas (subir/descer), não funções soltas
+em outros arquivos.
+
 ## Reconexão
 
 O transport avisa as quedas por `connection.status`; a `ReconnectionPolicy`
