@@ -167,6 +167,38 @@ describe('createPluginHost — boot', () => {
     expect(log.lines.find((line) => line.message.startsWith('Plugins:'))?.level).toBe('info');
   });
 
+  it('comando deixado de fora pelo contexto entra na linha do plugin e põe a tabela em warn', async () => {
+    const unregistered = [
+      { command: 'fig', missing: ['send.sticker' as const] },
+      { command: 'enquete', missing: ['polls' as const, 'reactions' as const] },
+    ];
+    const { host: h, log } = host([plugin('media'), plugin('ping')], {
+      createContext: (definition) => ({
+        context: { plugin: { name: definition.name } } as unknown as PluginContext,
+        dispose: () => undefined,
+        unregisteredCommands: () => (definition.name === 'media' ? unregistered : []),
+      }),
+    });
+    const table = await h.start();
+
+    expect(table).toEqual([
+      { name: 'media', version: '1.0.0', origin: 'config', status: 'loaded', unregistered },
+      { name: 'ping', version: '1.0.0', origin: 'config', status: 'loaded' },
+    ]);
+    const tableLine = log.lines.find((line) => line.message.startsWith('Plugins:'));
+    expect(tableLine?.level).toBe('warn');
+    expect(tableLine?.message).toContain(
+      'carregado; sem fig (send.sticker), enquete (polls, reactions)',
+    );
+    expect(tableLine?.fields?.['plugins']).toContainEqual({
+      name: 'media',
+      version: '1.0.0',
+      origin: 'config',
+      status: 'loaded',
+      unregistered,
+    });
+  });
+
   it('usa CORE_VERSION quando coreVersion não é passada', async () => {
     const { host: h } = host(
       [plugin('dev', { engine: '>=0.0.0' }), plugin('futuro', { engine: '^99.0.0' })],

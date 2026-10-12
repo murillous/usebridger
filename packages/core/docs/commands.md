@@ -423,9 +423,12 @@ ctx.commands.add(command({
 ```
 
 Sem alguma delas, o comando não é registrado: não casa no roteador, fica fora do
-`ctx.commands.list()` e do menu nativo da plataforma, e o resto do plugin sobe normalmente. Um log
-`info` com `command` e `missing` registra o comando deixado de fora. Quem digita o comando recebe
-o mesmo que receberia de um comando que não existe. A definição continua validada mesmo sem a
+`ctx.commands.list()` e do menu nativo da plataforma, e o resto do plugin sobe normalmente. Quem
+digita o comando recebe o mesmo que receberia de um comando que não existe, então o aviso é para o
+operador: um log `warn` com `plugin`, `command` e `missing`, e o comando na linha do plugin na
+[tabela de boot](plugins.md#boot-start) (`media  1.0.0  carregado; sem figurinha (send.sticker)`),
+que também sobe para `warn`. Em `bot.plugins()`, a linha do plugin traz `unregistered`, com
+`command` e `missing` de cada um. A definição continua validada mesmo sem a
 capability, então um nome inválido falha em qualquer transport. O roteador solto ignora
 `requires`, como o `timeoutMs`.
 

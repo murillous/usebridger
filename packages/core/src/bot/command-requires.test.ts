@@ -71,7 +71,7 @@ describe('requires por comando (ADR 0090)', () => {
     expect(menu.list().map((c) => c.name)).toEqual(['img']);
     expect(lines).toContainEqual(
       expect.objectContaining({
-        level: 'info',
+        level: 'warn',
         fields: expect.objectContaining({
           plugin: 'media',
           command: 'fig',
@@ -85,6 +85,22 @@ describe('requires por comando (ADR 0090)', () => {
     await expect.poll(() => sentTexts(transport)).toEqual(['imagem']);
     await bot.settled();
     expect(sentTexts(transport)).toEqual(['imagem']);
+  });
+
+  it('a tabela de boot lista o comando deixado de fora junto do plugin', async () => {
+    const { bot, lines } = start([media()], ['send.text', 'send.image']);
+    await bot.start();
+
+    expect(bot.plugins()).toEqual([
+      expect.objectContaining({
+        name: 'media',
+        status: 'loaded',
+        unregistered: [{ command: 'fig', missing: ['send.sticker'] }],
+      }),
+    ]);
+    const table = lines.find((line) => line.message.startsWith('Plugins:'));
+    expect(table?.level).toBe('warn');
+    expect(table?.message).toContain('carregado; sem fig (send.sticker)');
   });
 
   it('com todas as capabilities, registra como qualquer comando', async () => {
