@@ -39,6 +39,7 @@ import type { Contact } from '#message/types.ts';
 import type { Outbound } from '#outbound/types.ts';
 import { type PluginContextFactory, PluginHostStateError } from '#plugin/host.ts';
 import { formatMessage } from '#plugin/messages.ts';
+import type { UnregisteredCommand } from '#plugin/report.ts';
 import type { PluginContext } from '#plugin/types.ts';
 import type { SchedulerService } from '#scheduler/service.ts';
 import type { Scheduler } from '#scheduler/types.ts';
@@ -148,6 +149,8 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
     // dele aborta (ADR 0033). Comandos, papéis, listeners e jobs ainda em andamento têm
     // `Deadline` filho deste: o `dispose` os expira junto (#200).
     const lifetime = new Deadline();
+    // Comandos que o `add` deixou de fora; o host os põe na linha do plugin na tabela de boot.
+    const unregistered: UnregisteredCommand[] = [];
     const guard = (what: string): void => {
       if (lifetime.expired) {
         throw new PluginHostStateError(
@@ -205,13 +208,13 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
           assertCommandDefinition(definition);
           const missing = missingCapabilities(deps.transport, definition.requires ?? []);
           if (missing.length > 0) {
-            log.info(
+            // `warn`, e não `info`: o comando some sem resposta para quem o digita, e só o
+            // operador pode notar. A tabela de boot repete o aviso junto do plugin.
+            log.warn(
               `comando "${definition.name}" não registrado: capability ausente no transport`,
-              {
-                command: definition.name,
-                missing,
-              },
+              { command: definition.name, missing },
             );
+            unregistered.push({ command: definition.name, missing });
             return;
           }
           deps.router.registry.add(
@@ -296,6 +299,7 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
 
     return {
       context,
+      unregisteredCommands: () => unregistered,
       dispose(reason?: unknown): void {
         lifetime.expire(
           reason ?? new PluginHostStateError(`plugin "${name}": contexto descartado`),

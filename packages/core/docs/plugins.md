@@ -227,16 +227,22 @@ const errors = await host.stop();           // PluginLifecycleError[]
    boot segue.
 
 A tabela volta de `start()` como dado (`PluginReportEntry[]`, na ordem de carga) e vai para o
-log formatada — em `info` se tudo carregou, `warn` se algo foi ignorado —
-com os mesmos dados em `fields.plugins`:
+log formatada — em `info` se tudo carregou, `warn` se algo foi ignorado ou se um plugin carregou
+sem algum comando — com os mesmos dados em `fields.plugins`:
 
 ```
-Plugins: 2 carregado(s), 2 ignorado(s)
+Plugins: 3 carregado(s), 2 ignorado(s)
   user-names  1.0.0  carregado
   sticker     1.2.0  carregado
+  media       1.0.0  carregado; sem figurinha (send.sticker)
   enquete     1.0.0  ignorado (capability ausente no transport: polls)
   resumo      0.3.0  ignorado (dependência ignorada: ai)
 ```
+
+`carregado; sem ...` lista os comandos com `requires` que o transport não sustenta e as
+capabilities que faltam: o plugin subiu, mas eles não respondem
+([Capability por comando](commands.md#capability-por-comando)). Na entrada, ficam em
+`unregistered`.
 
 `host.report()` devolve a tabela atual (reflete reloads).
 

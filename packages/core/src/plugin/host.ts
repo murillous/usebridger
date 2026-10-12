@@ -11,6 +11,7 @@ import {
   type PluginPhase,
   type PluginReportEntry,
   type PluginSkipReason,
+  type UnregisteredCommand,
 } from './report.ts';
 import { parseVersion, satisfies } from './semver.ts';
 import type { PluginEntry } from './sources.ts';
@@ -24,6 +25,8 @@ import type { PluginContext, PluginDefinition } from './types.ts';
  */
 export interface PluginContextHandle {
   readonly context: PluginContext;
+  /** Comandos que o contexto deixou de fora por capability ausente; vão para a tabela de boot. */
+  unregisteredCommands?(): readonly UnregisteredCommand[];
   dispose(reason?: unknown): void | Promise<void>;
 }
 
@@ -245,7 +248,8 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
       return fail(base, setup.error);
     }
     slot.handle = handle;
-    return { ...base, status: 'loaded' };
+    const unregistered = [...(handle.unregisteredCommands?.() ?? [])];
+    return { ...base, status: 'loaded', ...(unregistered.length > 0 && { unregistered }) };
   }
 
   function fail(
@@ -308,11 +312,17 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
         origin: entry.origin,
         status: entry.status,
         ...(entry.status === 'skipped' ? { reason: describeSkipReason(entry.reason) } : {}),
+        ...(entry.status === 'loaded' && entry.unregistered
+          ? { unregistered: entry.unregistered }
+          : {}),
       })),
     };
-    const anySkipped = entries.some((entry) => entry.status === 'skipped');
-    // Plugin ignorado é configuração a revisar: warn chama atenção sem ser falha do bot.
-    if (anySkipped) log.warn(formatBootTable(entries), fields);
+    const toReview = entries.some(
+      (entry) => entry.status === 'skipped' || entry.unregistered !== undefined,
+    );
+    // Plugin ignorado ou comando deixado de fora é configuração a revisar: warn chama atenção
+    // sem ser falha do bot.
+    if (toReview) log.warn(formatBootTable(entries), fields);
     else log.info(formatBootTable(entries), fields);
   }
 

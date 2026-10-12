@@ -156,6 +156,7 @@ export {
   type PluginPhase,
   type PluginReportEntry,
   type PluginSkipReason,
+  type UnregisteredCommand,
 } from '#plugin/report.ts';
 export { PluginDiscoveryError } from '#plugin/sources.ts';
 export type {

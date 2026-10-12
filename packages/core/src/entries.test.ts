@@ -234,6 +234,7 @@ const entries: Record<string, { file: string; load: () => Promise<object> } & En
       'Transport',
       'TransportPacing',
       'UnknownMessage',
+      'UnregisteredCommand',
       'Unsafe',
       'Unsubscribe',
       'VideoMessage',
