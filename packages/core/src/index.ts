@@ -4,6 +4,7 @@
 // `entries.test.ts`: export novo é decisão explícita.
 
 export type { CommandAction, MessageAction, StepAction } from '#actions/actions.ts';
+export { createBot } from '#bot/bot.ts';
 export type {
   Bot,
   BotConfig,
@@ -13,8 +14,9 @@ export type {
   BotState,
   BotStats,
   BotTimeouts,
-} from '#bot/bot.ts';
-export { BotStateError, createBot, GroupAdminTimeoutError } from '#bot/bot.ts';
+} from '#bot/config.ts';
+export { BotStateError } from '#bot/config.ts';
+export { GroupAdminTimeoutError } from '#bot/group-admin.ts';
 export { CommandTimeoutError } from '#bot/plugin-context.ts';
 export type { BotReconnectionOptions } from '#bot/reconnect.ts';
 export type { ShutdownOptions, StopHook, StopHookOptions } from '#bot/stop-hooks.ts';

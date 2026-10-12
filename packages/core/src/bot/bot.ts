@@ -6,59 +6,41 @@ import {
   pickChoice,
 } from '#actions/actions.ts';
 import { createCommandCatalog } from '#commands/catalog.ts';
-import { createPrefixStore, type PrefixConfig } from '#commands/prefixes.ts';
+import { createPrefixStore } from '#commands/prefixes.ts';
 import { CommandConflictError, createCommandRegistry } from '#commands/registry.ts';
 import { RoleConflictError } from '#commands/roles.ts';
-import { createCommandRouter, type DispatchResult, type IsGroupAdmin } from '#commands/router.ts';
-import type { ConfigEnv } from '#config/env.ts';
-import { BotConfigError, type BotOwner, normalizeOwners } from '#config/owners.ts';
-import {
-  createPluginConfigs,
-  type PluginConfigFile,
-  type PluginConfigs,
-} from '#config/plugin-configs.ts';
-import type { BotMessageContext } from '#context.ts';
+import { createCommandRouter, type DispatchResult } from '#commands/router.ts';
+import { BotConfigError, normalizeOwners } from '#config/owners.ts';
+import { createPluginConfigs, type PluginConfigs } from '#config/plugin-configs.ts';
 import {
   ConversationRegistry,
   type PendingReply,
   StepTimeoutError,
 } from '#conversations/conversations.ts';
-import { ArmedTimers, ContextExpiredError, settleWithin } from '#deadline.ts';
-import { createEventBus, type EmittableEventName } from '#events/bus.ts';
+import { ArmedTimers, ContextExpiredError } from '#deadline.ts';
+import { createEventBus } from '#events/bus.ts';
 import type { BotEvents, ListenerExtras, PluginErrorEvent } from '#events/types.ts';
 import { createGroups } from '#groups/groups.ts';
 import { sessionHttp } from '#http/server.ts';
-import type { HttpServer } from '#http/types.ts';
 import { createDeferredLogger } from '#logger/deferred.ts';
-import { createLogger, createNoopLogger, type LoggerOptions } from '#logger/logger.ts';
-import { createSecretSet, type SecretSet } from '#logger/secrets.ts';
-import type { Logger, LogLevel } from '#logger/types.ts';
+import { createLogger, createNoopLogger } from '#logger/logger.ts';
+import { createSecretSet } from '#logger/secrets.ts';
+import type { Logger } from '#logger/types.ts';
 import { createMessage } from '#message/create.ts';
-import type { Chat, Message } from '#message/types.ts';
-import { type ChatFilterOptions, chatAllowed, chatFilter } from '#middleware/chat-filter.ts';
-import { ignoreBots } from '#middleware/ignore-bots.ts';
-import { ignoreSelf } from '#middleware/ignore-self.ts';
-import { type Middleware, MiddlewarePipeline } from '#middleware/pipeline.ts';
-import { type RateLimitOptions, rateLimit } from '#middleware/rate-limit.ts';
-import { type SanitizeOptions, sanitize } from '#middleware/sanitize.ts';
+import type { Message } from '#message/types.ts';
+import { chatAllowed } from '#middleware/chat-filter.ts';
 import { createOutbound, enqueueAction } from '#outbound/actions.ts';
-import {
-  OutboundQueue,
-  type OutboundQueueOptions,
-  type OutboundQueueStats,
-} from '#outbound/queue.ts';
+import { OutboundQueue } from '#outbound/queue.ts';
 import type { PrepareActions } from '#outbound/reply.ts';
 import { PLUGIN_NAME_PATTERN } from '#plugin/define.ts';
 import { createPluginHost, type PluginHost, type PluginReloadResult } from '#plugin/host.ts';
 import type { PluginLifecycleError, PluginReportEntry } from '#plugin/report.ts';
 import { collectPlugins } from '#plugin/sources.ts';
-import type { PluginDefinition } from '#plugin/types.ts';
-import { InboundQueue, type InboundQueueOptions, type InboundQueueStats } from '#queue/inbound.ts';
+import { InboundQueue } from '#queue/inbound.ts';
 import { createSchedulerService } from '#scheduler/service.ts';
 import { createServiceRegistry, ServiceConflictError } from '#services/registry.ts';
 import { createMemoryStorage } from '#storage/memory.ts';
 import { DEFAULT_SESSION, sessionStorage, sharedStorage } from '#storage/namespace.ts';
-import type { StoragePort } from '#storage/types.ts';
 import { TenantScope } from '#tenant/scope.ts';
 import { type Capability, hasCapability } from '#transport/capabilities.ts';
 import { transportIssues } from '#transport/methods.ts';
@@ -69,206 +51,32 @@ import type {
   TransportDeps,
 } from '#transport/types.ts';
 import { createUnsafeAccess } from '#unsafe/access.ts';
+import type { Bot, BotConfig, BotPluginConfigs, BotState, BotStats } from './config.ts';
+import { BotStateError } from './config.ts';
+import { DIRECT_EVENTS, type DirectEvent } from './direct-events.ts';
+import { GroupAdminTimeoutError, groupAdminPort } from './group-admin.ts';
 import {
   createMessageContext,
   type KernelMessageContext,
   type MessageContextDeps,
   messageExtras,
 } from './message-context.ts';
+import { createPipeline } from './middlewares.ts';
 import { CommandTimeoutError, createPluginContextFactory } from './plugin-context.ts';
-import { type BotReconnectionOptions, createReconnector, type Reconnector } from './reconnect.ts';
+import { createReconnector, type Reconnector } from './reconnect.ts';
 import { claimSession, type ReleaseSession } from './session.ts';
 import { acquireSessionLease, type SessionLease } from './session-lease.ts';
 import {
   type RegisteredStopHook,
   runStopHooks,
-  type ShutdownOptions,
   type StopHook,
   type StopHookOptions,
 } from './stop-hooks.ts';
 
-/**
- * Ciclo de vida: `idle → starting → running → stopping → stopped`. `stopped` é terminal —
- * uma instância não reinicia; para subir de novo, crie outro `Bot`.
- */
-export type BotState = 'idle' | 'starting' | 'running' | 'stopping' | 'stopped';
-
-/** Middleware do app com prioridade (maior roda antes). */
-export interface BotMiddlewareEntry {
-  readonly middleware: Middleware<BotMessageContext>;
-  /** Padrão: 0 — dentro dos oficiais, que ficam entre 700 e 1000. */
-  readonly priority?: number;
-}
-
-/**
- * Middlewares do bot. Os oficiais entram nesta ordem (de fora para dentro): `ignoreSelf` (1000),
- * `ignoreBots` (990), `chatFilter` (900), `rateLimit` (800), `sanitize` (700); depois os do app
- * (`use`, padrão 0).
- */
-export interface BotMiddlewaresConfig {
-  /** Barra as mensagens da própria sessão. Padrão: `true`. */
-  readonly ignoreSelf?: boolean;
-  /** Barra as mensagens de outros bots (`sender.isBot`). Padrão: `true`. */
-  readonly ignoreBots?: boolean;
-  /** Allow/blocklist de chats. Padrão: desligado. */
-  readonly chatFilter?: ChatFilterOptions;
-  /** Rate limit de entrada. Padrão: desligado. Sem `onLimited`, loga em `debug`. */
-  readonly rateLimit?: RateLimitOptions;
-  /** Truncagem de texto e nome. Padrão: ligado com os limites do `sanitize`; `false` desliga. */
-  readonly sanitize?: SanitizeOptions | false;
-  /** Middlewares do app. */
-  readonly use?: readonly (Middleware<BotMessageContext> | BotMiddlewareEntry)[];
-}
-
-/** Prazos dos estágios que rodam código de plugin, em ms. */
-export interface BotTimeouts {
-  /** Criação do contexto e `setup` de cada plugin. Padrão: 10000. */
-  readonly setupMs?: number;
-  /** `teardown` e limpeza de cada plugin. Padrão: 5000. */
-  readonly teardownMs?: number;
-  /**
-   * `run` de cada comando; estourado, o chat é liberado e sai `plugin.error`. Padrão: 30000.
-   * O `timeoutMs` de um comando sobrescreve só para ele.
-   */
-  readonly commandMs?: number;
-  /** Cada listener de evento. Padrão: 30000. */
-  readonly listenerMs?: number;
-  /** Cada handler de job do scheduler. Padrão: 30000. */
-  readonly jobMs?: number;
-  /**
-   * Cada middleware do pipeline, contado só no tempo dele (o que roda dentro do `next()` não
-   * conta). Estourado, a mensagem é descartada e o erro vai para o log. Padrão: 30000.
-   */
-  readonly middlewareMs?: number;
-}
-
-export interface BotConfig {
-  /**
-   * O transport, ou a fábrica que o monta com o que o bot fornece (`session`, `auth`, `log`;
-   * ADR 0037). O `createBot` chama a fábrica uma vez; ela só monta o objeto, sem I/O.
-   */
-  readonly transport: Transport | ((deps: TransportDeps) => Transport);
-  /**
-   * Sessão (o número) que este bot opera; kebab-case, como nome de plugin. Tudo o que o bot
-   * persiste fica no escopo dela (ADR 0036), então trocar o nome "esquece" os dados da anterior.
-   * Dois bots vivos no mesmo storage não podem usar a mesma. Padrão: `'default'`.
-   */
-  readonly session?: string;
-  /**
-   * Storage do bot (plugins, scheduler, overrides de config). O bot o fecha no `stop()` — o
-   * último a parar, se vários bots o dividem. Padrão: em memória (`createMemoryStorage`), com
-   * aviso no log — os dados somem ao reiniciar.
-   */
-  readonly storage?: StoragePort;
-  /**
-   * Servidor HTTP do processo (`createHttp`), o mesmo para todos os bots (ADR 0076). Dá
-   * `ctx.http` aos plugins e `TransportDeps.http` ao transport; a porta só abre se houver rota.
-   */
-  readonly http?: HttpServer;
-  /** Plugins da config (pacotes npm que o app importa). */
-  readonly plugins?: readonly PluginDefinition[];
-  /** Pastas de plugins locais (ver `collectPlugins`), relativas a `cwd`. */
-  readonly pluginDirs?: readonly string[];
-  /** Base de `pluginDirs`. Padrão: `process.cwd()`. */
-  readonly cwd?: string;
-  /** Nomes de plugin que não carregam. */
-  readonly disabledPlugins?: readonly string[];
-  /** Config por plugin (a camada "arquivo"; ver ADR 0032). */
-  readonly pluginConfig?: PluginConfigFile;
-  /** Ambiente da config de plugin (`BRIDGER_*`). Padrão: `process.env`. */
-  readonly env?: ConfigEnv;
-  /**
-   * Donos (`role: 'owner'`): telefone, aceito com pontuação e normalizado no `createBot`, ou
-   * `{ id }` com o ID nativo do contato, para plataformas sem telefone.
-   */
-  readonly owners?: readonly BotOwner[];
-  /**
-   * Prefixo de comando: um para todo chat (`'!'`) ou um por tipo (`{ dm: '', group: '!' }`,
-   * `group` vale para todo chat que não é `dm`). Vazio é permitido. Padrão: `'!'`. Um plugin
-   * troca o de um chat com `ctx.prefixes.set` (ADR 0063).
-   */
-  readonly prefix?: PrefixConfig;
-  /**
-   * Logger pronto. Sem ele, o bot cria um (`createLogger`) com `logLevel` e `secrets`. Um
-   * logger próprio só censura os segredos da config se for criado com o mesmo `secrets`.
-   */
-  readonly logger?: Logger;
-  /** Nível do logger criado pelo bot. Padrão: `'info'`. */
-  readonly logLevel?: LogLevel;
-  /**
-   * Formato do logger criado pelo bot: `'json'` (padrão) ou `'pretty'`, legível no terminal
-   * (ver `LoggerOptions.format`).
-   */
-  readonly logFormat?: LoggerOptions['format'];
-  /** Fonte de segredos compartilhada entre a config de plugin e o logger. Padrão: uma nova. */
-  readonly secrets?: SecretSet;
-  readonly middlewares?: BotMiddlewaresConfig;
-  /** Fila de entrada por chat. */
-  readonly inbound?: Pick<InboundQueueOptions, 'maxPendingPerChat'>;
-  /** Fila de saída (taxa, prioridade, retry, humanização). */
-  readonly outbound?: Omit<OutboundQueueOptions, 'transport'>;
-  /** Reconexão automática. Padrão: ligada com os padrões da `ReconnectionPolicy`. */
-  readonly reconnection?: BotReconnectionOptions | false;
-  readonly timeouts?: BotTimeouts;
-  readonly shutdown?: ShutdownOptions;
-}
-
-/** Config de plugin em runtime, para o dashboard: overrides, visão mascarada e schema. */
-export type BotPluginConfigs = Pick<PluginConfigs, 'setOverrides' | 'describe' | 'jsonSchema'>;
-
-export interface Bot {
-  readonly state: BotState;
-  /**
-   * Sobe o bot (ordem em docs/bot.md): carrega os plugins e, só se o boot deles der certo,
-   * conecta o transport e liga o scheduler. Plugin quebrado (ex.: `CommandConflictError`) ⇒ o
-   * transport nunca conecta. Idempotente enquanto `starting`/`running` (devolve a mesma
-   * promise); rejeita com `BotStateError` depois de `stop()`. Rejeita com o erro de boot depois
-   * de encerrar o que já tinha subido.
-   */
-  start(): Promise<void>;
-  /**
-   * Shutdown gracioso: roda os ganchos de parada (LIFO; os internos drenam filas e fazem o
-   * `teardown` dos plugins), desconecta o transport e fecha o storage. Idempotente: chamadas
-   * repetidas devolvem a mesma promise. Rejeita com `AggregateError` se alguma etapa falhar —
-   * mas sempre termina em `stopped`.
-   */
-  stop(): Promise<void>;
-  /** Registra um gancho de parada; devolve a função que o remove. */
-  onStop(hook: StopHook, options?: StopHookOptions): () => void;
-  /** Config dos plugins. Disponível depois que o `start()` carrega os plugins. */
-  readonly config: BotPluginConfigs;
-  /** Tabela de boot atual (reflete reloads); vazia antes do `start()`. */
-  plugins(): PluginReportEntry[];
-  /**
-   * Métricas das filas de entrada e de saída, lidas de contadores (O(1)). Sempre disponível:
-   * zeros antes do `start()`, valores finais depois do `stop()`. Devolve uma cópia.
-   */
-  stats(): BotStats;
-  /**
-   * Resolve quando o bot terminou de processar o que recebeu: fila de entrada vazia, nenhum
-   * comando em segundo plano (ADR 0087) nem listener em andamento (inclusive de eventos diretos e
-   * `plugin.error`) e fila de saída vazia, tudo ao mesmo tempo (ADR 0044). Chamado durante o boot, espera o boot assentar. Não
-   * espera jobs do scheduler; com a fila de saída pausada (conexão caída), espera a reconexão ou
-   * o `maxPauseMs`. Resolve na hora antes do `start()` e depois do `stop()`; nunca rejeita.
-   */
-  settled(): Promise<void>;
-}
-
-export interface BotStats {
-  readonly inbound: InboundQueueStats;
-  readonly outbound: OutboundQueueStats;
-}
-
-/** Operação incompatível com o estado atual do bot. */
-export class BotStateError extends Error {
-  readonly state: BotState;
-
-  constructor(message: string, state: BotState) {
-    super(message);
-    this.name = 'BotStateError';
-    this.state = state;
-  }
-}
+// Os testes de `bot/` importam o bot e seus erros daqui, junto com o `createBot`.
+export type { Bot, BotConfig } from './config.ts';
+export { BotStateError } from './config.ts';
+export { GroupAdminTimeoutError } from './group-admin.ts';
 
 /** Prazo padrão do `run` de um comando: o mesmo dos listeners. */
 const DEFAULT_COMMAND_TIMEOUT_MS = 30_000;
@@ -289,59 +97,6 @@ const STOP_TIMEOUTS = {
   outbound: 3000,
 } as const;
 
-/** Eventos do transport que não são mensagem: vão ao barramento sem fila nem middlewares. */
-type DirectEvent = Extract<
-  EmittableEventName,
-  | 'message.deleted'
-  | 'reaction'
-  | 'poll.vote'
-  | 'group.joined'
-  | 'group.left'
-  | 'group.participants'
-  | 'group.updated'
-  | 'contact.updated'
->;
-
-/** O que os filtros do ADR 0038 leem de um evento; `chat: null` = não passa pelo `chatFilter`. */
-interface EventOrigin {
-  /** Com o `parentId`, para o `chatFilter` casar também o espaço (ADR 0058). */
-  readonly chat: Pick<Chat, 'id' | 'parentId'> | null;
-  readonly fromMe: boolean;
-  /** Autor do evento, para o `ignoreBots` (ADR 0057). */
-  readonly fromBot: boolean;
-}
-
-const ALWAYS_PASSES: EventOrigin = { chat: null, fromMe: false, fromBot: false };
-
-/**
- * Origem de cada evento direto, para o `chatFilter`, o `ignoreSelf` e o `ignoreBots` (ADR 0038).
- */
-const DIRECT_EVENTS: { readonly [E in DirectEvent]: (payload: BotEvents[E]) => EventOrigin } = {
-  'message.deleted': (payload) => ({
-    chat: payload.chat,
-    fromMe: payload.fromMe,
-    fromBot: payload.deletedBy?.isBot === true,
-  }),
-  reaction: (payload) => ({
-    chat: payload.chat,
-    fromMe: payload.fromMe,
-    fromBot: payload.sender.isBot === true,
-  }),
-  'poll.vote': (payload) => ({
-    chat: payload.chat,
-    fromMe: payload.fromMe,
-    fromBot: payload.sender.isBot === true,
-  }),
-  // Entrada e saída do grupo são o ciclo de vida do próprio bot: servem para o plugin limpar
-  // estado, então passam mesmo com o grupo bloqueado.
-  'group.joined': () => ALWAYS_PASSES,
-  'group.left': () => ALWAYS_PASSES,
-  'group.participants': (payload) => ({ chat: payload.chat, fromMe: false, fromBot: false }),
-  'group.updated': (payload) => ({ chat: payload.chat, fromMe: false, fromBot: false }),
-  // Contato não é de um chat: bloquear um chat não esconde quem está nele de outros chats.
-  'contact.updated': () => ALWAYS_PASSES,
-};
-
 /**
  * Dono e passo da espera do menu numerado (ADR 0062). O nome não é kebab-case: nenhum plugin o
  * usa.
@@ -350,14 +105,6 @@ const MENU_OWNER = '#menu';
 // Dono das rotas do transport na tabela HTTP da sessão; nome de plugin não tem `$`.
 const TRANSPORT_ROUTE_OWNER = '$transport';
 const MENU_STEP = 'choice';
-
-const MIDDLEWARE_PRIORITY = {
-  ignoreSelf: 1000,
-  ignoreBots: 990,
-  chatFilter: 900,
-  rateLimit: 800,
-  sanitize: 700,
-};
 
 /**
  * Cria um bot. Valida a config e monta as peças sem efeito colateral (sem conexão, timer,
@@ -1389,13 +1136,13 @@ export function createBot(config: BotConfig): Bot {
   return bot;
 }
 
-/** Nome de sessão no formato de nome de plugin: vira prefixo de namespace no storage. */
 /** Erros de `setup` que derrubam o boot em vez de só ignorar o plugin. */
 const isBootConflict = (error: unknown): boolean =>
   error instanceof CommandConflictError ||
   error instanceof RoleConflictError ||
   error instanceof ServiceConflictError;
 
+/** Nome de sessão no formato de nome de plugin: vira prefixo de namespace no storage. */
 function validateSession(session: string): string {
   if (!PLUGIN_NAME_PATTERN.test(session)) {
     throw new BotConfigError(
@@ -1435,64 +1182,6 @@ function callConnect(transport: Transport): Promise<void> {
   }
 }
 
-/**
- * A consulta de admin do grupo ao transport (`role: 'group-admin'`) estourou o prazo do comando.
- * O comando não roda e sai `plugin.error` com `timedOut: true` no plugin dono do comando.
- */
-export class GroupAdminTimeoutError extends Error {
-  override readonly name = 'GroupAdminTimeoutError';
-  readonly chatId: string;
-  readonly timeoutMs: number;
-
-  constructor(chatId: string, timeoutMs: number) {
-    super(`consulta de admin do grupo "${chatId}" ao transport excedeu ${timeoutMs} ms`);
-    this.chatId = chatId;
-    this.timeoutMs = timeoutMs;
-  }
-}
-
-/**
- * Porta `isGroupAdmin` do roteador, a partir do transport: o `isChatAdmin` dele, se houver, ou a
- * lista de participantes do `getGroupMetadata` (capability `groups`, ADR 0059). Com o prazo do
- * comando: uma consulta que nunca resolve seguraria o chat na fila de entrada para sempre. O
- * timer só existe para quem não é owner pedindo comando de admin num grupo.
- */
-function groupAdminPort(
-  transport: Transport,
-  timeoutMs: number,
-  onLate: (error: unknown) => void,
-  armed: ArmedTimers,
-): IsGroupAdmin | undefined {
-  const within = <T>(work: Promise<T>, chatId: string): Promise<T> =>
-    settleWithin(
-      work,
-      timeoutMs,
-      () => new GroupAdminTimeoutError(chatId, timeoutMs),
-      onLate,
-      armed,
-    ) as Promise<T>;
-  if (transport.isChatAdmin) {
-    const isChatAdmin = transport.isChatAdmin.bind(transport);
-    return (chat, sender) => within(isChatAdmin(chat, sender), chat.id);
-  }
-  if (!hasCapability(transport, 'groups')) return undefined;
-  return async (chat, sender) => {
-    const metadata = await within(transport.getGroupMetadata(chat.id), chat.id);
-    // Sem a lista, não há como saber: recusa (fail-closed). Transport que não lista membros
-    // deve implementar `isChatAdmin`.
-    if (!metadata.participants) return false;
-    // Casa por id ou, quando os dois lados o têm, por telefone: o remetente e o participante
-    // podem vir com IDs de espaços diferentes (no WhatsApp, LID e JID de telefone; ADR 0046).
-    // Sem telefone de um lado, só o id decide (fail-closed).
-    return metadata.participants.some(
-      (participant) =>
-        participant.isAdmin &&
-        (participant.id === sender.id ||
-          (sender.phone !== null && participant.phone === sender.phone)),
-    );
-  };
-}
-
 /** Máximo de botões por mensagem do transport (`limits.actions`); sem ele, sem limite. */
 function buttonLimit(transport: Transport): number {
   const limit = transport.limits?.actions;
@@ -1501,46 +1190,4 @@ function buttonLimit(transport: Transport): number {
     throw new RangeError(`limits.actions do transport deve ser inteiro >= 1 (recebido: ${limit})`);
   }
   return limit;
-}
-
-/** Pipeline com os middlewares oficiais ligados pela config e os do app. */
-function createPipeline(
-  options: BotMiddlewaresConfig,
-  timeoutMs: number,
-  log: () => Logger,
-): MiddlewarePipeline<KernelMessageContext> {
-  // Middleware roda dentro da tarefa da fila do chat: sem prazo, um preso seguraria o chat
-  // para sempre (ADR 0043).
-  const pipeline = new MiddlewarePipeline<KernelMessageContext>({
-    timeoutMs,
-    onLateError: (error) => log().error('middleware rejeitou depois do prazo', { err: error }),
-  });
-  if (options.ignoreSelf !== false) {
-    pipeline.use(ignoreSelf(), { priority: MIDDLEWARE_PRIORITY.ignoreSelf });
-  }
-  if (options.ignoreBots !== false) {
-    pipeline.use(ignoreBots(), { priority: MIDDLEWARE_PRIORITY.ignoreBots });
-  }
-  if (options.chatFilter) {
-    pipeline.use(chatFilter(options.chatFilter), { priority: MIDDLEWARE_PRIORITY.chatFilter });
-  }
-  if (options.rateLimit) {
-    const limit = rateLimit({
-      onLimited: (ctx) =>
-        log().debug('mensagem barrada pelo rate limit', {
-          chatId: ctx.message.chat.id,
-          senderId: ctx.message.sender.id,
-        }),
-      ...options.rateLimit,
-    });
-    pipeline.use(limit, { priority: MIDDLEWARE_PRIORITY.rateLimit });
-  }
-  if (options.sanitize !== false) {
-    pipeline.use(sanitize(options.sanitize), { priority: MIDDLEWARE_PRIORITY.sanitize });
-  }
-  for (const entry of options.use ?? []) {
-    if (typeof entry === 'function') pipeline.use(entry);
-    else pipeline.use(entry.middleware, { priority: entry.priority });
-  }
-  return pipeline;
 }
