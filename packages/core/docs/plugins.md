@@ -393,6 +393,17 @@ pendentes), então um plugin com `engine: '^0.0.0'` deixa de carregar no primeir
   minor pode quebrar a API.
 - Na 1.0, todos passam a `^1.0.0`.
 
+### Qual faixa declarar no `dependsOn`
+
+A mesma regra do `^` vale para a versão da dependência: `^0.0.0` aceita só `0.0.0`, e o
+dependente deixa de carregar (`dependency-version`) no primeiro bump de patch dela, mesmo sem
+mudança incompatível. O boot avisa em `warn` quando um `dependsOn` usa `^0.0.z`.
+
+- **Plugins do mesmo repositório**, que sobem juntos: `0.x` ou `>=0.0.0 <1.0.0` enquanto a
+  dependência estiver no 0.x.
+- **Dependência publicada à parte:** `^0.M.0`, com o minor contra o qual o plugin foi testado.
+- Comece plugins em `0.1.0` (como o template do `create-bridger-plugin`), não em `0.0.0`.
+
 ## Testando o plugin
 
 O [`@usebridger/testing`](../../testing/docs/README.md) sobe o plugin num bot real sobre um
