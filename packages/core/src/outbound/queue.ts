@@ -3,16 +3,19 @@
 // informou, ADR 0067) e humanização opcional.
 
 import type { MessageText } from '#text/format.ts';
-import { assertCanSend, hasCapability, UnsupportedError } from '#transport/capabilities.ts';
+import { assertCanSend } from '#transport/capabilities.ts';
 import type {
   MessageKey,
   OutgoingContent,
   SendOptions,
   Transport,
-  TransportPacing,
   TypingKind,
 } from '#transport/types.ts';
 import { AlbumSplitter } from './album.ts';
+import { OutboundQueueError } from './errors.ts';
+import { Fifo } from './fifo.ts';
+import { type OutboundConfig, resolveOutboundOptions } from './options.ts';
+import { retryAfter, retryDelay } from './retry.ts';
 import { type SendPart, TextLimiter, toContent } from './text.ts';
 import type { ActionOptions, OutboundSendOptions, Sender, SendPriority } from './types.ts';
 
@@ -118,21 +121,7 @@ export interface OutboundCloseOptions {
   readonly drain?: boolean;
 }
 
-export type OutboundQueueErrorReason = 'full' | 'closed' | 'disconnected' | 'timeout';
-
-/**
- * Envio recusado ou abandonado pela fila: backlog cheio, fila fechada, conexão caída além de
- * `maxPauseMs` ou transport sem resposta em `sendTimeoutMs`.
- */
-export class OutboundQueueError extends Error {
-  override readonly name = 'OutboundQueueError';
-  readonly reason: OutboundQueueErrorReason;
-
-  constructor(reason: OutboundQueueErrorReason, message: string) {
-    super(message);
-    this.reason = reason;
-  }
-}
+export { OutboundQueueError, type OutboundQueueErrorReason } from './errors.ts';
 
 /** Índice nas estruturas por prioridade: 0 é a mais alta. */
 type PriorityIndex = 0 | 1 | 2;
@@ -143,59 +132,6 @@ const PRIORITY_INDEX: ReadonlyMap<string, PriorityIndex> = new Map<SendPriority,
   ['normal', 1],
   ['low', 2],
 ]);
-
-const DEFAULTS = {
-  globalIntervalMs: 300,
-  chatIntervalMs: 1000,
-  maxPending: 1000,
-  maxAttempts: 3,
-  baseDelayMs: 1000,
-  maxDelayMs: 30_000,
-  maxPauseMs: 60_000,
-  sendTimeoutMs: 30_000,
-  msPerChar: 50,
-  minMs: 500,
-  maxMs: 3000,
-} as const;
-
-/** FIFO com remoção O(1) na frente; `Array.shift` é O(n) e o backlog pode ter milhares. */
-class Fifo<T> {
-  #items: (T | undefined)[] = [];
-  #head = 0;
-
-  get size(): number {
-    return this.#items.length - this.#head;
-  }
-
-  push(item: T): void {
-    this.#items.push(item);
-  }
-
-  peek(): T | undefined {
-    return this.#items[this.#head];
-  }
-
-  shift(): T | undefined {
-    if (this.#head >= this.#items.length) return undefined;
-    const item = this.#items[this.#head];
-    this.#items[this.#head] = undefined;
-    this.#head++;
-    if (this.#head === this.#items.length) {
-      this.#items = [];
-      this.#head = 0;
-    } else if (this.#head >= 1024 && this.#head * 2 >= this.#items.length) {
-      // Compacta só quando a parte consumida domina: custo amortizado O(1).
-      this.#items = this.#items.slice(this.#head);
-      this.#head = 0;
-    }
-    return item;
-  }
-
-  clear(): void {
-    this.#items = [];
-    this.#head = 0;
-  }
-}
 
 /** Uma chamada ao transport e o conteúdo dela, para a humanização (`null` nas ações). */
 interface JobPart {
@@ -251,19 +187,7 @@ export class OutboundQueue implements Sender {
   readonly #transport: OutboundTransport;
   readonly #text: TextLimiter;
   readonly #album: AlbumSplitter;
-  readonly #globalIntervalMs: number;
-  readonly #chatIntervalMs: number;
-  readonly #maxPending: number;
-  readonly #maxAttempts: number;
-  readonly #baseDelayMs: number;
-  readonly #maxDelayMs: number;
-  readonly #isRetryable: (error: unknown) => boolean;
-  readonly #humanize: Required<HumanizeOptions> | null;
-  readonly #onTypingError: ((error: unknown, chatId: string) => void) | undefined;
-  readonly #maxPauseMs: number;
-  readonly #sendTimeoutMs: number;
-  readonly #clock: () => number;
-  readonly #random: () => number;
+  readonly #config: OutboundConfig;
 
   // Só chats com mensagem aguardando ou em andamento: ao esvaziar, saem (o vazamento do
   // rateLimiter do legacy).
@@ -299,49 +223,10 @@ export class OutboundQueue implements Sender {
   #dropped = 0;
 
   constructor(options: OutboundQueueOptions) {
-    const retry = options.retry ?? {};
+    this.#config = resolveOutboundOptions(options);
     this.#transport = options.transport;
     this.#text = new TextLimiter(options.transport);
     this.#album = new AlbumSplitter(options.transport);
-    // O ritmo é da plataforma (ADR 0067): a config do bot sobrescreve o do transport, e sem
-    // nenhum dos dois vale o padrão anti-ban do WhatsApp (ADR 0019).
-    const pacing = options.transport.pacing;
-    this.#globalIntervalMs = pace('globalIntervalMs', options.globalIntervalMs, pacing);
-    this.#chatIntervalMs = pace('chatIntervalMs', options.chatIntervalMs, pacing);
-    const maxPending = options.maxPending ?? DEFAULTS.maxPending;
-    if (
-      !(
-        maxPending === Number.POSITIVE_INFINITY ||
-        (Number.isInteger(maxPending) && maxPending >= 0)
-      )
-    ) {
-      throw new RangeError(
-        `maxPending deve ser inteiro >= 0 ou Infinity (recebido: ${maxPending})`,
-      );
-    }
-    this.#maxPending = maxPending;
-    const maxAttempts = retry.maxAttempts ?? DEFAULTS.maxAttempts;
-    if (!(Number.isInteger(maxAttempts) && maxAttempts >= 1)) {
-      throw new RangeError(`retry.maxAttempts deve ser inteiro >= 1 (recebido: ${maxAttempts})`);
-    }
-    this.#maxAttempts = maxAttempts;
-    this.#baseDelayMs = nonNegative('retry.baseDelayMs', retry.baseDelayMs ?? DEFAULTS.baseDelayMs);
-    this.#maxDelayMs = nonNegative('retry.maxDelayMs', retry.maxDelayMs ?? DEFAULTS.maxDelayMs);
-    this.#isRetryable = retry.isRetryable ?? isTransient;
-    this.#humanize = resolveHumanize(options.humanize, options.transport);
-    this.#onTypingError = options.onTypingError;
-    const maxPauseMs = options.maxPauseMs ?? DEFAULTS.maxPauseMs;
-    if (!(maxPauseMs >= 0)) {
-      throw new RangeError(`maxPauseMs deve ser >= 0 ou Infinity (recebido: ${maxPauseMs})`);
-    }
-    this.#maxPauseMs = maxPauseMs;
-    const sendTimeoutMs = options.sendTimeoutMs ?? DEFAULTS.sendTimeoutMs;
-    if (!(sendTimeoutMs > 0)) {
-      throw new RangeError(`sendTimeoutMs deve ser > 0 ou Infinity (recebido: ${sendTimeoutMs})`);
-    }
-    this.#sendTimeoutMs = sendTimeoutMs;
-    this.#clock = options.clock ?? (() => performance.now());
-    this.#random = options.random ?? Math.random;
   }
 
   /**
@@ -419,7 +304,7 @@ export class OutboundQueue implements Sender {
       return Promise.reject(
         new OutboundQueueError(
           'disconnected',
-          `conexão caída há mais de ${this.#maxPauseMs} ms: ${spec.what} recusado`,
+          `conexão caída há mais de ${this.#config.maxPauseMs} ms: ${spec.what} recusado`,
         ),
       );
     }
@@ -433,12 +318,12 @@ export class OutboundQueue implements Sender {
       return Promise.reject(error);
     }
     // Limite por prioridade: `low`/`normal` acumulados nunca tiram a vaga de uma `high`.
-    if (this.#pendingBy[priority] >= this.#maxPending) {
+    if (this.#pendingBy[priority] >= this.#config.maxPending) {
       this.#dropped++;
       return Promise.reject(
         new OutboundQueueError(
           'full',
-          `fila de saída cheia (${this.#maxPending} aguardando com prioridade ${requested ?? 'normal'}): ${spec.what} recusado`,
+          `fila de saída cheia (${this.#config.maxPending} aguardando com prioridade ${requested ?? 'normal'}): ${spec.what} recusado`,
         ),
       );
     }
@@ -458,7 +343,7 @@ export class OutboundQueue implements Sender {
       chat.jobs[priority].push(job);
       chat.pending++;
       this.#pendingBy[priority]++;
-      this.#wake(chat, this.#clock());
+      this.#wake(chat, this.#config.clock());
       this.#pump();
     });
   }
@@ -495,7 +380,7 @@ export class OutboundQueue implements Sender {
   pause(): void {
     if (this.#paused) return;
     this.#paused = true;
-    if (this.#maxPauseMs === Number.POSITIVE_INFINITY) return;
+    if (this.#config.maxPauseMs === Number.POSITIVE_INFINITY) return;
     this.#pauseTimer = setTimeout(() => {
       this.#pauseTimer = undefined;
       this.#offline = true;
@@ -503,10 +388,10 @@ export class OutboundQueue implements Sender {
         () =>
           new OutboundQueueError(
             'disconnected',
-            `conexão caída há mais de ${this.#maxPauseMs} ms: envio descartado`,
+            `conexão caída há mais de ${this.#config.maxPauseMs} ms: envio descartado`,
           ),
       );
-    }, this.#maxPauseMs);
+    }, this.#config.maxPauseMs);
   }
 
   /** Volta a despachar (a conexão abriu), inclusive depois de estourado o `maxPauseMs`. */
@@ -559,7 +444,7 @@ export class OutboundQueue implements Sender {
     if (now < chat.readyAt) {
       chat.timer ??= setTimeout(() => {
         chat.timer = undefined;
-        this.#wake(chat, this.#clock());
+        this.#wake(chat, this.#config.clock());
         this.#pump();
       }, chat.readyAt - now);
       return;
@@ -579,7 +464,7 @@ export class OutboundQueue implements Sender {
       for (;;) {
         const list = this.#peekReady();
         if (list === undefined) return;
-        const now = this.#clock();
+        const now = this.#config.clock();
         if (now < this.#globalReadyAt) {
           this.#globalTimer ??= setTimeout(() => {
             this.#globalTimer = undefined;
@@ -621,8 +506,8 @@ export class OutboundQueue implements Sender {
     chat.pending--;
     this.#pendingBy[job.priority]--;
     this.#inFlight++;
-    this.#globalReadyAt = now + this.#globalIntervalMs;
-    chat.readyAt = now + this.#chatIntervalMs;
+    this.#globalReadyAt = now + this.#config.globalIntervalMs;
+    chat.readyAt = now + this.#config.chatIntervalMs;
     this.#rememberCooldown(chat.id, chat.readyAt, now);
     void this.#execute(chat, job);
   }
@@ -639,15 +524,12 @@ export class OutboundQueue implements Sender {
   async #execute(chat: ChatState, job: Job): Promise<void> {
     job.attempts++;
     try {
-      if (this.#humanize !== null && job.content !== null) {
-        await this.#simulate(chat.id, job.content, this.#humanize);
+      if (this.#config.humanize !== null && job.content !== null) {
+        await this.#simulate(chat.id, job.content, this.#config.humanize);
       }
       // Descartada durante o "digitando": o envio não chegou ao transport e não sai.
       if (this.#discarding) {
-        this.#dropped++;
-        job.reject(
-          new OutboundQueueError('closed', 'fila de saída fechada sem drenar: envio descartado'),
-        );
+        this.#drop(job);
       } else {
         const result = await this.#withTimeout(job.run(), job.what);
         this.#sent++;
@@ -663,7 +545,7 @@ export class OutboundQueue implements Sender {
       this.#chats.delete(chat.id);
       this.#notifyIdle();
     } else {
-      this.#wake(chat, this.#clock());
+      this.#wake(chat, this.#config.clock());
     }
     this.#pump();
   }
@@ -677,55 +559,49 @@ export class OutboundQueue implements Sender {
       return;
     }
     if (this.#discarding) {
-      this.#dropped++;
-      job.reject(
-        new OutboundQueueError('closed', 'fila de saída fechada sem drenar: envio descartado'),
-      );
+      this.#drop(job);
       return;
     }
-    chat.head = { ...job, ...next, rest, first, attempts: 0 };
-    chat.pending++;
-    this.#pendingBy[job.priority]++;
+    this.#requeueHead(chat, { ...job, ...next, rest, first, attempts: 0 });
   }
 
   #handleFailure(chat: ChatState, job: Job, error: unknown): void {
-    const now = this.#clock();
+    const now = this.#config.clock();
     const hint = this.#discarding ? undefined : retryAfter(error);
     // Janela global (429 global): nenhum chat envia antes dela, nem quando este envio não
     // re-tenta. Mandar antes só gastaria requisições recusadas, que a plataforma também pune.
     if (hint?.global === true) {
       this.#globalReadyAt = Math.max(this.#globalReadyAt, now + hint.ms);
     }
-    let retryable: boolean;
-    try {
-      // Prazo estourado não re-tenta: o transport pode ainda entregar, e reenviar duplicaria.
-      // Pausada além do teto, a re-tentativa ficaria parada sem previsão. Janela acima do teto
-      // de espera também não: a resposta sairia fora de contexto.
-      retryable =
-        !this.#discarding &&
-        !this.#offline &&
-        !(error instanceof OutboundQueueError) &&
-        job.attempts < this.#maxAttempts &&
-        (hint === undefined || hint.ms <= this.#maxDelayMs) &&
-        this.#isRetryable(error);
-    } catch (hookError) {
-      this.#failed++;
-      job.reject(new AggregateError([hookError, error], 'retry.isRetryable lançou'));
-      return;
+    // Descartando, não re-tenta; pausada além do teto, a re-tentativa ficaria parada sem previsão.
+    let delay: number | null = null;
+    if (!this.#discarding && !this.#offline) {
+      try {
+        delay = retryDelay(error, job.attempts, hint, this.#config.retry, this.#config.random);
+      } catch (hookError) {
+        this.#failed++;
+        job.reject(new AggregateError([hookError, error], 'retry.isRetryable lançou'));
+        return;
+      }
     }
-    if (!retryable) {
+    if (delay === null) {
       this.#failed++;
       job.reject(error);
       return;
     }
     this.#retries++;
+    this.#requeueHead(chat, job);
+    chat.readyAt = Math.max(chat.readyAt, now + delay);
+  }
+
+  /**
+   * Põe o job na frente do chat (re-tentativa ou parte seguinte de um texto dividido). Os dois
+   * contadores andam juntos: `stats()`, `maxPending` e `onIdle()` dependem deles.
+   */
+  #requeueHead(chat: ChatState, job: Job): void {
     chat.head = job;
     chat.pending++;
     this.#pendingBy[job.priority]++;
-    // A janela informada pela plataforma é exata: sem jitter, e no lugar do backoff, que
-    // tentaria cedo demais e gastaria as tentativas antes de ela abrir.
-    const delay = hint === undefined ? this.#backoff(job.attempts) : hint.ms;
-    chat.readyAt = Math.max(chat.readyAt, now + delay);
   }
 
   /**
@@ -733,21 +609,15 @@ export class OutboundQueue implements Sender {
    * chamou `send` já recebeu o `'timeout'`, e o `race` mantém um handler na promise original.
    */
   #withTimeout<T>(operation: Promise<T>, what: string): Promise<T> {
-    if (this.#sendTimeoutMs === Number.POSITIVE_INFINITY) return operation;
+    if (this.#config.sendTimeoutMs === Number.POSITIVE_INFINITY) return operation;
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => {
-        const message = `${what}: transport sem resposta em ${this.#sendTimeoutMs} ms`;
+        const message = `${what}: transport sem resposta em ${this.#config.sendTimeoutMs} ms`;
         reject(new OutboundQueueError('timeout', message));
-      }, this.#sendTimeoutMs);
+      }, this.#config.sendTimeoutMs);
     });
     return Promise.race([operation, timeout]).finally(() => clearTimeout(timer));
-  }
-
-  /** Exponencial com teto e jitter "igual": metade fixa, metade aleatória. */
-  #backoff(failures: number): number {
-    const capped = Math.min(this.#maxDelayMs, this.#baseDelayMs * 2 ** (failures - 1));
-    return capped / 2 + (capped / 2) * this.#random();
   }
 
   async #simulate(
@@ -773,7 +643,7 @@ export class OutboundQueue implements Sender {
       await this.#withTimeout(this.#transport.sendTyping(chatId, kind), `"digitando" em ${chatId}`);
     } catch (error) {
       // O indicador é cosmético: a falha vai para o destino configurado e o envio segue já.
-      this.#onTypingError?.(error, chatId);
+      this.#config.onTypingError?.(error, chatId);
       return;
     }
     if (ms > 0 && !this.#discarding) await this.#sleep(ms);
@@ -797,9 +667,13 @@ export class OutboundQueue implements Sender {
     clearTimeout(this.#pauseTimer);
     this.#pauseTimer = undefined;
     for (const done of this.#sleepers) done();
-    this.#rejectWaiting(
-      () => new OutboundQueueError('closed', 'fila de saída fechada sem drenar: envio descartado'),
-    );
+    this.#rejectWaiting(discardedError);
+  }
+
+  /** Descarta, sem enviar, um job que já saiu da espera. */
+  #drop(job: Job): void {
+    this.#dropped++;
+    job.reject(discardedError());
   }
 
   /** Rejeita tudo o que aguarda, inclusive re-tentativas; os envios em andamento seguem. */
@@ -843,58 +717,6 @@ function firstNonEmpty(jobs: ChatState['jobs']): PriorityIndex | -1 {
   return jobs[2].size > 0 ? 2 : -1;
 }
 
-function nonNegative(name: string, value: number): number {
-  if (!(Number.isFinite(value) && value >= 0)) {
-    throw new RangeError(`${name} deve ser um número finito >= 0 (recebido: ${value})`);
-  }
-  return value;
-}
-
-function pace(
-  name: keyof TransportPacing,
-  configured: number | undefined,
-  pacing: TransportPacing | undefined,
-): number {
-  if (configured !== undefined) return nonNegative(name, configured);
-  const fromTransport = pacing?.[name];
-  if (fromTransport !== undefined) return nonNegative(`transport.pacing.${name}`, fromTransport);
-  return DEFAULTS[name];
-}
-
-/**
- * Janela que a plataforma informou num erro do transport (ADR 0067): `retryAfterMs` finito e
- * >= 0, e `retryAfterScope: 'global'` quando ela vale para todos os chats. Duck typing, como o
- * `retryable`: o transport não precisa de classe do core para lançar o erro nativo enriquecido.
- */
-function retryAfter(error: unknown): { readonly ms: number; readonly global: boolean } | undefined {
-  if (typeof error !== 'object' || error === null || !('retryAfterMs' in error)) return undefined;
-  const ms = error.retryAfterMs;
-  if (typeof ms !== 'number' || !(Number.isFinite(ms) && ms >= 0)) return undefined;
-  return { ms, global: 'retryAfterScope' in error && error.retryAfterScope === 'global' };
-}
-
-function isTransient(error: unknown): boolean {
-  if (error instanceof UnsupportedError) return false;
-  return !(
-    typeof error === 'object' &&
-    error !== null &&
-    'retryable' in error &&
-    error.retryable === false
-  );
-}
-
-function resolveHumanize(
-  option: boolean | HumanizeOptions | undefined,
-  transport: OutboundTransport,
-): Required<HumanizeOptions> | null {
-  // Capabilities são fixas na vida do transport: decide uma vez, não a cada envio.
-  if (option === undefined || option === false || !hasCapability(transport, 'typing')) {
-    return null;
-  }
-  const custom = option === true ? {} : option;
-  return {
-    msPerChar: nonNegative('humanize.msPerChar', custom.msPerChar ?? DEFAULTS.msPerChar),
-    minMs: nonNegative('humanize.minMs', custom.minMs ?? DEFAULTS.minMs),
-    maxMs: nonNegative('humanize.maxMs', custom.maxMs ?? DEFAULTS.maxMs),
-  };
+function discardedError(): OutboundQueueError {
+  return new OutboundQueueError('closed', 'fila de saída fechada sem drenar: envio descartado');
 }

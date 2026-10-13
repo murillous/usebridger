@@ -325,6 +325,32 @@ describe('OutboundQueue: retry', () => {
   });
 });
 
+describe('OutboundQueue: contadores de aguardando (#77)', () => {
+  it('voltam a zero depois de uma re-tentativa e de um texto dividido', async () => {
+    const fake = fakeTransport();
+    const queue = new OutboundQueue({
+      transport: { ...fake.transport, limits: { text: 4 } },
+      globalIntervalMs: 0,
+      chatIntervalMs: 0,
+      random: () => 1,
+    });
+    let calls = 0;
+    fake.failWith(() => (++calls === 2 ? new Error('instável') : undefined));
+    const sent = queue.send('a', text('abcd efgh ijkl'), { priority: 'high' });
+    await vi.advanceTimersByTimeAsync(0);
+    // A primeira parte saiu e a segunda falhou: ela espera o backoff na frente do chat.
+    expect(queue.stats()).toMatchObject({ pending: { high: 1 }, retries: 1 });
+    await vi.runAllTimersAsync();
+    await expect(sent).resolves.toMatchObject({ id: 'm1' });
+    expect(fake.sends.map((s) => s.label)).toEqual(['abcd', 'efgh', 'efgh', 'ijkl']);
+    expect(queue.stats()).toMatchObject({
+      pending: { high: 0, normal: 0, low: 0 },
+      activeChats: 0,
+    });
+    await expect(queue.onIdle()).resolves.toBeUndefined();
+  });
+});
+
 describe('OutboundQueue: humanização', () => {
   it('é desligada por padrão', async () => {
     const { queue, transport } = newQueue();
