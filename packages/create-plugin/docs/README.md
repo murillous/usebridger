@@ -35,6 +35,8 @@ bridger-plugin-ola/
   tsconfig.json         # strict + isolatedDeclarations
   tsdown.config.ts      # dist/ com JS e .d.ts
   README.md
+  AGENTS.md             # convenções do plugin para agentes de código (Codex, Cursor, Copilot…)
+  CLAUDE.md             # uma linha: importa o AGENTS.md no Claude Code
   .changeset/           # config do changesets para versão e changelog
   .gitignore
 ```
@@ -46,6 +48,10 @@ O exemplo responde `!ola` e ensina o plugin portátil:
 - **Formatação pelos helpers.** `fmt` e `bold`, nunca `*negrito*` à mão.
 - **Teste em todos os perfis.** `describe.each(PROFILE_NAMES)` roda o mesmo teste como WhatsApp,
   Telegram, Discord e web.
+
+O `AGENTS.md` repete essas regras, mais as de ciclo de vida (`teardown`, `ctx.signal`), `ctx.unsafe`
+e versão, com o porquê de cada uma, para o agente de código que for desenvolver o plugin. Entra
+sempre, sem opção: é pequeno, e o agente o lê sem precisar de rede.
 
 O `@usebridger/core` entra como peer dependency (o plugin usa o core do bot) e como dev dependency
 (para o teste e o typecheck). A faixa é `<1.0.0` até o core chegar ao 1.0.

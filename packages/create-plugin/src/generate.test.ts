@@ -71,6 +71,18 @@ describe('generate', () => {
     );
   });
 
+  it('gera AGENTS.md com os nomes do plugin e CLAUDE.md apontando para ele', () => {
+    const target = join(tempDir(), 'p');
+
+    generate(target, pluginNames('@acme/bridger-plugin-boas-vindas'));
+
+    const agents = readFileSync(join(target, 'AGENTS.md'), 'utf8');
+    expect(agents).toContain('`@acme/bridger-plugin-boas-vindas`');
+    expect(agents).toContain("name: 'boas-vindas'");
+    expect(agents).toContain('export `boasVindas`');
+    expect(readFileSync(join(target, 'CLAUDE.md'), 'utf8')).toBe('@AGENTS.md\n');
+  });
+
   it('não deixa marcador para trás', () => {
     const target = join(tempDir(), 'p');
 
