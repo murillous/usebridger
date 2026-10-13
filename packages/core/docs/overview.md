@@ -14,7 +14,7 @@ Três públicos, três pontos de entrada ([README](README.md#pontos-de-entrada))
 | Quem | Escreve | Importa de |
 | --- | --- | --- |
 | Autor de app | a composição: `createBot`, `createHttp`, middlewares, logger | `@usebridger/core` |
-| Autor de plugin | `definePlugin`, comandos, listeners, jobs | `@usebridger/core` |
+| Autor de plugin | `definePlugin`, comandos, listeners, jobs | `@usebridger/core` e `@usebridger/core/zod` (schema da config) |
 | Autor de transport ou storage | o adapter de uma plataforma ou de um banco | `@usebridger/core/adapter` e `@usebridger/core/storage-contract` |
 
 ## As peças

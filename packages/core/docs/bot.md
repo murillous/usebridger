@@ -624,7 +624,7 @@ import {
   definePlugin,
   secret,
 } from '@usebridger/core';
-import { z } from 'zod';
+import { z } from '@usebridger/core/zod';
 
 declare module '@usebridger/core' {
   interface Services {

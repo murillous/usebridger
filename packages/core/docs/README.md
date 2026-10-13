@@ -14,6 +14,7 @@ A API pública se divide por público ([ADR 0034](../../../docs/adr/0034-bibliot
 | `@usebridger/core` | Autor de plugin e app | `definePlugin`, `command`, `secret`, tipos dos contextos, eventos, mensagem, storage do plugin e os erros que o plugin trata; `createBot` e sua config, `createHttp`, middlewares oficiais, `createLogger`, `createSecretSet`, `createMemoryStorage` |
 | `@usebridger/core/adapter` | Autor de transport ou storage | Contratos `Transport`/`StoragePort`, `defineTransport`, `TypedEmitter`, `createMessage`, `createMedia`, `messageKey`, `ReconnectionPolicy`, helpers de capability, normalização de consultas, `StorageClosedError` |
 | `@usebridger/core/storage-contract` | Autor de storage | Suíte de contrato (`defineStorageContract`) |
+| `@usebridger/core/zod` | Autor de plugin | O `z` do Zod que o core usa, para o schema da config ([ADR 0095](../../../docs/adr/0095-zod-no-subpath-do-core.md)) |
 
 O adapter usa também o modelo compartilhado de `@usebridger/core` (`Message`, `MessageKey`,
 `OutgoingContent`, tipos de storage). Host de plugins, barramento, filas, scheduler e roteador

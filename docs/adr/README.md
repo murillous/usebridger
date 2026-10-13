@@ -226,3 +226,4 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0092](0092-placeholders-nas-messages.md) | D92 | Placeholders nas `messages` e `ctx.t`: `{prefix}` do chat e valores do plugin, sobrescrita validada contra o texto padrão (substitui em parte D25, detalha D63) | Aceito |
 | [0093](0093-react-do-contexto-tolerante.md) | D93 | `react` do contexto tolerante: sem a capability `reactions`, resolve sem reagir e registra em `debug`; o `ctx.send.react` continua estrito (substitui em parte D40) | Aceito |
 | [0094](0094-accepts-estreita-o-contexto-e-args.md) | D94 | `accepts` estreita o contexto do `run` (`ctx.media` como `Media` quando toda entrada tem mídia) e ganha `'args'`, que casa só com texto depois do comando (detalha D12) | Aceito |
+| [0095](0095-zod-no-subpath-do-core.md) | D95 | Zod do core no subpath `@usebridger/core/zod`: o schema da config sai da mesma cópia do core, e o `@usebridger/core` segue sem carregar o Zod (detalha D17/D34) | Aceito |

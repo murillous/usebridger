@@ -15,7 +15,7 @@ Para começar um plugin em pacote próprio, com teste e build prontos, use o sca
 
 ```ts
 import { command, definePlugin } from '@usebridger/core';
-import { z } from 'zod';
+import { z } from '@usebridger/core/zod';
 
 export const sticker = definePlugin({
   name: 'sticker',                              // kebab-case, único no bot

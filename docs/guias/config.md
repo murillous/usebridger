@@ -3,12 +3,13 @@
 O plugin declara o que é configurável com um schema [Zod 4](https://zod.dev). O kernel junta o que
 o dono do bot definiu, valida, esconde os segredos no log e entrega a config tipada em `ctx.config`.
 O detalhe está em [Config no core](../../packages/core/docs/config.md).
+O `z` vem de `@usebridger/core/zod`, o mesmo Zod do core: não precisa instalar o `zod`.
 
 ## Declarar
 
 ```ts
 import { definePlugin, secret } from '@usebridger/core';
-import { z } from 'zod';
+import { z } from '@usebridger/core/zod';
 
 export const clima = definePlugin({
   name: 'clima',

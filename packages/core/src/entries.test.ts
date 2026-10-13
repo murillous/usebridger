@@ -306,6 +306,12 @@ const entries: Record<string, { file: string; load: () => Promise<object> } & En
     values: ['defineStorageContract'],
     types: ['ContractTestApi', 'StorageContractOptions'],
   },
+  '@usebridger/core/zod': {
+    file: './zod.ts',
+    load: () => import('@usebridger/core/zod'),
+    values: ['z'],
+    types: [],
+  },
 };
 
 // Tipos somem em runtime, então a lista deles sai do texto do entry. Os entries só reexportam
