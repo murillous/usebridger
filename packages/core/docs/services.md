@@ -114,6 +114,56 @@ export const download = definePlugin({
   ([ADR 0072](../../../docs/adr/0072-isolamento-por-tenant.md)). Estado em memória (um `Map` no
   plugin) não ganha escopo. Guarde no `ctx.storage` o que é de um cliente.
 
+## Pontos de extensão
+
+Um serviço que outros plugins estendem (o `sticker` que aceita etapas, como a legenda do
+`sticker-text`) não guarda as contribuições nem cuida de tirá-las: o registry faz isso
+([ADR 0096](../../../docs/adr/0096-pontos-de-extensao-em-servicos.md)). Quem oferece declara o
+tipo da contribuição em `ExtensionPoints` e lê com `extensionPoint`; quem estende chama
+`contribute`:
+
+```ts
+export type StickerStep = (image: Buffer, input: StickerInput) => Promise<Buffer>;
+
+declare module '@usebridger/core' {
+  interface ExtensionPoints {
+    'sticker.steps': StickerStep;
+  }
+}
+
+// quem oferece (plugin `sticker`)
+setup(ctx) {
+  const steps = ctx.services.extensionPoint('sticker.steps');
+  ctx.services.provide('sticker', {
+    async make(image, input) {
+      for (const step of steps.list()) image = await step(image, input);
+      return image;
+    },
+  });
+}
+
+// quem estende (plugin `sticker-text`, com `dependsOn: { sticker: '^1.0.0' }`)
+setup(ctx) {
+  ctx.services.contribute('sticker.steps', addCaption); // sai no teardown/reload/disable deste plugin
+}
+```
+
+- **Atribuída a quem contribuiu.** A contribuição sai sozinha no teardown, reload e disable do
+  plugin que a fez, como os serviços que ele provê. Sem `ctx.signal`, sem `Unsubscribe`: o reload
+  do contribuidor não duplica a etapa, e o plugin desligado para de rodar.
+- **Visão viva.** `extensionPoint(name)` devolve `{ list() }`; guarde a visão no `setup` e chame
+  `list()` a cada uso. Cada chamada devolve uma cópia já com as entradas e saídas recentes.
+- **Ordem: a de carga** dos plugins que contribuíram (ajustável com `after`/`priority`, como a
+  carga), e dentro do mesmo plugin a ordem dos `contribute`. O reload de um contribuidor não o
+  manda para o fim.
+- **O ponto não tem dono.** `contribute` não exige que alguém já tenha pedido o ponto, e o
+  reload de quem oferece não apaga as contribuições dos outros. Para o tipo e a ordem de carga,
+  o contribuidor declara `dependsOn` (ou `after`) em quem oferece; com `dependsOn`, ele recarrega
+  em cascata junto, e a contribuição sai e volta sem duplicar.
+- **Vários por ponto.** Ao contrário de `provide`, contribuir não conflita: cada `contribute`
+  acrescenta uma entrada, inclusive do mesmo plugin.
+- Depois do descarte do contexto, `contribute` lança `PluginHostStateError`, como `provide`.
+
 ## Registry
 
 O `Bot` cria um registry por instância (sem estado global) e entrega a cada plugin o acesso
@@ -123,12 +173,13 @@ atribuído a ele (`ctx.services`); no teardown/reload remove o que o plugin prov
 ```ts
 import { createServiceRegistry } from '#services/registry.ts';
 
-const services = createServiceRegistry();
+// `loadOrder` (opcional) ordena as contribuições; o `Bot` passa a tabela do host.
+const services = createServiceRegistry({ loadOrder: () => host.report().map((e) => e.name) });
 
 const aiServices = services.forPlugin('ai');         // o ctx.services do plugin 'ai'
 aiServices.provide('ai', aiService);
 
 services.forPlugin('resumo').get('ai');
 services.list();                                     // [{ plugin: 'ai', name: 'ai', service }]
-services.removePlugin('ai');                         // teardown/reload
+services.removePlugin('ai');                         // teardown/reload: serviços e contribuições
 ```

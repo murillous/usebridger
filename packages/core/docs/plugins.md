@@ -318,7 +318,7 @@ O loader não conhece comandos, eventos, storage nem serviços: recebe
 registrou pelo contexto. Um `setup` que estoura o prazo continua rodando em segundo plano
 (não há como abortar código síncrono/arbitrário); a fábrica deve fazer o contexto recusar
 registros depois do `dispose`, para o setup atrasado não deixar nada para trás — a do `Bot` lança
-`PluginHostStateError` em `commands.add`, `events.on`, `services.provide`, `scheduler.on`,
+`PluginHostStateError` em `commands.add`, `events.on`, `services.provide`, `services.contribute`, `scheduler.on`,
 `http.route` e `http.ws` (o `dispose` tira as rotas e fecha os WebSockets delas), e
 rejeita com `ContextExpiredError` `send` (com as ações), `groups`, `storage` (KV e coleções) e
 `scheduler.at`/`cancel`.
