@@ -59,10 +59,40 @@ O tipo vem de importar o pacote do provedor (ou só o tipo dele): é esse import
 - **`get` no `setup` pode**: o boot segue a ordem topológica do `dependsOn`, então o
   provedor já rodou o `setup` dele (e o `provide`). Também pode ser chamado depois, em
   comandos e listeners.
-- **Serviço opcional**: `ctx.services.has('ai')` responde sem lançar.
+- **Serviço opcional**: `ctx.services.has('ai')` responde sem lançar. Veja abaixo.
 - **Serviço ausente**: `get` lança `ServiceNotFoundError` dizendo qual serviço, qual plugin
   pediu e que nenhum plugin carregado o provê, sugerindo declarar o `dependsOn`. O erro tem
   os campos `service` e `requestedBy`.
+
+## Serviço opcional
+
+Quando o plugin funciona sem o provedor e só parte dele usa o serviço, `dependsOn` derrubaria o
+plugin inteiro. Declare o provedor em `optionalDependsOn`
+([ADR 0099](../../../docs/adr/0099-comando-que-exige-servico.md)):
+
+- o formato é o do `dependsOn` (nome do plugin → faixa semver, faixa inválida é erro de
+  manifesto);
+- o provedor carrega antes, se existir, e o plugin carrega mesmo sem ele (ausente, ignorado,
+  com `setup` falho ou desligado);
+- provedor carregado fora da faixa também não impede a carga: o boot avisa em `warn`
+  (`dependency`, `range`, `version`), e o serviço dele segue visível para `has`, `get` e
+  `services` do comando;
+- recarregar, desligar ou ligar o provedor recarrega o plugin em cascata, como no `dependsOn`, então
+  o `setup` sempre vê o estado atual e pode guardar o serviço se `has` responder `true`;
+- o comando que precisa do serviço o declara em `services` e só existe enquanto ele está provido
+  ([Serviço por comando](commands.md#serviço-por-comando)).
+
+```ts
+export const download = definePlugin({
+  name: 'download',
+  version: '1.0.0',
+  engine: '^1.0.0',
+  optionalDependsOn: { sticker: '^0.1.0' },
+  setup(ctx) {
+    if (ctx.services.has('sticker')) { /* liga o que depende do serviço */ }
+  },
+});
+```
 
 ## Regras
 
@@ -77,11 +107,62 @@ O tipo vem de importar o pacote do provedor (ou só o tipo dele): é esse import
 - **Teardown e reload** removem o que o plugin proveu; no novo `setup` ele provê de novo. O
   reload do provedor recarrega em cascata quem declara `dependsOn` nele
   ([ADR 0041](../../../docs/adr/0041-reload-em-cascata.md)), então guardar a instância no `setup`
-  é seguro. Quem usa o serviço sem `dependsOn` não recarrega junto e fica com a instância antiga.
+  é seguro; `optionalDependsOn` também entra na cascata. Quem usa o serviço sem nenhum dos dois não
+  recarrega junto e fica com a instância antiga.
 - **Tenant.** Chamado no handler de uma mensagem com `chat.tenantId`, o serviço roda no escopo
   daquele tenant: o `ctx.storage` do provedor grava no tenant certo sem receber nada
   ([ADR 0072](../../../docs/adr/0072-isolamento-por-tenant.md)). Estado em memória (um `Map` no
   plugin) não ganha escopo. Guarde no `ctx.storage` o que é de um cliente.
+
+## Pontos de extensão
+
+Um serviço que outros plugins estendem (o `sticker` que aceita etapas, como a legenda do
+`sticker-text`) não guarda as contribuições nem cuida de tirá-las: o registry faz isso
+([ADR 0096](../../../docs/adr/0096-pontos-de-extensao-em-servicos.md)). Quem oferece declara o
+tipo da contribuição em `ExtensionPoints` e lê com `extensionPoint`; quem estende chama
+`contribute`:
+
+```ts
+export type StickerStep = (image: Buffer, input: StickerInput) => Promise<Buffer>;
+
+declare module '@usebridger/core' {
+  interface ExtensionPoints {
+    'sticker.steps': StickerStep;
+  }
+}
+
+// quem oferece (plugin `sticker`)
+setup(ctx) {
+  const steps = ctx.services.extensionPoint('sticker.steps');
+  ctx.services.provide('sticker', {
+    async make(image, input) {
+      for (const step of steps.list()) image = await step(image, input);
+      return image;
+    },
+  });
+}
+
+// quem estende (plugin `sticker-text`, com `dependsOn: { sticker: '^1.0.0' }`)
+setup(ctx) {
+  ctx.services.contribute('sticker.steps', addCaption); // sai no teardown/reload/disable deste plugin
+}
+```
+
+- **Atribuída a quem contribuiu.** A contribuição sai sozinha no teardown, reload e disable do
+  plugin que a fez, como os serviços que ele provê. Sem `ctx.signal`, sem `Unsubscribe`: o reload
+  do contribuidor não duplica a etapa, e o plugin desligado para de rodar.
+- **Visão viva.** `extensionPoint(name)` devolve `{ list() }`; guarde a visão no `setup` e chame
+  `list()` a cada uso. Cada chamada devolve uma cópia já com as entradas e saídas recentes.
+- **Ordem: a de carga** dos plugins que contribuíram (ajustável com `after`/`priority`, como a
+  carga), e dentro do mesmo plugin a ordem dos `contribute`. O reload de um contribuidor não o
+  manda para o fim.
+- **O ponto não tem dono.** `contribute` não exige que alguém já tenha pedido o ponto, e o
+  reload de quem oferece não apaga as contribuições dos outros. Para o tipo e a ordem de carga,
+  o contribuidor declara `dependsOn` (ou `after`) em quem oferece; com `dependsOn`, ele recarrega
+  em cascata junto, e a contribuição sai e volta sem duplicar.
+- **Vários por ponto.** Ao contrário de `provide`, contribuir não conflita: cada `contribute`
+  acrescenta uma entrada, inclusive do mesmo plugin.
+- Depois do descarte do contexto, `contribute` lança `PluginHostStateError`, como `provide`.
 
 ## Registry
 
@@ -92,12 +173,13 @@ atribuído a ele (`ctx.services`); no teardown/reload remove o que o plugin prov
 ```ts
 import { createServiceRegistry } from '#services/registry.ts';
 
-const services = createServiceRegistry();
+// `loadOrder` (opcional) ordena as contribuições; o `Bot` passa a tabela do host.
+const services = createServiceRegistry({ loadOrder: () => host.report().map((e) => e.name) });
 
 const aiServices = services.forPlugin('ai');         // o ctx.services do plugin 'ai'
 aiServices.provide('ai', aiService);
 
 services.forPlugin('resumo').get('ai');
 services.list();                                     // [{ plugin: 'ai', name: 'ai', service }]
-services.removePlugin('ai');                         // teardown/reload
+services.removePlugin('ai');                         // teardown/reload: serviços e contribuições
 ```

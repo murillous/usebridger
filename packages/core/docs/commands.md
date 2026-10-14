@@ -432,6 +432,44 @@ que também sobe para `warn`. Em `bot.plugins()`, a linha do plugin traz `unregi
 capability, então um nome inválido falha em qualquer transport. O roteador solto ignora
 `requires`, como o `timeoutMs`.
 
+### Serviço por comando
+
+Um comando que usa o serviço de outro plugin, num plugin que funciona sem ele, declara o serviço
+em `services` ([ADR 0099](../../../docs/adr/0099-comando-que-exige-servico.md)). Com o provedor
+em `optionalDependsOn` no manifesto, o comando some e volta junto com ele:
+
+```ts
+export const download = definePlugin({
+  name: 'download',
+  version: '1.0.0',
+  engine: '^1.0.0',
+  optionalDependsOn: { sticker: '^0.1.0' }, // carrega depois do sticker e recarrega com ele, se existir
+  commands: {
+    downloadsticker: {
+      requires: ['send.sticker'],
+      services: ['sticker'],
+      run: async (c, plugin) => {
+        const stickers = plugin.services.get('sticker'); // provido: senão o comando não existiria
+        /* ... */
+      },
+    },
+  },
+});
+```
+
+Na hora do registro (`ctx.commands.add`, também o dos `commands` do manifesto), se algum serviço
+de `services` não está provido, o comando fica de fora como o sem capability: fora do roteador, do
+`ctx.commands.list()` e do menu nativo, com um log `warn` com `plugin`, `command` e `services`, e
+na tabela de boot como `sem downloadsticker (serviço sticker)`. Em `unregistered`, a entrada traz
+`services` com os que faltavam e `missing` vazio.
+
+A conferência é só no registro. Quem a refaz quando o provedor sobe, falha, recarrega, é
+desligado ou ligado é o reload em cascata do `optionalDependsOn`
+([Plugins](plugins.md#recarregar-um-plugin-reload)): o plugin desce e sobe junto, e o `setup` novo
+registra o comando ou o deixa de fora. Sem `optionalDependsOn` (ou `dependsOn`) no provedor, o
+comando fica como estava no boot. Serviço que o próprio plugin provê conta se o `provide` vier
+antes do `add`. O roteador solto ignora `services`.
+
 Para perguntar algo e tratar a resposta, o `run` não espera a próxima mensagem: ela está na fila
 atrás dele. Ele envia a pergunta, chama `c.expectReply(passo)` e termina, e a resposta vai ao
 passo ([Conversas](conversations.md)). Um comando digitado enquanto a espera vale a cancela e

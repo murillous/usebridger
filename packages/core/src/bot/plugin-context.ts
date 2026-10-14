@@ -223,6 +223,18 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
             unregistered.push({ command: definition.name, missing });
             return;
           }
+          // Serviço que ninguém provê agora: o comando fica de fora como o sem capability, em vez
+          // de aparecer na ajuda e recusar no `run`. Conferido só aqui: quem volta a registrá-lo
+          // quando o provedor sobe é o reload em cascata do `optionalDependsOn` (ADR 0099).
+          const absent = (definition.services ?? []).filter((service) => !services.has(service));
+          if (absent.length > 0) {
+            log.warn(`comando "${definition.name}" não registrado: serviço não provido`, {
+              command: definition.name,
+              services: absent,
+            });
+            unregistered.push({ command: definition.name, missing: [], services: absent });
+            return;
+          }
           deps.router.registry.add(
             name,
             wrapCommand(name, definition, commandViews, lifetime, deps),
@@ -276,6 +288,13 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         },
         get: (service) => services.get(service),
         has: (service) => services.has(service),
+        contribute(point, contribution) {
+          // Depois do `dispose` o `removePlugin` já passou: aceitar a contribuição a deixaria
+          // órfã, rodando em nome de um plugin que saiu.
+          guard('services.contribute');
+          services.contribute(point, contribution);
+        },
+        extensionPoint: (point) => services.extensionPoint(point),
       } satisfies ServiceAccess,
       storage: {
         ...liveTenantStorage(tenantStorage(deps.storage, name, deps.tenants), live),

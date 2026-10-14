@@ -59,6 +59,22 @@ function checkNames(value: unknown, label: string, self: unknown, issues: string
   }
 }
 
+/** `dependsOn` e `optionalDependsOn` (ADR 0099): objeto nome de plugin → faixa semver. */
+function checkDependencies(value: unknown, label: string, self: unknown, issues: string[]): void {
+  if (value === undefined) return;
+  if (!isRecord(value)) {
+    issues.push(`${label} deve ser um objeto nome → faixa semver`);
+    return;
+  }
+  for (const [dependency, range] of Object.entries(value)) {
+    checkName(dependency, `${label}: nome`, issues);
+    if (dependency === self) issues.push(`${label} não pode citar o próprio plugin`);
+    if (typeof range !== 'string' || !isValidRange(range)) {
+      issues.push(`${label}["${dependency}"] deve ser uma faixa semver; recebido ${show(range)}`);
+    }
+  }
+}
+
 /**
  * `commands` do manifesto (ADR 0079). Confere aqui o que o `ctx.commands.add` só descobriria no
  * boot, para o erro sair no `definePlugin`, que aponta a linha do plugin.
@@ -152,17 +168,14 @@ export function manifestIssues(value: unknown): string[] {
   }
 
   const dependsOn = value['dependsOn'];
-  if (dependsOn !== undefined) {
-    if (!isRecord(dependsOn)) issues.push('dependsOn deve ser um objeto nome → faixa semver');
-    else {
-      for (const [dependency, range] of Object.entries(dependsOn)) {
-        checkName(dependency, 'dependsOn: nome', issues);
-        if (dependency === name) issues.push('dependsOn não pode citar o próprio plugin');
-        if (typeof range !== 'string' || !isValidRange(range)) {
-          issues.push(
-            `dependsOn["${dependency}"] deve ser uma faixa semver; recebido ${show(range)}`,
-          );
-        }
+  checkDependencies(dependsOn, 'dependsOn', name, issues);
+  const optional = value['optionalDependsOn'];
+  checkDependencies(optional, 'optionalDependsOn', name, issues);
+  // Exigir e tolerar a ausência do mesmo plugin se contradizem: o `dependsOn` venceria calado.
+  if (isRecord(optional) && isRecord(dependsOn)) {
+    for (const dependency of Object.keys(optional)) {
+      if (Object.hasOwn(dependsOn, dependency)) {
+        issues.push(`"${dependency}" está em dependsOn e optionalDependsOn; deixe só um`);
       }
     }
   }

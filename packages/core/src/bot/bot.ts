@@ -171,7 +171,10 @@ export function createBot(config: BotConfig): Bot {
     armed,
     onError: (event) => logPluginError(event),
   });
-  const services = createServiceRegistry();
+  // Ordem dos pontos de extensão: a tabela do host, já na ordem de carga (ADR 0096).
+  const services = createServiceRegistry({
+    loadOrder: () => host?.report().map((entry) => entry.name) ?? [],
+  });
   const prefixes = createPrefixStore(config.prefix, scoped);
   const router = createCommandRouter({
     registry,

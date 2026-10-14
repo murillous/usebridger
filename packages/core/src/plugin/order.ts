@@ -1,9 +1,12 @@
 import type { PluginManifest } from './types.ts';
 
 /** O que a ordenação lê do manifesto. */
-export type OrderableManifest = Pick<PluginManifest, 'name' | 'priority' | 'after' | 'dependsOn'>;
+export type OrderableManifest = Pick<
+  PluginManifest,
+  'name' | 'priority' | 'after' | 'dependsOn' | 'optionalDependsOn'
+>;
 
-/** `dependsOn`/`after` formam um ciclo: não existe ordem de carga possível. Erro no boot. */
+/** `dependsOn`/`optionalDependsOn`/`after` formam um ciclo: não existe ordem de carga possível. Erro no boot. */
 export class PluginCycleError extends Error {
   override readonly name = 'PluginCycleError';
   /** Caminho do ciclo, fechando no primeiro: `['a', 'b', 'a']` = a depende de b, b de a. */
@@ -12,14 +15,15 @@ export class PluginCycleError extends Error {
   constructor(cycle: readonly string[]) {
     super(
       `Ciclo na ordem de carga dos plugins: ${cycle.join(' → ')} ` +
-        '(→ = depende de / carrega depois de). Remova um dos dependsOn/after.',
+        '(→ = depende de / carrega depois de). Remova um dos dependsOn/optionalDependsOn/after.',
     );
     this.cycle = cycle;
   }
 }
 
 /**
- * Ordem de carga (ADR 0007): toposort em que `dependsOn` e `after` são arestas (a dependência
+ * Ordem de carga (ADR 0007): toposort em que `dependsOn`, `optionalDependsOn` (ADR 0099) e
+ * `after` são arestas (a dependência
  * vem antes) e, entre os prontos, desempata `priority` maior e depois a ordem recebida. Nomes
  * citados que não estão na lista não criam aresta — dependência ausente é motivo de "ignorado",
  * não de ordem. Lança `PluginCycleError` com o caminho do ciclo.
@@ -29,7 +33,11 @@ export function sortPlugins<T extends OrderableManifest>(plugins: readonly T[]):
   // predecessors[i]: índices que precisam carregar antes de i.
   const predecessors = plugins.map((plugin) => {
     const before = new Set<number>();
-    for (const name of [...Object.keys(plugin.dependsOn ?? {}), ...(plugin.after ?? [])]) {
+    for (const name of [
+      ...Object.keys(plugin.dependsOn ?? {}),
+      ...Object.keys(plugin.optionalDependsOn ?? {}),
+      ...(plugin.after ?? []),
+    ]) {
       const j = index.get(name);
       if (j !== undefined) before.add(j);
     }

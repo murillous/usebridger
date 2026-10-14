@@ -2,6 +2,7 @@ import type { BotMessageContext } from '#context.ts';
 import type { ExpectReply } from '#conversations/conversations.ts';
 import type { Media, MediaMessageType, Message, MessageType } from '#message/types.ts';
 import type { MessageText } from '#plugin/messages.ts';
+import type { ServiceName } from '#services/types.ts';
 import { type Capability, isCapability } from '#transport/capabilities.ts';
 import type { RoleName } from './roles.ts';
 
@@ -198,6 +199,14 @@ export interface CommandDefinition<A extends readonly AcceptSpec[] = readonly Ac
    * como um plugin pulado pelo `requires` dele. O roteador solto ignora o campo.
    */
   readonly requires?: readonly Capability[];
+  /**
+   * Serviços que o comando exige (ADR 0099). No bot, se algum não estiver provido quando o
+   * comando é registrado, ele fica de fora como no `requires`. Para o comando voltar quando o
+   * provedor sobe, cai ou recarrega, o plugin declara o provedor em `optionalDependsOn` (ou
+   * `dependsOn`): o reload em cascata registra os comandos de novo. O roteador solto ignora o
+   * campo.
+   */
+  readonly services?: readonly ServiceName[];
 }
 
 /** Comando como os plugins o veem em `ctx.commands.list()` (ADR 0040): sem `run` nem `onReject`. */
@@ -225,7 +234,8 @@ function assertToken(token: string, what: string): void {
  * `RangeError` se `timeoutMs` não for finito e > 0 (o `setTimeout` trataria `Infinity`/`NaN`
  * como 1 ms e o comando estouraria na hora) ou se `concurrency` não for inteiro >= 1 (0 nunca
  * rodaria). Entrada de `accepts` com mimetype mal formado, ou num tipo sem mídia, `'quoted:args'` e capability
- * desconhecida em `requires` também lançam `TypeError`.
+ * desconhecida em `requires` também lançam `TypeError`, como serviço vazio ou não textual em
+ * `services`.
  */
 export function assertCommandDefinition(definition: CommandDefinition): void {
   assertToken(definition.name, 'Nome');
@@ -261,6 +271,14 @@ export function assertCommandDefinition(definition: CommandDefinition): void {
     if (!isCapability(capability)) {
       throw new TypeError(
         `requires do comando "${definition.name}": capability desconhecida ${JSON.stringify(capability)}`,
+      );
+    }
+  }
+  // Como em `requires`: o tipo já barra, a checagem é para quem define em JS.
+  for (const service of (definition.services ?? []) as readonly unknown[]) {
+    if (typeof service !== 'string' || service.length === 0) {
+      throw new TypeError(
+        `services do comando "${definition.name}": nome de serviço inválido ${JSON.stringify(service)}`,
       );
     }
   }
