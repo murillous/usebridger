@@ -114,6 +114,35 @@ function cadastro(): PluginDefinition {
   });
 }
 
+/**
+ * Como o `cadastro`, com espera de 1 segundo, mas o `setup` do reload espera `gate`: o teste age
+ * com o plugin no meio do reload. As mensagens citam o número do `setup` que as definiu.
+ */
+function lento(gate: Promise<void>): PluginDefinition {
+  let setups = 0;
+  return definePlugin({
+    name: 'cadastro',
+    version: '1.0.0',
+    engine: '>=0.0.0',
+    async setup(ctx) {
+      const setup = ++setups;
+      if (setup > 1) await gate;
+      ctx.commands.add(
+        command({
+          name: 'cadastro',
+          run: (c) => {
+            c.expectReply('nome', { ttlMs: 1_000 });
+          },
+        }),
+      );
+      ctx.conversations.define('nome', (c) => c.reply(`Oi, ${c.text} (${setup})`), {
+        persist: true,
+        onExpire: (c) => c.reply(`Encerrei (${setup})`),
+      });
+    },
+  });
+}
+
 interface Started {
   readonly bot: Bot;
   readonly transport: RecordingTransport;
@@ -342,6 +371,53 @@ describe('Bot: esperas persistidas (ADR 0098)', () => {
 
     expect(sentTexts(started.transport)).toEqual(['De qual aluno?', 'Notas de Maria (aluno)']);
     expect(orphanWarnings(started.lines)).toEqual([]);
+  });
+
+  it('a espera que vence no meio do reload expira com o passo do setup novo', async () => {
+    const storage = durableStorage();
+    const gate = Promise.withResolvers<void>();
+    const started = await boot(storage, [lento(gate.promise)], {
+      timeouts: { setupMs: 600_000 },
+    });
+    await say(started, '!cadastro');
+
+    const reloading = started.bot.plugins.reload('cadastro');
+    // O timer dispara com o plugin entre o `removePlugin` e o `setup` novo: sem passo definido.
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(sentTexts(started.transport)).toEqual([]);
+
+    gate.resolve();
+    await reloading;
+    await started.bot.settled();
+
+    expect(sentTexts(started.transport)).toEqual(['Encerrei (2)']);
+    expect(orphanWarnings(started.lines)).toEqual([]);
+    await stop(started.bot);
+    expect(await waits(storage).find()).toEqual([]);
+  });
+
+  it('a resposta que chega no meio do reload não apaga a espera persistida', async () => {
+    const storage = durableStorage();
+    const gate = Promise.withResolvers<void>();
+    const started = await boot(storage, [lento(gate.promise)], {
+      timeouts: { setupMs: 600_000 },
+    });
+    await say(started, '!cadastro');
+
+    const reloading = started.bot.plugins.reload('cadastro');
+    await vi.advanceTimersByTimeAsync(0);
+    started.transport.emit('message', message('Maria'));
+    await vi.advanceTimersByTimeAsync(0);
+
+    gate.resolve();
+    await reloading;
+    await say(started, 'Joana');
+
+    // Sem passo, ninguém tratava "Maria"; a espera seguiu para o plugin recarregado.
+    expect(sentTexts(started.transport)).toEqual(['Oi, Joana (2)']);
+    expect(orphanWarnings(started.lines)).toEqual([]);
+    await stop(started.bot);
+    expect(await waits(storage).find()).toEqual([]);
   });
 
   it('o reload cujo setup novo falha descarta a espera persistida com warn', async () => {

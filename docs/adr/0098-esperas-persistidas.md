@@ -88,9 +88,10 @@ Alternativas consideradas:
 - **Reload mantém, desligar remove.** O `dispose` tira da memória só as esperas não persistidas.
   Depois de cada mudança de plugin (`reload`, `disable`, `enable`) e no boot, o bot descarta com
   `warn`, também do storage, as esperas cujo passo não está definido. Assim o reload que redefine
-  o passo as mantém, e o `disable`, o `setup` novo que falha e o passo que sumiu as removem. Uma
-  resposta que chega no meio do reload, antes de o passo voltar, descarta a espera com `warn` e
-  segue o fluxo normal.
+  o passo as mantém, e o `disable`, o `setup` novo que falha e o passo que sumiu as removem. No
+  meio do reload, antes de o passo voltar, a espera fica intocada: a resposta que chega segue o
+  fluxo normal sem consumi-la, e a que vence nessa janela tem a expiração retomada depois do
+  `setup` novo, com o `onExpire` dele. Quem decide se ela fica é a varredura do fim do reload.
 - **`stop()`** tira tudo da memória sem tocar no storage e espera as escritas pendentes antes de
   liberar a trava da sessão e fechar o storage.
 - **Uma sessão por processo basta.** A trava de sessão (ADR 0074) garante um só processo lendo e

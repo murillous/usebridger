@@ -193,7 +193,8 @@ ctx.conversations.define(
 - **Reload mantém, desligar remove.** Um reload (troca de config) guarda as esperas persistidas
   e as devolve quando o `setup` novo redefine o passo. Um `bot.plugins.disable`, um `setup` novo
   que falha ou um passo que sumiu as descartam com `warn`, também do storage. Uma resposta que
-  chegar no meio do reload, antes de o passo voltar, segue o fluxo normal.
+  chegar no meio do reload, antes de o passo voltar, segue o fluxo normal e não consome a espera;
+  a espera que vencer nessa janela roda o `onExpire` do `setup` novo quando ele termina.
 - **O `data` precisa caber em JSON** (`JsonValue`, como sempre): ele vai ao storage como está e
   fica lá até a espera sair. Não guarde nele o que não guardaria no `ctx.storage`.
 - **Chat e contato.** O registro guarda o `Chat` (com o `tenantId`,

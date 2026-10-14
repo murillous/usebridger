@@ -213,6 +213,11 @@ interface Wait {
   readonly timer: ReturnType<typeof setTimeout>;
   /** O timer já disparou: vale mesmo com o relógio de parede atrás do relógio do timer. */
   due: boolean;
+  /**
+   * Venceu, ou teve a expiração na vez dela, sem o passo definido: o plugin estava no meio de um
+   * reload. O `sweep` seguinte retoma a expiração (ou descarta a espera, se o passo não voltou).
+   */
+  stalled: boolean;
 }
 
 interface StepEntry<C, O> {
@@ -314,14 +319,12 @@ export class ConversationRegistry<C, O = unknown> {
     const key = waitKey(chatId, senderId);
     const wait = this.#waits.get(key);
     if (wait === undefined) return undefined;
-    this.#drop(key);
     const run = this.#steps.get(wait.plugin)?.get(wait.step)?.run;
-    // Só a espera persistida fica sem passo (o `removePlugin` tira as outras): o plugin está no
-    // meio de um reload ou não subiu. Ninguém trataria a resposta, então a mensagem segue o fluxo.
-    if (run === undefined) {
-      this.#warnOrphan(wait);
-      return undefined;
-    }
+    // Só a espera persistida fica sem passo (o `removePlugin` tira as outras), e só entre o
+    // `removePlugin` de um reload e o `sweep` dele (ADR 0098). Ninguém trataria a resposta, então
+    // a mensagem segue o fluxo; a espera fica para o plugin recarregado ou para o `sweep` descartar.
+    if (run === undefined) return undefined;
+    this.#drop(key);
     return { plugin: wait.plugin, step: wait.step, data: wait.data, run };
   }
 
@@ -337,8 +340,14 @@ export class ConversationRegistry<C, O = unknown> {
     const key = waitKey(chatId, senderId);
     const wait = this.#waits.get(key);
     if (wait === undefined || !(wait.due || Date.now() >= wait.dueAt)) return undefined;
+    const entry = this.#steps.get(wait.plugin)?.get(wait.step);
+    // Plugin no meio de um reload: o `sweep` dele retoma a expiração com o passo novo.
+    if (entry === undefined) {
+      wait.stalled = true;
+      return undefined;
+    }
     this.#drop(key);
-    const expire = this.#steps.get(wait.plugin)?.get(wait.step)?.expire;
+    const { expire } = entry;
     if (expire === undefined) return undefined;
     const { plugin, step, data, chat, sender } = wait;
     return { plugin, step, data, chat, sender, run: expire };
@@ -364,14 +373,20 @@ export class ConversationRegistry<C, O = unknown> {
 
   /**
    * Descarta, com `warn`, as esperas cujo passo não está definido (plugin desligado, `setup` que
-   * falhou, passo renomeado), também do storage. O bot chama depois do boot e de cada mudança de
-   * plugin, quando todo plugin que devia subir já rodou o `setup`.
+   * falhou, passo renomeado), também do storage, e retoma a expiração da que venceu durante o
+   * reload do plugin. O bot chama depois do boot e de cada mudança de plugin, quando todo plugin
+   * que devia subir já rodou o `setup`.
    */
   sweep(): void {
     for (const [key, wait] of this.#waits) {
-      if (this.#steps.get(wait.plugin)?.has(wait.step)) continue;
-      this.#drop(key);
-      this.#warnOrphan(wait);
+      if (!this.#steps.get(wait.plugin)?.has(wait.step)) {
+        this.#drop(key);
+        this.#warnOrphan(wait);
+        continue;
+      }
+      if (!wait.stalled) continue;
+      wait.stalled = false;
+      this.#due(key, wait);
     }
   }
 
@@ -440,7 +455,7 @@ export class ConversationRegistry<C, O = unknown> {
   }
 
   /** Arma o timer de validade e guarda a espera; a nova e a restaurada passam por aqui. */
-  #arm(key: string, fields: Omit<Wait, 'timer' | 'due'>): Wait {
+  #arm(key: string, fields: Omit<Wait, 'timer' | 'due' | 'stalled'>): Wait {
     // O restore entrega vencidas: sem o piso, o atraso seria negativo. Quem restaura chama o
     // `#due` na hora, e o `due` marcado impede o timer de repetir a expiração.
     const delay = Math.max(0, fields.dueAt - Date.now());
@@ -450,7 +465,7 @@ export class ConversationRegistry<C, O = unknown> {
     }, delay);
     // A espera não mantém o processo vivo: ela só importa se chegar mensagem.
     timer.unref?.();
-    const wait: Wait = { ...fields, timer, due: false };
+    const wait: Wait = { ...fields, timer, due: false, stalled: false };
     this.#waits.set(key, wait);
     return wait;
   }
@@ -460,12 +475,17 @@ export class ConversationRegistry<C, O = unknown> {
    * (ADR 0060). Com ele, o bot põe a expiração na fila do chat e chama `expire` na vez dela.
    */
   #due(key: string, wait: Wait): void {
-    const expire = this.#steps.get(wait.plugin)?.get(wait.step)?.expire;
-    if (expire === undefined || this.#onDue === undefined) {
+    wait.due = true;
+    const entry = this.#steps.get(wait.plugin)?.get(wait.step);
+    // Persistida que venceu durante o reload do plugin: o `sweep` dele decide, com o passo novo.
+    if (entry === undefined) {
+      wait.stalled = true;
+      return;
+    }
+    if (entry.expire === undefined || this.#onDue === undefined) {
       this.#drop(key);
       return;
     }
-    wait.due = true;
     this.#onDue(wait.chat, wait.sender);
   }
 
