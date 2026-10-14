@@ -56,8 +56,12 @@ export type {
   Conversations,
   ExpectReply,
   ExpectReplyOptions,
+  ExpireContext,
+  ExpireHandler,
   StepContext,
   StepHandler,
+  StepOptions,
+  StepStage,
 } from '#conversations/conversations.ts';
 export { StepTimeoutError } from '#conversations/conversations.ts';
 export {
