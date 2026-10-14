@@ -25,7 +25,7 @@ export const sticker = definePlugin({
   transports: ['baileys'],                      // opcional: fixa o(s) transport(s)
   dependsOn: { 'user-names': '^1.0.0' },        // opcional: plugin → faixa semver
   after: ['logger-extra'],                      // opcional: carrega depois, se existir
-  optionalDependsOn: ['ai'],                    // opcional: como after, mais o reload em cascata
+  optionalDependsOn: { ai: '^1.0.0' },          // opcional: como dependsOn, sem impedir a carga
   priority: 0,                                  // opcional: maior carrega antes
 
   config: z.object({ quality: z.number().min(1).max(100).default(80) }),
@@ -55,7 +55,7 @@ problemas encontrados. Regras:
 | `transports` | lista não vazia de nomes de transport. |
 | `dependsOn` | nome de plugin → faixa semver; não pode citar o próprio plugin. |
 | `after` | nomes de plugin; não pode citar o próprio plugin. |
-| `optionalDependsOn` | nomes de plugin; não pode citar o próprio plugin nem repetir um nome do `dependsOn` ([Serviço opcional](services.md#serviço-opcional)). |
+| `optionalDependsOn` | nome de plugin → faixa semver, como o `dependsOn`; não pode citar o próprio plugin nem repetir um nome do `dependsOn` ([Serviço opcional](services.md#serviço-opcional)). |
 | `priority` | número finito; padrão 0. |
 | `config` | schema Zod ([Config](config.md#declarar)). |
 | `messages` | objeto chave → texto. |
@@ -420,7 +420,8 @@ pendentes), então um plugin com `engine: '^0.0.0'` deixa de carregar no primeir
 
 A mesma regra do `^` vale para a versão da dependência: `^0.0.0` aceita só `0.0.0`, e o
 dependente deixa de carregar (`dependency-version`) no primeiro bump de patch dela, mesmo sem
-mudança incompatível. O boot avisa em `warn` quando um `dependsOn` usa `^0.0.z`.
+mudança incompatível. O boot avisa em `warn` quando um `dependsOn` ou `optionalDependsOn` usa
+`^0.0.z`.
 
 - **Plugins do mesmo repositório**, que sobem juntos: `0.x` ou `>=0.0.0 <1.0.0` enquanto a
   dependência estiver no 0.x.

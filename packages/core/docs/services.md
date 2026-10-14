@@ -70,8 +70,13 @@ Quando o plugin funciona sem o provedor e só parte dele usa o serviço, `depend
 plugin inteiro. Declare o provedor em `optionalDependsOn`
 ([ADR 0099](../../../docs/adr/0099-comando-que-exige-servico.md)):
 
+- o formato é o do `dependsOn` (nome do plugin → faixa semver, faixa inválida é erro de
+  manifesto);
 - o provedor carrega antes, se existir, e o plugin carrega mesmo sem ele (ausente, ignorado,
   com `setup` falho ou desligado);
+- provedor carregado fora da faixa também não impede a carga: o boot avisa em `warn`
+  (`dependency`, `range`, `version`), e o serviço dele segue visível para `has`, `get` e
+  `services` do comando;
 - recarregar, desligar ou ligar o provedor recarrega o plugin em cascata, como no `dependsOn`, então
   o `setup` sempre vê o estado atual e pode guardar o serviço se `has` responder `true`;
 - o comando que precisa do serviço o declara em `services` e só existe enquanto ele está provido
@@ -82,7 +87,7 @@ export const download = definePlugin({
   name: 'download',
   version: '1.0.0',
   engine: '^1.0.0',
-  optionalDependsOn: ['sticker'],
+  optionalDependsOn: { sticker: '^0.1.0' },
   setup(ctx) {
     if (ctx.services.has('sticker')) { /* liga o que depende do serviço */ }
   },

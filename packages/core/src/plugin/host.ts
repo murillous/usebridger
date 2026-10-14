@@ -349,12 +349,33 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
   // `^0.0.z` aceita só `0.0.z`: o dependente para de carregar no primeiro bump de patch da
   // dependência, mesmo sem quebra. Aviso, não erro: a faixa é válida e pode ser intencional.
   function warnExactCaret(definition: PluginDefinition): void {
-    for (const [dependency, range] of Object.entries(definition.dependsOn ?? {})) {
-      if (!isExactCaret(range)) continue;
+    const fields = [
+      ['dependsOn', definition.dependsOn],
+      ['optionalDependsOn', definition.optionalDependsOn],
+    ] as const;
+    for (const [label, dependencies] of fields) {
+      for (const [dependency, range] of Object.entries(dependencies ?? {})) {
+        if (!isExactCaret(range)) continue;
+        log.warn(
+          `plugin "${definition.name}": ${label}["${dependency}"] = "${range}" aceita só essa ` +
+            'versão exata; para acompanhar o 0.x da dependência, use "0.x" ou ">=0.0.0 <1.0.0"',
+          { plugin: definition.name, dependency, range },
+        );
+      }
+    }
+  }
+
+  // Provedor opcional fora da faixa não impede a carga (ADR 0099): o serviço dele já está no
+  // registry quando o dependente sobe, e esconder do `has` só para um plugin criaria um segundo
+  // estado de serviço. Fica o aviso, uma vez no boot, porque as versões não mudam em runtime.
+  function warnOptionalVersion(definition: PluginDefinition): void {
+    for (const [dependency, range] of Object.entries(definition.optionalDependsOn ?? {})) {
+      const version = byName.get(dependency)?.entry.definition.version;
+      if (version === undefined || satisfies(version, range)) continue;
       log.warn(
-        `plugin "${definition.name}": dependsOn["${dependency}"] = "${range}" aceita só essa ` +
-          'versão exata; para acompanhar o 0.x da dependência, use "0.x" ou ">=0.0.0 <1.0.0"',
-        { plugin: definition.name, dependency, range },
+        `plugin "${definition.name}": optionalDependsOn["${dependency}"] = "${range}" não ` +
+          `aceita a versão carregada ${version}; o plugin sobe e o serviço dela segue visível`,
+        { plugin: definition.name, dependency, range, version },
       );
     }
   }
@@ -392,7 +413,10 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
         });
       }
     }
-    for (const slot of slots) warnExactCaret(slot.entry.definition);
+    for (const slot of slots) {
+      warnExactCaret(slot.entry.definition);
+      warnOptionalVersion(slot.entry.definition);
+    }
     for (const slot of slots) {
       const reason = incompatibility(slot.entry.definition);
       slot.report = reason
@@ -494,7 +518,7 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
       const { definition } = each.entry;
       const dependsOn = [
         ...Object.keys(definition.dependsOn ?? {}),
-        ...(definition.optionalDependsOn ?? []),
+        ...Object.keys(definition.optionalDependsOn ?? {}),
       ];
       if (!dependsOn.some((dependency) => names.has(dependency))) return false;
       names.add(each.entry.definition.name);

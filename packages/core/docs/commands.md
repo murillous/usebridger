@@ -443,7 +443,7 @@ export const download = definePlugin({
   name: 'download',
   version: '1.0.0',
   engine: '^1.0.0',
-  optionalDependsOn: ['sticker'], // carrega depois do sticker e recarrega com ele, se existir
+  optionalDependsOn: { sticker: '^0.1.0' }, // carrega depois do sticker e recarrega com ele, se existir
   commands: {
     downloadsticker: {
       requires: ['send.sticker'],

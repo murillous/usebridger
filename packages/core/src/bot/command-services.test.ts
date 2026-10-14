@@ -68,7 +68,7 @@ const download = definePlugin({
   name: 'download',
   version: '1.0.0',
   engine: ENGINE,
-  optionalDependsOn: ['sticker'],
+  optionalDependsOn: { sticker: '^1.0.0' },
   commands: {
     ds: {
       services: ['figurinhas'],
@@ -179,7 +179,7 @@ describe('services por comando (ADR 0099)', () => {
       name: 'download',
       version: '1.0.0',
       engine: ENGINE,
-      optionalDependsOn: ['sticker'],
+      optionalDependsOn: { sticker: '^1.0.0' },
       setup(ctx) {
         setups++;
         ctx.commands.add(
@@ -232,6 +232,58 @@ describe('services por comando (ADR 0099)', () => {
     const { bot, menu } = start([own]);
     await bot.start();
     expect(names(menu)).toEqual(['ds']);
+  });
+
+  it('provedor fora da faixa não impede a carga e avisa em warn', async () => {
+    const old = definePlugin({
+      name: 'download',
+      version: '1.0.0',
+      engine: ENGINE,
+      optionalDependsOn: { sticker: '^2.0.0' },
+      commands: {
+        ds: {
+          services: ['figurinhas'],
+          run: (_, plugin) => plugin.services.get('figurinhas').cria(),
+        },
+      },
+    });
+    const { bot, menu, lines } = start([old, sticker()]);
+    await bot.start();
+
+    expect(bot.plugins()).toContainEqual(
+      expect.objectContaining({ name: 'download', status: 'loaded' }),
+    );
+    // O serviço já está no registry: o comando registra, e o aviso fica para o operador.
+    expect(names(menu)).toEqual(['ds']);
+    expect(lines).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        fields: expect.objectContaining({
+          plugin: 'download',
+          dependency: 'sticker',
+          range: '^2.0.0',
+          version: '1.0.0',
+        }),
+      }),
+    );
+  });
+
+  it('^0.0.z no optionalDependsOn avisa como no dependsOn', async () => {
+    const exact = definePlugin({
+      name: 'download',
+      version: '1.0.0',
+      engine: ENGINE,
+      optionalDependsOn: { sticker: '^0.0.3' },
+      setup: () => undefined,
+    });
+    const { bot, lines } = start([exact]);
+    await bot.start();
+    expect(lines).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        message: expect.stringContaining('optionalDependsOn["sticker"] = "^0.0.3"'),
+      }),
+    );
   });
 
   it('nome de serviço inválido lança na definição', () => {

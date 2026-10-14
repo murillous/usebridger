@@ -12,17 +12,31 @@ const valid = {
 };
 
 describe('optionalDependsOn no manifesto', () => {
-  it('aceita uma lista de nomes de plugin', () => {
-    expect(manifestIssues({ ...valid, optionalDependsOn: ['sticker'] })).toEqual([]);
+  it('aceita um objeto nome → faixa semver, como o dependsOn', () => {
+    expect(manifestIssues({ ...valid, optionalDependsOn: { sticker: '^0.1.0' } })).toEqual([]);
   });
 
   it.each([
-    ['que não é lista', { optionalDependsOn: 'sticker' }, /optionalDependsOn deve ser uma lista/],
-    ['com nome inválido', { optionalDependsOn: ['Sticker'] }, /optionalDependsOn: item/],
-    ['em si mesmo', { optionalDependsOn: ['download'] }, /optionalDependsOn não pode citar/],
+    [
+      'lista em vez de objeto',
+      { optionalDependsOn: ['sticker'] },
+      /optionalDependsOn deve ser um objeto/,
+    ],
+    ['que não é objeto', { optionalDependsOn: 'sticker' }, /optionalDependsOn deve ser um objeto/],
+    [
+      'com faixa inválida',
+      { optionalDependsOn: { sticker: 'qualquer' } },
+      /optionalDependsOn\["sticker"\]/,
+    ],
+    ['com nome inválido', { optionalDependsOn: { Sticker: '^1.0.0' } }, /optionalDependsOn: nome/],
+    [
+      'em si mesmo',
+      { optionalDependsOn: { download: '^1.0.0' } },
+      /optionalDependsOn não pode citar/,
+    ],
     [
       'repetindo o dependsOn',
-      { dependsOn: { sticker: '^1.0.0' }, optionalDependsOn: ['sticker'] },
+      { dependsOn: { sticker: '^1.0.0' }, optionalDependsOn: { sticker: '^1.0.0' } },
       /"sticker" está em dependsOn e optionalDependsOn/,
     ],
   ])('%s', (_, patch, pattern) => {
@@ -37,7 +51,7 @@ describe('optionalDependsOn na ordem de carga', () => {
   it('carrega o provedor antes, sem exigir que exista', () => {
     expect(
       names([
-        { name: 'download', optionalDependsOn: ['sticker', 'fantasma'] },
+        { name: 'download', optionalDependsOn: { sticker: '^1.0.0', fantasma: '^1.0.0' } },
         { name: 'sticker' },
       ]),
     ).toEqual(['sticker', 'download']);
@@ -46,7 +60,7 @@ describe('optionalDependsOn na ordem de carga', () => {
   it('entra na detecção de ciclo', () => {
     expect(() =>
       sortPlugins([
-        { name: 'a', optionalDependsOn: ['b'] },
+        { name: 'a', optionalDependsOn: { b: '^1.0.0' } },
         { name: 'b', after: ['a'] },
       ]),
     ).toThrow(PluginCycleError);

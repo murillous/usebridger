@@ -35,7 +35,7 @@ export function sortPlugins<T extends OrderableManifest>(plugins: readonly T[]):
     const before = new Set<number>();
     for (const name of [
       ...Object.keys(plugin.dependsOn ?? {}),
-      ...(plugin.optionalDependsOn ?? []),
+      ...Object.keys(plugin.optionalDependsOn ?? {}),
       ...(plugin.after ?? []),
     ]) {
       const j = index.get(name);

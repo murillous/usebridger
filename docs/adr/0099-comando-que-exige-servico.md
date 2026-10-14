@@ -35,15 +35,19 @@ Alternativas consideradas:
   `command` e `services`, e uma entrada em `unregistered` com `missing: []` e `services` com os
   que faltavam. A tabela de boot mostra `sem ds (serviço sticker)`. Nome que não é texto não vazio
   lança `TypeError` na definição. O roteador solto ignora o campo.
-- `optionalDependsOn: ['sticker']` no manifesto, lista de nomes de plugin. Ordena como o `after`
-  (aresta na toposort e no ciclo), não impede a carga (ausente, ignorado, `setup` falho ou
-  desligado) e entra na cascata do ADR 0041: `reload`, `disable` e `enable` do provedor descem e
-  sobem o dependente opcional junto. O mesmo nome em `dependsOn` e `optionalDependsOn` é erro de
-  manifesto.
+- `optionalDependsOn: { sticker: '^0.1.0' }` no manifesto, no formato do `dependsOn` (nome de
+  plugin → faixa semver, com a mesma validação: faixa inválida é erro de manifesto). Ordena como o
+  `dependsOn` (aresta na toposort e no ciclo), não impede a carga (ausente, ignorado, `setup`
+  falho ou desligado) e entra na cascata do ADR 0041: `reload`, `disable` e `enable` do provedor
+  descem e sobem o dependente opcional junto. O mesmo nome em `dependsOn` e `optionalDependsOn`
+  é erro de manifesto. O aviso de `^0.0.z` do boot vale para os dois.
+- Provedor carregado com versão fora da faixa também não impede a carga, e o boot avisa em `warn`
+  (`dependency`, `range`, `version`). Ele continua na ordem e na cascata, e o serviço segue
+  visível para o dependente (`has`, `get` e o `services` do comando). Tratá-lo como ausente
+  exigiria esconder do registry, só para um plugin, um serviço já provido: um segundo estado de
+  serviço, para um caso que o aviso já entrega ao operador.
 - A conferência do `services` é só no registro. O que a refaz quando o provedor muda é o reload
   em cascata, que roda o `setup` (e o registro dos `commands` do manifesto) de novo.
-- Sem faixa semver no `optionalDependsOn`: o vínculo que importa é o serviço, que o comando já
-  confere pelo nome.
 
 ## Consequências
 
@@ -51,6 +55,7 @@ Alternativas consideradas:
   quando o provedor sobe, sem reiniciar o bot.
 - O plugin com `optionalDependsOn` reinicia junto com o provedor, como o dependente do
   `dependsOn`: durante o reload, os comandos dele também ficam ausentes.
+- Versão fora da faixa no opcional é aviso, não bloqueio: quem quer bloquear usa `dependsOn`.
 - `services` sem `optionalDependsOn` (ou `dependsOn`) no provedor confere só no boot e depende da
   ordem de carga. A doc ensina os dois juntos.
 - Serviço provido pelo próprio plugin conta se o `provide` vier antes do `add`; os `commands` do

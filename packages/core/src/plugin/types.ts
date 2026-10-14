@@ -46,12 +46,13 @@ export interface PluginManifest {
   /** Carrega depois destes, sem exigir que existam. */
   readonly after?: readonly string[];
   /**
-   * Plugins de que este usa serviços opcionais (ADR 0099). Carregam antes deste, como no
-   * `after`, mas sem impedir a carga se estiverem ausentes, ignorados ou desligados; e, como no
-   * `dependsOn`, recarregar, desligar ou ligar um deles recarrega este em cascata. É o par do
-   * `services` do comando: o comando que exige o serviço some e volta com o provedor.
+   * Plugins de que este usa serviços opcionais (ADR 0099): nome → faixa semver, como no
+   * `dependsOn`. Carregam antes deste, mas sem impedir a carga se estiverem ausentes, ignorados,
+   * desligados ou fora da faixa (aí o boot avisa em `warn`); recarregar, desligar ou ligar um
+   * deles recarrega este em cascata. É o par do `services` do comando: o comando que exige o
+   * serviço some e volta com o provedor.
    */
-  readonly optionalDependsOn?: readonly string[];
+  readonly optionalDependsOn?: Readonly<Record<string, string>>;
 }
 
 /** O que o plugin recebe em `setup`/`teardown`. */
