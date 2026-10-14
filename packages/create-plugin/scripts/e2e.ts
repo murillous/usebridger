@@ -1,5 +1,13 @@
 import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
@@ -45,6 +53,12 @@ try {
   sh('node cli/package/dist/cli.mjs bridger-plugin-e2e', root);
 
   const project = join(root, 'bridger-plugin-e2e');
+  // Instruções para agentes de código (#93): saem no projeto, com os marcadores trocados.
+  const agents = readFileSync(join(project, 'AGENTS.md'), 'utf8');
+  if (!agents.includes("name: 'e2e'") || /__(package|name|export)__/.test(agents)) {
+    throw new Error('AGENTS.md ausente ou com marcador sem trocar no projeto gerado');
+  }
+  if (!existsSync(join(project, 'CLAUDE.md'))) throw new Error('projeto gerado sem CLAUDE.md');
   // O core e o kit ainda não estão no npm: o override vale também para a dependência do kit no
   // core, e o projeto fica com uma cópia só de cada pacote, como no registry.
   writeFileSync(
