@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { compareVersions, isValidRange, parseVersion, type SemVer, satisfies } from './semver.ts';
+import {
+  compareVersions,
+  isExactCaret,
+  isValidRange,
+  parseVersion,
+  type SemVer,
+  satisfies,
+} from './semver.ts';
 
 const v = (text: string): SemVer => {
   const parsed = parseVersion(text);
@@ -115,6 +122,22 @@ describe('satisfies', () => {
     expect(() => satisfies('1.0', '^1.0.0')).toThrow(RangeError);
     expect(() => satisfies('1.0.0', '1.0.0 - 2.0.0')).toThrow(RangeError);
   });
+});
+
+describe('isExactCaret', () => {
+  it.each(['^0.0.0', '^0.0.3', '^ 0.0.1', '^0.0.1-beta.1', '>=1.0.0 || ^0.0.2'])(
+    '%s trava numa versão só',
+    (r) => {
+      expect(isExactCaret(r)).toBe(true);
+    },
+  );
+
+  it.each(['^0.0', '^0.0.x', '^0.1.0', '^1.0.0', '0.x', '>=0.0.0 <1.0.0', '0.0.3', '*'])(
+    '%s não',
+    (r) => {
+      expect(isExactCaret(r)).toBe(false);
+    },
+  );
 });
 
 describe('isValidRange', () => {

@@ -221,6 +221,26 @@ describe('createPluginHost — boot', () => {
     );
   });
 
+  it('avisa dependsOn com ^0.0.z, que aceita só a versão exata', async () => {
+    const { host: h, log } = host([
+      plugin('sticker', { version: '0.0.0' }),
+      plugin('sticker-text', { dependsOn: { sticker: '^0.0.0' } }),
+      plugin('ok', { dependsOn: { sticker: '0.x' } }),
+    ]);
+    expect(statusOf(await h.start())).toEqual({
+      sticker: 'loaded',
+      'sticker-text': 'loaded',
+      ok: 'loaded',
+    });
+    const warnings = log.lines.filter((line) => line.message.includes('versão exata'));
+    expect(warnings).toEqual([
+      expect.objectContaining({
+        level: 'warn',
+        fields: { plugin: 'sticker-text', dependency: 'sticker', range: '^0.0.0' },
+      }),
+    ]);
+  });
+
   it('ignorado propaga para quem depende, em cadeia', async () => {
     const { host: h } = host(
       [

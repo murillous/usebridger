@@ -13,7 +13,7 @@ import {
   type PluginSkipReason,
   type UnregisteredCommand,
 } from './report.ts';
-import { parseVersion, satisfies } from './semver.ts';
+import { isExactCaret, parseVersion, satisfies } from './semver.ts';
 import type { PluginEntry } from './sources.ts';
 import type { PluginContext, PluginDefinition } from './types.ts';
 
@@ -326,6 +326,19 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
     else log.info(formatBootTable(entries), fields);
   }
 
+  // `^0.0.z` aceita só `0.0.z`: o dependente para de carregar no primeiro bump de patch da
+  // dependência, mesmo sem quebra. Aviso, não erro: a faixa é válida e pode ser intencional.
+  function warnExactCaret(definition: PluginDefinition): void {
+    for (const [dependency, range] of Object.entries(definition.dependsOn ?? {})) {
+      if (!isExactCaret(range)) continue;
+      log.warn(
+        `plugin "${definition.name}": dependsOn["${dependency}"] = "${range}" aceita só essa ` +
+          'versão exata; para acompanhar o 0.x da dependência, use "0.x" ou ">=0.0.0 <1.0.0"',
+        { plugin: definition.name, dependency, range },
+      );
+    }
+  }
+
   /** Erros de boot: manifesto, nome repetido e ciclo. Lança antes de qualquer setup. */
   function plan(): Slot[] {
     const origins = new Map<string, string[]>();
@@ -359,6 +372,7 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
         });
       }
     }
+    for (const slot of slots) warnExactCaret(slot.entry.definition);
     for (const slot of slots) {
       const reason = incompatibility(slot.entry.definition);
       slot.report = reason
