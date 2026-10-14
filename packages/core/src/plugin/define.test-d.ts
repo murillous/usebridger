@@ -1,6 +1,7 @@
 // Testes de tipo do `definePlugin` (verificados pelo `pnpm typecheck`, ver message/types.test-d.ts).
 import { describe, expectTypeOf, it } from 'vitest';
 import { z } from 'zod';
+import type { CommandContext, RejectContext } from '#commands/command.ts';
 import { definePlugin } from './define.ts';
 import type { PluginDefinition } from './types.ts';
 
@@ -52,6 +53,26 @@ describe('definePlugin', () => {
             // @ts-expect-error chave que o plugin não declarou, também na recusa
             return ctx.t('needMediaa');
           },
+        },
+      },
+      setup: () => undefined,
+    });
+  });
+
+  it('helper tipado com o contexto genérico aceita o contexto tipado do plugin', () => {
+    // Helper compartilhado entre plugins (#87): recebe qualquer contexto de comando.
+    const attempt = (ctx: CommandContext): string => ctx.t('conversionError');
+    const usage = (ctx: RejectContext): string => ctx.t('needMedia');
+    definePlugin({
+      name: 'media',
+      version: '1.0.0',
+      engine: '^1.0.0',
+      messages: { conversionError: 'Falhou', needMedia: 'Mande uma imagem' },
+      commands: {
+        sticker: {
+          accepts: ['image'],
+          run: (ctx) => attempt(ctx),
+          onReject: (ctx) => usage(ctx),
         },
       },
       setup: () => undefined,

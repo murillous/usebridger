@@ -9,10 +9,12 @@ export type MessageValues = Readonly<Record<string, string | number>>;
  * demais, de `values`. Chave que o plugin não declara, ou placeholder sem valor, lança
  * `TypeError`: é erro do plugin, e a config só sobrescreve com os placeholders do texto padrão.
  */
-export type MessageText<TKey extends string = string> = (
-  key: TKey,
-  values?: MessageValues,
-) => string;
+// Assinatura de método, não de função: o TS compara método de forma bivariante, então o contexto
+// de um plugin (`CommandContext<'a' | 'b'>`) continua aceito por helper tipado com o contexto
+// genérico (`CommandContext`). Com função, `strictFunctionTypes` recusaria.
+export type MessageText<TKey extends string = string> = {
+  bivarianceHack(key: TKey, values?: MessageValues): string;
+}['bivarianceHack'];
 
 /** Placeholder que o kernel preenche: o prefixo de comando do chat (ADR 0063). */
 export const PREFIX_PLACEHOLDER = 'prefix';
