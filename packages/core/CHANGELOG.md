@@ -1,5 +1,27 @@
 # @usebridger/core
 
+## 0.4.0
+
+### Minor Changes
+
+- c6d3256: `command()` e os `commands` do `definePlugin` inferem o `accepts`: quando toda entrada tem mídia, o `run` recebe `MediaCommandContext`, com `ctx.media` como `Media` e `ctx.accepted` como `AcceptedMessage`, sem `null`. Nova entrada `'args'` no `accepts`, que casa só quando há texto depois do comando: `['sticker', 'quoted:sticker', 'args']` aceita mídia ou um link, e o comando sozinho cai no `onReject` (ADR 0094).
+- 193f283: Comando que exige serviço (ADR 0099): `command({ services: ['sticker'] })` deixa o comando fora do roteador, do `ctx.commands.list()` e do menu nativo enquanto o serviço não está provido, com log `warn` e a entrada em `unregistered` (agora com `services`). O manifesto ganha `optionalDependsOn`, no formato do `dependsOn` (`{ sticker: '^0.1.0' }`): o provedor carrega antes, se existir, não impede a carga do plugin e o recarrega em cascata no `reload`, `disable` e `enable`, então o comando some e volta junto com o provedor. Provedor fora da faixa não impede a carga e gera `warn` no boot, como o `^0.0.z`.
+- 2ca908b: Comando deixado de fora por `requires` ausente no transport (ADR 0090) agora aparece para o operador: o log sobe de `info` para `warn`, e a tabela de boot mostra o comando junto do plugin (`media  1.0.0  carregado; sem figurinha (send.sticker)`), em `warn`. Em `bot.plugins()`, a entrada `loaded` ganha `unregistered` (tipo `UnregisteredCommand`), com `command` e `missing` de cada comando.
+- 81535a0: `ctx.conversations.define(step, handler, { onExpire })`: o passo reage à espera que venceu sem resposta ("Encerrei por falta de resposta", lembrar de terminar um cadastro, registrar o abandono). O `onExpire` roda na fila do chat, com o prazo do comando, e recebe `chat`, `sender`, `step`, `data`, `reply` (no chat, sem citar), `log`, `t`, `signal` e `expectReply` para encadear outra espera. Só dispara quando o TTL vence: espera respondida, substituída, cancelada por comando ou descartada (teardown, reload, `stop()`) não dispara. A falha vira `plugin.error` com a fase nova `'step-expire'`; o `StepTimeoutError` ganha `stage` (`'run'` ou `'onExpire'`). Passo sem `onExpire` continua expirando em silêncio (ADR 0097).
+- f637749: `t` do contexto de comando (`CommandContext`, `MediaCommandContext`, `RejectContext`) aceita só as chaves de `messages` do plugin nos `commands` do `definePlugin`: chave que o plugin não declara vira erro de compilação, não `TypeError` na hora de responder. `command()` avulso continua com `string`, e helper tipado com o contexto genérico (`(ctx: CommandContext) => ...`) continua aceitando o contexto do plugin.
+- 0cc4cab: Esperas do `expectReply` que sobrevivem a restart: `ctx.conversations.define(step, handler, { persist: true })` grava cada espera do passo no storage do bot (coleção `waits` do namespace `$conversations`), e o boot seguinte a restaura depois do `setup` de todos os plugins. A mensagem segue lendo a espera da memória; o storage é a cópia. O vencimento gravado é absoluto: a espera que venceu durante o restart expira no boot (e roda o `onExpire` do passo, se houver), e a de passo que não existe mais é descartada com `warn`. Um reload do plugin mantém as esperas persistidas, e as de plugin cujo `setup` falhou ficam guardadas até ele subir; `disable`, plugin removido ou passo renomeado as removem. Sem `persist`, nada muda.
+  
+  No kit, `TestBot.restart(overrides?)` para o bot e sobe outro sobre o mesmo storage, para testar o que sobrevive a um deploy. O storage em memória agora é criado pelo kit e fechado no `stop()` do último bot.
+- 5b2d55e: `bot.plugins` ganha `disable(name)` e `enable(name)`, para desligar e ligar um plugin em execução sem gravar override na config. A cascata é a do `reload`: os dependentes descem junto e sobem depois. Um plugin desligado (por `disabledPlugins` ou por `disable`) recusa `reload` até ser ligado. `bot.plugins()` segue devolvendo a tabela de boot.
+  
+  Mudança de nomes no resultado de `reload`, `disable` e `enable` (antes `PluginReloadResult`): o tipo agora é `PluginChangeResult`, e os campos são `plugin` (era `entry`) e `teardownErrors` (era `errors`). `dependents` não muda.
+- 175cb4a: Pontos de extensão em serviços: `ctx.services.contribute(name, contribuicao)` acrescenta uma contribuição atribuída ao plugin, que sai sozinha no teardown, reload e disable dele, e `ctx.services.extensionPoint(name).list()` devolve as contribuições de todos os plugins, na ordem de carga. O tipo vem de declaration merging na nova interface `ExtensionPoints` (tipos `ExtensionPoint`, `ExtensionPointName` e `ExtensionPoints` exportados). O serviço extensível deixa de precisar do `ctx.signal` de quem contribui (ADR 0096).
+- 5c68c87: Novo ponto de entrada `@usebridger/core/zod`, que reexporta o Zod do core (ADR 0095): `import { z } from '@usebridger/core/zod'` declara o schema da config com a mesma cópia que o `definePlugin` tipa, sem o app instalar o `zod`. O `@usebridger/core` segue sem carregar o Zod, então importá-lo continua sem side effect.
+
+### Patch Changes
+
+- be082f9: O boot avisa em `warn` quando um `dependsOn` usa `^0.0.z`: pela regra do `^`, a faixa aceita só a versão exata `0.0.z`, e o plugin deixa de carregar no primeiro bump de patch da dependência. A mensagem sugere `0.x` ou `>=0.0.0 <1.0.0`.
+
 ## 0.3.0
 
 ### Minor Changes
