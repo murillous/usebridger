@@ -78,7 +78,7 @@ export interface AcceptedMessage {
  * o que o roteador resolveu. Quem usa o roteador fora do `Bot` fornece `reply`/`log` no
  * contexto passado a `dispatch`; o roteador só herda o que recebeu.
  */
-export interface CommandContext extends BotMessageContext {
+export interface CommandContext<TKey extends string = string> extends BotMessageContext {
   /** Nome canônico do comando casado (não o alias digitado). */
   readonly command: string;
   /** Token digitado, já em minúsculas: o nome ou um dos aliases. */
@@ -105,7 +105,7 @@ export interface CommandContext extends BotMessageContext {
    * Texto de `messages` do plugin com os placeholders preenchidos: `{prefix}` com o prefixo
    * deste chat, os outros com `values` (ADR 0092). Montado pelo `Bot`, como o `signal`.
    */
-  readonly t: MessageText;
+  readonly t: MessageText<TKey>;
   /** Entrada de `accepts` que casou; `null` se o comando não declara `accepts`. */
   readonly accepted: AcceptedMessage | null;
   /**
@@ -116,7 +116,7 @@ export interface CommandContext extends BotMessageContext {
 }
 
 /** Contexto do `run` cujo `accepts` só lista entradas com mídia: o roteador já garantiu as duas. */
-export interface MediaCommandContext extends CommandContext {
+export interface MediaCommandContext<TKey extends string = string> extends CommandContext<TKey> {
   readonly accepted: AcceptedMessage;
   readonly media: Media;
 }
@@ -125,11 +125,11 @@ export interface MediaCommandContext extends CommandContext {
  * Contexto do `run` para o `accepts` declarado: `MediaCommandContext` quando toda entrada tem
  * mídia. As tuplas evitam a distribuição sobre a união das entradas.
  */
-export type CommandContextFor<A extends readonly AcceptSpec[]> = [A[number]] extends [
-  MediaAcceptSpec,
-]
-  ? MediaCommandContext
-  : CommandContext;
+export type CommandContextFor<A extends readonly AcceptSpec[], TKey extends string = string> = [
+  A[number],
+] extends [MediaAcceptSpec]
+  ? MediaCommandContext<TKey>
+  : CommandContext<TKey>;
 
 /** Por que o roteador recusou rodar o comando. */
 export type CommandRejection =
@@ -140,7 +140,10 @@ export type CommandRejection =
  * Contexto de `onReject`: ainda não há mídia resolvida nem `accepted`. No bot, o `onReject` tem
  * o mesmo prazo do `run`, e o `signal` aborta quando ele estoura.
  */
-export type RejectContext = Omit<CommandContext, 'accepted' | 'media'>;
+export type RejectContext<TKey extends string = string> = Omit<
+  CommandContext<TKey>,
+  'accepted' | 'media'
+>;
 
 /**
  * `A` é o `accepts` declarado: `command()` o infere para tipar o contexto do `run`

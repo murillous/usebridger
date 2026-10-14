@@ -22,7 +22,7 @@ describe('definePlugin com commands e on', () => {
       commands: {
         saldo: {
           run(c, plugin) {
-            expectTypeOf(c).toEqualTypeOf<CommandContext>();
+            expectTypeOf(c).toEqualTypeOf<CommandContext<'vazio'>>();
             expectTypeOf(plugin.config).toEqualTypeOf<{ moeda: string }>();
             expectTypeOf(plugin.plugin.messages.vazio).toEqualTypeOf<string>();
             return plugin.config.moeda;
@@ -51,7 +51,7 @@ describe('definePlugin com commands e on', () => {
         imagem: {
           accepts: ['sticker'],
           onReject(c, rejection, plugin) {
-            expectTypeOf(c).toEqualTypeOf<RejectContext>();
+            expectTypeOf(c).toEqualTypeOf<RejectContext<'uso'>>();
             expectTypeOf(rejection).toEqualTypeOf<CommandRejection>();
             expectTypeOf(plugin.plugin.messages.uso).toEqualTypeOf<string>();
             return plugin.plugin.messages.uso;

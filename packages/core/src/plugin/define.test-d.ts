@@ -34,6 +34,30 @@ describe('definePlugin', () => {
     });
   });
 
+  it('ctx.t de comando só aceita as chaves de messages do plugin', () => {
+    definePlugin({
+      name: 'media',
+      version: '1.0.0',
+      engine: '^1.0.0',
+      messages: { conversionError: 'Falhou', needMedia: 'Mande uma imagem' },
+      commands: {
+        sticker: {
+          run(ctx) {
+            ctx.t('conversionError');
+            ctx.t('needMedia', { quem: 'você' });
+            // @ts-expect-error chave que o plugin não declarou (erro de digitação)
+            ctx.t('conversionEror');
+          },
+          onReject(ctx) {
+            // @ts-expect-error chave que o plugin não declarou, também na recusa
+            return ctx.t('needMediaa');
+          },
+        },
+      },
+      setup: () => undefined,
+    });
+  });
+
   it('sem schema, a config é unknown', () => {
     definePlugin({
       name: 'ping',

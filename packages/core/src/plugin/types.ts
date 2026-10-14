@@ -146,13 +146,16 @@ export interface PluginCommand<
    * O `run` do comando, com o contexto do plugin (`storage`, `config`, `send`...) no 2º
    * argumento. Devolver texto responde, como em qualquer comando.
    */
-  run(ctx: CommandContextFor<TAccepts>, plugin: PluginContext<TConfig, TMessages>): unknown;
+  run(
+    ctx: CommandContextFor<TAccepts, keyof TMessages & string>,
+    plugin: PluginContext<TConfig, TMessages>,
+  ): unknown;
   /**
    * O `onReject` do comando, com o contexto do plugin no 3º argumento: a recusa pode usar
    * `plugin.plugin.messages`, que a config sobrescreve (ADR 0025).
    */
   onReject?(
-    ctx: RejectContext,
+    ctx: RejectContext<keyof TMessages & string>,
     rejection: CommandRejection,
     plugin: PluginContext<TConfig, TMessages>,
   ): ReturnType<NonNullable<CommandDefinition['onReject']>>;
