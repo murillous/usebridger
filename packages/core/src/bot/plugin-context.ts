@@ -264,6 +264,13 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         },
         get: (service) => services.get(service),
         has: (service) => services.has(service),
+        contribute(point, contribution) {
+          // Depois do `dispose` o `removePlugin` já passou: aceitar a contribuição a deixaria
+          // órfã, rodando em nome de um plugin que saiu.
+          guard('services.contribute');
+          services.contribute(point, contribution);
+        },
+        extensionPoint: (point) => services.extensionPoint(point),
       } satisfies ServiceAccess,
       storage: {
         ...liveTenantStorage(tenantStorage(deps.storage, name, deps.tenants), live),

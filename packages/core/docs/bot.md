@@ -281,9 +281,9 @@ instância, sempre em nome do plugin:
 | `unsafe` | escape hatch, com aviso uma vez por plugin |
 
 No `teardown`/reload o bot remove tudo o que o plugin registrou (comandos, papéis, passos e
-esperas de conversa, listeners, serviços, handlers de job). Um `setup` que estoura o prazo continua rodando em segundo plano; depois do
-descarte, o contexto **recusa** `commands.add`, `roles.define`, `events.on`, `services.provide`
-e `scheduler.on` (lançam `PluginHostStateError`), para nada ficar órfão, e `send`, `storage` (KV e
+esperas de conversa, listeners, serviços, contribuições a pontos de extensão, handlers de job). Um `setup` que estoura o prazo continua rodando em segundo plano; depois do
+descarte, o contexto **recusa** `commands.add`, `roles.define`, `events.on`, `services.provide`,
+`services.contribute` e `scheduler.on` (lançam `PluginHostStateError`), para nada ficar órfão, e `send`, `storage` (KV e
 coleções) e `scheduler.at`/`cancel` (rejeitam com `ContextExpiredError`), para nenhum efeito sair
 de um plugin que já desceu. O `ctx.signal` do plugin aborta no descarte.
 
