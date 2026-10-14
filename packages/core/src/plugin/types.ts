@@ -45,6 +45,13 @@ export interface PluginManifest {
   readonly priority?: number;
   /** Carrega depois destes, sem exigir que existam. */
   readonly after?: readonly string[];
+  /**
+   * Plugins de que este usa serviços opcionais (ADR 0099). Carregam antes deste, como no
+   * `after`, mas sem impedir a carga se estiverem ausentes, ignorados ou desligados; e, como no
+   * `dependsOn`, recarregar, desligar ou ligar um deles recarrega este em cascata. É o par do
+   * `services` do comando: o comando que exige o serviço some e volta com o provedor.
+   */
+  readonly optionalDependsOn?: readonly string[];
 }
 
 /** O que o plugin recebe em `setup`/`teardown`. */

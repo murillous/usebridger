@@ -80,6 +80,7 @@ sendo a referência; um ADR novo entra nos dois.
 - [0087](0087-comando-em-segundo-plano.md) — Comando em segundo plano: `background: true` tira o `run` da fila do chat (detalha D42/D49)
 - [0090](0090-requires-por-comando.md) — `requires` por comando: sem a capability, o comando não é registrado (detalha D16/D64)
 - [0094](0094-accepts-estreita-o-contexto-e-args.md) — `accepts` estreita o `ctx.media` do `run` e ganha `'args'` (detalha D12)
+- [0099](0099-comando-que-exige-servico.md) — Comando que exige serviço (`services`) e `optionalDependsOn` (detalha D18/D41/D90)
 
 **Plugins: carga, config, services e execução**
 
@@ -227,3 +228,4 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0093](0093-react-do-contexto-tolerante.md) | D93 | `react` do contexto tolerante: sem a capability `reactions`, resolve sem reagir e registra em `debug`; o `ctx.send.react` continua estrito (substitui em parte D40) | Aceito |
 | [0094](0094-accepts-estreita-o-contexto-e-args.md) | D94 | `accepts` estreita o contexto do `run` (`ctx.media` como `Media` quando toda entrada tem mídia) e ganha `'args'`, que casa só com texto depois do comando (detalha D12) | Aceito |
 | [0095](0095-zod-no-subpath-do-core.md) | D95 | Zod do core no subpath `@usebridger/core/zod`: o schema da config sai da mesma cópia do core, e o `@usebridger/core` segue sem carregar o Zod (detalha D17/D34) | Aceito |
+| [0099](0099-comando-que-exige-servico.md) | D99 | Comando que exige serviço: `services` no comando o deixa fora do registro sem o serviço, e `optionalDependsOn` no manifesto ordena e recarrega em cascata sem impedir a carga (detalha D18/D41/D90) | Aceito |

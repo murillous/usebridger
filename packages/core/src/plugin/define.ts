@@ -168,6 +168,16 @@ export function manifestIssues(value: unknown): string[] {
   }
 
   checkNames(value['after'], 'after', name, issues);
+  const optional = value['optionalDependsOn'];
+  checkNames(optional, 'optionalDependsOn', name, issues);
+  // Exigir e tolerar a ausência do mesmo plugin se contradizem: o `dependsOn` venceria calado.
+  if (Array.isArray(optional) && isRecord(dependsOn)) {
+    for (const dependency of optional) {
+      if (typeof dependency === 'string' && Object.hasOwn(dependsOn, dependency)) {
+        issues.push(`"${dependency}" está em dependsOn e optionalDependsOn; deixe só um`);
+      }
+    }
+  }
 
   const priority = value['priority'];
   if (priority !== undefined && (typeof priority !== 'number' || !Number.isFinite(priority))) {

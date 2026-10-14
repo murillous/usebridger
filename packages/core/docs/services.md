@@ -59,10 +59,35 @@ O tipo vem de importar o pacote do provedor (ou só o tipo dele): é esse import
 - **`get` no `setup` pode**: o boot segue a ordem topológica do `dependsOn`, então o
   provedor já rodou o `setup` dele (e o `provide`). Também pode ser chamado depois, em
   comandos e listeners.
-- **Serviço opcional**: `ctx.services.has('ai')` responde sem lançar.
+- **Serviço opcional**: `ctx.services.has('ai')` responde sem lançar. Veja abaixo.
 - **Serviço ausente**: `get` lança `ServiceNotFoundError` dizendo qual serviço, qual plugin
   pediu e que nenhum plugin carregado o provê, sugerindo declarar o `dependsOn`. O erro tem
   os campos `service` e `requestedBy`.
+
+## Serviço opcional
+
+Quando o plugin funciona sem o provedor e só parte dele usa o serviço, `dependsOn` derrubaria o
+plugin inteiro. Declare o provedor em `optionalDependsOn`
+([ADR 0099](../../../docs/adr/0099-comando-que-exige-servico.md)):
+
+- o provedor carrega antes, se existir, e o plugin carrega mesmo sem ele (ausente, ignorado,
+  com `setup` falho ou desligado);
+- recarregar, desligar ou ligar o provedor recarrega o plugin em cascata, como no `dependsOn`, então
+  o `setup` sempre vê o estado atual e pode guardar o serviço se `has` responder `true`;
+- o comando que precisa do serviço o declara em `services` e só existe enquanto ele está provido
+  ([Serviço por comando](commands.md#serviço-por-comando)).
+
+```ts
+export const download = definePlugin({
+  name: 'download',
+  version: '1.0.0',
+  engine: '^1.0.0',
+  optionalDependsOn: ['sticker'],
+  setup(ctx) {
+    if (ctx.services.has('sticker')) { /* liga o que depende do serviço */ }
+  },
+});
+```
 
 ## Regras
 
@@ -77,7 +102,8 @@ O tipo vem de importar o pacote do provedor (ou só o tipo dele): é esse import
 - **Teardown e reload** removem o que o plugin proveu; no novo `setup` ele provê de novo. O
   reload do provedor recarrega em cascata quem declara `dependsOn` nele
   ([ADR 0041](../../../docs/adr/0041-reload-em-cascata.md)), então guardar a instância no `setup`
-  é seguro. Quem usa o serviço sem `dependsOn` não recarrega junto e fica com a instância antiga.
+  é seguro; `optionalDependsOn` também entra na cascata. Quem usa o serviço sem nenhum dos dois não
+  recarrega junto e fica com a instância antiga.
 - **Tenant.** Chamado no handler de uma mensagem com `chat.tenantId`, o serviço roda no escopo
   daquele tenant: o `ctx.storage` do provedor grava no tenant certo sem receber nada
   ([ADR 0072](../../../docs/adr/0072-isolamento-por-tenant.md)). Estado em memória (um `Map` no

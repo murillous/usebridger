@@ -25,6 +25,7 @@ export const sticker = definePlugin({
   transports: ['baileys'],                      // opcional: fixa o(s) transport(s)
   dependsOn: { 'user-names': '^1.0.0' },        // opcional: plugin → faixa semver
   after: ['logger-extra'],                      // opcional: carrega depois, se existir
+  optionalDependsOn: ['ai'],                    // opcional: como after, mais o reload em cascata
   priority: 0,                                  // opcional: maior carrega antes
 
   config: z.object({ quality: z.number().min(1).max(100).default(80) }),
@@ -54,6 +55,7 @@ problemas encontrados. Regras:
 | `transports` | lista não vazia de nomes de transport. |
 | `dependsOn` | nome de plugin → faixa semver; não pode citar o próprio plugin. |
 | `after` | nomes de plugin; não pode citar o próprio plugin. |
+| `optionalDependsOn` | nomes de plugin; não pode citar o próprio plugin nem repetir um nome do `dependsOn` ([Serviço opcional](services.md#serviço-opcional)). |
 | `priority` | número finito; padrão 0. |
 | `config` | schema Zod ([Config](config.md#declarar)). |
 | `messages` | objeto chave → texto. |
@@ -202,9 +204,11 @@ const errors = await host.stop();           // PluginLifecycleError[]
 
 1. **Erros de boot** — rejeitam `start()` antes de qualquer `setup`:
    `PluginManifestError` (manifesto malformado), `PluginConflictError` (dois plugins com o
-   mesmo `name`, com as duas origens) e `PluginCycleError` (ciclo em `dependsOn`/`after`, com o
+   mesmo `name`, com as duas origens) e `PluginCycleError` (ciclo em
+   `dependsOn`/`optionalDependsOn`/`after`, com o
    caminho: `a → b → c → a`, onde `→` = "depende de / carrega depois de").
-2. **Ordem** (`sortPlugins`): toposort com `dependsOn` e `after` como arestas; entre os
+2. **Ordem** (`sortPlugins`): toposort com `dependsOn`, `optionalDependsOn` e `after` como
+   arestas; entre os
    prontos, `priority` maior primeiro e, no empate, a ordem de declaração. Nome citado que não
    existe não cria aresta. A ordenação considera todos os plugins, inclusive os desabilitados:
    ciclo é erro do código, não da config.
@@ -240,9 +244,9 @@ Plugins: 3 carregado(s), 2 ignorado(s)
 ```
 
 `carregado; sem ...` lista os comandos com `requires` que o transport não sustenta e as
-capabilities que faltam: o plugin subiu, mas eles não respondem
-([Capability por comando](commands.md#capability-por-comando)). Na entrada, ficam em
-`unregistered`.
+capabilities que faltam, e os com `services` que ninguém provia (`sem ds (serviço figurinhas)`):
+o plugin subiu, mas eles não respondem ([Capability por comando](commands.md#capability-por-comando),
+[Serviço por comando](commands.md#serviço-por-comando)). Na entrada, ficam em `unregistered`.
 
 `host.report()` devolve a tabela atual (reflete reloads).
 
@@ -289,7 +293,9 @@ O plugin e os dependentes são reavaliados como no boot (desligado, ou com a dep
 desligada, ele não sobe). Se o `setup` novo do plugin falhar, os dependentes ficam
 `dependency-skipped`; um reload seguinte que o suba traz todos de volta. Um dependente ignorado
 por motivo próprio (ex.: desabilitado) continua ignorado. `after` não entra na cascata, porque só
-ordena a carga.
+ordena a carga. `optionalDependsOn` entra: o dependente opcional desce e sobe junto, e sobe mesmo
+que o plugin não suba ([ADR 0099](../../../docs/adr/0099-comando-que-exige-servico.md)). O mesmo
+vale para `disable` e `enable`.
 
 ### Desligar e ligar (`disable` / `enable`)
 

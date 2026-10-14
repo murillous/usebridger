@@ -66,8 +66,9 @@ export interface PluginChangeResult {
    */
   readonly plugin: PluginReportEntry;
   /**
-   * Linhas novas de quem depende dele (`dependsOn`, transitivo), descidos e subidos em cascata,
-   * na ordem de carga. `dependency-skipped` se o plugin de que dependem não subiu.
+   * Linhas novas de quem depende dele (`dependsOn` ou `optionalDependsOn`, transitivo), descidos
+   * e subidos em cascata, na ordem de carga. `dependency-skipped` se o plugin de que dependem
+   * por `dependsOn` não subiu; o dependente opcional sobe mesmo assim.
    */
   readonly dependents: readonly PluginReportEntry[];
   /**
@@ -97,8 +98,9 @@ export interface PluginHost {
   stop(signal?: AbortSignal): Promise<PluginLifecycleError[]>;
   /**
    * Derruba e sobe de novo um plugin (`teardown` → `dispose` → novo contexto → `setup`) e, em
-   * cascata, quem depende dele por `dependsOn` (ADR 0041): os dependentes descem antes (ordem
-   * inversa) e sobem depois (ordem de carga), reavaliados como no boot. É a primitiva do reload
+   * cascata, quem depende dele por `dependsOn` (ADR 0041) ou `optionalDependsOn` (ADR 0099): os
+   * dependentes descem antes (ordem inversa) e sobem depois (ordem de carga), reavaliados como
+   * no boot. É a primitiva do reload
    * por mudança de config (ADR 0017): o contexto novo sai da fábrica, que já lê a config
    * atualizada. Vale para plugin carregado ou cujo `setup` falhou.
    */
@@ -479,15 +481,21 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
   }
 
   /**
-   * O slot e quem depende dele por `dependsOn`, direta ou transitivamente, na ordem de carga.
-   * `after` só ordena: quem o usa não pega nada do outro plugin, então não entra.
+   * O slot e quem depende dele por `dependsOn` ou `optionalDependsOn`, direta ou
+   * transitivamente, na ordem de carga. `after` só ordena: quem o usa não pega nada do outro
+   * plugin, então não entra. O opcional entra porque o setup dele decide o que registra conforme
+   * o serviço existe (ADR 0099).
    */
   function withDependents(root: Slot): Slot[] {
     const names = new Set([root.entry.definition.name]);
     // Na ordem topológica, toda dependência aparece antes do dependente: uma passada basta.
     return slots.filter((each) => {
       if (each === root) return true;
-      const dependsOn = Object.keys(each.entry.definition.dependsOn ?? {});
+      const { definition } = each.entry;
+      const dependsOn = [
+        ...Object.keys(definition.dependsOn ?? {}),
+        ...(definition.optionalDependsOn ?? []),
+      ];
       if (!dependsOn.some((dependency) => names.has(dependency))) return false;
       names.add(each.entry.definition.name);
       return true;
