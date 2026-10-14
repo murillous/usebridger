@@ -36,8 +36,10 @@ setup(ctx) {
 }
 ```
 
-- **`ctx.conversations.define(step, handler)`**, no `setup`, define um passo do plugin. Um nome
-  vazio ou repetido no mesmo plugin lança `TypeError`, e o setup falha.
+- **`ctx.conversations.define(step, handler, { persist? })`**, no `setup`, define um passo do
+  plugin. Um nome vazio ou repetido no mesmo plugin lança `TypeError`, e o setup falha. Com
+  `persist: true`, as esperas do passo sobrevivem a restart
+  ([abaixo](#conversa-que-sobrevive-a-restart)).
 - **`expectReply(step, { data, ttlMs })`** registra que a próxima mensagem do **remetente**,
   **neste chat**, vai para `step`. Existe no contexto do comando (`run` e `onReject`), dos
   listeners de mensagem (`message`, `message:<tipo>`, `message.edited`) e do próprio passo. É
@@ -144,17 +146,77 @@ lança `ContextExpiredError`. Um handler atrasado não abre uma conversa que nin
 
 ## Ciclo de vida
 
-- O estado fica **em memória**. Um restart perde as conversas em andamento, e o usuário recomeça.
-  O passo é nomeado e o `data` é JSON para que, no futuro, a espera possa ir ao storage sem mudar
-  a API.
-- No `teardown`/reload, o plugin perde os passos e as esperas dele, sem `onExpire`. A resposta
-  que chegar depois segue o fluxo normal. Um `onExpire` rodando no reload tem o `signal` abortado
-  e o `reply` recusado.
-- No `stop()`, as esperas que restam são descartadas sem `onExpire`, e nenhum timer de validade
-  sobrevive. Uma espera que vence durante o `stop()` também some em silêncio.
+- O estado fica **em memória**. Sem `persist`, um restart perde as conversas em andamento, e o
+  usuário recomeça. Para conversa longa, veja [abaixo](#conversa-que-sobrevive-a-restart).
+- No `teardown`/reload, o plugin perde os passos e as esperas dele, sem `onExpire` (salvo as
+  persistidas, que o reload mantém). A resposta que chegar depois segue o fluxo normal. Um
+  `onExpire` rodando no reload tem o `signal` abortado e o `reply` recusado.
+- No `stop()`, as esperas que restam saem da memória sem `onExpire`, e nenhum timer de validade
+  sobrevive. Uma espera que vence durante o `stop()` também some em silêncio. As persistidas
+  ficam no storage para o próximo boot.
 - O `settled()` não espera o `ttlMs`: a espera não é trabalho em andamento. O passo e o
   `onExpire`, quando rodam, já contam, porque rodam dentro da fila do chat.
 - Não depende de capability: funciona em qualquer transport.
+
+## Conversa que sobrevive a restart
+
+Num cadastro, numa triagem ou num funil de pedido, com TTL de horas, um deploy no meio do dia não
+pode derrubar quem está no meio do fluxo. O passo definido com **`persist: true`** grava cada
+espera dele no storage do bot, e o boot seguinte a restaura
+([ADR 0098](../../../docs/adr/0098-esperas-persistidas.md)):
+
+```ts
+ctx.conversations.define(
+  'endereco',
+  async (c) => {
+    const pedido = c.data as { itens: string[] };
+    await c.reply('Confirma o pedido? (sim/não)');
+    c.expectReply('confirmacao', { data: { ...pedido, endereco: c.text }, ttlMs: 2 * 3_600_000 });
+  },
+  { persist: true },
+);
+```
+
+- **Opt-in por passo.** O `persist` vale para toda espera que aponta para o passo; o
+  `expectReply` não muda. Sem ele, nada vai ao storage.
+- **Custo.** Uma escrita no `expectReply` e uma remoção quando a espera sai (respondida,
+  substituída, cancelada por comando ou vencida). A mensagem continua lendo a espera da memória:
+  o storage é só a cópia que o boot restaura. A escrita é em segundo plano; uma falha vai ao log
+  em `warn`, e a conversa segue em memória (só não voltaria depois de um restart).
+- **Restauração no boot**, depois do `setup` de todos os plugins e antes da primeira mensagem:
+  - a espera volta com o **tempo que faltava**: o vencimento gravado é absoluto, e o tempo fora do
+    ar conta;
+  - a que **venceu** durante o restart expira no boot, como se o timer tivesse disparado: com
+    [`onExpire`](#quando-a-espera-vence-onexpire), ele roda na fila do chat assim que o boot termina;
+  - a de **passo que não existe mais** (plugin desligado ou que não subiu, passo renomeado na
+    versão nova) é descartada com `warn` e sai do storage.
+- **Reload mantém, desligar remove.** Um reload (troca de config) guarda as esperas persistidas
+  e as devolve quando o `setup` novo redefine o passo. Um `bot.plugins.disable`, um `setup` novo
+  que falha ou um passo que sumiu as descartam com `warn`, também do storage. Uma resposta que
+  chegar no meio do reload, antes de o passo voltar, segue o fluxo normal.
+- **O `data` precisa caber em JSON** (`JsonValue`, como sempre): ele vai ao storage como está e
+  fica lá até a espera sair. Não guarde nele o que não guardaria no `ctx.storage`.
+- **Chat e contato.** O registro guarda o `Chat` (com o `tenantId`,
+  [ADR 0072](../../../docs/adr/0072-isolamento-por-tenant.md)) e o `Contact` da espera, para o
+  `onExpire` restaurado ter `chat` e `sender`. Os `claims` do contato não vão ao storage: no
+  `onExpire` de uma espera restaurada, `sender.claims` fica ausente.
+- **Uma sessão por processo.** A trava de sessão
+  ([ADR 0074](../../../docs/adr/0074-trava-de-sessao-entre-processos.md)) garante que só um
+  processo restaura e serve as esperas de uma sessão.
+
+As esperas ficam na coleção `waits` do namespace do kernel `$conversations` (por sessão), um
+documento por (chat, remetente):
+
+| Campo | O que é |
+| --- | --- |
+| `v` | Versão do formato (hoje `1`). Registro de versão desconhecida fica intocado no storage |
+| `chatId`, `senderId` | A chave da espera |
+| `chat`, `sender` | O `Chat` e o `Contact` (sem `claims`) |
+| `plugin`, `step` | O passo que trata a resposta |
+| `data` | O `data` do `expectReply` |
+| `expiresAt` | Vencimento em epoch ms |
+
+Um bot sem nenhum passo persistido não lê essa coleção no boot.
 
 ## Testando
 
@@ -177,4 +239,15 @@ await bot.receive({ text: '!cadastro' });
 await vi.advanceTimersByTimeAsync(60_000);
 await bot.bot.settled();
 expect(bot.sent).toContainText('Encerrei por falta de resposta.');
+```
+
+Para a conversa persistida, o `restart()` sobe um bot novo sobre o mesmo storage:
+
+```ts
+const antes = await createTestBot({ plugins: [notas] });
+await antes.receive({ text: '!notas' });
+const depois = await antes.restart();
+await depois.receive({ text: 'Maria' });
+expect(depois.sent).toContainText('Notas de Maria');
+await depois.stop();
 ```

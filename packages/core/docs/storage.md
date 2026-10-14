@@ -193,8 +193,9 @@ Tudo nesta seção é interno do kernel, não exportado ([ADR 0034](../../../doc
 `createBot`, fechado no `stop()`). Namespaces que
 começam com `$` são do kernel: `pluginStorage` lança `ReservedNamespaceError` para eles, então
 nenhum plugin alcança os dados internos, seja qual for o nome dele. Componentes do kernel usam
-`kernelStorage(port, 'scheduler')` (namespace `$scheduler`), `kernelStorage(port, 'config')`
-etc. `isReservedNamespace(name)` serve para validar nomes cedo (manifesto, M1-8).
+`kernelStorage(port, 'scheduler')` (namespace `$scheduler`), `kernelStorage(port, 'config')`,
+`kernelStorage(port, 'conversations')` (esperas persistidas,
+[Conversas](conversations.md#conversa-que-sobrevive-a-restart)) etc. `isReservedNamespace(name)` serve para validar nomes cedo (manifesto, M1-8).
 
 ### Escopo de sessão
 

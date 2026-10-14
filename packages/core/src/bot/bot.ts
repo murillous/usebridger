@@ -6,7 +6,7 @@ import { RoleConflictError } from '#commands/roles.ts';
 import { createCommandRouter } from '#commands/router.ts';
 import { BotConfigError, normalizeOwners } from '#config/owners.ts';
 import { createPluginConfigs, type PluginConfigs } from '#config/plugin-configs.ts';
-import { ConversationRegistry } from '#conversations/conversations.ts';
+import { ConversationRegistry, type WaitRecord } from '#conversations/conversations.ts';
 import { ArmedTimers, ContextExpiredError } from '#deadline.ts';
 import { createEventBus } from '#events/bus.ts';
 import type { BotEvents, PluginErrorEvent } from '#events/types.ts';
@@ -28,7 +28,12 @@ import { InboundQueue } from '#queue/inbound.ts';
 import { createSchedulerService } from '#scheduler/service.ts';
 import { createServiceRegistry, ServiceConflictError } from '#services/registry.ts';
 import { createMemoryStorage } from '#storage/memory.ts';
-import { DEFAULT_SESSION, sessionStorage, sharedStorage } from '#storage/namespace.ts';
+import {
+  DEFAULT_SESSION,
+  kernelStorage,
+  sessionStorage,
+  sharedStorage,
+} from '#storage/namespace.ts';
 import { TenantScope } from '#tenant/scope.ts';
 import { type Capability, hasCapability } from '#transport/capabilities.ts';
 import { transportIssues } from '#transport/methods.ts';
@@ -183,9 +188,12 @@ export function createBot(config: BotConfig): Bot {
         { plugin: command.plugin, command: command.name, role },
       ),
   });
-  // A espera com `onExpire` que vence entra na fila do chat como uma mensagem (ADR 0097).
+  // A espera com `onExpire` que vence entra na fila do chat como uma mensagem (ADR 0097). As de
+  // passo com `persist` ficam no storage da sessão (ADR 0098); a coleção só abre no primeiro uso.
   const conversations = new ConversationRegistry<KernelMessageContext, ExpireOrigin>({
     onDue: (chat, sender) => expireWait(chat, sender),
+    store: () => kernelStorage(scoped, 'conversations').collection<WaitRecord>('waits'),
+    log: getLog,
   });
   const actions = new ActionRegistry();
   // Validado mesmo sem a capability: `limits.actions` malformado é erro de config de todo jeito.
@@ -566,6 +574,9 @@ export function createBot(config: BotConfig): Bot {
       if (isBootConflict(error.cause)) throw error.cause;
       emitLifecycleError(error);
     }
+    // Depois do `setup` de todos: só então se sabe que passo existe. Antes de liberar a fila de
+    // entrada, então a primeira resposta já acha a espera.
+    await conversations.restore();
   }
 
   /** Mudança de um plugin em execução (`action` só entra na mensagem de erro). */
@@ -577,6 +588,9 @@ export function createBot(config: BotConfig): Bot {
     // Um aviso só ao transport, no fim: no meio, os comandos do plugin saíram e não voltaram.
     const pluginHost = host;
     const result = await catalog.batch(() => pluginHost[action](name));
+    // O reload que redefiniu o passo fica com as esperas persistidas; quem desceu de vez (disable,
+    // `setup` novo que falhou, passo que sumiu) as perde, também do storage (ADR 0098).
+    conversations.sweep();
     for (const error of result.teardownErrors) emitLifecycleError(error);
     // Os dependentes recarregados em cascata (ADR 0041) também podem falhar no `setup` novo.
     for (const entry of [result.plugin, ...result.dependents]) {
@@ -728,6 +742,9 @@ export function createBot(config: BotConfig): Bot {
     }
     // Storage por último: os teardowns e o scheduler ainda o usam até aqui. Se outro bot (outra
     // sessão) ainda o usa, quem fecha é o último a parar.
+    // As gravações de espera persistida em andamento terminam antes de o storage fechar e de outro
+    // processo assumir a sessão (ADR 0098). Falha de escrita já vai ao log; isto não rejeita.
+    await conversations.flush();
     // Liberada no stop limpo, a sessão sobe em outro processo na hora, sem esperar a validade.
     try {
       await sessionLease?.release();
