@@ -67,6 +67,9 @@ export const ingles = definePlugin({
   de `Services` para o consumidor.
 - **Sem o provedor, o consumidor não sobe.** O `dependsOn` faz o boot ignorar o consumidor, com o
   motivo na tabela de boot, em vez de ele falhar em runtime.
+- **Faixa no 0.x:** `^0.0.0` aceita só `0.0.0` e quebra no primeiro bump do provedor. Entre
+  plugins do mesmo repositório, use `0.x`
+  ([Plugins → faixa no `dependsOn`](../../packages/core/docs/plugins.md#qual-faixa-declarar-no-dependson)).
 - **Service opcional:** sem `dependsOn`, confira com `ctx.services.has('traducao')` antes do
   `get`. Sem o provedor, `get` lança `ServiceNotFoundError`. Para garantir a ordem de carga sem
   exigir o provedor, use `after: ['traducao']`.
@@ -80,6 +83,37 @@ export const ingles = definePlugin({
 - **Tenant.** Chamado numa mensagem de um tenant, o service roda no escopo dele: o `ctx.storage`
   do provedor grava nos dados daquele tenant sem receber nada
   ([Storage → Tenants](storage.md#tenants-um-bot-vários-clientes)).
+
+## Serviço extensível
+
+Quando outros plugins acrescentam peças ao seu service (etapas, filtros, formatos), use um ponto de
+extensão em vez de guardar as peças num `Set`. O core atribui cada contribuição ao plugin que a
+fez e a tira no teardown, reload e disable dele:
+
+```ts
+export type Etapa = (texto: string) => Promise<string>;
+
+declare module '@usebridger/core' {
+  interface ExtensionPoints {
+    'traducao.etapas': Etapa;
+  }
+}
+
+// no `traducao`
+const etapas = ctx.services.extensionPoint('traducao.etapas');
+ctx.services.provide('traducao', {
+  async traduzir(texto, idioma) {
+    for (const etapa of etapas.list()) texto = await etapa(texto);
+    return chamarApi(texto, idioma);
+  },
+});
+
+// em outro plugin, com `dependsOn: { traducao: '^1.0.0' }`
+ctx.services.contribute('traducao.etapas', async (texto) => texto.trim());
+```
+
+As etapas rodam na ordem de carga de quem contribuiu. Detalhes em
+[Services no core → Pontos de extensão](../../packages/core/docs/services.md#pontos-de-extensão).
 
 ## Service ou import?
 

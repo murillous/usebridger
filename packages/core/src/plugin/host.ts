@@ -11,8 +11,9 @@ import {
   type PluginPhase,
   type PluginReportEntry,
   type PluginSkipReason,
+  type UnregisteredCommand,
 } from './report.ts';
-import { parseVersion, satisfies } from './semver.ts';
+import { isExactCaret, parseVersion, satisfies } from './semver.ts';
 import type { PluginEntry } from './sources.ts';
 import type { PluginContext, PluginDefinition } from './types.ts';
 
@@ -24,6 +25,8 @@ import type { PluginContext, PluginDefinition } from './types.ts';
  */
 export interface PluginContextHandle {
   readonly context: PluginContext;
+  /** Comandos que o contexto deixou de fora por capability ausente; vão para a tabela de boot. */
+  unregisteredCommands?(): readonly UnregisteredCommand[];
   dispose(reason?: unknown): void | Promise<void>;
 }
 
@@ -52,19 +55,28 @@ export interface PluginHostOptions {
 /** `idle → starting → running → stopping → stopped`; `stopped` é terminal. */
 export type PluginHostState = 'idle' | 'starting' | 'running' | 'stopping' | 'stopped';
 
-export interface PluginReloadResult {
-  /** Linha nova do plugin na tabela: `loaded`, ou `skipped` se o `setup` novo falhou. */
-  readonly entry: PluginReportEntry;
+/**
+ * Resultado de `reload`, `disable` e `enable`: o que mudou no plugin e em quem depende dele.
+ */
+export interface PluginChangeResult {
   /**
-   * Linhas novas de quem depende dele (`dependsOn`, transitivo), recarregados em cascata, na
-   * ordem de carga. `dependency-skipped` se o plugin recarregado não subiu.
+   * Linha nova do plugin na tabela. Depois de `reload`: `loaded`, ou `skipped` se o `setup` novo
+   * falhou. Depois de `disable`: `skipped` com `reason.kind` `disabled`. Depois de `enable`: a
+   * linha que o boot daria agora.
+   */
+  readonly plugin: PluginReportEntry;
+  /**
+   * Linhas novas de quem depende dele (`dependsOn` ou `optionalDependsOn`, transitivo), descidos
+   * e subidos em cascata, na ordem de carga. `dependency-skipped` se o plugin de que dependem
+   * por `dependsOn` não subiu; o dependente opcional sobe mesmo assim.
    */
   readonly dependents: readonly PluginReportEntry[];
   /**
-   * Falhas do `teardown`/`dispose` das instâncias anteriores, do plugin e dos dependentes (já
-   * registradas no log). Falha do `setup` novo fica na `entry` de cada um.
+   * Falhas do `teardown`/`dispose` das instâncias que desceram (do plugin e dos dependentes; já
+   * registradas no log). Falha do `setup` novo não entra aqui: fica no `reason` da linha do
+   * plugin ou do dependente, como `setup-failed`.
    */
-  readonly errors: readonly PluginLifecycleError[];
+  readonly teardownErrors: readonly PluginLifecycleError[];
 }
 
 export interface PluginHost {
@@ -86,12 +98,24 @@ export interface PluginHost {
   stop(signal?: AbortSignal): Promise<PluginLifecycleError[]>;
   /**
    * Derruba e sobe de novo um plugin (`teardown` → `dispose` → novo contexto → `setup`) e, em
-   * cascata, quem depende dele por `dependsOn` (ADR 0041): os dependentes descem antes (ordem
-   * inversa) e sobem depois (ordem de carga), reavaliados como no boot. É a primitiva do reload
+   * cascata, quem depende dele por `dependsOn` (ADR 0041) ou `optionalDependsOn` (ADR 0099): os
+   * dependentes descem antes (ordem inversa) e sobem depois (ordem de carga), reavaliados como
+   * no boot. É a primitiva do reload
    * por mudança de config (ADR 0017): o contexto novo sai da fábrica, que já lê a config
    * atualizada. Vale para plugin carregado ou cujo `setup` falhou.
    */
-  reload(name: string): Promise<PluginReloadResult>;
+  reload(name: string): Promise<PluginChangeResult>;
+  /**
+   * Desliga um plugin em execução: desce ele e os dependentes, e não carrega mais até `enable`.
+   * Quem depende dele por `dependsOn` vira `dependency-skipped`; quem depende por
+   * `optionalDependsOn` sobe de novo sem ele (ADR 0099). Já desligado, não faz nada.
+   */
+  disable(name: string): Promise<PluginChangeResult>;
+  /**
+   * Liga um plugin desligado (por `disable` ou `disabledPlugins`) e sobe os dependentes que ele
+   * libera. Já ligado, não faz nada.
+   */
+  enable(name: string): Promise<PluginChangeResult>;
   /** Tabela atual, na ordem de carga (reflete reloads). */
   report(): PluginReportEntry[];
 }
@@ -245,7 +269,8 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
       return fail(base, setup.error);
     }
     slot.handle = handle;
-    return { ...base, status: 'loaded' };
+    const unregistered = [...(handle.unregisteredCommands?.() ?? [])];
+    return { ...base, status: 'loaded', ...(unregistered.length > 0 && { unregistered }) };
   }
 
   function fail(
@@ -308,12 +333,52 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
         origin: entry.origin,
         status: entry.status,
         ...(entry.status === 'skipped' ? { reason: describeSkipReason(entry.reason) } : {}),
+        ...(entry.status === 'loaded' && entry.unregistered
+          ? { unregistered: entry.unregistered }
+          : {}),
       })),
     };
-    const anySkipped = entries.some((entry) => entry.status === 'skipped');
-    // Plugin ignorado é configuração a revisar: warn chama atenção sem ser falha do bot.
-    if (anySkipped) log.warn(formatBootTable(entries), fields);
+    const toReview = entries.some(
+      (entry) => entry.status === 'skipped' || entry.unregistered !== undefined,
+    );
+    // Plugin ignorado ou comando deixado de fora é configuração a revisar: warn chama atenção
+    // sem ser falha do bot.
+    if (toReview) log.warn(formatBootTable(entries), fields);
     else log.info(formatBootTable(entries), fields);
+  }
+
+  // `^0.0.z` aceita só `0.0.z`: o dependente para de carregar no primeiro bump de patch da
+  // dependência, mesmo sem quebra. Aviso, não erro: a faixa é válida e pode ser intencional.
+  function warnExactCaret(definition: PluginDefinition): void {
+    const fields = [
+      ['dependsOn', definition.dependsOn],
+      ['optionalDependsOn', definition.optionalDependsOn],
+    ] as const;
+    for (const [label, dependencies] of fields) {
+      for (const [dependency, range] of Object.entries(dependencies ?? {})) {
+        if (!isExactCaret(range)) continue;
+        log.warn(
+          `plugin "${definition.name}": ${label}["${dependency}"] = "${range}" aceita só essa ` +
+            'versão exata; para acompanhar o 0.x da dependência, use "0.x" ou ">=0.0.0 <1.0.0"',
+          { plugin: definition.name, dependency, range },
+        );
+      }
+    }
+  }
+
+  // Provedor opcional fora da faixa não impede a carga (ADR 0099): o serviço dele já está no
+  // registry quando o dependente sobe, e esconder do `has` só para um plugin criaria um segundo
+  // estado de serviço. Fica o aviso, uma vez no boot, porque as versões não mudam em runtime.
+  function warnOptionalVersion(definition: PluginDefinition): void {
+    for (const [dependency, range] of Object.entries(definition.optionalDependsOn ?? {})) {
+      const version = byName.get(dependency)?.entry.definition.version;
+      if (version === undefined || satisfies(version, range)) continue;
+      log.warn(
+        `plugin "${definition.name}": optionalDependsOn["${dependency}"] = "${range}" não ` +
+          `aceita a versão carregada ${version}; o plugin sobe e o serviço dela segue visível`,
+        { plugin: definition.name, dependency, range, version },
+      );
+    }
   }
 
   /** Erros de boot: manifesto, nome repetido e ciclo. Lança antes de qualquer setup. */
@@ -350,6 +415,10 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
       }
     }
     for (const slot of slots) {
+      warnExactCaret(slot.entry.definition);
+      warnOptionalVersion(slot.entry.definition);
+    }
+    for (const slot of slots) {
       const reason = incompatibility(slot.entry.definition);
       slot.report = reason
         ? { ...reportBase(slot.entry), status: 'skipped', reason }
@@ -370,12 +439,17 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
     return errors;
   }
 
-  async function runReload(name: string): Promise<PluginReloadResult> {
+  function slotOf(action: string, name: string): Slot {
     if (state !== 'running') {
-      throw new PluginHostStateError(`reload("${name}"): host em "${state}"`);
+      throw new PluginHostStateError(`${action}("${name}"): host em "${state}"`);
     }
     const slot = byName.get(name);
-    if (!slot) throw new PluginHostStateError(`reload("${name}"): plugin desconhecido`);
+    if (!slot) throw new PluginHostStateError(`${action}("${name}"): plugin desconhecido`);
+    return slot;
+  }
+
+  async function runReload(name: string): Promise<PluginChangeResult> {
+    const slot = slotOf('reload', name);
     const { report } = slot;
     if (report.status === 'skipped' && report.reason.kind !== 'setup-failed') {
       throw new PluginHostStateError(
@@ -383,22 +457,43 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
           'só recarrega plugin carregado ou cujo setup falhou',
       );
     }
+    return restart(slot, 'recarregado');
+  }
+
+  async function runDisable(name: string): Promise<PluginChangeResult> {
+    const slot = slotOf('disable', name);
+    if (disabled.has(name)) return { plugin: slot.report, dependents: [], teardownErrors: [] };
+    disabled.add(name);
+    return restart(slot, 'desligado');
+  }
+
+  async function runEnable(name: string): Promise<PluginChangeResult> {
+    const slot = slotOf('enable', name);
+    if (!disabled.delete(name)) return { plugin: slot.report, dependents: [], teardownErrors: [] };
+    return restart(slot, 'ligado');
+  }
+
+  /**
+   * Desce o plugin e os dependentes e sobe de novo, na ordem do boot. Todos passam por
+   * `incompatibility`, inclusive a raiz: o motivo dela pode ter mudado (desligada, ou com a
+   * dependência desligada), e um `setup-failed` anterior ganha nova tentativa.
+   */
+  async function restart(slot: Slot, verb: string): Promise<PluginChangeResult> {
+    const name = slot.entry.definition.name;
     // Quem guardou um serviço do plugin no `setup` ficaria com a instância do contexto
     // descartado: o subgrafo de dependentes desce e sobe junto (ADR 0041).
     const affected = withDependents(slot);
     const errors: PluginLifecycleError[] = [];
     for (const each of affected.toReversed()) errors.push(...(await bringDown(each)));
     for (const each of affected) {
-      // O próprio plugin não passa por `incompatibility`: o motivo estático dele não muda, e
-      // um `setup-failed` anterior precisa de uma nova tentativa.
-      const reason = each === slot ? undefined : incompatibility(each.entry.definition);
+      const reason = incompatibility(each.entry.definition);
       each.report = reason
         ? { ...reportBase(each.entry), status: 'skipped', reason }
         : await bringUp(each);
     }
     const dependents = affected.slice(1).map((each) => each.report);
     log.info(
-      `plugin "${name}" recarregado: ${slot.report.status === 'loaded' ? 'carregado' : 'ignorado'}`,
+      `plugin "${name}" ${verb}: ${slot.report.status === 'loaded' ? 'carregado' : 'ignorado'}`,
       {
         plugin: name,
         status: slot.report.status,
@@ -407,19 +502,25 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
         }),
       },
     );
-    return { entry: slot.report, dependents, errors };
+    return { plugin: slot.report, dependents, teardownErrors: errors };
   }
 
   /**
-   * O slot e quem depende dele por `dependsOn`, direta ou transitivamente, na ordem de carga.
-   * `after` só ordena: quem o usa não pega nada do outro plugin, então não entra.
+   * O slot e quem depende dele por `dependsOn` ou `optionalDependsOn`, direta ou
+   * transitivamente, na ordem de carga. `after` só ordena: quem o usa não pega nada do outro
+   * plugin, então não entra. O opcional entra porque o setup dele decide o que registra conforme
+   * o serviço existe (ADR 0099).
    */
   function withDependents(root: Slot): Slot[] {
     const names = new Set([root.entry.definition.name]);
     // Na ordem topológica, toda dependência aparece antes do dependente: uma passada basta.
     return slots.filter((each) => {
       if (each === root) return true;
-      const dependsOn = Object.keys(each.entry.definition.dependsOn ?? {});
+      const { definition } = each.entry;
+      const dependsOn = [
+        ...Object.keys(definition.dependsOn ?? {}),
+        ...Object.keys(definition.optionalDependsOn ?? {}),
+      ];
       if (!dependsOn.some((dependency) => names.has(dependency))) return false;
       names.add(each.entry.definition.name);
       return true;
@@ -448,8 +549,16 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
       return stopPromise;
     },
 
-    reload(name: string): Promise<PluginReloadResult> {
+    reload(name: string): Promise<PluginChangeResult> {
       return enqueue(() => runReload(name));
+    },
+
+    disable(name: string): Promise<PluginChangeResult> {
+      return enqueue(() => runDisable(name));
+    },
+
+    enable(name: string): Promise<PluginChangeResult> {
+      return enqueue(() => runEnable(name));
     },
 
     report(): PluginReportEntry[] {

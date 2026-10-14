@@ -5,9 +5,11 @@ import {
   type Contact,
   createBot,
   createLogger,
+  createMemoryStorage,
   type MediaInput,
   type Message,
   type OutgoingContent,
+  type StoragePort,
 } from '@usebridger/core';
 import type { Interaction, TransportEvents } from '@usebridger/core/adapter';
 import { FakeTransport, type SentMessage } from './fake-transport.ts';
@@ -71,6 +73,15 @@ export interface TestBot {
   click(sent: SentMessage, label: string, options?: ClickOptions): Promise<void>;
   /** Simula outro evento do canal (reação, entrada em grupo...) e espera o bot assentar. */
   emit<E extends keyof TransportEvents>(event: E, payload: TransportEvents[E]): Promise<void>;
+  /**
+   * Simula um restart (deploy, crash): para este bot e sobe outro com as mesmas opções sobre o
+   * **mesmo storage**, que não é fechado no meio. Serve para testar o que sobrevive ao restart,
+   * como as esperas de passo com `persist: true` (ADR 0098). `overrides` troca opções do bot novo
+   * (a versão nova do plugin, por exemplo); o storage não se troca. O transport criado pelo kit
+   * é novo (e `sent` começa vazio); o passado em `transport` é reaproveitado. Daqui em diante,
+   * use o `TestBot` devolvido.
+   */
+  restart(overrides?: Omit<TestBotOptions, 'storage'>): Promise<TestBot>;
   /** Para o bot (teardown dos plugins, storage fechado). */
   stop(): Promise<void>;
 }
@@ -80,7 +91,34 @@ export interface TestBot {
  * ambiente vazio (nenhum `BRIDGER_*` da máquina vaza para a config), fila de saída sem
  * intervalo entre envios e sem reconexão. Qualquer um deles pode ser sobrescrito.
  */
-export async function createTestBot(options: TestBotOptions = {}): Promise<TestBot> {
+export function createTestBot(options: TestBotOptions = {}): Promise<TestBot> {
+  const storage = options.storage ?? createMemoryStorage();
+  return startTestBot(options, storage, keepOpen(storage));
+}
+
+/**
+ * O storage como o bot o vê: o `close()` do `stop()` não o fecha, para o `restart()` subir o bot
+ * novo sobre os mesmos dados. Quem fecha o de verdade é o `stop()` do kit. O mesmo objeto vale
+ * em todos os restarts: o `claimSession` do core é por objeto, e o bot parado já o liberou.
+ * `Proxy`, e não uma cópia campo a campo: um método que o `StoragePort` ganhar (ou que o adapter
+ * tenha a mais) passa sem ninguém lembrar de repassá-lo. Os métodos saem presos ao original, para
+ * o adapter de classe (com campos `#privados`) continuar funcionando.
+ */
+export function keepOpen(storage: StoragePort): StoragePort {
+  return new Proxy(storage, {
+    get(target, property) {
+      if (property === 'close') return async () => undefined;
+      const value: unknown = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
+async function startTestBot(
+  options: TestBotOptions,
+  storage: StoragePort,
+  durable: StoragePort,
+): Promise<TestBot> {
   const { profile, ...config } = options;
   if (profile !== undefined && config.transport !== undefined) {
     throw new TypeError('createTestBot: passe `profile` ou `transport`, não os dois');
@@ -97,12 +135,14 @@ export async function createTestBot(options: TestBotOptions = {}): Promise<TestB
     ...config,
     outbound: { globalIntervalMs: 0, chatIntervalMs: 0, ...config.outbound },
     transport,
+    storage: durable,
   });
   await bot.start();
   // Contadores do bot, não do módulo (ADR 0004): os IDs recomeçam em cada `TestBot`.
   let received = 0;
   const build = { nextId: () => `in-${++received}`, sender };
   let clicks = 0;
+  let restarted = false;
   return {
     bot,
     transport,
@@ -139,7 +179,16 @@ export async function createTestBot(options: TestBotOptions = {}): Promise<TestB
       transport.emit(event, payload);
       await bot.settled();
     },
-    stop: () => bot.stop(),
+    async restart(overrides = {}) {
+      restarted = true;
+      await bot.stop();
+      return startTestBot({ ...options, ...overrides }, storage, durable);
+    },
+    async stop() {
+      await bot.stop();
+      // Depois de um restart, o storage é do bot novo: só ele o fecha.
+      if (!restarted) await storage.close();
+    },
   };
 }
 

@@ -155,9 +155,20 @@ function mediaOf(message: Message | null): Media | null {
   return message !== null && 'media' in message ? message.media : null;
 }
 
-/** Primeira entrada de `accepts` que casa (tipo e, se houver, mimetype), na ordem declarada. */
-function resolveAccepts(message: Message, accepts: readonly AcceptSpec[]): AcceptedMessage | null {
+/**
+ * Primeira entrada de `accepts` que casa (tipo e, se houver, mimetype; `'args'`, texto depois do
+ * comando), na ordem declarada.
+ */
+function resolveAccepts(
+  message: Message,
+  rawArgs: string,
+  accepts: readonly AcceptSpec[],
+): AcceptedMessage | null {
   for (const spec of accepts) {
+    if (spec === 'args') {
+      if (rawArgs !== '') return { spec, message };
+      continue;
+    }
     const { quoted, type, mimetype } = parseAccept(spec);
     const target = quoted ? message.quoted : message;
     if (target === null || target.type !== type) continue;
@@ -316,7 +327,7 @@ export function createCommandRouter(options: CommandRouterOptions = {}): Command
         let accepted: AcceptedMessage | null = null;
         let media: Media | null;
         if (definition.accepts) {
-          accepted = resolveAccepts(message, definition.accepts);
+          accepted = resolveAccepts(message, rawArgs, definition.accepts);
           if (!accepted) {
             const rejection: CommandRejection = { reason: 'accepts', accepts: definition.accepts };
             const reply = await reject(definition, base, rejection);

@@ -35,16 +35,23 @@ export interface CreateReplyOptions {
 }
 
 /**
+ * Chat e remetente de uma resposta sem mensagem a citar: o `onExpire` de um passo responde a
+ * quem não respondeu (ADR 0097).
+ */
+export type ReplyOrigin = Pick<Message, 'chat' | 'sender'>;
+
+/**
  * Monta o `ctx.reply` de uma mensagem: envia no chat dela, citando-a, com prioridade `high`,
- * pelo `sender` (a fila de saída). O plugin não vê a fila — só chama `reply`.
+ * pelo `sender` (a fila de saída). O plugin não vê a fila — só chama `reply`. Com uma
+ * `ReplyOrigin` no lugar da mensagem, envia no chat dela sem citar.
  */
 export function createReply(
   sender: Sender,
-  message: Message,
+  message: Message | ReplyOrigin,
   options: CreateReplyOptions = {},
 ): Reply {
   const chatId = message.chat.id;
-  const quoted = options.quote === false ? undefined : message;
+  const quoted = options.quote === false || !('key' in message) ? undefined : message;
 
   const send = (
     content: OutgoingContent,

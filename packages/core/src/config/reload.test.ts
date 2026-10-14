@@ -90,7 +90,7 @@ describe('reload por mudança de config', () => {
       greeting: 'e aí',
       messages: { hello: 'Opa' },
     });
-    expect(result?.entry.status).toBe('loaded');
+    expect(result?.plugin.status).toBe('loaded');
     expect(calls).toEqual(['teardown:oi', 'setup:e aí:Opa']);
     expect(host.state).toBe('running');
   });

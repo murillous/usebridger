@@ -167,6 +167,38 @@ describe('createPluginHost — boot', () => {
     expect(log.lines.find((line) => line.message.startsWith('Plugins:'))?.level).toBe('info');
   });
 
+  it('comando deixado de fora pelo contexto entra na linha do plugin e põe a tabela em warn', async () => {
+    const unregistered = [
+      { command: 'fig', missing: ['send.sticker' as const] },
+      { command: 'enquete', missing: ['polls' as const, 'reactions' as const] },
+    ];
+    const { host: h, log } = host([plugin('media'), plugin('ping')], {
+      createContext: (definition) => ({
+        context: { plugin: { name: definition.name } } as unknown as PluginContext,
+        dispose: () => undefined,
+        unregisteredCommands: () => (definition.name === 'media' ? unregistered : []),
+      }),
+    });
+    const table = await h.start();
+
+    expect(table).toEqual([
+      { name: 'media', version: '1.0.0', origin: 'config', status: 'loaded', unregistered },
+      { name: 'ping', version: '1.0.0', origin: 'config', status: 'loaded' },
+    ]);
+    const tableLine = log.lines.find((line) => line.message.startsWith('Plugins:'));
+    expect(tableLine?.level).toBe('warn');
+    expect(tableLine?.message).toContain(
+      'carregado; sem fig (send.sticker), enquete (polls, reactions)',
+    );
+    expect(tableLine?.fields?.['plugins']).toContainEqual({
+      name: 'media',
+      version: '1.0.0',
+      origin: 'config',
+      status: 'loaded',
+      unregistered,
+    });
+  });
+
   it('usa CORE_VERSION quando coreVersion não é passada', async () => {
     const { host: h } = host(
       [plugin('dev', { engine: '>=0.0.0' }), plugin('futuro', { engine: '^99.0.0' })],
@@ -187,6 +219,26 @@ describe('createPluginHost — boot', () => {
     expect(log.lines).toContainEqual(
       expect.objectContaining({ level: 'warn', message: expect.stringContaining('"pnig"') }),
     );
+  });
+
+  it('avisa dependsOn com ^0.0.z, que aceita só a versão exata', async () => {
+    const { host: h, log } = host([
+      plugin('sticker', { version: '0.0.0' }),
+      plugin('sticker-text', { dependsOn: { sticker: '^0.0.0' } }),
+      plugin('ok', { dependsOn: { sticker: '0.x' } }),
+    ]);
+    expect(statusOf(await h.start())).toEqual({
+      sticker: 'loaded',
+      'sticker-text': 'loaded',
+      ok: 'loaded',
+    });
+    const warnings = log.lines.filter((line) => line.message.includes('versão exata'));
+    expect(warnings).toEqual([
+      expect.objectContaining({
+        level: 'warn',
+        fields: { plugin: 'sticker-text', dependency: 'sticker', range: '^0.0.0' },
+      }),
+    ]);
   });
 
   it('ignorado propaga para quem depende, em cadeia', async () => {
@@ -504,9 +556,9 @@ describe('createPluginHost — reload', () => {
     const result = await h.reload('ai');
     expect(calls).toEqual(['teardown:ai', 'dispose:ai', 'context:ai', 'setup:ai#2']);
     expect(result).toEqual({
-      entry: { name: 'ai', version: '1.0.0', origin: 'config', status: 'loaded' },
+      plugin: { name: 'ai', version: '1.0.0', origin: 'config', status: 'loaded' },
       dependents: [],
-      errors: [],
+      teardownErrors: [],
     });
   });
 
@@ -522,7 +574,7 @@ describe('createPluginHost — reload', () => {
     expect(statusOf(await h.start())).toEqual({ ai: 'setup-failed' });
     broken = false;
     const result = await h.reload('ai');
-    expect(result.entry.status).toBe('loaded');
+    expect(result.plugin.status).toBe('loaded');
     expect(statusOf(h.report())).toEqual({ ai: 'loaded' });
   });
 
@@ -536,8 +588,8 @@ describe('createPluginHost — reload', () => {
     ]);
     await h.start();
     const result = await h.reload('ai');
-    expect(result.errors.map((error) => error.phase)).toEqual(['teardown']);
-    expect(result.entry.status).toBe('loaded');
+    expect(result.teardownErrors.map((error) => error.phase)).toEqual(['teardown']);
+    expect(result.plugin.status).toBe('loaded');
   });
 
   it('recusa plugin desconhecido, ignorado por incompatibilidade ou host fora de running', async () => {
@@ -582,7 +634,7 @@ describe('createPluginHost — reload', () => {
       'context:resumo',
       'context:digest',
     ]);
-    expect(result.entry.status).toBe('loaded');
+    expect(result.plugin.status).toBe('loaded');
     expect(statusOf(result.dependents)).toEqual({ resumo: 'loaded', digest: 'loaded' });
   });
 
@@ -644,7 +696,7 @@ describe('createPluginHost — reload', () => {
     ]);
     await h.start();
     const result = await h.reload('ai');
-    expect(result.errors.map((error) => `${error.plugin}:${error.phase}`)).toEqual([
+    expect(result.teardownErrors.map((error) => `${error.plugin}:${error.phase}`)).toEqual([
       'resumo:teardown',
     ]);
   });

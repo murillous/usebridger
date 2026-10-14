@@ -202,8 +202,34 @@ com `'audio:audio/ogg'`. A mídia de outro mimetype não casa aquela entrada, e 
 próxima; se nenhuma casar, a recusa vai ao `onReject` como sempre. Mimetype mal formado, ou num
 tipo sem mídia (`'text:text/plain'`), falha na definição com `TypeError`.
 
+`'args'` casa quando há texto depois do comando (`ctx.rawArgs` não vazio). É o que serve para
+"mídia **ou** um argumento": `'text'` não ajuda, porque o próprio comando é texto e casaria sempre.
+Com `!sticker` declarando `['sticker', 'quoted:sticker', 'args']`, `!s https://...` roda com
+`ctx.accepted.spec === 'args'` e `ctx.media` nulo, e o `!s` sozinho, sem mídia, cai no `onReject`.
+`'args'` é só da própria mensagem: `'quoted:args'` ou `'args'` com mimetype falham com `TypeError`.
+
 Sem `accepts`, qualquer mensagem passa; `ctx.media` é a mídia própria ou, na falta dela, a da
 citada.
+
+### `ctx.media` garantido
+
+`command()` e o `commands` do `definePlugin` inferem o `accepts` declarado. Quando **toda**
+entrada tem mídia, o `run` recebe um `MediaCommandContext`: `ctx.media` é `Media` e
+`ctx.accepted` é `AcceptedMessage`, sem `null`, porque o roteador só chega ao `run` depois de
+casar uma delas. Basta uma entrada sem mídia (`'args'`, `'quoted:text'`) para voltar ao
+`CommandContext`, com `Media | null`.
+
+```ts
+command({
+  name: 'image',
+  accepts: ['sticker', 'quoted:sticker'],
+  run: async (ctx) => ctx.media.download(), // sem `!` nem checagem
+});
+```
+
+O estreitamento vem do literal: um `accepts` guardado numa variável tipada `AcceptSpec[]`, ou um
+comando passado direto a `ctx.commands.add` sem `command()`, fica com o contexto largo. Um helper
+fora do `run` pode receber `MediaCommandContext`.
 
 ## `role`
 
@@ -397,11 +423,52 @@ ctx.commands.add(command({
 ```
 
 Sem alguma delas, o comando não é registrado: não casa no roteador, fica fora do
-`ctx.commands.list()` e do menu nativo da plataforma, e o resto do plugin sobe normalmente. Um log
-`info` com `command` e `missing` registra o comando deixado de fora. Quem digita o comando recebe
-o mesmo que receberia de um comando que não existe. A definição continua validada mesmo sem a
+`ctx.commands.list()` e do menu nativo da plataforma, e o resto do plugin sobe normalmente. Quem
+digita o comando recebe o mesmo que receberia de um comando que não existe, então o aviso é para o
+operador: um log `warn` com `plugin`, `command` e `missing`, e o comando na linha do plugin na
+[tabela de boot](plugins.md#boot-start) (`media  1.0.0  carregado; sem figurinha (send.sticker)`),
+que também sobe para `warn`. Em `bot.plugins()`, a linha do plugin traz `unregistered`, com
+`command` e `missing` de cada um. A definição continua validada mesmo sem a
 capability, então um nome inválido falha em qualquer transport. O roteador solto ignora
 `requires`, como o `timeoutMs`.
+
+### Serviço por comando
+
+Um comando que usa o serviço de outro plugin, num plugin que funciona sem ele, declara o serviço
+em `services` ([ADR 0099](../../../docs/adr/0099-comando-que-exige-servico.md)). Com o provedor
+em `optionalDependsOn` no manifesto, o comando some e volta junto com ele:
+
+```ts
+export const download = definePlugin({
+  name: 'download',
+  version: '1.0.0',
+  engine: '^1.0.0',
+  optionalDependsOn: { sticker: '^0.1.0' }, // carrega depois do sticker e recarrega com ele, se existir
+  commands: {
+    downloadsticker: {
+      requires: ['send.sticker'],
+      services: ['sticker'],
+      run: async (c, plugin) => {
+        const stickers = plugin.services.get('sticker'); // provido: senão o comando não existiria
+        /* ... */
+      },
+    },
+  },
+});
+```
+
+Na hora do registro (`ctx.commands.add`, também o dos `commands` do manifesto), se algum serviço
+de `services` não está provido, o comando fica de fora como o sem capability: fora do roteador, do
+`ctx.commands.list()` e do menu nativo, com um log `warn` com `plugin`, `command` e `services`, e
+na tabela de boot como `sem downloadsticker (serviço sticker)`. Em `unregistered`, a entrada traz
+`services` com os que faltavam e `missing` vazio.
+
+A conferência é só no registro. Quem a refaz quando o provedor sobe, falha, recarrega, é
+desligado ou ligado é o reload em cascata do `optionalDependsOn`
+([Plugins](plugins.md#recarregar-um-plugin-reload)): o plugin desce e sobe junto, e o `setup` novo
+registra o comando ou o deixa de fora. Sem `optionalDependsOn` (ou `dependsOn`) no provedor, o
+comando fica como estava no boot. Serviço que o próprio plugin provê conta se o `provide` vier
+antes do `add`. O roteador solto ignora `services`.
 
 Para perguntar algo e tratar a resposta, o `run` não espera a próxima mensagem: ela está na fila
 atrás dele. Ele envia a pergunta, chama `c.expectReply(passo)` e termina, e a resposta vai ao

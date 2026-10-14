@@ -50,7 +50,7 @@ iniciado. Os padrões mudam para o caso de teste:
 | `env` | `{}` | Nenhum `BRIDGER_*` da máquina entra na config dos plugins |
 | `outbound` | `globalIntervalMs` e `chatIntervalMs` em 0 | Os envios saem na hora |
 | `reconnection` | `false` | |
-| `storage` | em memória (padrão do core) | |
+| `storage` | em memória | O kit o cria e o fecha no `stop()`; o `restart()` o mantém |
 
 Qualquer opção pode ser sobrescrita, por exemplo `pluginConfig`, `owners`, `prefix` ou `storage`.
 
@@ -64,8 +64,32 @@ Qualquer opção pode ser sobrescrita, por exemplo `pluginConfig`, `owners`, `pr
 | `sent` | Os envios, na ordem (`SentMessage[]`) |
 | `sentMedia(type)` | Os envios de mídia do tipo, na ordem, com os bytes ([abaixo](#bytes-enviados-sentmedia)) |
 | `transport` | O `FakeTransport`, com os outros registros |
-| `bot` | O `Bot` (`plugins()`, `stats()`, `config`...) |
+| `bot` | O `Bot` (`plugins()`, `plugins.reload`/`disable`/`enable`, `stats()`, `config`...) |
+| `restart(overrides?)` | Para o bot e sobe outro sobre o mesmo storage; devolve o `TestBot` novo ([abaixo](#restart)) |
 | `stop()` | Para o bot |
+
+### Restart
+
+O `restart()` simula um deploy ou um crash: para o bot e sobe outro com as mesmas opções sobre o
+**mesmo storage**, que não fecha no meio. Serve para testar o que sobrevive ao restart, como as
+[esperas persistidas](../../core/docs/conversations.md#conversa-que-sobrevive-a-restart):
+
+```ts
+const antes = await createTestBot({ plugins: [pedidos()] });
+await antes.receive({ text: '!pedido' });
+
+const depois = await antes.restart();
+await depois.receive({ text: 'Rua A, 10' });
+expect(depois.sent).toContainText('Confirma o pedido?');
+await depois.stop();
+```
+
+- `overrides` troca opções do bot novo, como a versão nova do plugin
+  (`antes.restart({ plugins: [pedidosV2()] })`). O `storage` não se troca.
+- O transport criado pelo kit é novo, e `sent` do bot novo começa vazio. Um `transport` passado
+  nas opções é reaproveitado (e o `sent` dele continua).
+- Use o `TestBot` devolvido daí em diante. O storage fecha no `stop()` do último bot; o `stop()`
+  do anterior só confirma que ele parou.
 
 ## Mensagem de entrada
 
@@ -213,6 +237,32 @@ const bot = await createTestBot({
 await bot.receive({ text: '!menu' });
 await bot.receive({ text: '1' });
 ```
+
+## Espera que vence (`onExpire`)
+
+O kit não tem relógio próprio: para vencer uma espera (`expectReply` com `ttlMs`) e testar o
+`onExpire` do passo, use os fake timers do Vitest. Depois de avançar o tempo, espere o bot
+assentar com `bot.bot.settled()`, porque o `onExpire` roda na fila do chat e nenhuma mensagem
+nova o espera:
+
+```ts
+import { vi } from 'vitest';
+
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
+
+it('encerra quem não responde', async () => {
+  const bot = await createTestBot({ plugins: [cadastro] });
+  await bot.receive({ text: '!cadastro' });
+  await vi.advanceTimersByTimeAsync(60_000);
+  await bot.bot.settled();
+  expect(bot.sent).toContainText('Encerrei por falta de resposta.');
+  await bot.stop();
+});
+```
+
+Ligue os fake timers antes do `createTestBot`: a espera arma o timer dela no relógio que estiver
+valendo quando o `expectReply` roda.
 
 ## Fixtures
 

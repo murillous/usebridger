@@ -267,7 +267,7 @@ describe('papéis custom nomeados', () => {
     await vi.waitFor(() => expect(sentTexts(transport)).toEqual(['só moderador']));
 
     const result = await b.config.setOverrides('moderacao', { libera: true });
-    expect(result?.entry.status).toBe('loaded');
+    expect(result?.plugin.status).toBe('loaded');
     transport.emit('message', message('!ban'));
     await vi.waitFor(() => expect(sentTexts(transport)).toEqual(['só moderador', 'banido']));
   });

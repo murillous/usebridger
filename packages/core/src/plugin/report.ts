@@ -51,9 +51,28 @@ interface ReportBase {
   readonly origin: string;
 }
 
+/**
+ * Comando que o plugin pediu e o kernel deixou de fora por capability ausente (ADR 0090) ou por
+ * serviço não provido (ADR 0099).
+ */
+export interface UnregisteredCommand {
+  readonly command: string;
+  /** Capabilities ausentes no transport; vazio quando só falta serviço. */
+  readonly missing: readonly Capability[];
+  /** Serviços de `services` que ninguém provia no registro. Só aparece quando falta algum. */
+  readonly services?: readonly string[];
+}
+
 /** Uma linha da tabela de boot. A tabela segue a ordem de carga. */
 export type PluginReportEntry =
-  | (ReportBase & { readonly status: 'loaded' })
+  | (ReportBase & {
+      readonly status: 'loaded';
+      /**
+       * Comandos do `setup` que não entraram no registro, na ordem em que foram pedidos. Só
+       * aparece quando há algum: o plugin carregou, mas parte dele não responde neste transport.
+       */
+      readonly unregistered?: readonly UnregisteredCommand[];
+    })
   | (ReportBase & { readonly status: 'skipped'; readonly reason: PluginSkipReason });
 
 /** Motivo em texto curto, como aparece na tabela de boot. */
@@ -87,12 +106,24 @@ export function describeSkipReason(reason: PluginSkipReason): string {
   }
 }
 
+/** Situação do plugin em texto curto, como aparece na tabela de boot. */
+function describeStatus(entry: PluginReportEntry): string {
+  if (entry.status === 'skipped') return `ignorado (${describeSkipReason(entry.reason)})`;
+  if (!entry.unregistered) return 'carregado';
+  const commands = entry.unregistered.map(
+    ({ command, missing, services = [] }) =>
+      `${command} (${[...missing, ...services.map((service) => `serviço ${service}`)].join(', ')})`,
+  );
+  return `carregado; sem ${commands.join(', ')}`;
+}
+
 /**
  * Tabela de boot para log, uma linha por plugin, alinhada em colunas:
  *
  * ```
- * Plugins: 1 carregado(s), 1 ignorado(s)
+ * Plugins: 2 carregado(s), 1 ignorado(s)
  *   sticker  1.2.0  carregado
+ *   media    1.0.0  carregado; sem fig (send.sticker)
  *   ai       1.0.0  ignorado (capability ausente no transport: polls)
  * ```
  */
@@ -101,10 +132,9 @@ export function formatBootTable(entries: readonly PluginReportEntry[]): string {
   const header = `Plugins: ${loaded} carregado(s), ${entries.length - loaded} ignorado(s)`;
   const nameWidth = Math.max(0, ...entries.map((entry) => entry.name.length));
   const versionWidth = Math.max(0, ...entries.map((entry) => entry.version.length));
-  const lines = entries.map((entry) => {
-    const status =
-      entry.status === 'loaded' ? 'carregado' : `ignorado (${describeSkipReason(entry.reason)})`;
-    return `  ${entry.name.padEnd(nameWidth)}  ${entry.version.padEnd(versionWidth)}  ${status}`;
-  });
+  const lines = entries.map(
+    (entry) =>
+      `  ${entry.name.padEnd(nameWidth)}  ${entry.version.padEnd(versionWidth)}  ${describeStatus(entry)}`,
+  );
   return [header, ...lines].join('\n');
 }

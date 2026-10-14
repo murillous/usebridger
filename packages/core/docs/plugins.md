@@ -15,7 +15,7 @@ Para começar um plugin em pacote próprio, com teste e build prontos, use o sca
 
 ```ts
 import { command, definePlugin } from '@usebridger/core';
-import { z } from 'zod';
+import { z } from '@usebridger/core/zod';
 
 export const sticker = definePlugin({
   name: 'sticker',                              // kebab-case, único no bot
@@ -25,6 +25,7 @@ export const sticker = definePlugin({
   transports: ['baileys'],                      // opcional: fixa o(s) transport(s)
   dependsOn: { 'user-names': '^1.0.0' },        // opcional: plugin → faixa semver
   after: ['logger-extra'],                      // opcional: carrega depois, se existir
+  optionalDependsOn: { ai: '^1.0.0' },          // opcional: como dependsOn, sem impedir a carga
   priority: 0,                                  // opcional: maior carrega antes
 
   config: z.object({ quality: z.number().min(1).max(100).default(80) }),
@@ -54,6 +55,7 @@ problemas encontrados. Regras:
 | `transports` | lista não vazia de nomes de transport. |
 | `dependsOn` | nome de plugin → faixa semver; não pode citar o próprio plugin. |
 | `after` | nomes de plugin; não pode citar o próprio plugin. |
+| `optionalDependsOn` | nome de plugin → faixa semver, como o `dependsOn`; não pode citar o próprio plugin nem repetir um nome do `dependsOn` ([Serviço opcional](services.md#serviço-opcional)). |
 | `priority` | número finito; padrão 0. |
 | `config` | schema Zod ([Config](config.md#declarar)). |
 | `messages` | objeto chave → texto. |
@@ -202,9 +204,11 @@ const errors = await host.stop();           // PluginLifecycleError[]
 
 1. **Erros de boot** — rejeitam `start()` antes de qualquer `setup`:
    `PluginManifestError` (manifesto malformado), `PluginConflictError` (dois plugins com o
-   mesmo `name`, com as duas origens) e `PluginCycleError` (ciclo em `dependsOn`/`after`, com o
+   mesmo `name`, com as duas origens) e `PluginCycleError` (ciclo em
+   `dependsOn`/`optionalDependsOn`/`after`, com o
    caminho: `a → b → c → a`, onde `→` = "depende de / carrega depois de").
-2. **Ordem** (`sortPlugins`): toposort com `dependsOn` e `after` como arestas; entre os
+2. **Ordem** (`sortPlugins`): toposort com `dependsOn`, `optionalDependsOn` e `after` como
+   arestas; entre os
    prontos, `priority` maior primeiro e, no empate, a ordem de declaração. Nome citado que não
    existe não cria aresta. A ordenação considera todos os plugins, inclusive os desabilitados:
    ciclo é erro do código, não da config.
@@ -227,16 +231,22 @@ const errors = await host.stop();           // PluginLifecycleError[]
    boot segue.
 
 A tabela volta de `start()` como dado (`PluginReportEntry[]`, na ordem de carga) e vai para o
-log formatada — em `info` se tudo carregou, `warn` se algo foi ignorado —
-com os mesmos dados em `fields.plugins`:
+log formatada — em `info` se tudo carregou, `warn` se algo foi ignorado ou se um plugin carregou
+sem algum comando — com os mesmos dados em `fields.plugins`:
 
 ```
-Plugins: 2 carregado(s), 2 ignorado(s)
+Plugins: 3 carregado(s), 2 ignorado(s)
   user-names  1.0.0  carregado
   sticker     1.2.0  carregado
+  media       1.0.0  carregado; sem figurinha (send.sticker)
   enquete     1.0.0  ignorado (capability ausente no transport: polls)
   resumo      0.3.0  ignorado (dependência ignorada: ai)
 ```
+
+`carregado; sem ...` lista os comandos com `requires` que o transport não sustenta e as
+capabilities que faltam, e os com `services` que ninguém provia (`sem ds (serviço figurinhas)`):
+o plugin subiu, mas eles não respondem ([Capability por comando](commands.md#capability-por-comando),
+[Serviço por comando](commands.md#serviço-por-comando)). Na entrada, ficam em `unregistered`.
 
 `host.report()` devolve a tabela atual (reflete reloads).
 
@@ -254,8 +264,16 @@ seguintes não rodam (cada um vira falha com `timedOut: true`), mas o `dispose` 
 ### Recarregar um plugin (`reload`)
 
 ```ts
-const { entry, dependents, errors } = await host.reload('ai');
+const { plugin, dependents, teardownErrors } = await host.reload('ai');
 ```
+
+O resultado (`PluginChangeResult`) é o mesmo para `reload`, `disable` e `enable`:
+
+| Campo | O que é |
+|-------|---------|
+| `plugin` | Linha nova do plugin na tabela |
+| `dependents` | Linhas novas dos dependentes descidos e subidos junto, na ordem de carga |
+| `teardownErrors` | Falhas de `teardown`/`dispose` das instâncias que desceram, do plugin e dos dependentes. Falha do `setup` novo fica no `reason` da linha (`setup-failed`) |
 
 `teardown` → `dispose` → contexto novo → `setup`. É a primitiva do reload por mudança de config
 ([ADR 0017](../../../docs/adr/0017-config-por-plugin-zod.md)): a fábrica lê a config já
@@ -271,16 +289,27 @@ contexto descartado. Com `resumo` dependendo de `ai` e `digest` de `resumo`:
 teardown digest → teardown resumo → teardown ai → setup ai → setup resumo → setup digest
 ```
 
-Os dependentes são reavaliados como no boot. Se o `setup` novo do plugin falhar, eles ficam
+O plugin e os dependentes são reavaliados como no boot (desligado, ou com a dependência
+desligada, ele não sobe). Se o `setup` novo do plugin falhar, os dependentes ficam
 `dependency-skipped`; um reload seguinte que o suba traz todos de volta. Um dependente ignorado
 por motivo próprio (ex.: desabilitado) continua ignorado. `after` não entra na cascata, porque só
-ordena a carga.
+ordena a carga. `optionalDependsOn` entra: o dependente opcional desce e sobe junto, e sobe mesmo
+que o plugin não suba ([ADR 0099](../../../docs/adr/0099-comando-que-exige-servico.md)). O mesmo
+vale para `disable` e `enable`.
 
-| Campo | O que é |
-|-------|---------|
-| `entry` | Linha nova do plugin na tabela |
-| `dependents` | Linhas novas dos dependentes recarregados, na ordem de carga |
-| `errors` | Falhas de `teardown`/`dispose` das instâncias anteriores, do plugin e dos dependentes |
+### Desligar e ligar (`disable` / `enable`)
+
+```ts
+await bot.plugins.disable('ai');  // desce ai e os dependentes; ai vira "disabled"
+await bot.plugins.enable('ai');   // sobe ai de volta e os dependentes que ele libera
+```
+
+Mesma cascata do `reload`, sem mexer na config: nada é gravado no storage. Desligado, o plugin
+não carrega até `enable`, nem pelo `reload`, e o boot aceita a mesma lista em `disabledPlugins`
+(o `enable` liga também quem veio dela).
+Desligar um plugin já desligado, ou ligar um já ligado, não faz nada. Chamados antes do `start()`,
+recusam com `BotStateError`. Os métodos ficam em `bot.plugins`; `bot.plugins()` segue devolvendo a
+tabela de boot.
 
 ### A fábrica de contexto
 
@@ -289,7 +318,7 @@ O loader não conhece comandos, eventos, storage nem serviços: recebe
 registrou pelo contexto. Um `setup` que estoura o prazo continua rodando em segundo plano
 (não há como abortar código síncrono/arbitrário); a fábrica deve fazer o contexto recusar
 registros depois do `dispose`, para o setup atrasado não deixar nada para trás — a do `Bot` lança
-`PluginHostStateError` em `commands.add`, `events.on`, `services.provide`, `scheduler.on`,
+`PluginHostStateError` em `commands.add`, `events.on`, `services.provide`, `services.contribute`, `scheduler.on`,
 `http.route` e `http.ws` (o `dispose` tira as rotas e fecha os WebSockets delas), e
 rejeita com `ContextExpiredError` `send` (com as ações), `groups`, `storage` (KV e coleções) e
 `scheduler.at`/`cancel`.
@@ -386,6 +415,18 @@ pendentes), então um plugin com `engine: '^0.0.0'` deixa de carregar no primeir
 - **Plugins de fora** declaram `^0.M.0`, com o minor contra o qual foram testados: no 0.x um
   minor pode quebrar a API.
 - Na 1.0, todos passam a `^1.0.0`.
+
+### Qual faixa declarar no `dependsOn`
+
+A mesma regra do `^` vale para a versão da dependência: `^0.0.0` aceita só `0.0.0`, e o
+dependente deixa de carregar (`dependency-version`) no primeiro bump de patch dela, mesmo sem
+mudança incompatível. O boot avisa em `warn` quando um `dependsOn` ou `optionalDependsOn` usa
+`^0.0.z`.
+
+- **Plugins do mesmo repositório**, que sobem juntos: `0.x` ou `>=0.0.0 <1.0.0` enquanto a
+  dependência estiver no 0.x.
+- **Dependência publicada à parte:** `^0.M.0`, com o minor contra o qual o plugin foi testado.
+- Comece plugins em `0.1.0` (como o template do `create-bridger-plugin`), não em `0.0.0`.
 
 ## Testando o plugin
 

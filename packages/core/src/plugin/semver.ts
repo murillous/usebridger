@@ -144,18 +144,21 @@ function desugar(term: string): Comparator[] | undefined {
   }
 }
 
+/** Termos de um conjunto (o trecho entre `||`). `>= 1.2.3` vale como `>=1.2.3`. */
+function termsOf(raw: string): string[] {
+  return raw
+    .trim()
+    .replace(/(\^|~|>=|<=|>|<|=)\s+/g, '$1')
+    .split(/\s+/)
+    .filter((term) => term.length > 0);
+}
+
 /** Conjuntos de comparadores (OU entre conjuntos, E dentro de cada um); `undefined` se inválida. */
 function parseRange(range: string): Comparator[][] | undefined {
   const sets: Comparator[][] = [];
   for (const raw of range.split('||')) {
-    // `>= 1.2.3` vale como `>=1.2.3`.
-    const terms = raw
-      .trim()
-      .replace(/(\^|~|>=|<=|>|<|=)\s+/g, '$1')
-      .split(/\s+/)
-      .filter((term) => term.length > 0);
     const set: Comparator[] = [];
-    for (const term of terms) {
+    for (const term of termsOf(raw)) {
       const comparators = desugar(term);
       if (!comparators) return undefined;
       set.push(...comparators);
@@ -168,6 +171,18 @@ function parseRange(range: string): Comparator[][] | undefined {
 /** `true` se `range` é uma faixa que este subconjunto entende. */
 export function isValidRange(range: string): boolean {
   return parseRange(range) !== undefined;
+}
+
+/**
+ * `true` se algum termo de `range` é um `^0.0.z` completo. Pela regra do `^`, ele aceita só a
+ * versão `0.0.z`: quase nunca é a intenção de quem declara, e quebra no primeiro bump de patch.
+ * `^0.0` e `^0.0.x` (parciais) aceitam `0.0.*` e ficam de fora.
+ */
+export function isExactCaret(range: string): boolean {
+  return range
+    .split('||')
+    .flatMap(termsOf)
+    .some((term) => /^\^0\.0\.\d+(?:[-+].*)?$/.test(term));
 }
 
 function test(v: SemVer, { operator, version: other }: Comparator): boolean {

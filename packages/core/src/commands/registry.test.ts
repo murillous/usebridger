@@ -48,6 +48,15 @@ describe('command', () => {
     expect(command({ name: 'pdf', accepts: valid, run: noop }).accepts).toEqual(valid);
   });
 
+  it("recusa 'args' citado ou com mimetype", () => {
+    for (const spec of ['quoted:args', 'args:text/plain']) {
+      expect(() => command({ name: 'fig', accepts: [spec as AcceptSpec], run: noop })).toThrow(
+        /accepts do comando "fig" inválido/,
+      );
+    }
+    expect(command({ name: 'fig', accepts: ['args'], run: noop }).accepts).toEqual(['args']);
+  });
+
   it('recusa capability desconhecida em requires', () => {
     const requires = ['send.hologram'] as unknown as Capability[];
     expect(() => command({ name: 'fig', requires, run: noop })).toThrow(/send\.hologram/);

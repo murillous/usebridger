@@ -16,9 +16,12 @@ import { BotConfigError } from '#config/owners.ts';
 import type { PluginConfigs } from '#config/plugin-configs.ts';
 import {
   type ConversationRegistry,
+  type ExpireHandler,
+  type KernelExpire,
   type KernelStep,
   type StepContext,
   type StepHandler,
+  type StepOptions,
   StepTimeoutError,
 } from '#conversations/conversations.ts';
 import {
@@ -39,6 +42,7 @@ import type { Contact } from '#message/types.ts';
 import type { Outbound } from '#outbound/types.ts';
 import { type PluginContextFactory, PluginHostStateError } from '#plugin/host.ts';
 import { formatMessage } from '#plugin/messages.ts';
+import type { UnregisteredCommand } from '#plugin/report.ts';
 import type { PluginContext } from '#plugin/types.ts';
 import type { SchedulerService } from '#scheduler/service.ts';
 import type { Scheduler } from '#scheduler/types.ts';
@@ -61,6 +65,8 @@ import type { UnsafeAccess } from '#unsafe/access.ts';
 import {
   type CommandViews,
   commandViewFactory,
+  type ExpireOrigin,
+  expireViewFactory,
   type KernelMessageContext,
   listenerViewFactory,
   type PluginExpect,
@@ -75,7 +81,7 @@ export interface PluginContextDeps {
   readonly router: CommandRouter;
   readonly prefixes: Prefixes;
   /** Passos e esperas de conversa (ADR 0060). */
-  readonly conversations: ConversationRegistry<KernelMessageContext>;
+  readonly conversations: ConversationRegistry<KernelMessageContext, ExpireOrigin>;
   readonly bus: EventBus;
   readonly services: ServiceRegistry;
   readonly storage: StoragePort;
@@ -148,6 +154,8 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
     // dele aborta (ADR 0033). Comandos, papéis, listeners e jobs ainda em andamento têm
     // `Deadline` filho deste: o `dispose` os expira junto (#200).
     const lifetime = new Deadline();
+    // Comandos que o `add` deixou de fora; o host os põe na linha do plugin na tabela de boot.
+    const unregistered: UnregisteredCommand[] = [];
     const guard = (what: string): void => {
       if (lifetime.expired) {
         throw new PluginHostStateError(
@@ -171,14 +179,15 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         lifetime.expired ? refuse(operation) : fn(...args);
 
     // A espera é sempre do plugin dono do contexto: ele só aponta para os próprios passos.
-    const expect: PluginExpect = (message, step, options) =>
-      deps.conversations.expect(name, message.chat.id, message.sender.id, step, options);
+    const expect: PluginExpect = (origin, step, options) =>
+      deps.conversations.expect(name, origin.chat, origin.sender, step, options);
     // `{prefix}` lido a cada chamada: um `ctx.prefixes.set` vale já para a mensagem seguinte.
     const text: PluginText = (message, key, values) =>
       formatMessage(messages, key, values, deps.prefixes.get(message.chat));
     const commandViews = commandViewFactory(name, log, expect, text);
     const listenerView = listenerViewFactory(name, log, expect, text);
     const stepView = stepViewFactory(name, log, expect, text);
+    const expireView = expireViewFactory(name, log, expect, text);
     const roleView = roleViewFactory(log);
     // Nos eventos de mensagem, cada listener recebe a visão com `message`/`text`/`reply`/`log`
     // do plugin; o barramento a cria (uma por listener) e pendura nela o `Deadline`.
@@ -205,13 +214,25 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
           assertCommandDefinition(definition);
           const missing = missingCapabilities(deps.transport, definition.requires ?? []);
           if (missing.length > 0) {
-            log.info(
+            // `warn`, e não `info`: o comando some sem resposta para quem o digita, e só o
+            // operador pode notar. A tabela de boot repete o aviso junto do plugin.
+            log.warn(
               `comando "${definition.name}" não registrado: capability ausente no transport`,
-              {
-                command: definition.name,
-                missing,
-              },
+              { command: definition.name, missing },
             );
+            unregistered.push({ command: definition.name, missing });
+            return;
+          }
+          // Serviço que ninguém provê agora: o comando fica de fora como o sem capability, em vez
+          // de aparecer na ajuda e recusar no `run`. Conferido só aqui: quem volta a registrá-lo
+          // quando o provedor sobe é o reload em cascata do `optionalDependsOn` (ADR 0099).
+          const absent = (definition.services ?? []).filter((service) => !services.has(service));
+          if (absent.length > 0) {
+            log.warn(`comando "${definition.name}" não registrado: serviço não provido`, {
+              command: definition.name,
+              services: absent,
+            });
+            unregistered.push({ command: definition.name, missing: [], services: absent });
             return;
           }
           deps.router.registry.add(
@@ -239,12 +260,18 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         reset: live('prefixes.reset', (chatId: string) => deps.prefixes.reset(chatId)),
       } satisfies Prefixes,
       conversations: {
-        define(step: string, handler: StepHandler): void {
+        define(step: string, handler: StepHandler, options?: StepOptions): void {
           guard('conversations.define');
+          const onExpire = options?.onExpire;
+          if (onExpire !== undefined && typeof onExpire !== 'function') {
+            throw new TypeError(`plugin "${name}": onExpire do passo "${step}" não é função`);
+          }
           deps.conversations.define(
             name,
             step,
             wrapStep(name, step, handler, stepView, log, lifetime, deps),
+            onExpire && wrapExpire(name, step, onExpire, expireView, log, lifetime, deps),
+            options?.persist === true,
           );
         },
       },
@@ -261,6 +288,13 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         },
         get: (service) => services.get(service),
         has: (service) => services.has(service),
+        contribute(point, contribution) {
+          // Depois do `dispose` o `removePlugin` já passou: aceitar a contribuição a deixaria
+          // órfã, rodando em nome de um plugin que saiu.
+          guard('services.contribute');
+          services.contribute(point, contribution);
+        },
+        extensionPoint: (point) => services.extensionPoint(point),
       } satisfies ServiceAccess,
       storage: {
         ...liveTenantStorage(tenantStorage(deps.storage, name, deps.tenants), live),
@@ -296,6 +330,7 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
 
     return {
       context,
+      unregisteredCommands: () => unregistered,
       dispose(reason?: unknown): void {
         lifetime.expire(
           reason ?? new PluginHostStateError(`plugin "${name}": contexto descartado`),
@@ -567,6 +602,42 @@ function wrapStep(
         // A recusa de um contexto expirado já foi logada quando aconteceu (ADR 0033).
         if (error instanceof ContextExpiredError) return;
         log.error(`passo "${step}" rejeitou depois do prazo`, { step, err: error });
+      },
+      deps.armed,
+      deadline,
+    );
+  };
+}
+
+/**
+ * `onExpire` de um passo com a visão do plugin e o prazo do comando, como o passo (ADR 0097): roda
+ * na fila do chat, e um preso seguraria o chat. O `Deadline` é filho do de vida do plugin, então
+ * o reload aborta o `signal` e recusa o `reply` de um `onExpire` ainda rodando.
+ */
+function wrapExpire(
+  plugin: string,
+  step: string,
+  handler: ExpireHandler,
+  view: ReturnType<typeof expireViewFactory>,
+  log: Logger,
+  lifetime: Deadline,
+  deps: Pick<PluginContextDeps, 'commandTimeoutMs' | 'armed'>,
+): KernelExpire<ExpireOrigin> {
+  const timeoutMs = deps.commandTimeoutMs;
+  return (origin, data) => {
+    const deadline = new Deadline(lifetime);
+    return settleWithin(
+      handler(view(origin, deadline, step, data)),
+      timeoutMs,
+      () => {
+        const error = new StepTimeoutError(plugin, step, timeoutMs, 'onExpire');
+        deadline.expire(error);
+        return error;
+      },
+      (error) => {
+        // A recusa de um contexto expirado já foi logada quando aconteceu (ADR 0033).
+        if (error instanceof ContextExpiredError) return;
+        log.error(`onExpire do passo "${step}" rejeitou depois do prazo`, { step, err: error });
       },
       deps.armed,
       deadline,

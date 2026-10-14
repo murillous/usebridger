@@ -4,7 +4,8 @@
 
 import type { z } from 'zod';
 import type {
-  CommandContext,
+  AcceptSpec,
+  CommandContextFor,
   CommandDefinition,
   CommandInfo,
   CommandRejection,
@@ -44,6 +45,14 @@ export interface PluginManifest {
   readonly priority?: number;
   /** Carrega depois destes, sem exigir que existam. */
   readonly after?: readonly string[];
+  /**
+   * Plugins de que este usa serviços opcionais (ADR 0099): nome → faixa semver, como no
+   * `dependsOn`. Carregam antes deste, mas sem impedir a carga se estiverem ausentes, ignorados,
+   * desligados ou fora da faixa (aí o boot avisa em `warn`); recarregar, desligar ou ligar um
+   * deles recarrega este em cascata. É o par do `services` do comando: o comando que exige o
+   * serviço some e volta com o provedor.
+   */
+  readonly optionalDependsOn?: Readonly<Record<string, string>>;
 }
 
 /** O que o plugin recebe em `setup`/`teardown`. */
@@ -129,23 +138,32 @@ export interface PluginContext<
 
 /**
  * Comando declarado no manifesto (ADR 0079): o `CommandDefinition` sem `name`, que vem da chave em
- * `commands`. O kernel o registra com `ctx.commands.add` antes do `setup`.
+ * `commands`. O kernel o registra com `ctx.commands.add` antes do `setup`. `TAccepts` é o
+ * `accepts` declarado, que o `definePlugin` infere para tipar o contexto do `run`.
  */
-export interface PluginCommand<TConfig = unknown, TMessages extends PluginMessages = PluginMessages>
-  extends Omit<CommandDefinition, 'name' | 'run' | 'onReject'> {
+export interface PluginCommand<
+  TConfig = unknown,
+  TMessages extends PluginMessages = PluginMessages,
+  TAccepts extends readonly AcceptSpec[] = readonly AcceptSpec[],
+> extends Omit<CommandDefinition, 'name' | 'accepts' | 'run' | 'onReject'> {
+  // Fora do `Omit` para o `definePlugin` inferir `TAccepts` daqui.
+  readonly accepts?: TAccepts;
   // Sintaxe de método de propósito: parâmetro bivariante, para `PluginDefinition<Schema>` caber
   // na anotação larga `: PluginDefinition` que o `isolatedDeclarations` exige.
   /**
    * O `run` do comando, com o contexto do plugin (`storage`, `config`, `send`...) no 2º
    * argumento. Devolver texto responde, como em qualquer comando.
    */
-  run(ctx: CommandContext, plugin: PluginContext<TConfig, TMessages>): unknown;
+  run(
+    ctx: CommandContextFor<TAccepts, keyof TMessages & string>,
+    plugin: PluginContext<TConfig, TMessages>,
+  ): unknown;
   /**
    * O `onReject` do comando, com o contexto do plugin no 3º argumento: a recusa pode usar
    * `plugin.plugin.messages`, que a config sobrescreve (ADR 0025).
    */
   onReject?(
-    ctx: RejectContext,
+    ctx: RejectContext<keyof TMessages & string>,
     rejection: CommandRejection,
     plugin: PluginContext<TConfig, TMessages>,
   ): ReturnType<NonNullable<CommandDefinition['onReject']>>;
@@ -167,9 +185,18 @@ export type PluginListeners<
   TMessages extends PluginMessages = PluginMessages,
 > = { readonly [E in BotEventName]?: PluginListener<E, TConfig, TMessages> };
 
+/**
+ * `accepts` de cada comando do manifesto, nome → lista, inferido pelo `definePlugin`. O comando
+ * sem `accepts` não dá o que inferir e fica `unknown`, que `AcceptsOf` troca pela lista larga.
+ */
+export type PluginAccepts = Readonly<Record<string, unknown>>;
+
+type AcceptsOf<T> = T extends readonly AcceptSpec[] ? T : readonly AcceptSpec[];
+
 export interface PluginDefinition<
   TSchema extends z.ZodType = z.ZodType,
   TMessages extends PluginMessages = PluginMessages,
+  TAccepts extends PluginAccepts = PluginAccepts,
 > extends PluginManifest {
   /** Schema Zod da config (ADR 0017). */
   readonly config?: TSchema;
@@ -178,7 +205,13 @@ export interface PluginDefinition<
    * Comandos fixos, nome → definição (ADR 0079). Ficam conhecidos sem rodar o plugin, e o kernel
    * os registra antes do `setup`. Declará-los implica `requires: ['send.text']`.
    */
-  readonly commands?: Readonly<Record<string, PluginCommand<z.output<TSchema>, TMessages>>>;
+  readonly commands?: {
+    readonly [K in keyof TAccepts]: PluginCommand<
+      z.output<TSchema>,
+      TMessages,
+      AcceptsOf<TAccepts[K]>
+    >;
+  };
   /** Listeners fixos, evento → listener (ADR 0079), registrados antes do `setup`. */
   readonly on?: PluginListeners<z.output<TSchema>, TMessages>;
   /** O que é dinâmico: depende da config, registra sob condição, prepara estado. */

@@ -10,7 +10,7 @@ os segredos e recarrega o plugin quando a config muda
 
 ```ts
 import { definePlugin, secret } from '@usebridger/core';
-import { z } from 'zod';
+import { z } from '@usebridger/core/zod';
 
 export const ai = definePlugin({
   name: 'ai',
@@ -28,6 +28,13 @@ export const ai = definePlugin({
   },
 });
 ```
+
+O `z` vem de `@usebridger/core/zod`, que reexporta o Zod do próprio core: o schema sai da mesma
+cópia que o `definePlugin` tipa, sem o app instalar o `zod` nem acompanhar a faixa dele
+([ADR 0095](../../../docs/adr/0095-zod-no-subpath-do-core.md)). O subpath é separado do
+`@usebridger/core` porque carregar o Zod cria um global, e importar o core não tem side effect.
+Instalar o `zod` direto ainda funciona, mas uma faixa diferente da do core pode trazer uma
+segunda cópia, com erros de tipo confusos.
 
 Regras do schema: o tipo base precisa ser `z.object(...)` (pode ter `.default`, `.optional`) e
 não pode ter campo `messages`, que é reservado para sobrescrever textos. `secret()` só vale em
@@ -227,6 +234,8 @@ setup(ctx) {
 - Os outros vêm de `values` (texto ou número). Placeholder sem valor, ou chave que o plugin não
   declara, lança `TypeError`: é erro do plugin.
 - Só `{identificador}` é placeholder; `{ ok }` ou JSON ficam como texto.
+- Nos `commands` do `definePlugin`, `t` só aceita as chaves de `messages` do manifesto: chave
+  digitada errada é erro de compilação, não `TypeError` no meio do comando.
 - A sobrescrita só pode usar os placeholders do texto padrão, mais `{prefix}`: ela muda onde os
   valores entram e pode tirá-los, mas um placeholder novo é `PluginConfigError`
   (`placeholder desconhecido {total}; a mensagem aceita {count}, {prefix}`), em vez de um
@@ -243,7 +252,8 @@ await configs.setOverrides('ai', { model: 'pro' });
 
 Sem reiniciar o processo. Quem depende do plugin por `dependsOn` recarrega junto, em cascata
 ([Plugins](plugins.md#recarregar-um-plugin-reload)); os outros ficam intocados. As mudanças são
-serializadas. Se o
+serializadas. Para desligar ou ligar um plugin sem passar pela config, use `bot.plugins.disable`
+e `bot.plugins.enable` ([Plugins](plugins.md#desligar-e-ligar-disable--enable)). Se o
 `reload` rejeitar (ex.: host parado, plugin desabilitado), o override **já foi salvo** e vale no
 próximo boot.
 

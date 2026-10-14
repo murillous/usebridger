@@ -4,6 +4,7 @@
 // `entries.test.ts`: export novo é decisão explícita.
 
 export type { CommandAction, MessageAction, StepAction } from '#actions/actions.ts';
+export { createBot } from '#bot/bot.ts';
 export type {
   Bot,
   BotConfig,
@@ -13,8 +14,9 @@ export type {
   BotState,
   BotStats,
   BotTimeouts,
-} from '#bot/bot.ts';
-export { BotStateError, createBot, GroupAdminTimeoutError } from '#bot/bot.ts';
+} from '#bot/config.ts';
+export { BotStateError } from '#bot/config.ts';
+export { GroupAdminTimeoutError } from '#bot/group-admin.ts';
 export { CommandTimeoutError } from '#bot/plugin-context.ts';
 export type { BotReconnectionOptions } from '#bot/reconnect.ts';
 export type { ShutdownOptions, StopHook, StopHookOptions } from '#bot/stop-hooks.ts';
@@ -27,6 +29,7 @@ export type {
   CommandInfo,
   CommandRejection,
   CommandRole,
+  MediaCommandContext,
   RejectContext,
 } from '#commands/command.ts';
 export { command } from '#commands/command.ts';
@@ -53,8 +56,12 @@ export type {
   Conversations,
   ExpectReply,
   ExpectReplyOptions,
+  ExpireContext,
+  ExpireHandler,
   StepContext,
   StepHandler,
+  StepOptions,
+  StepStage,
 } from '#conversations/conversations.ts';
 export { StepTimeoutError } from '#conversations/conversations.ts';
 export {
@@ -148,13 +155,14 @@ export type {
   SendPriority,
 } from '#outbound/types.ts';
 export { definePlugin, PluginManifestError } from '#plugin/define.ts';
-export { PluginConflictError, type PluginReloadResult } from '#plugin/host.ts';
+export { type PluginChangeResult, PluginConflictError } from '#plugin/host.ts';
 export { PluginCycleError } from '#plugin/order.ts';
 export {
   PluginLifecycleError,
   type PluginPhase,
   type PluginReportEntry,
   type PluginSkipReason,
+  type UnregisteredCommand,
 } from '#plugin/report.ts';
 export { PluginDiscoveryError } from '#plugin/sources.ts';
 export type {
@@ -170,7 +178,14 @@ export type { InboundQueueStats } from '#queue/inbound.ts';
 export { JobHandlerConflictError } from '#scheduler/service.ts';
 export type { JobContext, JobHandler, Scheduler } from '#scheduler/types.ts';
 export { ServiceConflictError, ServiceNotFoundError } from '#services/registry.ts';
-export type { ServiceAccess, ServiceName, Services } from '#services/types.ts';
+export type {
+  ExtensionPoint,
+  ExtensionPointName,
+  ExtensionPoints,
+  ServiceAccess,
+  ServiceName,
+  Services,
+} from '#services/types.ts';
 export { createMemoryStorage } from '#storage/memory.ts';
 export type { PluginContextStorage, TenantStorage } from '#storage/tenant.ts';
 export type {
