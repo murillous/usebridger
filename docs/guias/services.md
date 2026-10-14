@@ -84,6 +84,37 @@ export const ingles = definePlugin({
   do provedor grava nos dados daquele tenant sem receber nada
   ([Storage → Tenants](storage.md#tenants-um-bot-vários-clientes)).
 
+## Serviço extensível
+
+Quando outros plugins acrescentam peças ao seu service (etapas, filtros, formatos), use um ponto de
+extensão em vez de guardar as peças num `Set`. O core atribui cada contribuição ao plugin que a
+fez e a tira no teardown, reload e disable dele:
+
+```ts
+export type Etapa = (texto: string) => Promise<string>;
+
+declare module '@usebridger/core' {
+  interface ExtensionPoints {
+    'traducao.etapas': Etapa;
+  }
+}
+
+// no `traducao`
+const etapas = ctx.services.extensionPoint('traducao.etapas');
+ctx.services.provide('traducao', {
+  async traduzir(texto, idioma) {
+    for (const etapa of etapas.list()) texto = await etapa(texto);
+    return chamarApi(texto, idioma);
+  },
+});
+
+// em outro plugin, com `dependsOn: { traducao: '^1.0.0' }`
+ctx.services.contribute('traducao.etapas', async (texto) => texto.trim());
+```
+
+As etapas rodam na ordem de carga de quem contribuiu. Detalhes em
+[Services no core → Pontos de extensão](../../packages/core/docs/services.md#pontos-de-extensão).
+
 ## Service ou import?
 
 Use service quando a implementação pode ser trocada (IA de outro fornecedor) ou quando o
