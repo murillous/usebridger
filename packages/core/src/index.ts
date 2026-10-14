@@ -174,7 +174,14 @@ export type { InboundQueueStats } from '#queue/inbound.ts';
 export { JobHandlerConflictError } from '#scheduler/service.ts';
 export type { JobContext, JobHandler, Scheduler } from '#scheduler/types.ts';
 export { ServiceConflictError, ServiceNotFoundError } from '#services/registry.ts';
-export type { ServiceAccess, ServiceName, Services } from '#services/types.ts';
+export type {
+  ExtensionPoint,
+  ExtensionPointName,
+  ExtensionPoints,
+  ServiceAccess,
+  ServiceName,
+  Services,
+} from '#services/types.ts';
 export { createMemoryStorage } from '#storage/memory.ts';
 export type { PluginContextStorage, TenantStorage } from '#storage/tenant.ts';
 export type {
