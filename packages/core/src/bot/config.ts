@@ -201,7 +201,7 @@ export interface BotPlugins {
   reload(name: string): Promise<PluginChangeResult>;
   /** Desliga o plugin e os dependentes, que viram `dependency-skipped`; até `enable`. */
   disable(name: string): Promise<PluginChangeResult>;
-  /** Liga de volta um plugin desligado com `disable`; os dependentes que ele libera sobem. */
+  /** Liga um plugin desligado (`disable` ou `disabledPlugins`); sobem os dependentes que ele libera. */
   enable(name: string): Promise<PluginChangeResult>;
 }
 

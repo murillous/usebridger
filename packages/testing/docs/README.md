@@ -64,7 +64,7 @@ Qualquer opção pode ser sobrescrita, por exemplo `pluginConfig`, `owners`, `pr
 | `sent` | Os envios, na ordem (`SentMessage[]`) |
 | `sentMedia(type)` | Os envios de mídia do tipo, na ordem, com os bytes ([abaixo](#bytes-enviados-sentmedia)) |
 | `transport` | O `FakeTransport`, com os outros registros |
-| `bot` | O `Bot` (`plugins()`, `stats()`, `config`...) |
+| `bot` | O `Bot` (`plugins()`, `plugins.reload`/`disable`/`enable`, `stats()`, `config`...) |
 | `stop()` | Para o bot |
 
 ## Mensagem de entrada

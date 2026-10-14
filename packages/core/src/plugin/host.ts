@@ -109,8 +109,8 @@ export interface PluginHost {
    */
   disable(name: string): Promise<PluginChangeResult>;
   /**
-   * Liga de volta um plugin desligado com `disable`, e sobe os dependentes que ele libera. Não
-   * ligado, não faz nada.
+   * Liga um plugin desligado (por `disable` ou `disabledPlugins`) e sobe os dependentes que ele
+   * libera. Já ligado, não faz nada.
    */
   enable(name: string): Promise<PluginChangeResult>;
   /** Tabela atual, na ordem de carga (reflete reloads). */
