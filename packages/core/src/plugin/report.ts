@@ -51,10 +51,16 @@ interface ReportBase {
   readonly origin: string;
 }
 
-/** Comando que o plugin pediu e o kernel deixou de fora por capability ausente (ADR 0090). */
+/**
+ * Comando que o plugin pediu e o kernel deixou de fora por capability ausente (ADR 0090) ou por
+ * serviço não provido (ADR 0099).
+ */
 export interface UnregisteredCommand {
   readonly command: string;
+  /** Capabilities ausentes no transport; vazio quando só falta serviço. */
   readonly missing: readonly Capability[];
+  /** Serviços de `services` que ninguém provia no registro. Só aparece quando falta algum. */
+  readonly services?: readonly string[];
 }
 
 /** Uma linha da tabela de boot. A tabela segue a ordem de carga. */
@@ -105,7 +111,8 @@ function describeStatus(entry: PluginReportEntry): string {
   if (entry.status === 'skipped') return `ignorado (${describeSkipReason(entry.reason)})`;
   if (!entry.unregistered) return 'carregado';
   const commands = entry.unregistered.map(
-    ({ command, missing }) => `${command} (${missing.join(', ')})`,
+    ({ command, missing, services = [] }) =>
+      `${command} (${[...missing, ...services.map((service) => `serviço ${service}`)].join(', ')})`,
   );
   return `carregado; sem ${commands.join(', ')}`;
 }
