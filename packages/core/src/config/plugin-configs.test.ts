@@ -442,9 +442,9 @@ describe('createPluginConfigs: segredos fora do override', () => {
       reload: async (name) => {
         reloaded.push(name);
         return {
-          entry: { name, version: '1.0.0', origin: 'config', status: 'loaded' },
+          plugin: { name, version: '1.0.0', origin: 'config', status: 'loaded' },
           dependents: [],
-          errors: [],
+          teardownErrors: [],
         };
       },
     });

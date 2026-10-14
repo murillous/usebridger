@@ -21,7 +21,7 @@ import { chatAllowed } from '#middleware/chat-filter.ts';
 import { createOutbound, enqueueAction } from '#outbound/actions.ts';
 import { OutboundQueue } from '#outbound/queue.ts';
 import { PLUGIN_NAME_PATTERN } from '#plugin/define.ts';
-import { createPluginHost, type PluginHost, type PluginReloadResult } from '#plugin/host.ts';
+import { createPluginHost, type PluginChangeResult, type PluginHost } from '#plugin/host.ts';
 import type { PluginLifecycleError, PluginReportEntry } from '#plugin/report.ts';
 import { collectPlugins } from '#plugin/sources.ts';
 import { InboundQueue } from '#queue/inbound.ts';
@@ -546,14 +546,14 @@ export function createBot(config: BotConfig): Bot {
   async function change(
     action: 'reload' | 'disable' | 'enable',
     name: string,
-  ): Promise<PluginReloadResult> {
+  ): Promise<PluginChangeResult> {
     if (!host) throw new BotStateError(`${action}("${name}"): plugins ainda não carregados`, state);
     // Um aviso só ao transport, no fim: no meio, os comandos do plugin saíram e não voltaram.
     const pluginHost = host;
     const result = await catalog.batch(() => pluginHost[action](name));
-    for (const error of result.errors) emitLifecycleError(error);
+    for (const error of result.teardownErrors) emitLifecycleError(error);
     // Os dependentes recarregados em cascata (ADR 0041) também podem falhar no `setup` novo.
-    for (const entry of [result.entry, ...result.dependents]) {
+    for (const entry of [result.plugin, ...result.dependents]) {
       if (entry.status === 'skipped' && entry.reason.kind === 'setup-failed') {
         emitLifecycleError(entry.reason.error);
       }
@@ -561,7 +561,7 @@ export function createBot(config: BotConfig): Bot {
     return result;
   }
 
-  const reload = (name: string): Promise<PluginReloadResult> => change('reload', name);
+  const reload = (name: string): Promise<PluginChangeResult> => change('reload', name);
 
   const plugins: BotPlugins = Object.assign((): PluginReportEntry[] => host?.report() ?? [], {
     reload,

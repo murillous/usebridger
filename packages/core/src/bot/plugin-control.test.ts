@@ -59,14 +59,14 @@ describe('bot.plugins.disable / enable (#85)', () => {
     await b.start();
 
     const off = await b.plugins.disable('base');
-    expect(off.entry.status).toBe('skipped');
-    expect(off.entry.status === 'skipped' && off.entry.reason.kind).toBe('disabled');
+    expect(off.plugin.status).toBe('skipped');
+    expect(off.plugin.status === 'skipped' && off.plugin.reason.kind).toBe('disabled');
     transport.emit('message', message('!base'));
     await b.settled();
     expect(sentTexts(transport)).toEqual([]);
 
     const on = await b.plugins.enable('base');
-    expect(on.entry.status).toBe('loaded');
+    expect(on.plugin.status).toBe('loaded');
     transport.emit('message', message('!base'));
     await vi.waitFor(() => expect(sentTexts(transport)).toEqual(['base']));
   });
@@ -97,9 +97,9 @@ describe('bot.plugins.disable / enable (#85)', () => {
 
     const noop = await b.plugins.enable('base');
     expect(noop).toEqual({
-      entry: expect.objectContaining({ name: 'base' }),
+      plugin: expect.objectContaining({ name: 'base' }),
       dependents: [],
-      errors: [],
+      teardownErrors: [],
     });
     await b.plugins.disable('base');
     const again = await b.plugins.disable('base');

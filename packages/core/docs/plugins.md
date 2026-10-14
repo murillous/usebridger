@@ -260,8 +260,12 @@ seguintes não rodam (cada um vira falha com `timedOut: true`), mas o `dispose` 
 ### Recarregar um plugin (`reload`)
 
 ```ts
-const { entry, dependents, errors } = await host.reload('ai');
+const { plugin, dependents, teardownErrors } = await host.reload('ai');
 ```
+
+O resultado (`PluginChangeResult`) é o mesmo para `reload`, `disable` e `enable`: `plugin` é a linha
+nova do plugin, `dependents` as dos que foram descidos e subidos junto, e `teardownErrors` as falhas
+do `teardown`/`dispose` que já desceram.
 
 `teardown` → `dispose` → contexto novo → `setup`. É a primitiva do reload por mudança de config
 ([ADR 0017](../../../docs/adr/0017-config-por-plugin-zod.md)): a fábrica lê a config já

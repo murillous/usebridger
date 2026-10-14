@@ -1054,7 +1054,7 @@ describe('Bot: boot', () => {
 
     // Sem tirar o handler no dispose, o setup novo falharia com JobHandlerConflictError.
     const result = await b.config.setOverrides('agenda', { versao: 'v2' });
-    expect(result?.entry.status).toBe('loaded');
+    expect(result?.plugin.status).toBe('loaded');
     await vi.waitFor(() => expect(runs).toEqual(['v1', 'v2']));
   });
 
@@ -1079,7 +1079,7 @@ describe('Bot: boot', () => {
     await b.start();
 
     const result = await b.config.setOverrides('ouvinte', { versao: 'v2' });
-    expect(result?.entry.status).toBe('loaded');
+    expect(result?.plugin.status).toBe('loaded');
     transport.emit('message', message('oi'));
     await vi.waitFor(() => expect(heard).toEqual(['v2:oi']));
   });
@@ -1146,7 +1146,7 @@ describe('Bot: boot', () => {
     await b.start();
 
     const result = await b.config.setOverrides('instavel', { quebrar: true });
-    expect(result?.entry.status).toBe('skipped');
+    expect(result?.plugin.status).toBe('skipped');
     await vi.waitFor(() =>
       expect(errors).toEqual([
         expect.objectContaining({ plugin: 'instavel', phase: 'setup', error: boom }),

@@ -9,7 +9,7 @@ import type { z } from 'zod';
 import { createNoopLogger, MIN_SECRET_LENGTH } from '#logger/logger.ts';
 import type { SecretSet } from '#logger/secrets.ts';
 import type { Logger } from '#logger/types.ts';
-import type { PluginReloadResult } from '#plugin/host.ts';
+import type { PluginChangeResult } from '#plugin/host.ts';
 import { PREFIX_PLACEHOLDER, placeholders } from '#plugin/messages.ts';
 import type { PluginDefinition, PluginMessages } from '#plugin/types.ts';
 import { kernelStorage } from '#storage/namespace.ts';
@@ -71,7 +71,7 @@ export interface PluginConfigsOptions {
   /** Recebe os valores dos campos `secret` de cada plugin resolvido (compartilhe com o logger). */
   readonly secrets?: SecretSet;
   /** Chamado depois de salvar um override válido; normalmente `(name) => host.reload(name)`. */
-  readonly reload?: (plugin: string) => Promise<PluginReloadResult>;
+  readonly reload?: (plugin: string) => Promise<PluginChangeResult>;
   /** Avisos de configuração (ex.: `pluginConfig` citando plugin inexistente). */
   readonly log?: Logger;
 }
@@ -91,7 +91,7 @@ export interface PluginConfigs {
    * Campo do override que o arquivo ou o env já definem não tem efeito: é salvo mesmo assim
    * (vale se a camada de cima sair) e gera um aviso no log com os caminhos sombreados.
    */
-  setOverrides(plugin: string, overrides: JsonObject): Promise<PluginReloadResult | undefined>;
+  setOverrides(plugin: string, overrides: JsonObject): Promise<PluginChangeResult | undefined>;
   /** Config atual com os segredos mascarados. Lança `PluginConfigError` se inválida. */
   describe(plugin: string): Promise<PluginConfigView>;
   /** JSON Schema da config para gerar formulário; `undefined` se o plugin não declara `config`. */
@@ -554,7 +554,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
   async function runSetOverrides(
     name: string,
     overrides: JsonObject,
-  ): Promise<PluginReloadResult | undefined> {
+  ): Promise<PluginChangeResult | undefined> {
     const definition = definitionOf(name);
     // O storage guarda o override em texto puro (banco, backups): segredo não entra (ADR 0032).
     const secretIssues: PluginConfigIssue[] = definition.config
@@ -581,7 +581,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
   return {
     resolve: async (name) => (await current(name)).resolved,
 
-    setOverrides(name: string, overrides: JsonObject): Promise<PluginReloadResult | undefined> {
+    setOverrides(name: string, overrides: JsonObject): Promise<PluginChangeResult | undefined> {
       // Uma mudança por vez: duas gravações concorrentes reordenariam save e reload.
       const result = queue.then(() => runSetOverrides(name, overrides));
       queue = result.then(

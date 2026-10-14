@@ -55,19 +55,27 @@ export interface PluginHostOptions {
 /** `idle → starting → running → stopping → stopped`; `stopped` é terminal. */
 export type PluginHostState = 'idle' | 'starting' | 'running' | 'stopping' | 'stopped';
 
-export interface PluginReloadResult {
-  /** Linha nova do plugin na tabela: `loaded`, ou `skipped` se o `setup` novo falhou. */
-  readonly entry: PluginReportEntry;
+/**
+ * Resultado de `reload`, `disable` e `enable`: o que mudou no plugin e em quem depende dele.
+ */
+export interface PluginChangeResult {
   /**
-   * Linhas novas de quem depende dele (`dependsOn`, transitivo), recarregados em cascata, na
-   * ordem de carga. `dependency-skipped` se o plugin recarregado não subiu.
+   * Linha nova do plugin na tabela. Depois de `reload`: `loaded`, ou `skipped` se o `setup` novo
+   * falhou. Depois de `disable`: `skipped` com `reason.kind` `disabled`. Depois de `enable`: a
+   * linha que o boot daria agora.
+   */
+  readonly plugin: PluginReportEntry;
+  /**
+   * Linhas novas de quem depende dele (`dependsOn`, transitivo), descidos e subidos em cascata,
+   * na ordem de carga. `dependency-skipped` se o plugin de que dependem não subiu.
    */
   readonly dependents: readonly PluginReportEntry[];
   /**
-   * Falhas do `teardown`/`dispose` das instâncias anteriores, do plugin e dos dependentes (já
-   * registradas no log). Falha do `setup` novo fica na `entry` de cada um.
+   * Falhas do `teardown`/`dispose` das instâncias que desceram (do plugin e dos dependentes; já
+   * registradas no log). Falha do `setup` novo não entra aqui: fica no `reason` da linha do
+   * plugin ou do dependente, como `setup-failed`.
    */
-  readonly errors: readonly PluginLifecycleError[];
+  readonly teardownErrors: readonly PluginLifecycleError[];
 }
 
 export interface PluginHost {
@@ -94,17 +102,17 @@ export interface PluginHost {
    * por mudança de config (ADR 0017): o contexto novo sai da fábrica, que já lê a config
    * atualizada. Vale para plugin carregado ou cujo `setup` falhou.
    */
-  reload(name: string): Promise<PluginReloadResult>;
+  reload(name: string): Promise<PluginChangeResult>;
   /**
    * Desliga um plugin em execução: desce ele e os dependentes (que viram `dependency-skipped`),
    * e não carrega mais até `enable`. Já desligado, não faz nada.
    */
-  disable(name: string): Promise<PluginReloadResult>;
+  disable(name: string): Promise<PluginChangeResult>;
   /**
    * Liga de volta um plugin desligado com `disable`, e sobe os dependentes que ele libera. Não
    * ligado, não faz nada.
    */
-  enable(name: string): Promise<PluginReloadResult>;
+  enable(name: string): Promise<PluginChangeResult>;
   /** Tabela atual, na ordem de carga (reflete reloads). */
   report(): PluginReportEntry[];
 }
@@ -399,7 +407,7 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
     return slot;
   }
 
-  async function runReload(name: string): Promise<PluginReloadResult> {
+  async function runReload(name: string): Promise<PluginChangeResult> {
     const slot = slotOf('reload', name);
     const { report } = slot;
     if (report.status === 'skipped' && report.reason.kind !== 'setup-failed') {
@@ -411,16 +419,16 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
     return restart(slot, 'recarregado');
   }
 
-  async function runDisable(name: string): Promise<PluginReloadResult> {
+  async function runDisable(name: string): Promise<PluginChangeResult> {
     const slot = slotOf('disable', name);
-    if (disabled.has(name)) return { entry: slot.report, dependents: [], errors: [] };
+    if (disabled.has(name)) return { plugin: slot.report, dependents: [], teardownErrors: [] };
     disabled.add(name);
     return restart(slot, 'desligado');
   }
 
-  async function runEnable(name: string): Promise<PluginReloadResult> {
+  async function runEnable(name: string): Promise<PluginChangeResult> {
     const slot = slotOf('enable', name);
-    if (!disabled.delete(name)) return { entry: slot.report, dependents: [], errors: [] };
+    if (!disabled.delete(name)) return { plugin: slot.report, dependents: [], teardownErrors: [] };
     return restart(slot, 'ligado');
   }
 
@@ -429,7 +437,7 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
    * `incompatibility`, inclusive a raiz: o motivo dela pode ter mudado (desligada, ou com a
    * dependência desligada), e um `setup-failed` anterior ganha nova tentativa.
    */
-  async function restart(slot: Slot, verb: string): Promise<PluginReloadResult> {
+  async function restart(slot: Slot, verb: string): Promise<PluginChangeResult> {
     const name = slot.entry.definition.name;
     // Quem guardou um serviço do plugin no `setup` ficaria com a instância do contexto
     // descartado: o subgrafo de dependentes desce e sobe junto (ADR 0041).
@@ -453,7 +461,7 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
         }),
       },
     );
-    return { entry: slot.report, dependents, errors };
+    return { plugin: slot.report, dependents, teardownErrors: errors };
   }
 
   /**
@@ -494,15 +502,15 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
       return stopPromise;
     },
 
-    reload(name: string): Promise<PluginReloadResult> {
+    reload(name: string): Promise<PluginChangeResult> {
       return enqueue(() => runReload(name));
     },
 
-    disable(name: string): Promise<PluginReloadResult> {
+    disable(name: string): Promise<PluginChangeResult> {
       return enqueue(() => runDisable(name));
     },
 
-    enable(name: string): Promise<PluginReloadResult> {
+    enable(name: string): Promise<PluginChangeResult> {
       return enqueue(() => runEnable(name));
     },
 

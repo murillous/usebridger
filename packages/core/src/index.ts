@@ -151,7 +151,7 @@ export type {
   SendPriority,
 } from '#outbound/types.ts';
 export { definePlugin, PluginManifestError } from '#plugin/define.ts';
-export { PluginConflictError, type PluginReloadResult } from '#plugin/host.ts';
+export { type PluginChangeResult, PluginConflictError } from '#plugin/host.ts';
 export { PluginCycleError } from '#plugin/order.ts';
 export {
   PluginLifecycleError,

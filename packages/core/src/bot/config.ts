@@ -12,7 +12,7 @@ import type { Middleware } from '#middleware/pipeline.ts';
 import type { RateLimitOptions } from '#middleware/rate-limit.ts';
 import type { SanitizeOptions } from '#middleware/sanitize.ts';
 import type { OutboundQueueOptions, OutboundQueueStats } from '#outbound/queue.ts';
-import type { PluginReloadResult } from '#plugin/host.ts';
+import type { PluginChangeResult } from '#plugin/host.ts';
 import type { PluginReportEntry } from '#plugin/report.ts';
 import type { PluginDefinition } from '#plugin/types.ts';
 import type { InboundQueueOptions, InboundQueueStats } from '#queue/inbound.ts';
@@ -191,17 +191,18 @@ export interface Bot {
 /**
  * Plugins em execução. Chamado, devolve a tabela de boot (`PluginReportEntry[]`); os métodos
  * mudam um plugin sem mexer na config (sem gravar override no storage). Quem muda um plugin
- * recebe o mesmo `PluginReloadResult` do reload por config: a linha nova e os dependentes.
+ * recebe o mesmo `PluginChangeResult` do reload por config: a linha nova do plugin
+ * (`plugin`), a dos dependentes (`dependents`) e as falhas de teardown (`teardownErrors`).
  * Quem não estiver `start()`-ado recebe `BotStateError`; plugin desconhecido, `PluginHostStateError`.
  */
 export interface BotPlugins {
   (): PluginReportEntry[];
   /** Derruba e sobe de novo o plugin e os dependentes (ADR 0041). */
-  reload(name: string): Promise<PluginReloadResult>;
+  reload(name: string): Promise<PluginChangeResult>;
   /** Desliga o plugin e os dependentes, que viram `dependency-skipped`; até `enable`. */
-  disable(name: string): Promise<PluginReloadResult>;
+  disable(name: string): Promise<PluginChangeResult>;
   /** Liga de volta um plugin desligado com `disable`; os dependentes que ele libera sobem. */
-  enable(name: string): Promise<PluginReloadResult>;
+  enable(name: string): Promise<PluginChangeResult>;
 }
 
 export interface BotStats {
