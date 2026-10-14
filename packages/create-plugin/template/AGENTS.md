@@ -32,12 +32,14 @@ mensageria. O plugin (`name: '__name__'`, export `__export__`) fica em `src/inde
   WhatsApp, Telegram, Discord e web. Teste num perfil só esconde o plugin que não é portátil.
 - **Versão em sincronia.** O `version` do manifesto em `src/index.ts` é o mesmo do
   `package.json`; o `changeset version` só mexe no `package.json`, então atualize os dois juntos.
+- **Config com o `z` do core.** O schema vem de `import { z } from '@usebridger/core/zod'`, não
+  do pacote `zod`: uma segunda cópia do Zod dá erros de tipo confusos no `definePlugin`.
 - **`dependsOn` no 0.x:** `^0.0.z` aceita só a versão exata `0.0.z`. Use `^0.M.0` ou `0.x`.
 
 ## Documentação
 
 - **Tipos e JSDoc**, na versão instalada: `node_modules/@usebridger/core/dist/*.d.mts` e
   `node_modules/@usebridger/testing/dist/*.d.mts`.
-- **Guias do autor de plugin:** https://github.com/murillous/usebridger/tree/develop/docs/guias
+- **Guias do autor de plugin:** https://github.com/murillous/usebridger/tree/main/docs/guias
 - **Como cada módulo do core funciona:**
-  https://github.com/murillous/usebridger/tree/develop/packages/core/docs
+  https://github.com/murillous/usebridger/tree/main/packages/core/docs
