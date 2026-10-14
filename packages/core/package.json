@@ -29,6 +29,11 @@
       "@usebridger/source": "./src/storage/contract/index.ts",
       "types": "./dist/storage-contract.d.mts",
       "default": "./dist/storage-contract.mjs"
+    },
+    "./zod": {
+      "@usebridger/source": "./src/zod.ts",
+      "types": "./dist/zod.d.mts",
+      "default": "./dist/zod.mjs"
     }
   },
   "files": [

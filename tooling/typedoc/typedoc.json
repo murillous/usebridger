@@ -7,6 +7,7 @@
     "../../packages/core/src/index.ts",
     "../../packages/core/src/adapter.ts",
     "../../packages/core/src/storage/contract/index.ts",
+    "../../packages/core/src/zod.ts",
     "../../packages/storage-sqlite/src/index.ts",
     "../../packages/storage-postgres/src/index.ts",
     "../../packages/transport-baileys/src/index.ts",
