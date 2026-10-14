@@ -16,9 +16,12 @@ import { BotConfigError } from '#config/owners.ts';
 import type { PluginConfigs } from '#config/plugin-configs.ts';
 import {
   type ConversationRegistry,
+  type ExpireHandler,
+  type KernelExpire,
   type KernelStep,
   type StepContext,
   type StepHandler,
+  type StepOptions,
   StepTimeoutError,
 } from '#conversations/conversations.ts';
 import {
@@ -62,6 +65,8 @@ import type { UnsafeAccess } from '#unsafe/access.ts';
 import {
   type CommandViews,
   commandViewFactory,
+  type ExpireOrigin,
+  expireViewFactory,
   type KernelMessageContext,
   listenerViewFactory,
   type PluginExpect,
@@ -76,7 +81,7 @@ export interface PluginContextDeps {
   readonly router: CommandRouter;
   readonly prefixes: Prefixes;
   /** Passos e esperas de conversa (ADR 0060). */
-  readonly conversations: ConversationRegistry<KernelMessageContext>;
+  readonly conversations: ConversationRegistry<KernelMessageContext, ExpireOrigin>;
   readonly bus: EventBus;
   readonly services: ServiceRegistry;
   readonly storage: StoragePort;
@@ -174,14 +179,15 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         lifetime.expired ? refuse(operation) : fn(...args);
 
     // A espera é sempre do plugin dono do contexto: ele só aponta para os próprios passos.
-    const expect: PluginExpect = (message, step, options) =>
-      deps.conversations.expect(name, message.chat.id, message.sender.id, step, options);
+    const expect: PluginExpect = (origin, step, options) =>
+      deps.conversations.expect(name, origin.chat, origin.sender, step, options);
     // `{prefix}` lido a cada chamada: um `ctx.prefixes.set` vale já para a mensagem seguinte.
     const text: PluginText = (message, key, values) =>
       formatMessage(messages, key, values, deps.prefixes.get(message.chat));
     const commandViews = commandViewFactory(name, log, expect, text);
     const listenerView = listenerViewFactory(name, log, expect, text);
     const stepView = stepViewFactory(name, log, expect, text);
+    const expireView = expireViewFactory(name, log, expect, text);
     const roleView = roleViewFactory(log);
     // Nos eventos de mensagem, cada listener recebe a visão com `message`/`text`/`reply`/`log`
     // do plugin; o barramento a cria (uma por listener) e pendura nela o `Deadline`.
@@ -242,12 +248,17 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         reset: live('prefixes.reset', (chatId: string) => deps.prefixes.reset(chatId)),
       } satisfies Prefixes,
       conversations: {
-        define(step: string, handler: StepHandler): void {
+        define(step: string, handler: StepHandler, options?: StepOptions): void {
           guard('conversations.define');
+          const onExpire = options?.onExpire;
+          if (onExpire !== undefined && typeof onExpire !== 'function') {
+            throw new TypeError(`plugin "${name}": onExpire do passo "${step}" não é função`);
+          }
           deps.conversations.define(
             name,
             step,
             wrapStep(name, step, handler, stepView, log, lifetime, deps),
+            onExpire && wrapExpire(name, step, onExpire, expireView, log, lifetime, deps),
           );
         },
       },
@@ -571,6 +582,42 @@ function wrapStep(
         // A recusa de um contexto expirado já foi logada quando aconteceu (ADR 0033).
         if (error instanceof ContextExpiredError) return;
         log.error(`passo "${step}" rejeitou depois do prazo`, { step, err: error });
+      },
+      deps.armed,
+      deadline,
+    );
+  };
+}
+
+/**
+ * `onExpire` de um passo com a visão do plugin e o prazo do comando, como o passo (ADR 0097): roda
+ * na fila do chat, e um preso seguraria o chat. O `Deadline` é filho do de vida do plugin, então
+ * o reload aborta o `signal` e recusa o `reply` de um `onExpire` ainda rodando.
+ */
+function wrapExpire(
+  plugin: string,
+  step: string,
+  handler: ExpireHandler,
+  view: ReturnType<typeof expireViewFactory>,
+  log: Logger,
+  lifetime: Deadline,
+  deps: Pick<PluginContextDeps, 'commandTimeoutMs' | 'armed'>,
+): KernelExpire<ExpireOrigin> {
+  const timeoutMs = deps.commandTimeoutMs;
+  return (origin, data) => {
+    const deadline = new Deadline(lifetime);
+    return settleWithin(
+      handler(view(origin, deadline, step, data)),
+      timeoutMs,
+      () => {
+        const error = new StepTimeoutError(plugin, step, timeoutMs, 'onExpire');
+        deadline.expire(error);
+        return error;
+      },
+      (error) => {
+        // A recusa de um contexto expirado já foi logada quando aconteceu (ADR 0033).
+        if (error instanceof ContextExpiredError) return;
+        log.error(`onExpire do passo "${step}" rejeitou depois do prazo`, { step, err: error });
       },
       deps.armed,
       deadline,

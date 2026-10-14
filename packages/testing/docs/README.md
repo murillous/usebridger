@@ -214,6 +214,32 @@ await bot.receive({ text: '!menu' });
 await bot.receive({ text: '1' });
 ```
 
+## Espera que vence (`onExpire`)
+
+O kit não tem relógio próprio: para vencer uma espera (`expectReply` com `ttlMs`) e testar o
+`onExpire` do passo, use os fake timers do Vitest. Depois de avançar o tempo, espere o bot
+assentar com `bot.bot.settled()`, porque o `onExpire` roda na fila do chat e nenhuma mensagem
+nova o espera:
+
+```ts
+import { vi } from 'vitest';
+
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
+
+it('encerra quem não responde', async () => {
+  const bot = await createTestBot({ plugins: [cadastro] });
+  await bot.receive({ text: '!cadastro' });
+  await vi.advanceTimersByTimeAsync(60_000);
+  await bot.bot.settled();
+  expect(bot.sent).toContainText('Encerrei por falta de resposta.');
+  await bot.stop();
+});
+```
+
+Ligue os fake timers antes do `createTestBot`: a espera arma o timer dela no relógio que estiver
+valendo quando o `expectReply` roda.
+
 ## Fixtures
 
 Um plugin que decodifica a mídia (sharp, ffmpeg) falha com bytes quaisquer, como

@@ -78,12 +78,59 @@ ctx.conversations.define('bimestre', async (c) => {
   ([Comandos](commands.md#prefixo-por-chat)), responder `ajuda` a um passo roda o comando `ajuda`.
 - **A espera vale uma vez.** A resposta a consome. Depois dela, a mensagem seguinte segue o fluxo
   normal, a menos que o passo registre outra espera.
-- **Expiração silenciosa.** Passado o `ttlMs`, a espera some sem aviso, e a próxima mensagem
-  segue o fluxo normal.
+- **Expiração.** Passado o `ttlMs`, a espera some, e a próxima mensagem segue o fluxo normal. Sem
+  `onExpire` no passo, some sem aviso; com ele, o plugin reage
+  ([Quando a espera vence](#quando-a-espera-vence-onexpire)).
 - **Edição não responde.** Só mensagem nova (`message`) consome a espera.
 - **O menu numerado também é uma espera.** Sem botões, as [ações](actions.md) de um `reply`
   registram uma espera do kernel para o remetente. Um `expectReply` depois do `reply` com ações a
   substitui, e o número deixa de valer. O clique num botão cancela a espera de quem clicou.
+
+## Quando a espera vence: `onExpire`
+
+Para avisar quem parou de responder, lembrar de terminar um cadastro ou registrar o abandono de um
+funil, passe `onExpire` no `define`
+([ADR 0097](../../../docs/adr/0097-onexpire-do-passo.md)):
+
+```ts
+ctx.conversations.define('nome', (c) => c.reply(`Olá, ${c.text}`), {
+  onExpire: async (c) => {
+    await c.reply('Encerrei por falta de resposta. Mande !cadastro para recomeçar.');
+  },
+});
+```
+
+- **Só quando o TTL vence.** Não roda quando a espera é respondida, substituída por outro
+  `expectReply` (do mesmo plugin ou de outro), descartada porque o texto casou um comando ou pelo
+  clique num botão, nem quando o plugin desce (teardown, reload) ou o bot para (`stop()`).
+- **O contexto** traz `chat`, `sender` (quem não respondeu), `step`, `data`, `reply`, `log`, `t`,
+  `signal` e `expectReply`. Não há `message`, `text` nem `react`: nenhuma mensagem chegou. O
+  `reply` envia no chat da espera, sem citar. As ações de passo num `reply` apontam para os passos
+  do plugin, como no passo.
+- **Encadeia outra espera.** `c.expectReply` abre uma nova para a mesma pessoa no mesmo chat:
+
+  ```ts
+  ctx.conversations.define('nome', tratarNome, {
+    onExpire: async (c) => {
+      await c.reply('Ainda está aí?');
+      c.expectReply('nome', { data: c.data, ttlMs: 60_000 });
+    },
+  });
+  ```
+
+- **Roda na fila do chat**, como uma mensagem: não corre junto com outra mensagem do mesmo chat.
+  Quem entra primeiro na fila decide. Se a resposta da pessoa já estava na fila quando o TTL
+  venceu, ela vai ao passo e o `onExpire` não roda. Se a expiração entrou primeiro, o `onExpire`
+  roda e a resposta segue o fluxo normal.
+- **Não passa pelos middlewares**, porque não há mensagem. A espera só existe porque uma mensagem
+  do chat já passou por eles.
+- **Prazo e erros como no passo**: o prazo do comando (`timeouts.commandMs`). Estourado, o
+  `c.signal` aborta com `StepTimeoutError` (`stage: 'onExpire'`), e o `reply` e o `expectReply`
+  passam a ser recusados com `ContextExpiredError`. A falha, ou o prazo estourado, vira
+  `plugin.error` com `phase: 'step-expire'` e `event` igual ao nome do passo.
+- **Fila do chat cheia**: a expiração é descartada com uma linha `warn`, e o `onExpire` não roda.
+- **`settled()`**: o `onExpire` rodando (ou na fila) conta; o TTL pendente não.
+- `onExpire` que não é função lança `TypeError` no `define`, e o setup falha.
 
 ## Prazo e erros
 
@@ -100,11 +147,13 @@ lança `ContextExpiredError`. Um handler atrasado não abre uma conversa que nin
 - O estado fica **em memória**. Um restart perde as conversas em andamento, e o usuário recomeça.
   O passo é nomeado e o `data` é JSON para que, no futuro, a espera possa ir ao storage sem mudar
   a API.
-- No `teardown`/reload, o plugin perde os passos e as esperas dele. A resposta que chegar depois
-  segue o fluxo normal.
-- No `stop()`, as esperas que restam são descartadas, e nenhum timer de validade sobrevive.
-- O `settled()` não espera o `ttlMs`: a espera não é trabalho em andamento. O passo, quando roda,
-  já conta, porque roda dentro da fila do chat.
+- No `teardown`/reload, o plugin perde os passos e as esperas dele, sem `onExpire`. A resposta
+  que chegar depois segue o fluxo normal. Um `onExpire` rodando no reload tem o `signal` abortado
+  e o `reply` recusado.
+- No `stop()`, as esperas que restam são descartadas sem `onExpire`, e nenhum timer de validade
+  sobrevive. Uma espera que vence durante o `stop()` também some em silêncio.
+- O `settled()` não espera o `ttlMs`: a espera não é trabalho em andamento. O passo e o
+  `onExpire`, quando rodam, já contam, porque rodam dentro da fila do chat.
 - Não depende de capability: funciona em qualquer transport.
 
 ## Testando
@@ -116,4 +165,16 @@ const bot = await createTestBot({ plugins: [notas] });
 await bot.receive({ text: '!notas' });
 await bot.receive({ text: 'Maria' });
 expect(bot.sent).toContainText('Notas de Maria');
+```
+
+Para o `onExpire`, vença a espera com os fake timers do Vitest e espere o bot assentar
+([kit de testes](../../testing/docs/README.md#espera-que-vence-onexpire)):
+
+```ts
+vi.useFakeTimers();
+const bot = await createTestBot({ plugins: [cadastro] });
+await bot.receive({ text: '!cadastro' });
+await vi.advanceTimersByTimeAsync(60_000);
+await bot.bot.settled();
+expect(bot.sent).toContainText('Encerrei por falta de resposta.');
 ```
