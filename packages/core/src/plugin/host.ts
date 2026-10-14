@@ -106,8 +106,9 @@ export interface PluginHost {
    */
   reload(name: string): Promise<PluginChangeResult>;
   /**
-   * Desliga um plugin em execução: desce ele e os dependentes (que viram `dependency-skipped`),
-   * e não carrega mais até `enable`. Já desligado, não faz nada.
+   * Desliga um plugin em execução: desce ele e os dependentes, e não carrega mais até `enable`.
+   * Quem depende dele por `dependsOn` vira `dependency-skipped`; quem depende por
+   * `optionalDependsOn` sobe de novo sem ele (ADR 0099). Já desligado, não faz nada.
    */
   disable(name: string): Promise<PluginChangeResult>;
   /**
