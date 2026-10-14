@@ -252,7 +252,8 @@ await configs.setOverrides('ai', { model: 'pro' });
 
 Sem reiniciar o processo. Quem depende do plugin por `dependsOn` recarrega junto, em cascata
 ([Plugins](plugins.md#recarregar-um-plugin-reload)); os outros ficam intocados. As mudanças são
-serializadas. Se o
+serializadas. Para desligar ou ligar um plugin sem passar pela config, use `bot.plugins.disable`
+e `bot.plugins.enable` ([Plugins](plugins.md#desligar-e-ligar-disable--enable)). Se o
 `reload` rejeitar (ex.: host parado, plugin desabilitado), o override **já foi salvo** e vale no
 próximo boot.
 

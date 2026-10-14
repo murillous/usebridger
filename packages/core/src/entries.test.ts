@@ -178,7 +178,7 @@ const entries: Record<string, { file: string; load: () => Promise<object> } & En
       'PluginManifest',
       'PluginMessages',
       'PluginPhase',
-      'PluginReloadResult',
+      'PluginChangeResult',
       'PluginReportEntry',
       'PluginSkipReason',
       'PluginStorage',

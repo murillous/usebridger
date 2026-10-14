@@ -260,8 +260,16 @@ seguintes não rodam (cada um vira falha com `timedOut: true`), mas o `dispose` 
 ### Recarregar um plugin (`reload`)
 
 ```ts
-const { entry, dependents, errors } = await host.reload('ai');
+const { plugin, dependents, teardownErrors } = await host.reload('ai');
 ```
+
+O resultado (`PluginChangeResult`) é o mesmo para `reload`, `disable` e `enable`:
+
+| Campo | O que é |
+|-------|---------|
+| `plugin` | Linha nova do plugin na tabela |
+| `dependents` | Linhas novas dos dependentes descidos e subidos junto, na ordem de carga |
+| `teardownErrors` | Falhas de `teardown`/`dispose` das instâncias que desceram, do plugin e dos dependentes. Falha do `setup` novo fica no `reason` da linha (`setup-failed`) |
 
 `teardown` → `dispose` → contexto novo → `setup`. É a primitiva do reload por mudança de config
 ([ADR 0017](../../../docs/adr/0017-config-por-plugin-zod.md)): a fábrica lê a config já
@@ -277,16 +285,25 @@ contexto descartado. Com `resumo` dependendo de `ai` e `digest` de `resumo`:
 teardown digest → teardown resumo → teardown ai → setup ai → setup resumo → setup digest
 ```
 
-Os dependentes são reavaliados como no boot. Se o `setup` novo do plugin falhar, eles ficam
+O plugin e os dependentes são reavaliados como no boot (desligado, ou com a dependência
+desligada, ele não sobe). Se o `setup` novo do plugin falhar, os dependentes ficam
 `dependency-skipped`; um reload seguinte que o suba traz todos de volta. Um dependente ignorado
 por motivo próprio (ex.: desabilitado) continua ignorado. `after` não entra na cascata, porque só
 ordena a carga.
 
-| Campo | O que é |
-|-------|---------|
-| `entry` | Linha nova do plugin na tabela |
-| `dependents` | Linhas novas dos dependentes recarregados, na ordem de carga |
-| `errors` | Falhas de `teardown`/`dispose` das instâncias anteriores, do plugin e dos dependentes |
+### Desligar e ligar (`disable` / `enable`)
+
+```ts
+await bot.plugins.disable('ai');  // desce ai e os dependentes; ai vira "disabled"
+await bot.plugins.enable('ai');   // sobe ai de volta e os dependentes que ele libera
+```
+
+Mesma cascata do `reload`, sem mexer na config: nada é gravado no storage. Desligado, o plugin
+não carrega até `enable`, nem pelo `reload`, e o boot aceita a mesma lista em `disabledPlugins`
+(o `enable` liga também quem veio dela).
+Desligar um plugin já desligado, ou ligar um já ligado, não faz nada. Chamados antes do `start()`,
+recusam com `BotStateError`. Os métodos ficam em `bot.plugins`; `bot.plugins()` segue devolvendo a
+tabela de boot.
 
 ### A fábrica de contexto
 

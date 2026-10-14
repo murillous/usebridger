@@ -556,9 +556,9 @@ describe('createPluginHost — reload', () => {
     const result = await h.reload('ai');
     expect(calls).toEqual(['teardown:ai', 'dispose:ai', 'context:ai', 'setup:ai#2']);
     expect(result).toEqual({
-      entry: { name: 'ai', version: '1.0.0', origin: 'config', status: 'loaded' },
+      plugin: { name: 'ai', version: '1.0.0', origin: 'config', status: 'loaded' },
       dependents: [],
-      errors: [],
+      teardownErrors: [],
     });
   });
 
@@ -574,7 +574,7 @@ describe('createPluginHost — reload', () => {
     expect(statusOf(await h.start())).toEqual({ ai: 'setup-failed' });
     broken = false;
     const result = await h.reload('ai');
-    expect(result.entry.status).toBe('loaded');
+    expect(result.plugin.status).toBe('loaded');
     expect(statusOf(h.report())).toEqual({ ai: 'loaded' });
   });
 
@@ -588,8 +588,8 @@ describe('createPluginHost — reload', () => {
     ]);
     await h.start();
     const result = await h.reload('ai');
-    expect(result.errors.map((error) => error.phase)).toEqual(['teardown']);
-    expect(result.entry.status).toBe('loaded');
+    expect(result.teardownErrors.map((error) => error.phase)).toEqual(['teardown']);
+    expect(result.plugin.status).toBe('loaded');
   });
 
   it('recusa plugin desconhecido, ignorado por incompatibilidade ou host fora de running', async () => {
@@ -634,7 +634,7 @@ describe('createPluginHost — reload', () => {
       'context:resumo',
       'context:digest',
     ]);
-    expect(result.entry.status).toBe('loaded');
+    expect(result.plugin.status).toBe('loaded');
     expect(statusOf(result.dependents)).toEqual({ resumo: 'loaded', digest: 'loaded' });
   });
 
@@ -696,7 +696,7 @@ describe('createPluginHost — reload', () => {
     ]);
     await h.start();
     const result = await h.reload('ai');
-    expect(result.errors.map((error) => `${error.plugin}:${error.phase}`)).toEqual([
+    expect(result.teardownErrors.map((error) => `${error.plugin}:${error.phase}`)).toEqual([
       'resumo:teardown',
     ]);
   });

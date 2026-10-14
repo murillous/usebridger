@@ -12,6 +12,7 @@ import type { Middleware } from '#middleware/pipeline.ts';
 import type { RateLimitOptions } from '#middleware/rate-limit.ts';
 import type { SanitizeOptions } from '#middleware/sanitize.ts';
 import type { OutboundQueueOptions, OutboundQueueStats } from '#outbound/queue.ts';
+import type { PluginChangeResult } from '#plugin/host.ts';
 import type { PluginReportEntry } from '#plugin/report.ts';
 import type { PluginDefinition } from '#plugin/types.ts';
 import type { InboundQueueOptions, InboundQueueStats } from '#queue/inbound.ts';
@@ -170,8 +171,8 @@ export interface Bot {
   onStop(hook: StopHook, options?: StopHookOptions): () => void;
   /** Config dos plugins. Disponível depois que o `start()` carrega os plugins. */
   readonly config: BotPluginConfigs;
-  /** Tabela de boot atual (reflete reloads); vazia antes do `start()`. */
-  plugins(): PluginReportEntry[];
+  /** Tabela de boot atual (reflete reloads); vazia antes do `start()`. Também tem os métodos abaixo. */
+  readonly plugins: BotPlugins;
   /**
    * Métricas das filas de entrada e de saída, lidas de contadores (O(1)). Sempre disponível:
    * zeros antes do `start()`, valores finais depois do `stop()`. Devolve uma cópia.
@@ -185,6 +186,23 @@ export interface Bot {
    * o `maxPauseMs`. Resolve na hora antes do `start()` e depois do `stop()`; nunca rejeita.
    */
   settled(): Promise<void>;
+}
+
+/**
+ * Plugins em execução. Chamado, devolve a tabela de boot (`PluginReportEntry[]`); os métodos
+ * mudam um plugin sem mexer na config (sem gravar override no storage). Quem muda um plugin
+ * recebe o mesmo `PluginChangeResult` do reload por config: a linha nova do plugin
+ * (`plugin`), a dos dependentes (`dependents`) e as falhas de teardown (`teardownErrors`).
+ * Quem não estiver `start()`-ado recebe `BotStateError`; plugin desconhecido, `PluginHostStateError`.
+ */
+export interface BotPlugins {
+  (): PluginReportEntry[];
+  /** Derruba e sobe de novo o plugin e os dependentes (ADR 0041). */
+  reload(name: string): Promise<PluginChangeResult>;
+  /** Desliga o plugin e os dependentes, que viram `dependency-skipped`; até `enable`. */
+  disable(name: string): Promise<PluginChangeResult>;
+  /** Liga um plugin desligado (`disable` ou `disabledPlugins`); sobem os dependentes que ele libera. */
+  enable(name: string): Promise<PluginChangeResult>;
 }
 
 export interface BotStats {
