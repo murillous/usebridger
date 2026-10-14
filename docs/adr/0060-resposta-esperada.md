@@ -2,7 +2,8 @@
 
 **Status:** Aceito (2026-10-09) · Detalha **D12** ([ADR 0012](0012-pipeline-de-3-estagios.md)) e
 **D42** ([ADR 0042](0042-handler-lento-segura-o-chat.md)) · Parte do kernel multiplataforma
-([ADR 0055](0055-plataformas-alvo-e-transport-web.md))
+([ADR 0055](0055-plataformas-alvo-e-transport-web.md)) · Estado só em memória: substituído, para o
+passo com `persist`, pelo [ADR 0098](0098-esperas-persistidas.md)
 
 ## Contexto
 

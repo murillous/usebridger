@@ -50,7 +50,7 @@ iniciado. Os padrões mudam para o caso de teste:
 | `env` | `{}` | Nenhum `BRIDGER_*` da máquina entra na config dos plugins |
 | `outbound` | `globalIntervalMs` e `chatIntervalMs` em 0 | Os envios saem na hora |
 | `reconnection` | `false` | |
-| `storage` | em memória (padrão do core) | |
+| `storage` | em memória | O kit o cria e o fecha no `stop()`; o `restart()` o mantém |
 
 Qualquer opção pode ser sobrescrita, por exemplo `pluginConfig`, `owners`, `prefix` ou `storage`.
 
@@ -65,7 +65,31 @@ Qualquer opção pode ser sobrescrita, por exemplo `pluginConfig`, `owners`, `pr
 | `sentMedia(type)` | Os envios de mídia do tipo, na ordem, com os bytes ([abaixo](#bytes-enviados-sentmedia)) |
 | `transport` | O `FakeTransport`, com os outros registros |
 | `bot` | O `Bot` (`plugins()`, `plugins.reload`/`disable`/`enable`, `stats()`, `config`...) |
+| `restart(overrides?)` | Para o bot e sobe outro sobre o mesmo storage; devolve o `TestBot` novo ([abaixo](#restart)) |
 | `stop()` | Para o bot |
+
+### Restart
+
+O `restart()` simula um deploy ou um crash: para o bot e sobe outro com as mesmas opções sobre o
+**mesmo storage**, que não fecha no meio. Serve para testar o que sobrevive ao restart, como as
+[esperas persistidas](../../core/docs/conversations.md#conversa-que-sobrevive-a-restart):
+
+```ts
+const antes = await createTestBot({ plugins: [pedidos()] });
+await antes.receive({ text: '!pedido' });
+
+const depois = await antes.restart();
+await depois.receive({ text: 'Rua A, 10' });
+expect(depois.sent).toContainText('Confirma o pedido?');
+await depois.stop();
+```
+
+- `overrides` troca opções do bot novo, como a versão nova do plugin
+  (`antes.restart({ plugins: [pedidosV2()] })`). O `storage` não se troca.
+- O transport criado pelo kit é novo, e `sent` do bot novo começa vazio. Um `transport` passado
+  nas opções é reaproveitado (e o `sent` dele continua).
+- Use o `TestBot` devolvido daí em diante. O storage fecha no `stop()` do último bot; o `stop()`
+  do anterior só confirma que ele parou.
 
 ## Mensagem de entrada
 

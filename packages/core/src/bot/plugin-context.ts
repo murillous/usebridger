@@ -271,6 +271,7 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
             step,
             wrapStep(name, step, handler, stepView, log, lifetime, deps),
             onExpire && wrapExpire(name, step, onExpire, expireView, log, lifetime, deps),
+            options?.persist === true,
           );
         },
       },
