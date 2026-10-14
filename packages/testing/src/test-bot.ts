@@ -100,21 +100,18 @@ export function createTestBot(options: TestBotOptions = {}): Promise<TestBot> {
  * O storage como o bot o vê: o `close()` do `stop()` não o fecha, para o `restart()` subir o bot
  * novo sobre os mesmos dados. Quem fecha o de verdade é o `stop()` do kit. O mesmo objeto vale
  * em todos os restarts: o `claimSession` do core é por objeto, e o bot parado já o liberou.
+ * `Proxy`, e não uma cópia campo a campo: um método que o `StoragePort` ganhar (ou que o adapter
+ * tenha a mais) passa sem ninguém lembrar de repassá-lo. Os métodos saem presos ao original, para
+ * o adapter de classe (com campos `#privados`) continuar funcionando.
  */
-function keepOpen(storage: StoragePort): StoragePort {
-  return {
-    forNamespace: (namespace) => storage.forNamespace(namespace),
-    authState: (session) => storage.authState(session),
-    ...(storage.acquireLease && {
-      acquireLease: (name: string, owner: string, ttlMs: number) =>
-        (storage.acquireLease as NonNullable<StoragePort['acquireLease']>)(name, owner, ttlMs),
-    }),
-    ...(storage.releaseLease && {
-      releaseLease: (name: string, owner: string) =>
-        (storage.releaseLease as NonNullable<StoragePort['releaseLease']>)(name, owner),
-    }),
-    close: async () => undefined,
-  };
+export function keepOpen(storage: StoragePort): StoragePort {
+  return new Proxy(storage, {
+    get(target, property) {
+      if (property === 'close') return async () => undefined;
+      const value: unknown = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
 }
 
 async function startTestBot(

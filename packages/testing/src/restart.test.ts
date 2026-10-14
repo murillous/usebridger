@@ -4,7 +4,7 @@
 import { command, createMemoryStorage, definePlugin, type StoragePort } from '@usebridger/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FakeTransport } from './fake-transport.ts';
-import { createTestBot, type TestBot } from './test-bot.ts';
+import { createTestBot, keepOpen, type TestBot } from './test-bot.ts';
 import './matchers.ts';
 
 const bots: TestBot[] = [];
@@ -90,5 +90,52 @@ describe('TestBot.restart', () => {
     expect(closed).toBe(0);
     await second.stop();
     expect(closed).toBe(1);
+  });
+});
+
+describe('keepOpen', () => {
+  /** Adapter de classe com campo privado e um método que o `StoragePort` ainda não declara. */
+  class ClassStorage implements StoragePort {
+    readonly #memory = createMemoryStorage();
+    closed = 0;
+
+    forNamespace(namespace: string) {
+      return this.#memory.forNamespace(namespace);
+    }
+
+    authState(session: string) {
+      return this.#memory.authState(session);
+    }
+
+    async acquireLease(): Promise<boolean> {
+      return true;
+    }
+
+    vacuum(): string {
+      return `vacuum ${this.#memory === undefined ? 'sem' : 'com'} memória`;
+    }
+
+    async close(): Promise<void> {
+      this.closed++;
+      await this.#memory.close();
+    }
+  }
+
+  it('repassa todo método do storage, inclusive o que o port não declara', async () => {
+    const storage = new ClassStorage();
+    const kept = keepOpen(storage) as ClassStorage;
+
+    expect(kept.vacuum()).toBe('vacuum com memória');
+    expect('acquireLease' in kept).toBe(true);
+    expect(await kept.acquireLease()).toBe(true);
+    expect(kept.forNamespace('x')).toBeDefined();
+  });
+
+  it('o close não fecha o storage de verdade', async () => {
+    const storage = new ClassStorage();
+
+    await keepOpen(storage).close();
+
+    expect(storage.closed).toBe(0);
   });
 });
