@@ -143,6 +143,18 @@ function lento(gate: Promise<void>): PluginDefinition {
   });
 }
 
+/** Plugin com um passo persistido qualquer: faz o boot ler a coleção de esperas. */
+function outro(): PluginDefinition {
+  return definePlugin({
+    name: 'outro',
+    version: '1.0.0',
+    engine: '>=0.0.0',
+    setup(ctx) {
+      ctx.conversations.define('x', () => undefined, { persist: true });
+    },
+  });
+}
+
 interface Started {
   readonly bot: Bot;
   readonly transport: RecordingTransport;
@@ -420,7 +432,7 @@ describe('Bot: esperas persistidas (ADR 0098)', () => {
     expect(await waits(storage).find()).toEqual([]);
   });
 
-  it('o reload cujo setup novo falha descarta a espera persistida com warn', async () => {
+  it('o reload cujo setup novo falha mantém a espera persistida, dormente, até o plugin voltar', async () => {
     const storage = durableStorage();
     let setups = 0;
     const flaky = definePlugin({
@@ -429,7 +441,7 @@ describe('Bot: esperas persistidas (ADR 0098)', () => {
       engine: '>=0.0.0',
       setup(ctx) {
         setups++;
-        if (setups > 1) throw new Error('setup quebrou');
+        if (setups === 2) throw new Error('setup quebrou');
         ctx.commands.add(
           command({
             name: 'notas',
@@ -438,16 +450,62 @@ describe('Bot: esperas persistidas (ADR 0098)', () => {
             },
           }),
         );
-        ctx.conversations.define('aluno', () => undefined, { persist: true });
+        ctx.conversations.define('aluno', (c) => c.reply(`Notas de ${c.text}`), {
+          persist: true,
+        });
       },
     });
     const started = await boot(storage, [flaky]);
     await say(started, '!notas');
 
     await started.bot.plugins.reload('notas');
+    // Falha passageira não apaga a conversa (ADR 0098).
+    expect(orphanWarnings(started.lines)).toEqual([]);
+    expect(await waits(storage).find()).toHaveLength(1);
 
-    expect(orphanWarnings(started.lines)).toHaveLength(1);
+    await started.bot.plugins.reload('notas');
+    await say(started, 'Maria');
+
+    expect(sentTexts(started.transport)).toEqual(['Notas de Maria']);
     await stop(started.bot);
+    expect(await waits(storage).find()).toEqual([]);
+  });
+
+  it('a espera de plugin cujo setup falhou no boot fica no storage para o boot seguinte', async () => {
+    const storage = durableStorage();
+    const first = await boot(storage, [notas()]);
+    await say(first, '!notas');
+    await stop(first.bot);
+
+    const broken = definePlugin({
+      name: 'notas',
+      version: '1.0.0',
+      engine: '>=0.0.0',
+      setup() {
+        throw new Error('banco fora do ar');
+      },
+    });
+    // Outro plugin com passo persistido faz o boot ler a coleção.
+    const second = await boot(storage, [broken, outro()]);
+    expect(orphanWarnings(second.lines)).toEqual([]);
+    await stop(second.bot);
+    expect(await waits(storage).find()).toHaveLength(1);
+
+    const third = await boot(storage, [notas()]);
+    await say(third, 'Maria');
+    expect(sentTexts(third.transport)).toEqual(['Notas de Maria (aluno)']);
+  });
+
+  it('a espera de plugin que saiu da lista é descartada com warn', async () => {
+    const storage = durableStorage();
+    const first = await boot(storage, [notas()]);
+    await say(first, '!notas');
+    await stop(first.bot);
+
+    const second = await boot(storage, [outro()]);
+
+    expect(orphanWarnings(second.lines)).toHaveLength(1);
+    await stop(second.bot);
     expect(await waits(storage).find()).toEqual([]);
   });
 

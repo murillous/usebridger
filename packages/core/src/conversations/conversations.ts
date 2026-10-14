@@ -184,6 +184,13 @@ export type WaitRecord = {
   expiresAt: number;
 };
 
+/**
+ * Situação de um plugin para a varredura das esperas persistidas (ADR 0098): `loaded` subiu,
+ * `disabled` foi desligado (`disable` ou `disabledPlugins`), `down` não subiu por outro motivo
+ * (`setup` que falhou, capability ou dependência) e `absent` não está mais na lista de plugins.
+ */
+export type PluginPresence = 'loaded' | 'disabled' | 'down' | 'absent';
+
 export interface ConversationRegistryOptions {
   /**
    * Uma espera com `onExpire` venceu. O registro não a retira aqui: quem recebe põe a expiração
@@ -372,14 +379,17 @@ export class ConversationRegistry<C, O = unknown> {
   }
 
   /**
-   * Descarta, com `warn`, as esperas cujo passo não está definido (plugin desligado, `setup` que
-   * falhou, passo renomeado), também do storage, e retoma a expiração da que venceu durante o
-   * reload do plugin. O bot chama depois do boot e de cada mudança de plugin, quando todo plugin
-   * que devia subir já rodou o `setup`.
+   * Decide as esperas cujo passo não está definido e retoma a expiração da que venceu sem ele. O
+   * bot chama depois do boot e de cada mudança de plugin, quando todo plugin que devia subir já
+   * rodou o `setup`. Sai com `warn`, também do storage, a espera de plugin desligado, removido ou
+   * que subiu sem o passo (renomeado). A de plugin que não subiu por outro motivo (`setup` que
+   * falhou, capability, dependência) fica, dormente: uma falha passageira não apaga conversas, e
+   * ela volta quando o plugin subir (ADR 0098).
    */
-  sweep(): void {
+  sweep(presence: (plugin: string) => PluginPresence): void {
     for (const [key, wait] of this.#waits) {
       if (!this.#steps.get(wait.plugin)?.has(wait.step)) {
+        if (presence(wait.plugin) === 'down') continue;
         this.#drop(key);
         this.#warnOrphan(wait);
         continue;
@@ -393,13 +403,13 @@ export class ConversationRegistry<C, O = unknown> {
   /**
    * Restaura as esperas persistidas (ADR 0098). Roda no boot, depois do `setup` de todos os
    * plugins: a vencida durante o restart segue o caminho do timer que dispara (com `onExpire`, vai
-   * à fila do chat pelo `onDue`; sem, some), a de passo que não existe mais é descartada com
-   * `warn`, e as outras voltam com o tempo que faltava. Falha de leitura vai ao log e o boot segue
-   * sem as conversas: perdê-las é melhor que não subir.
+   * à fila do chat pelo `onDue`; sem, some), a sem passo vai à varredura (`sweep`), e as outras
+   * voltam com o tempo que faltava. Falha de leitura vai ao log e o boot segue sem as conversas:
+   * perdê-las é melhor que não subir.
    */
-  async restore(): Promise<void> {
-    // Sem passo persistido, nada a restaurar: o bot que não usa o recurso não paga a leitura. Um
-    // registro que sobrar fica para o boot que voltar a ter o passo.
+  async restore(presence: (plugin: string) => PluginPresence): Promise<void> {
+    // Sem passo persistido, nada a restaurar: o bot que não usa o recurso não paga a leitura. Os
+    // registros ficam no storage para o boot em que algum passo persistido voltar.
     if (this.#store === undefined || this.#closed || !this.#hasPersistedStep()) return;
     let records: WithId<WaitRecord>[];
     try {
@@ -424,12 +434,10 @@ export class ConversationRegistry<C, O = unknown> {
         dueAt: record.expiresAt,
         persist: true,
       });
-      // A órfã fica para o `sweep`, que avisa: a expiração é de quem ainda tem o passo.
-      if (record.expiresAt <= now && this.#steps.get(record.plugin)?.has(record.step)) {
-        this.#due(key, wait);
-      }
+      // Sem o passo, o `#due` só marca a espera: a expiração espera o plugin subir com ele.
+      if (record.expiresAt <= now) this.#due(key, wait);
     }
-    this.sweep();
+    this.sweep(presence);
   }
 
   /** Espera as escritas pendentes no storage; o bot chama antes de fechá-lo. Nunca rejeita. */
@@ -515,7 +523,7 @@ export class ConversationRegistry<C, O = unknown> {
   #warnOrphan(wait: Wait): void {
     this.#log()?.warn(
       `conversas: espera descartada; o plugin "${wait.plugin}" não tem o passo "${wait.step}" ` +
-        '(desligado, setup que falhou ou passo renomeado)',
+        '(desligado, removido ou passo renomeado)',
       { plugin: wait.plugin, step: wait.step },
     );
   }

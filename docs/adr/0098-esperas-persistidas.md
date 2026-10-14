@@ -78,17 +78,24 @@ Alternativas consideradas:
   - a espera volta com o tempo que faltava;
   - a que **venceu** durante o restart passa pelo **mesmo ponto de expiração** do timer de TTL,
     como se ele tivesse disparado com o bot fora;
-  - a de passo que não existe mais (plugin desligado ou que não subiu, passo renomeado) é
-    **descartada com `warn`** e sai do storage. A vencida e órfã também vai para esse descarte,
-    não para a expiração.
+  - a de plugin **desligado** (`disable`, `disabledPlugins`), **removido** da lista ou que subiu
+    **sem o passo** (renomeado) é **descartada com `warn`** e sai do storage. A vencida e órfã
+    também vai para esse descarte, não para a expiração;
+  - a de plugin que **não subiu por outro motivo** (`setup` que falhou, capability, dependência)
+    **fica dormente**: em memória e no storage, sem passo para responder ou expirar. Volta quando
+    o plugin subir (reload, `enable` ou o boot seguinte); se venceu enquanto isso, expira nessa
+    hora. Uma falha passageira (banco fora do ar no `setup`) não apaga conversas, e só o
+    desligamento explícito, que é decisão do operador, as remove.
   - Falha ao ler o storage vai ao log em `error`, e o boot segue sem as conversas: perdê-las é
     melhor que não subir.
-  - Sem nenhum passo persistido definido, o boot não lê a coleção. Um registro que sobrar espera o
-    boot que voltar a ter o passo.
+  - Sem nenhum passo persistido definido, o boot não lê a coleção. Os registros ficam no storage,
+    intocados, para o boot em que algum passo persistido voltar: o descarte acima só acontece num
+    boot que leu a coleção, mas o que fica nunca depende de outro plugin.
 - **Reload mantém, desligar remove.** O `dispose` tira da memória só as esperas não persistidas.
-  Depois de cada mudança de plugin (`reload`, `disable`, `enable`) e no boot, o bot descarta com
-  `warn`, também do storage, as esperas cujo passo não está definido. Assim o reload que redefine
-  o passo as mantém, e o `disable`, o `setup` novo que falha e o passo que sumiu as removem. No
+  Depois de cada mudança de plugin (`reload`, `disable`, `enable`) e no boot, o bot varre as
+  esperas cujo passo não está definido, pela tabela do host, com a regra da restauração acima.
+  Assim o reload que redefine o passo as mantém, o `setup` novo que falha as deixa dormentes, e o
+  `disable` e o passo que sumiu as removem com `warn`, também do storage. No
   meio do reload, antes de o passo voltar, a espera fica intocada: a resposta que chega segue o
   fluxo normal sem consumi-la, e a que vence nessa janela tem a expiração retomada depois do
   `setup` novo, com o `onExpire` dele. Quem decide se ela fica é a varredura do fim do reload.
@@ -115,7 +122,9 @@ A restauração usa o mesmo caminho, sem atalho:
   (`flow.expireReply` espera o `ready`), no escopo do `chat.tenantId` guardado; sem `onExpire`,
   some. O envio do `onExpire` espera na fila de saída, pausada até a conexão abrir
   ([ADR 0048](0048-connect-resolve-ao-iniciar.md));
-- a **órfã** não chega a esse ponto, porque não há passo para chamar: vai ao descarte com `warn`;
+- sem o passo, a espera não chega a esse ponto: fica marcada como vencida até a varredura, que a
+  descarta (plugin desligado, removido, passo renomeado) ou a mantém dormente até o plugin subir,
+  quando a expiração é retomada;
 - `ConversationRegistry.expire` enfileira a remoção da cópia no storage ao retirar a espera, antes
   de o `onExpire` rodar. Um crash entre os dois pode repetir o `onExpire` no boot seguinte; perder
   a remoção é o mesmo risco de qualquer escrita que falha (abaixo).
@@ -128,7 +137,8 @@ A restauração usa o mesmo caminho, sem atalho:
   caminho da mensagem. Com uma espera persistida aberta, a mensagem que responde paga só o
   enfileiramento da remoção.
 - A espera persistida sobrevive a crash, deploy e reload. O usuário só perde a conversa se o
-  plugin for desligado, não subir ou renomear o passo, e o operador vê o `warn`.
+  plugin for desligado ou removido, ou renomear o passo, e o operador vê o `warn`. A de plugin
+  que não subiu fica dormente e volta com ele.
 - Uma escrita que falhou deixa a cópia desatualizada: a espera pode não voltar, ou voltar já
   respondida, depois de um restart. O `warn` registra cada falha.
 - O `data` de uma espera persistida fica no storage até ela sair. Quem guarda dado sensível no

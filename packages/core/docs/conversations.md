@@ -188,11 +188,15 @@ ctx.conversations.define(
     ar conta;
   - a que **venceu** durante o restart expira no boot, como se o timer tivesse disparado: com
     [`onExpire`](#quando-a-espera-vence-onexpire), ele roda na fila do chat assim que o boot termina;
-  - a de **passo que não existe mais** (plugin desligado ou que não subiu, passo renomeado na
-    versão nova) é descartada com `warn` e sai do storage.
+  - a de plugin **desligado** (`disable`, `disabledPlugins`), **removido** da lista ou que subiu
+    **sem o passo** (renomeado na versão nova) é descartada com `warn` e sai do storage;
+  - a de plugin que **não subiu por outro motivo** (`setup` que falhou, capability, dependência)
+    fica guardada, sem responder, e volta quando ele subir (reload, `enable` ou o próximo boot):
+    uma falha passageira não apaga conversas.
 - **Reload mantém, desligar remove.** Um reload (troca de config) guarda as esperas persistidas
-  e as devolve quando o `setup` novo redefine o passo. Um `bot.plugins.disable`, um `setup` novo
-  que falha ou um passo que sumiu as descartam com `warn`, também do storage. Uma resposta que
+  e as devolve quando o `setup` novo redefine o passo; se o `setup` novo falha, elas ficam
+  guardadas até o plugin subir. Um `bot.plugins.disable` ou um passo que sumiu as descartam com
+  `warn`, também do storage. Uma resposta que
   chegar no meio do reload, antes de o passo voltar, segue o fluxo normal e não consome a espera;
   a espera que vencer nessa janela roda o `onExpire` do `setup` novo quando ele termina.
 - **O `data` precisa caber em JSON** (`JsonValue`, como sempre): ele vai ao storage como está e

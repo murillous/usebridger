@@ -6,7 +6,11 @@ import { RoleConflictError } from '#commands/roles.ts';
 import { createCommandRouter } from '#commands/router.ts';
 import { BotConfigError, normalizeOwners } from '#config/owners.ts';
 import { createPluginConfigs, type PluginConfigs } from '#config/plugin-configs.ts';
-import { ConversationRegistry, type WaitRecord } from '#conversations/conversations.ts';
+import {
+  ConversationRegistry,
+  type PluginPresence,
+  type WaitRecord,
+} from '#conversations/conversations.ts';
 import { ArmedTimers, ContextExpiredError } from '#deadline.ts';
 import { createEventBus } from '#events/bus.ts';
 import type { BotEvents, PluginErrorEvent } from '#events/types.ts';
@@ -576,7 +580,15 @@ export function createBot(config: BotConfig): Bot {
     }
     // Depois do `setup` de todos: só então se sabe que passo existe. Antes de liberar a fila de
     // entrada, então a primeira resposta já acha a espera.
-    await conversations.restore();
+    await conversations.restore(pluginPresence);
+  }
+
+  /** Situação do plugin na tabela do host, para a varredura das esperas persistidas (ADR 0098). */
+  function pluginPresence(plugin: string): PluginPresence {
+    const entry = host?.report().find((each) => each.name === plugin);
+    if (entry === undefined) return 'absent';
+    if (entry.status === 'loaded') return 'loaded';
+    return entry.reason.kind === 'disabled' ? 'disabled' : 'down';
   }
 
   /** Mudança de um plugin em execução (`action` só entra na mensagem de erro). */
@@ -588,9 +600,9 @@ export function createBot(config: BotConfig): Bot {
     // Um aviso só ao transport, no fim: no meio, os comandos do plugin saíram e não voltaram.
     const pluginHost = host;
     const result = await catalog.batch(() => pluginHost[action](name));
-    // O reload que redefiniu o passo fica com as esperas persistidas; quem desceu de vez (disable,
-    // `setup` novo que falhou, passo que sumiu) as perde, também do storage (ADR 0098).
-    conversations.sweep();
+    // O reload que redefiniu o passo fica com as esperas persistidas, e o `setup` novo que falhou
+    // também (dormentes); o `disable` e o passo que sumiu as perdem, também do storage (ADR 0098).
+    conversations.sweep(pluginPresence);
     for (const error of result.teardownErrors) emitLifecycleError(error);
     // Os dependentes recarregados em cascata (ADR 0041) também podem falhar no `setup` novo.
     for (const entry of [result.plugin, ...result.dependents]) {
