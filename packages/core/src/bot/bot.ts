@@ -35,7 +35,7 @@ import { transportIssues } from '#transport/methods.ts';
 import type { Interaction, Transport, TransportDeps } from '#transport/types.ts';
 import { createUnsafeAccess } from '#unsafe/access.ts';
 import { BackgroundTasks } from './background-tasks.ts';
-import type { Bot, BotConfig, BotPluginConfigs, BotState, BotStats } from './config.ts';
+import type { Bot, BotConfig, BotPluginConfigs, BotPlugins, BotState, BotStats } from './config.ts';
 import { BotStateError } from './config.ts';
 import { DIRECT_EVENTS, type DirectEvent } from './direct-events.ts';
 import { groupAdminPort } from './group-admin.ts';
@@ -542,11 +542,15 @@ export function createBot(config: BotConfig): Bot {
     }
   }
 
-  async function reload(name: string): Promise<PluginReloadResult> {
-    if (!host) throw new BotStateError(`reload("${name}"): plugins ainda não carregados`, state);
+  /** Mudança de um plugin em execução (`action` só entra na mensagem de erro). */
+  async function change(
+    action: 'reload' | 'disable' | 'enable',
+    name: string,
+  ): Promise<PluginReloadResult> {
+    if (!host) throw new BotStateError(`${action}("${name}"): plugins ainda não carregados`, state);
     // Um aviso só ao transport, no fim: no meio, os comandos do plugin saíram e não voltaram.
     const pluginHost = host;
-    const result = await catalog.batch(() => pluginHost.reload(name));
+    const result = await catalog.batch(() => pluginHost[action](name));
     for (const error of result.errors) emitLifecycleError(error);
     // Os dependentes recarregados em cascata (ADR 0041) também podem falhar no `setup` novo.
     for (const entry of [result.entry, ...result.dependents]) {
@@ -556,6 +560,14 @@ export function createBot(config: BotConfig): Bot {
     }
     return result;
   }
+
+  const reload = (name: string): Promise<PluginReloadResult> => change('reload', name);
+
+  const plugins: BotPlugins = Object.assign((): PluginReportEntry[] => host?.report() ?? [], {
+    reload,
+    disable: (name: string) => change('disable', name),
+    enable: (name: string) => change('enable', name),
+  });
 
   async function runStart(): Promise<void> {
     try {
@@ -754,9 +766,7 @@ export function createBot(config: BotConfig): Bot {
 
     config: pluginConfigs,
 
-    plugins(): PluginReportEntry[] {
-      return host?.report() ?? [];
-    },
+    plugins,
 
     stats(): BotStats {
       return { inbound: inbound.stats(), outbound: outbound.stats() };

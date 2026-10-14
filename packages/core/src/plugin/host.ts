@@ -95,6 +95,16 @@ export interface PluginHost {
    * atualizada. Vale para plugin carregado ou cujo `setup` falhou.
    */
   reload(name: string): Promise<PluginReloadResult>;
+  /**
+   * Desliga um plugin em execução: desce ele e os dependentes (que viram `dependency-skipped`),
+   * e não carrega mais até `enable`. Já desligado, não faz nada.
+   */
+  disable(name: string): Promise<PluginReloadResult>;
+  /**
+   * Liga de volta um plugin desligado com `disable`, e sobe os dependentes que ele libera. Não
+   * ligado, não faz nada.
+   */
+  enable(name: string): Promise<PluginReloadResult>;
   /** Tabela atual, na ordem de carga (reflete reloads). */
   report(): PluginReportEntry[];
 }
@@ -380,12 +390,17 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
     return errors;
   }
 
-  async function runReload(name: string): Promise<PluginReloadResult> {
+  function slotOf(action: string, name: string): Slot {
     if (state !== 'running') {
-      throw new PluginHostStateError(`reload("${name}"): host em "${state}"`);
+      throw new PluginHostStateError(`${action}("${name}"): host em "${state}"`);
     }
     const slot = byName.get(name);
-    if (!slot) throw new PluginHostStateError(`reload("${name}"): plugin desconhecido`);
+    if (!slot) throw new PluginHostStateError(`${action}("${name}"): plugin desconhecido`);
+    return slot;
+  }
+
+  async function runReload(name: string): Promise<PluginReloadResult> {
+    const slot = slotOf('reload', name);
     const { report } = slot;
     if (report.status === 'skipped' && report.reason.kind !== 'setup-failed') {
       throw new PluginHostStateError(
@@ -393,22 +408,43 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
           'só recarrega plugin carregado ou cujo setup falhou',
       );
     }
+    return restart(slot, 'recarregado');
+  }
+
+  async function runDisable(name: string): Promise<PluginReloadResult> {
+    const slot = slotOf('disable', name);
+    if (disabled.has(name)) return { entry: slot.report, dependents: [], errors: [] };
+    disabled.add(name);
+    return restart(slot, 'desligado');
+  }
+
+  async function runEnable(name: string): Promise<PluginReloadResult> {
+    const slot = slotOf('enable', name);
+    if (!disabled.delete(name)) return { entry: slot.report, dependents: [], errors: [] };
+    return restart(slot, 'ligado');
+  }
+
+  /**
+   * Desce o plugin e os dependentes e sobe de novo, na ordem do boot. Todos passam por
+   * `incompatibility`, inclusive a raiz: o motivo dela pode ter mudado (desligada, ou com a
+   * dependência desligada), e um `setup-failed` anterior ganha nova tentativa.
+   */
+  async function restart(slot: Slot, verb: string): Promise<PluginReloadResult> {
+    const name = slot.entry.definition.name;
     // Quem guardou um serviço do plugin no `setup` ficaria com a instância do contexto
     // descartado: o subgrafo de dependentes desce e sobe junto (ADR 0041).
     const affected = withDependents(slot);
     const errors: PluginLifecycleError[] = [];
     for (const each of affected.toReversed()) errors.push(...(await bringDown(each)));
     for (const each of affected) {
-      // O próprio plugin não passa por `incompatibility`: o motivo estático dele não muda, e
-      // um `setup-failed` anterior precisa de uma nova tentativa.
-      const reason = each === slot ? undefined : incompatibility(each.entry.definition);
+      const reason = incompatibility(each.entry.definition);
       each.report = reason
         ? { ...reportBase(each.entry), status: 'skipped', reason }
         : await bringUp(each);
     }
     const dependents = affected.slice(1).map((each) => each.report);
     log.info(
-      `plugin "${name}" recarregado: ${slot.report.status === 'loaded' ? 'carregado' : 'ignorado'}`,
+      `plugin "${name}" ${verb}: ${slot.report.status === 'loaded' ? 'carregado' : 'ignorado'}`,
       {
         plugin: name,
         status: slot.report.status,
@@ -460,6 +496,14 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
 
     reload(name: string): Promise<PluginReloadResult> {
       return enqueue(() => runReload(name));
+    },
+
+    disable(name: string): Promise<PluginReloadResult> {
+      return enqueue(() => runDisable(name));
+    },
+
+    enable(name: string): Promise<PluginReloadResult> {
+      return enqueue(() => runEnable(name));
     },
 
     report(): PluginReportEntry[] {

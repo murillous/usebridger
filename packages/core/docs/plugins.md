@@ -282,6 +282,19 @@ Os dependentes são reavaliados como no boot. Se o `setup` novo do plugin falhar
 por motivo próprio (ex.: desabilitado) continua ignorado. `after` não entra na cascata, porque só
 ordena a carga.
 
+### Desligar e ligar (`disable` / `enable`)
+
+```ts
+await bot.plugins.disable('ai');  // desce ai e os dependentes; ai vira "disabled"
+await bot.plugins.enable('ai');   // sobe ai de volta e os dependentes que ele libera
+```
+
+Mesma cascata do `reload`, sem mexer na config: nada é gravado no storage. Desligado, o plugin
+não carrega até `enable`, nem pelo `reload`, e o boot aceita a mesma lista em `disabledPlugins`.
+Desligar um plugin já desligado, ou ligar um já ligado, não faz nada. Chamados antes do `start()`,
+recusam com `BotStateError`. Os métodos ficam em `bot.plugins`; `bot.plugins()` segue devolvendo a
+tabela de boot.
+
 | Campo | O que é |
 |-------|---------|
 | `entry` | Linha nova do plugin na tabela |
