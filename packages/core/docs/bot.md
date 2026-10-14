@@ -171,7 +171,9 @@ shutdown.
 - **Resposta esperada** ([Conversas](conversations.md), [ADR 0060](../../../docs/adr/0060-resposta-esperada.md)):
   se o remetente tem uma espera neste chat (`expectReply`), a mensagem vai ao passo do plugin e
   para ali. Se o texto casa com um comando, a espera é descartada e o comando roda. O passo tem o
-  prazo do comando e, se falhar, vira `plugin.error` com `phase: 'step'`.
+  prazo do comando e, se falhar, vira `plugin.error` com `phase: 'step'`. A espera que vence com
+  `onExpire` no passo entra na fila do chat como uma tarefa própria, sem passar pelos middlewares
+  ([ADR 0097](../../../docs/adr/0097-onexpire-do-passo.md)); a falha vira `phase: 'step-expire'`.
 - **Comando que casa consome** a mensagem, mesmo recusado (papel, `accepts`) ou com erro. A
   resposta de `onReject` sai pelo `ctx.reply`. Comando que lança vira `plugin.error`
   (`phase: 'command'`, `event` = nome do comando) e uma linha de log em `error`; o chat segue.

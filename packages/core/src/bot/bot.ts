@@ -16,7 +16,7 @@ import { createDeferredLogger } from '#logger/deferred.ts';
 import { createLogger, createNoopLogger } from '#logger/logger.ts';
 import { createSecretSet } from '#logger/secrets.ts';
 import type { Logger } from '#logger/types.ts';
-import type { Message } from '#message/types.ts';
+import type { Chat, Contact, Message } from '#message/types.ts';
 import { chatAllowed } from '#middleware/chat-filter.ts';
 import { createOutbound, enqueueAction } from '#outbound/actions.ts';
 import { OutboundQueue } from '#outbound/queue.ts';
@@ -40,7 +40,7 @@ import { BotStateError } from './config.ts';
 import { DIRECT_EVENTS, type DirectEvent } from './direct-events.ts';
 import { groupAdminPort } from './group-admin.ts';
 import { createInboundFlow } from './inbound-flow.ts';
-import type { KernelMessageContext } from './message-context.ts';
+import type { ExpireOrigin, KernelMessageContext } from './message-context.ts';
 import { createPipeline } from './middlewares.ts';
 import { createPluginContextFactory } from './plugin-context.ts';
 import { createReconnector, type Reconnector } from './reconnect.ts';
@@ -186,7 +186,10 @@ export function createBot(config: BotConfig): Bot {
         { plugin: command.plugin, command: command.name, role },
       ),
   });
-  const conversations = new ConversationRegistry<KernelMessageContext>();
+  // A espera com `onExpire` que vence entra na fila do chat como uma mensagem (ADR 0097).
+  const conversations = new ConversationRegistry<KernelMessageContext, ExpireOrigin>({
+    onDue: (chat, sender) => expireWait(chat, sender),
+  });
   const actions = new ActionRegistry();
   // Validado mesmo sem a capability: `limits.actions` malformado é erro de config de todo jeito.
   const buttonMax = buttonLimit(transport);
@@ -328,6 +331,29 @@ export function createBot(config: BotConfig): Bot {
         reason: result,
       });
     }
+  }
+
+  /**
+   * Ponto único da expiração de uma espera (ADR 0097): põe na fila do chat a tarefa que retira a
+   * espera vencida e roda o `onExpire` do passo, para não correr junto com uma mensagem do mesmo
+   * chat. Chamado pelo timer da espera; uma espera restaurada que venceu durante o restart passa
+   * por aqui no boot. No `stop()`, ou com a fila do chat cheia ou fechada, a espera vencida some
+   * em silêncio, como antes do `onExpire`.
+   */
+  function expireWait(chat: Chat, sender: Contact): void {
+    if (state === 'stopping' || state === 'stopped') {
+      conversations.expire(chat.id, sender.id);
+      return;
+    }
+    const result = inbound.enqueue(chat.id, () =>
+      tenants.run(chat.tenantId, () => flow.expireReply(chat, sender)),
+    );
+    if (result === 'queued') return;
+    conversations.expire(chat.id, sender.id);
+    log.warn('expiração de espera descartada pela fila de entrada; onExpire não roda', {
+      chatId: chat.id,
+      reason: result,
+    });
   }
 
   /**

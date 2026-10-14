@@ -18,14 +18,16 @@ import {
 import type { EventBus } from '#events/bus.ts';
 import type { ListenerExtras, PluginErrorEvent } from '#events/types.ts';
 import { createMessage } from '#message/create.ts';
-import type { Message } from '#message/types.ts';
+import type { Chat, Contact, Message } from '#message/types.ts';
 import type { MiddlewarePipeline } from '#middleware/pipeline.ts';
-import type { PrepareActions } from '#outbound/reply.ts';
+import type { PrepareActions, ReplyOrigin } from '#outbound/reply.ts';
 import type { CommandInteraction, Interaction } from '#transport/types.ts';
 import type { BackgroundTasks } from './background-tasks.ts';
 import { GroupAdminTimeoutError } from './group-admin.ts';
 import {
+  createExpireOrigin,
   createMessageContext,
+  type ExpireOrigin,
   type KernelMessageContext,
   type MessageContextDeps,
   messageExtras,
@@ -41,7 +43,7 @@ const MENU_STEP = 'choice';
 
 export interface InboundFlowDeps {
   readonly router: CommandRouter;
-  readonly conversations: ConversationRegistry<KernelMessageContext>;
+  readonly conversations: ConversationRegistry<KernelMessageContext, ExpireOrigin>;
   readonly actions: ActionRegistry;
   readonly bus: EventBus;
   readonly pipeline: MiddlewarePipeline<KernelMessageContext>;
@@ -60,6 +62,11 @@ export interface InboundFlow {
   readonly handleMessage: (message: Message) => Promise<void>;
   readonly handleEdited: (message: Message) => Promise<void>;
   readonly handleInteraction: (interaction: Interaction) => Promise<void>;
+  /**
+   * Expira a espera do remetente no chat, se ela venceu, e roda o `onExpire` do passo (ADR 0097).
+   * Quem chama a põe na fila do chat: é a tarefa da expiração.
+   */
+  readonly expireReply: (chat: Chat, sender: Contact) => Promise<void>;
   /** A interação de origem da mensagem que o fluxo montou de um clique ou comando nativo. */
   readonly interactionOf: (message: Message) => Interaction | undefined;
 }
@@ -187,22 +194,49 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     }
   }
 
+  /**
+   * A tarefa da expiração, na fila do chat (ADR 0097). A espera só sai aqui, na vez dela: uma
+   * mensagem do remetente que entrou antes na fila já a consumiu, e aí não há o que expirar. Não
+   * passa pelos middlewares, porque não há mensagem; espera o fim do boot, como a mensagem. A
+   * falha vira `plugin.error` com `phase: 'step-expire'`.
+   */
+  async function expireReply(chat: Chat, sender: Contact): Promise<void> {
+    const ready = deps.ready();
+    if (ready !== true && !(await ready)) return;
+    const expired = conversations.expire(chat.id, sender.id);
+    if (expired === undefined) return;
+    try {
+      await expired.run(
+        createExpireOrigin(expired.chat, expired.sender, contextDeps),
+        expired.data,
+      );
+    } catch (error) {
+      reportPluginError({
+        plugin: expired.plugin,
+        phase: 'step-expire',
+        event: expired.step,
+        error,
+        timedOut: error instanceof StepTimeoutError,
+      });
+    }
+  }
+
   // --- Ações e botões (ADR 0062) -------------------------------------------------------------
 
   /**
    * Resolve as ações de um `reply`: guarda o alvo de cada uma sob um ID e devolve os botões ou,
    * sem a capability ou acima do limite, o texto com o menu numerado e a espera do remetente.
    */
-  function prepareActions(owner: string | null, message: Message): PrepareActions {
+  function prepareActions(owner: string | null, origin: ReplyOrigin): PrepareActions {
     return (text, list) => {
       const targets = list.map((action) => actionTarget(owner, action));
-      const chatId = message.chat.id;
+      const chatId = origin.chat.id;
       const ids = targets.map((target) => actions.register(chatId, target));
       const labels = targets.map(({ label }) => label);
       if (ids.length <= maxButtons) {
         return { text, actions: ids.map((id, index) => ({ id, label: labels[index] as string })) };
       }
-      conversations.expect(MENU_OWNER, chatId, message.sender.id, MENU_STEP, { data: ids });
+      conversations.expect(MENU_OWNER, origin.chat, origin.sender, MENU_STEP, { data: ids });
       return { text: numberedMenu(text, labels) };
     };
   }
@@ -350,6 +384,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     handleMessage,
     handleEdited,
     handleInteraction,
+    expireReply,
     interactionOf: (message) => interactions.get(message),
   };
 }

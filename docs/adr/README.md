@@ -192,7 +192,7 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0057](0057-contact-multiplataforma.md) | D57 | `Contact` multiplataforma: `username`, `isBot` e claims verificados (detalha D09/D38) | Aceito |
 | [0058](0058-chat-multiplataforma.md) | D58 | `Chat` multiplataforma: tipo, espaço e título (detalha D09/D24/D38) | Aceito |
 | [0059](0059-grupos-multiplataforma.md) | D59 | Grupos multiplataforma: admin, participantes, ações e eventos (detalha D24/D46; substitui em parte D10/D38/D40) | Aceito |
-| [0060](0060-resposta-esperada.md) | D60 | Resposta esperada: conversa com estado sem segurar o chat (detalha D12/D42) | Aceito |
+| [0060](0060-resposta-esperada.md) | D60 | Resposta esperada: conversa com estado sem segurar o chat (detalha D12/D42) | Aceito (`onExpire`: ADR 0097) |
 | [0061](0061-texto-formatado-neutro.md) | D61 | Texto formatado neutro, menções portáteis e limites de tamanho (detalha D09/D19) | Aceito |
 | [0062](0062-acoes-e-botoes.md) | D62 | Ações e botões: o clique dispara um comando, com fallback em texto numerado (detalha D12/D49/D60) | Aceito |
 | [0063](0063-prefixo-por-chat.md) | D63 | Prefixo por tipo de chat e por chat, vazio permitido (detalha D12/D60) | Aceito |
@@ -229,4 +229,5 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0094](0094-accepts-estreita-o-contexto-e-args.md) | D94 | `accepts` estreita o contexto do `run` (`ctx.media` como `Media` quando toda entrada tem mídia) e ganha `'args'`, que casa só com texto depois do comando (detalha D12) | Aceito |
 | [0095](0095-zod-no-subpath-do-core.md) | D95 | Zod do core no subpath `@usebridger/core/zod`: o schema da config sai da mesma cópia do core, e o `@usebridger/core` segue sem carregar o Zod (detalha D17/D34) | Aceito |
 | [0096](0096-pontos-de-extensao-em-servicos.md) | D96 | Pontos de extensão em serviços: `ctx.services.contribute` atribui a contribuição ao plugin e o registry a tira no teardown/reload/disable; `extensionPoint(name).list()` na ordem de carga, tipado por `ExtensionPoints` (detalha D18/D41) | Aceito |
+| [0097](0097-onexpire-do-passo.md) | D97 | `onExpire` no passo: a espera que vence sem resposta roda o handler do dono na fila do chat, com o prazo do comando e `phase: 'step-expire'`; resposta, troca, comando, teardown, reload e `stop()` não disparam (detalha D60) | Aceito |
 | [0099](0099-comando-que-exige-servico.md) | D99 | Comando que exige serviço: `services` no comando o deixa fora do registro sem o serviço, e `optionalDependsOn` no manifesto ordena e recarrega em cascata sem impedir a carga (detalha D18/D41/D90) | Aceito |

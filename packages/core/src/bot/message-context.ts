@@ -3,13 +3,17 @@
 // caminho quente (§7 do plano) não deve alocar o que ninguém vai usar.
 
 import type { BotMessageContext } from '#context.ts';
-import type { ExpectReply, ExpectReplyOptions } from '#conversations/conversations.ts';
+import type {
+  ExpectReply,
+  ExpectReplyOptions,
+  ExpireContext,
+} from '#conversations/conversations.ts';
 import { ContextExpiredError, DEADLINE, type Deadline, deadlineOf } from '#deadline.ts';
 import type { MessageListenerFields } from '#events/types.ts';
 import type { LogFields, Logger } from '#logger/types.ts';
 import type { Message } from '#message/types.ts';
 import type { SanitizedContext, SanitizedFields } from '#middleware/sanitize.ts';
-import { createReply, type PrepareActions } from '#outbound/reply.ts';
+import { createReply, type PrepareActions, type ReplyOrigin } from '#outbound/reply.ts';
 import type { Outbound, Reply } from '#outbound/types.ts';
 import type { MessageText, MessageValues } from '#plugin/messages.ts';
 import type { JsonValue } from '#storage/types.ts';
@@ -28,7 +32,7 @@ export interface MessageContextDeps {
    * Resolve as ações do `reply` (ADR 0062) em nome do plugin dono do contexto, ou de ninguém
    * (`null`) no contexto do kernel, que os middlewares veem.
    */
-  readonly actions?: (owner: string | null, message: Message) => PrepareActions;
+  readonly actions?: (owner: string | null, origin: ReplyOrigin) => PrepareActions;
 }
 
 // Chave simbólica, não campo `#privado`: o roteador e os listeners recebem objetos derivados por
@@ -92,7 +96,11 @@ class MessageContextImpl implements KernelMessageContext {
   }
 }
 
-function replyFor(deps: MessageContextDeps, message: Message, owner: string | null): Reply {
+function replyFor(
+  deps: MessageContextDeps,
+  message: Message | ReplyOrigin,
+  owner: string | null,
+): Reply {
   return createReply(deps.sender, message, {
     quote: deps.quote,
     ...(deps.actions && { actions: deps.actions(owner, message) }),
@@ -250,7 +258,11 @@ function expiringReactDescriptor<V extends ExpiringView>(
 }
 
 /** Registra uma espera em nome do plugin; o bot a liga ao registro de conversas (ADR 0060). */
-export type PluginExpect = (message: Message, step: string, options?: ExpectReplyOptions) => void;
+export type PluginExpect = (
+  origin: ReplyOrigin,
+  step: string,
+  options?: ExpectReplyOptions,
+) => void;
 
 /**
  * Descritor do `expectReply` de uma execução com prazo: a espera vale para o chat e o remetente
@@ -300,7 +312,11 @@ export interface CommandViews {
 }
 
 /** Texto das `messages` do plugin para o chat de uma mensagem (ADR 0092). */
-export type PluginText = (message: Message, key: string, values?: MessageValues) => string;
+export type PluginText = (
+  origin: Pick<Message, 'chat'>,
+  key: string,
+  values?: MessageValues,
+) => string;
 
 /**
  * Descritor do `t`: a função presa à mensagem da visão, criada no primeiro acesso e fixada, para
@@ -466,4 +482,73 @@ export function listenerViewFactory(
     t: textDescriptor(text),
   } satisfies Record<keyof MessageListenerFields, PropertyDescriptor>;
   return (ctx) => Object.create(ctx, descriptors);
+}
+
+/**
+ * Origem do `onExpire` (ADR 0097): chat e remetente da espera vencida, com o `reply` montado
+ * sobre as dependências do contexto do bot, para sair pela fila de saída e resolver as ações em
+ * nome do plugin. Não há mensagem: o `reply` não cita.
+ */
+export interface ExpireOrigin extends ReplyOrigin {
+  /** O `reply` no chat da espera, em nome do plugin (as ações de passo apontam para os dele). */
+  readonly replyAs: (plugin: string) => Reply;
+}
+
+/** Monta a origem do `onExpire` de uma espera vencida. */
+export function createExpireOrigin(
+  chat: ReplyOrigin['chat'],
+  sender: ReplyOrigin['sender'],
+  deps: MessageContextDeps,
+): ExpireOrigin {
+  const origin: ExpireOrigin = {
+    chat,
+    sender,
+    replyAs: (plugin) => replyFor(deps, origin, plugin),
+  };
+  return origin;
+}
+
+/**
+ * Deriva, para o `onExpire` dos passos de um plugin, o contexto com `chat`, `sender`, `step`,
+ * `data`, `log`, `t`, `signal`, e `reply` e `expectReply` presos ao prazo, como no passo. Montado
+ * de uma vez: a expiração é rara e não está no caminho quente.
+ */
+export function expireViewFactory(
+  plugin: string,
+  pluginLog: Logger,
+  expect: PluginExpect,
+  text: PluginText,
+): (origin: ExpireOrigin, deadline: Deadline, step: string, data: JsonValue) => ExpireContext {
+  return (origin, deadline, step, data) => {
+    const { chat, sender } = origin;
+    const log = pluginLog.child({ chatId: chat.id });
+    const label = `onExpire do passo "${step}"`;
+    const fields: LogFields = { step };
+    const refuse = refuser(plugin, { log }, deadline, () => ({ label, fields }));
+    return {
+      chat,
+      sender,
+      step,
+      data,
+      log,
+      get signal(): AbortSignal {
+        return deadline.signal;
+      },
+      reply: expiringReply(origin.replyAs(plugin), deadline, refuse),
+      expectReply: (next, options) => {
+        // Como no passo: um `onExpire` que estourou o prazo não abre conversa que ninguém pediu.
+        if (deadline.expired) {
+          const error = new ContextExpiredError(plugin, 'expectReply', label, deadline.reason);
+          log.warn(`expectReply recusado: ${label} já expirou`, {
+            ...fields,
+            operation: 'expectReply',
+            err: error,
+          });
+          throw error;
+        }
+        expect(origin, next, options);
+      },
+      t: (key, values) => text(origin, key, values),
+    };
+  };
 }

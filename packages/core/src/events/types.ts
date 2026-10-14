@@ -13,12 +13,14 @@ export interface PluginErrorEvent {
   readonly plugin: string;
   /**
    * Onde a falha aconteceu. `role`: a checagem de um papel custom que o plugin define. `step`: um
-   * passo de conversa (ADR 0060). `http`: uma rota ou WebSocket do plugin (ADR 0076).
+   * passo de conversa (ADR 0060). `step-expire`: o `onExpire` de um passo (ADR 0097). `http`:
+   * uma rota ou WebSocket do plugin (ADR 0076).
    */
   readonly phase:
     | 'listener'
     | 'command'
     | 'step'
+    | 'step-expire'
     | 'role'
     | 'setup'
     | 'teardown'
