@@ -227,6 +227,8 @@ setup(ctx) {
 - Os outros vêm de `values` (texto ou número). Placeholder sem valor, ou chave que o plugin não
   declara, lança `TypeError`: é erro do plugin.
 - Só `{identificador}` é placeholder; `{ ok }` ou JSON ficam como texto.
+- Nos `commands` do `definePlugin`, `t` só aceita as chaves de `messages` do manifesto: chave
+  digitada errada é erro de compilação, não `TypeError` no meio do comando.
 - A sobrescrita só pode usar os placeholders do texto padrão, mais `{prefix}`: ela muda onde os
   valores entram e pode tirá-los, mas um placeholder novo é `PluginConfigError`
   (`placeholder desconhecido {total}; a mensagem aceita {count}, {prefix}`), em vez de um
