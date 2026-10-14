@@ -66,8 +66,9 @@ export interface PluginChangeResult {
    */
   readonly plugin: PluginReportEntry;
   /**
-   * Linhas novas de quem depende dele (`dependsOn`, transitivo), descidos e subidos em cascata,
-   * na ordem de carga. `dependency-skipped` se o plugin de que dependem não subiu.
+   * Linhas novas de quem depende dele (`dependsOn` ou `optionalDependsOn`, transitivo), descidos
+   * e subidos em cascata, na ordem de carga. `dependency-skipped` se o plugin de que dependem
+   * por `dependsOn` não subiu; o dependente opcional sobe mesmo assim.
    */
   readonly dependents: readonly PluginReportEntry[];
   /**
@@ -97,15 +98,17 @@ export interface PluginHost {
   stop(signal?: AbortSignal): Promise<PluginLifecycleError[]>;
   /**
    * Derruba e sobe de novo um plugin (`teardown` → `dispose` → novo contexto → `setup`) e, em
-   * cascata, quem depende dele por `dependsOn` (ADR 0041): os dependentes descem antes (ordem
-   * inversa) e sobem depois (ordem de carga), reavaliados como no boot. É a primitiva do reload
+   * cascata, quem depende dele por `dependsOn` (ADR 0041) ou `optionalDependsOn` (ADR 0099): os
+   * dependentes descem antes (ordem inversa) e sobem depois (ordem de carga), reavaliados como
+   * no boot. É a primitiva do reload
    * por mudança de config (ADR 0017): o contexto novo sai da fábrica, que já lê a config
    * atualizada. Vale para plugin carregado ou cujo `setup` falhou.
    */
   reload(name: string): Promise<PluginChangeResult>;
   /**
-   * Desliga um plugin em execução: desce ele e os dependentes (que viram `dependency-skipped`),
-   * e não carrega mais até `enable`. Já desligado, não faz nada.
+   * Desliga um plugin em execução: desce ele e os dependentes, e não carrega mais até `enable`.
+   * Quem depende dele por `dependsOn` vira `dependency-skipped`; quem depende por
+   * `optionalDependsOn` sobe de novo sem ele (ADR 0099). Já desligado, não faz nada.
    */
   disable(name: string): Promise<PluginChangeResult>;
   /**
@@ -347,12 +350,33 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
   // `^0.0.z` aceita só `0.0.z`: o dependente para de carregar no primeiro bump de patch da
   // dependência, mesmo sem quebra. Aviso, não erro: a faixa é válida e pode ser intencional.
   function warnExactCaret(definition: PluginDefinition): void {
-    for (const [dependency, range] of Object.entries(definition.dependsOn ?? {})) {
-      if (!isExactCaret(range)) continue;
+    const fields = [
+      ['dependsOn', definition.dependsOn],
+      ['optionalDependsOn', definition.optionalDependsOn],
+    ] as const;
+    for (const [label, dependencies] of fields) {
+      for (const [dependency, range] of Object.entries(dependencies ?? {})) {
+        if (!isExactCaret(range)) continue;
+        log.warn(
+          `plugin "${definition.name}": ${label}["${dependency}"] = "${range}" aceita só essa ` +
+            'versão exata; para acompanhar o 0.x da dependência, use "0.x" ou ">=0.0.0 <1.0.0"',
+          { plugin: definition.name, dependency, range },
+        );
+      }
+    }
+  }
+
+  // Provedor opcional fora da faixa não impede a carga (ADR 0099): o serviço dele já está no
+  // registry quando o dependente sobe, e esconder do `has` só para um plugin criaria um segundo
+  // estado de serviço. Fica o aviso, uma vez no boot, porque as versões não mudam em runtime.
+  function warnOptionalVersion(definition: PluginDefinition): void {
+    for (const [dependency, range] of Object.entries(definition.optionalDependsOn ?? {})) {
+      const version = byName.get(dependency)?.entry.definition.version;
+      if (version === undefined || satisfies(version, range)) continue;
       log.warn(
-        `plugin "${definition.name}": dependsOn["${dependency}"] = "${range}" aceita só essa ` +
-          'versão exata; para acompanhar o 0.x da dependência, use "0.x" ou ">=0.0.0 <1.0.0"',
-        { plugin: definition.name, dependency, range },
+        `plugin "${definition.name}": optionalDependsOn["${dependency}"] = "${range}" não ` +
+          `aceita a versão carregada ${version}; o plugin sobe e o serviço dela segue visível`,
+        { plugin: definition.name, dependency, range, version },
       );
     }
   }
@@ -390,7 +414,10 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
         });
       }
     }
-    for (const slot of slots) warnExactCaret(slot.entry.definition);
+    for (const slot of slots) {
+      warnExactCaret(slot.entry.definition);
+      warnOptionalVersion(slot.entry.definition);
+    }
     for (const slot of slots) {
       const reason = incompatibility(slot.entry.definition);
       slot.report = reason
@@ -479,15 +506,21 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
   }
 
   /**
-   * O slot e quem depende dele por `dependsOn`, direta ou transitivamente, na ordem de carga.
-   * `after` só ordena: quem o usa não pega nada do outro plugin, então não entra.
+   * O slot e quem depende dele por `dependsOn` ou `optionalDependsOn`, direta ou
+   * transitivamente, na ordem de carga. `after` só ordena: quem o usa não pega nada do outro
+   * plugin, então não entra. O opcional entra porque o setup dele decide o que registra conforme
+   * o serviço existe (ADR 0099).
    */
   function withDependents(root: Slot): Slot[] {
     const names = new Set([root.entry.definition.name]);
     // Na ordem topológica, toda dependência aparece antes do dependente: uma passada basta.
     return slots.filter((each) => {
       if (each === root) return true;
-      const dependsOn = Object.keys(each.entry.definition.dependsOn ?? {});
+      const { definition } = each.entry;
+      const dependsOn = [
+        ...Object.keys(definition.dependsOn ?? {}),
+        ...Object.keys(definition.optionalDependsOn ?? {}),
+      ];
       if (!dependsOn.some((dependency) => names.has(dependency))) return false;
       names.add(each.entry.definition.name);
       return true;

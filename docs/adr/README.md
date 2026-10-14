@@ -80,6 +80,7 @@ sendo a referência; um ADR novo entra nos dois.
 - [0087](0087-comando-em-segundo-plano.md) — Comando em segundo plano: `background: true` tira o `run` da fila do chat (detalha D42/D49)
 - [0090](0090-requires-por-comando.md) — `requires` por comando: sem a capability, o comando não é registrado (detalha D16/D64)
 - [0094](0094-accepts-estreita-o-contexto-e-args.md) — `accepts` estreita o `ctx.media` do `run` e ganha `'args'` (detalha D12)
+- [0099](0099-comando-que-exige-servico.md) — Comando que exige serviço (`services`) e `optionalDependsOn` (detalha D18/D41/D90)
 
 **Plugins: carga, config, services e execução**
 
@@ -229,3 +230,4 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0095](0095-zod-no-subpath-do-core.md) | D95 | Zod do core no subpath `@usebridger/core/zod`: o schema da config sai da mesma cópia do core, e o `@usebridger/core` segue sem carregar o Zod (detalha D17/D34) | Aceito |
 | [0096](0096-pontos-de-extensao-em-servicos.md) | D96 | Pontos de extensão em serviços: `ctx.services.contribute` atribui a contribuição ao plugin e o registry a tira no teardown/reload/disable; `extensionPoint(name).list()` na ordem de carga, tipado por `ExtensionPoints` (detalha D18/D41) | Aceito |
 | [0097](0097-onexpire-do-passo.md) | D97 | `onExpire` no passo: a espera que vence sem resposta roda o handler do dono na fila do chat, com o prazo do comando e `phase: 'step-expire'`; resposta, troca, comando, teardown, reload e `stop()` não disparam (detalha D60) | Aceito |
+| [0099](0099-comando-que-exige-servico.md) | D99 | Comando que exige serviço: `services` no comando o deixa fora do registro sem o serviço, e `optionalDependsOn` no manifesto ordena e recarrega em cascata sem impedir a carga (detalha D18/D41/D90) | Aceito |
