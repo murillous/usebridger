@@ -113,6 +113,7 @@ export type {
   LocationMessage,
   Media,
   MediaMessageType,
+  Mention,
   Message,
   MessageOf,
   MessageType,
