@@ -126,8 +126,53 @@ o link expirou.
 4. sem par conhecido (ou se a consulta falhar, com log em `warn`): `null`. Os papéis `owner` e
    `group-admin` falham fechados nesse caso.
 
-`sender.name` é o `pushName`; menções e o autor da citada vêm com `name: null`. Na conversa
-privada, o remetente de uma mensagem da própria sessão é a sessão.
+`sender.name` é o `pushName`; o autor da citada vem com `name: null`. Na conversa privada, o
+remetente de uma mensagem da própria sessão é a sessão.
+
+#### Nome e tag das menções
+
+Cada item de `mentions` traz `tag`, o trecho literal da menção em `text`: `@` + a parte de
+usuário do JID mencionado, sem o aparelho (o mesmo token que o transport escreve ao enviar uma
+menção). O `name` vem do cache de nomes já vistos (em memória, persistido no auth state; veja abaixo), por ordem de prioridade:
+
+1. `notify` (o `pushName` que a pessoa escolheu), de mensagens (`messages.upsert`) e das
+   sincronizações de contatos (`contacts.upsert`, `contacts.update` e o campo `contacts` do
+   `messaging-history.set`);
+2. `verifiedName` (conta comercial);
+3. `name` (nome salvo na agenda do aparelho do bot), só quando não se sabe nenhum outro nome:
+   nunca troca um `pushName` já visto.
+
+LID e telefone da mesma pessoa são tratados como apelidos: o nome aprendido por um vale para o
+outro (pelo `phone` do contato, pelos `lid`/`phoneNumber` que o Baileys manda e, para um LID sem
+entrada, pelo mapeamento da sessão).
+
+#### Persistência dos nomes
+
+O nome da agenda do aparelho do bot (`name` da sincronização) não é gravado e vale só quando não há
+pushName nem na memória nem no storage.
+
+Os nomes persistem por sessão no auth state (`deps.auth`), no tipo `bridger-contact-name`: o id é
+o JID normalizado e o valor, o nome. O par LID ↔ telefone vira uma entrada própria com o mesmo
+nome. Sobrevivem ao restart e o logout os apaga junto com as credenciais
+([ADR 0101](../../../docs/adr/0101-nomes-de-contatos-no-auth-state.md)).
+
+- **Leitura lazy:** a memória responde primeiro. Só quando ela não sabe o nome (nem pelo telefone
+  par) o transport consulta o storage, uma vez por id, num único `getKeys` com o id e o par. A
+  ausência também fica em cache, e leituras concorrentes do mesmo id dividem a consulta. Vale
+  também para reação, voto, apagamento, edição e participantes. Nome lido do storage não emite
+  `contact.updated`.
+- **Escrita em lote:** nome novo vira pendente e uma gravação com debounce (2 s) leva tudo num
+  `setKeys`; a sincronização inicial não faz uma gravação por contato. O `disconnect()` grava o
+  que sobrou. O storage nunca fica no caminho de cada mensagem.
+- **Falhas:** leitura que falha loga `warn`, segue sem nome e tenta de novo na próxima vez;
+  gravação que falha loga `warn` e o lote volta para a próxima.
+- **Logout:** ao fechar por `logged-out` ou `auth-failed` (o kernel apaga o auth state), o
+  transport esquece os nomes em memória e o lote pendente, para o flush atrasado não ressuscitar
+  quem não está mais pareado.
+
+Limites: quem nunca foi visto fica com `name: null` e o `tag` é a única pista. A menção ao próprio remetente na mesma mensagem sai sem nome na
+primeira vez. A sincronização inicial pode emitir muitos `contact.updated` de uma vez (um por
+contato com nome novo).
 
 ### Citada
 
@@ -180,7 +225,7 @@ Sai antes da `message` do remetente, para quem guarda nomes já tê-lo ao tratar
 Campo desconhecido não conta como mudança: uma mensagem sem `pushName` não apaga o nome visto, e um
 LID sem telefone resolvido não apaga o telefone. Mensagens da própria sessão não geram o evento. Os
 contatos vistos ficam em memória durante a vida do transport (sobrevivem às reconexões); ao
-reiniciar o processo, cada um sai de novo na primeira mensagem. Quem precisa do nome de todo
+reiniciar o processo, cada um sai de novo na primeira mensagem (os nomes persistem, o evento não). Quem precisa do nome de todo
 remetente (o `trackUsers` do legacy) faz upsert a cada `contact.updated`.
 
 ### Votos de enquete

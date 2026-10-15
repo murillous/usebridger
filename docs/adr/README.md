@@ -81,6 +81,7 @@ sendo a referência; um ADR novo entra nos dois.
 - [0090](0090-requires-por-comando.md) — `requires` por comando: sem a capability, o comando não é registrado (detalha D16/D64)
 - [0094](0094-accepts-estreita-o-contexto-e-args.md) — `accepts` estreita o `ctx.media` do `run` e ganha `'args'` (detalha D12)
 - [0099](0099-comando-que-exige-servico.md) — Comando que exige serviço (`services`) e `optionalDependsOn` (detalha D18/D41/D90)
+- [0100](0100-mencao-com-tag-no-texto.md) — Menção com `tag` no texto e `textWithMentionNames` (detalha D57/D61)
 
 **Plugins: carga, config, services e execução**
 
@@ -232,3 +233,5 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0097](0097-onexpire-do-passo.md) | D97 | `onExpire` no passo: a espera que vence sem resposta roda o handler do dono na fila do chat, com o prazo do comando e `phase: 'step-expire'`; resposta, troca, comando, teardown, reload e `stop()` não disparam (detalha D60) | Aceito |
 | [0098](0098-esperas-persistidas.md) | D98 | Esperas do `expectReply` persistidas por passo: `define(step, handler, { persist: true })`, leitura em memória com o storage como cópia, vencimento absoluto, restauração depois do `setup` de todos e descarte com `warn` da órfã; reload e `setup` que falhou mantêm, `disable` remove (substitui em parte D60, detalha D15) | Aceito |
 | [0099](0099-comando-que-exige-servico.md) | D99 | Comando que exige serviço: `services` no comando o deixa fora do registro sem o serviço, e `optionalDependsOn` no manifesto ordena e recarrega em cascata sem impedir a carga (detalha D18/D41/D90) | Aceito |
+| [0100](0100-mencao-com-tag-no-texto.md) | D100 | Menção com `tag` literal (`Mention`) e `textWithMentionNames`, que troca o tag pelo nome vindo do cache do transport; o core não interpreta o `id` (detalha D57/D61) | Aceito |
+| [0101](0101-nomes-de-contatos-no-auth-state.md) | D101 | Nomes de contatos do transport Baileys persistidos no auth state (`bridger-contact-name`): leitura lazy com cache negativo, escrita em lote com debounce, descarte no logout (detalha D100/D49) | Aceito |

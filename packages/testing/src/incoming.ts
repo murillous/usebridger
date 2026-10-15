@@ -2,7 +2,7 @@
 // só o que importa (`{ text: '!s', image }`) e o resto sai com padrões coerentes.
 
 import { randomUUID } from 'node:crypto';
-import type { Chat, Contact, Message } from '@usebridger/core';
+import type { Chat, Contact, Mention, Message } from '@usebridger/core';
 import { createMessage, type MediaSource, type MessageInit } from '@usebridger/core/adapter';
 import { DEFAULT_SENDER } from './profiles.ts';
 
@@ -42,7 +42,7 @@ export interface IncomingMessage {
   readonly sender?: Partial<Contact>;
   /** Mensagem citada, descrita do mesmo jeito ou já pronta. */
   readonly quoted?: IncomingMessage | Message;
-  readonly mentions?: readonly Contact[];
+  readonly mentions?: readonly Mention[];
   readonly fromMe?: boolean;
   readonly isForwarded?: boolean;
   readonly isViewOnce?: boolean;

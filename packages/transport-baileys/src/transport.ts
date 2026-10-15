@@ -54,6 +54,7 @@ import { toDisconnectReason } from './disconnect-reason.ts';
 import {
   ContactBook,
   chatOf,
+  learnContacts,
   toDeleted,
   toEdited,
   toGroupUpdated,
@@ -169,7 +170,7 @@ export class BaileysTransport implements Transport {
    */
   readonly #groups = new Map<string, Promise<BaileysGroupMetadata>>();
   /** Contatos já vistos, entre conexões: o `contact.updated` sai só no que é novo. */
-  readonly #contacts = new ContactBook();
+  readonly #contacts: ContactBook;
   /** Enquetes vistas, para decifrar os votos (ADR 0071); o `disconnect()` as esquece. */
   readonly #polls = new PollBook();
 
@@ -178,6 +179,8 @@ export class BaileysTransport implements Transport {
     this.#driver = options.driver;
     this.#logLevel = options.logLevel;
     this.#deps = deps;
+    // Os nomes persistem no auth state da sessão, que o logout apaga (ADR 0101).
+    this.#contacts = new ContactBook({ store: deps.auth, log: deps.log });
     this.#events = new TypedEmitter<TransportEvents>((error, event) =>
       this.#log.error('handler de evento do transport falhou', { err: error, event }),
     );
@@ -279,7 +282,10 @@ export class BaileysTransport implements Transport {
               }
               return;
             }
-            const message = await toMessage(raw, env);
+            // Menção a si próprio no mesmo envio sai sem nome: o remetente só é observado depois, e
+            // o nome dele pode não ter chegado ainda. Adiantar o `observe` mudaria a ordem dos
+            // eventos para ganhar pouco.
+            const message = await toMessage(raw, env, (id) => contacts.nameFor(id, env));
             if (message === null || !current()) return;
             // Antes da mensagem: quem guarda nomes já o tem ao tratá-la.
             const contact = message.fromMe ? null : contacts.observe(message.sender);
@@ -291,6 +297,21 @@ export class BaileysTransport implements Transport {
         );
       }
     });
+
+    // Nomes sincronizados pelo Baileys alimentam as menções (e o `contact.updated`, ADR 0040).
+    const learn = (list: readonly Partial<BaileysContact>[]) => {
+      if (!current()) return;
+      enqueue(async () => {
+        // Fila atrasada: a conexão pode ter caído (e a sessão sido encerrada) até aqui.
+        if (!current()) return;
+        for (const update of learnContacts(list, contacts)) {
+          if (current()) this.#events.emit('contact.updated', update);
+        }
+      }, 'falha ao aprender nomes de contatos do Baileys; descartados');
+    };
+    socket.ev.on('contacts.upsert', learn);
+    socket.ev.on('contacts.update', learn);
+    socket.ev.on('messaging-history.set', ({ contacts: list }) => learn(list));
 
     socket.ev.on('messages.reaction', (reactions) => {
       if (!current()) return;
@@ -390,6 +411,9 @@ export class BaileysTransport implements Transport {
           this.#socket = null;
           const error = lastDisconnect?.error;
           const reason = toDisconnectReason(error, { pairing });
+          // Sessão encerrada: o kernel apaga o auth state em seguida, e os nomes (memória e lote
+          // pendente) não podem sobreviver a ele nem voltar com um flush atrasado.
+          if (reason === 'logged-out' || reason === 'auth-failed') contacts.reset();
           this.#events.emit('connection.status', { status: 'closed', reason, error });
           return;
         }
@@ -401,6 +425,7 @@ export class BaileysTransport implements Transport {
     this.#attempt++;
     this.#endSocket();
     this.#polls.clear();
+    await this.#contacts.flush();
   }
 
   /** Encerra o socket atual sem emitir nada: quem chamou já sabe que a conexão acabou. */

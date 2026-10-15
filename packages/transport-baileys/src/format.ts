@@ -4,6 +4,15 @@
 import type { FormattedText, TextNode } from '@usebridger/core';
 import { jidDecode } from 'baileys';
 
+/**
+ * O token que o WhatsApp põe no texto para uma menção: `@` + a parte de usuário do JID (sem
+ * aparelho), inclusive com LID. Entrada (`Mention.tag`) e saída usam esta função para não
+ * divergirem.
+ */
+export function mentionTag(jid: string): string {
+  return `@${jidDecode(jid)?.user ?? jid}`;
+}
+
 export interface RenderedText {
   readonly text: string;
   /** JIDs das menções da árvore, na ordem e sem repetição. */
@@ -40,7 +49,7 @@ export function renderWhatsApp(text: FormattedText): RenderedText {
         case 'mention':
           mentions.add(node.contact.id);
           // O app troca `@<usuário do JID>` pelo nome do contato, inclusive com LID.
-          out += `@${jidDecode(node.contact.id)?.user ?? node.contact.id}`;
+          out += mentionTag(node.contact.id);
           break;
       }
     }

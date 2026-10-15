@@ -502,6 +502,11 @@ vida. O que tem dono próprio saiu para módulos vizinhos em `src/bot/`:
 | Módulo | O que faz |
 | --- | --- |
 | `config.ts` | Tipos públicos do bot (`BotConfig`, `Bot`, `BotState`) e o `BotStateError` |
+| `bot-setup.ts` | Validações da config que não dependem do estado do bot: nome da sessão, transport (instância ou fábrica), `limits.actions` e os conflitos que derrubam o boot |
+| `transport-entry.ts` | Assinatura dos eventos do transport: fila do chat para mensagem, edição e clique, [eventos que não são mensagem](#eventos-que-não-são-mensagem) direto ao barramento e a expiração de espera na fila do chat |
+| `ready-gate.ts` | O portão do boot: o que chega antes de os plugins subirem espera; boot abortado descarta |
+| `plugin-control.ts` | `bot.plugins` (`reload`/`disable`/`enable`), `bot.config` e a situação de cada plugin para as esperas persistidas |
+| `plugin-errors.ts` | Falha de plugin para o log e para o evento `plugin.error` |
 | `inbound-flow.ts` | O [fluxo de uma mensagem](#fluxo-de-uma-mensagem) depois da fila do chat: middlewares, resposta esperada, roteador, listeners, cliques, comandos nativos e ações do `reply` |
 | `direct-events.ts` | De onde vem o chat de cada [evento que não é mensagem](#eventos-que-não-são-mensagem) |
 | `group-admin.ts` | Consulta de admin do grupo, com prazo, para o papel `group-admin` |
@@ -518,7 +523,7 @@ não foram extraídos, por três motivos:
   HTTP e a porta antes do `connect()`. Os ganchos internos são empilhados para o LIFO do
   [shutdown](#shutdown-gracioso-stop) descer na ordem certa, e o storage fecha por último. Lida
   de cima a baixo num lugar só, essa ordem é o que se revisa.
-- **Dependem do estado mutável da closure:** `ready`/`readyPromise`, `booted`, `connectCalled`,
+- **Dependem do estado mutável da closure:** o portão do boot, `booted`, `connectCalled`,
   `httpAttached`, `unsubscribe`, `stopRequested`, `host` e `configs`. Separar as funções
   espalharia esse estado por vários arquivos em vez de simplificar.
 - **É o trabalho do ponto de composição.** Feitas as outras extrações, é o que sobra no
