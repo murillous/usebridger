@@ -148,6 +148,9 @@ entrada, pelo mapeamento da sessão).
 
 #### Persistência dos nomes
 
+O nome da agenda do aparelho do bot (`name` da sincronização) não é gravado e vale só quando não há
+pushName nem na memória nem no storage.
+
 Os nomes persistem por sessão no auth state (`deps.auth`), no tipo `bridger-contact-name`: o id é
 o JID normalizado e o valor, o nome. O par LID ↔ telefone vira uma entrada própria com o mesmo
 nome. Sobrevivem ao restart e o logout os apaga junto com as credenciais

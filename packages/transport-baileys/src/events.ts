@@ -75,6 +75,11 @@ export class ContactBook {
   #writing: Promise<void> = Promise.resolve();
   /** Sobe no `reset()`: leitura e gravação de antes dele não valem mais. */
   #epoch = 0;
+  /**
+   * Ids cujo nome em `#known` veio só da agenda do aparelho do bot. Valem por último: o nome que a
+   * pessoa escolheu (pushName), mesmo o lido do storage, vem antes. Por isso também não persistem.
+   */
+  readonly #bookOnly = new Set<string>();
 
   constructor(options: ContactBookOptions = {}) {
     this.#store = options.store;
@@ -86,12 +91,19 @@ export class ContactBook {
    * que o contato aparece (ADR 0049) ou quando o nome ou o telefone mudou. Campo desconhecido
    * (`null`) não apaga o que já se sabia.
    */
-  observe(contact: Contact, alias?: string): TransportEvents['contact.updated'] | null {
+  observe(
+    contact: Contact,
+    alias?: string,
+    fromBook = false,
+  ): TransportEvents['contact.updated'] | null {
     const known = this.#known.get(contact.id);
     const name = contact.name ?? known?.name ?? null;
     const phone = contact.phone ?? known?.phone ?? null;
     this.#known.set(contact.id, { name, phone });
-    if (name !== null) {
+    if (name !== null && fromBook) {
+      this.#bookOnly.add(contact.id);
+    } else if (name !== null) {
+      this.#bookOnly.delete(contact.id);
       this.#remember(contact.id, name);
       // O mesmo contato aparece ora por LID, ora por telefone (ADR 0046): o nome vale nos dois.
       const peer = alias ?? (isLidUser(contact.id) && phone ? `${phone}@s.whatsapp.net` : null);
@@ -108,7 +120,17 @@ export class ContactBook {
   }
 
   nameOf(id: string): string | null {
-    return this.#known.get(id)?.name ?? this.#aliasNames.get(id) ?? null;
+    return this.#trustedName(id) ?? this.#bookName(id);
+  }
+
+  /** Nome que a pessoa escolheu: o observado, o do apelido ou o lido do storage. */
+  #trustedName(id: string): string | null {
+    const known = this.#bookOnly.has(id) ? null : (this.#known.get(id)?.name ?? null);
+    return known ?? this.#aliasNames.get(id) ?? null;
+  }
+
+  #bookName(id: string): string | null {
+    return this.#bookOnly.has(id) ? (this.#known.get(id)?.name ?? null) : null;
   }
 
   /**
@@ -118,19 +140,25 @@ export class ContactBook {
    * observado com o telefone.
    */
   async nameFor(id: string, env: Pick<NormalizeEnv, 'pnForLid'>): Promise<string | null> {
-    const direct = this.nameOf(id);
+    const direct = this.#trustedName(id);
     if (direct !== null) return direct;
     let peerId: string | null = null;
     if (isLidUser(id)) {
       const pn = await env.pnForLid(id);
       if (pn) {
         peerId = jidNormalizedUser(pn) || pn;
-        const viaPeer = this.nameOf(peerId);
+        const viaPeer = this.#trustedName(peerId);
         if (viaPeer !== null) return viaPeer;
       }
     }
     await this.#load(peerId === null ? [id] : [id, peerId]);
-    return this.nameOf(id) ?? (peerId === null ? null : this.nameOf(peerId));
+    // A agenda só depois do storage: depois de um restart, o pushName gravado vence.
+    return (
+      this.#trustedName(id) ??
+      (peerId === null ? null : this.#trustedName(peerId)) ??
+      this.#bookName(id) ??
+      (peerId === null ? null : this.#bookName(peerId))
+    );
   }
 
   /** O contato com o nome já visto, quando o evento não trouxe nenhum (só memória). */
@@ -171,6 +199,7 @@ export class ContactBook {
     this.#dirty.clear();
     this.#asked.clear();
     this.#reading.clear();
+    this.#bookOnly.clear();
   }
 
   #remember(id: string, name: string): void {
@@ -233,7 +262,7 @@ export class ContactBook {
       for (const id of ids) {
         const name = found[id];
         // O que foi observado nesse meio-tempo é mais novo que o que estava gravado.
-        if (typeof name === 'string' && this.nameOf(id) === null) {
+        if (typeof name === 'string' && this.#trustedName(id) === null) {
           this.#aliasNames.set(id, name);
           if (!this.#saved.has(id)) this.#saved.set(id, name);
         }
@@ -267,13 +296,13 @@ export function learnContacts(
     if (!c.id) continue;
     const id = jidNormalizedUser(c.id) || c.id;
     // `||` e não `??`: o WhatsApp manda `notify` vazio para quem não definiu nome.
-    const name =
-      c.notify || c.verifiedName || (contacts.nameOf(id) === null ? c.name || null : null);
+    const chosen = c.notify || c.verifiedName || null;
+    const name = chosen ?? (contacts.nameOf(id) === null ? c.name || null : null);
     if (name === null) continue;
     const other = isLidUser(id) ? c.phoneNumber : c.lid;
     const pn = isLidUser(id) ? c.phoneNumber : id;
     const phone = pn ? (jidDecode(pn)?.user ?? null) : null;
-    const update = contacts.observe({ id, name, phone }, other);
+    const update = contacts.observe({ id, name, phone }, other, chosen === null);
     if (update !== null) updates.push(update);
   }
   return updates;

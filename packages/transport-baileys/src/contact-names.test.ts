@@ -279,3 +279,42 @@ describe('BaileysTransport: nomes persistidos', () => {
     expect(await inner.getKeys(NAME_KEY, [ALICE])).toEqual({});
   });
 });
+
+describe('ContactBook: nome da agenda', () => {
+  it('não é gravado no store', async () => {
+    const { store, calls } = spyStore();
+    const book = new ContactBook({ store });
+    learnContacts([{ id: ALICE, name: 'Minha amiga' }], book);
+    await book.flush();
+    expect(calls.set).toEqual([]);
+    expect(book.nameOf(ALICE)).toBe('Minha amiga');
+  });
+
+  it('depois de um restart, o pushName gravado vence o nome da agenda', async () => {
+    const { store } = spyStore();
+    const first = new ContactBook({ store });
+    first.observe({ id: ALICE, name: 'Alice', phone: '5511911110000' });
+    await first.flush();
+
+    const second = new ContactBook({ store });
+    learnContacts([{ id: ALICE, name: 'Minha amiga' }], second);
+    expect(await second.nameFor(ALICE, env)).toBe('Alice');
+  });
+
+  it('sem nada gravado, a agenda ainda serve de último recurso', async () => {
+    const { store } = spyStore();
+    const book = new ContactBook({ store });
+    learnContacts([{ id: ALICE, name: 'Minha amiga' }], book);
+    expect(await book.nameFor(ALICE, env)).toBe('Minha amiga');
+  });
+
+  it('pushName visto depois toma o lugar da agenda e passa a ser gravado', async () => {
+    const { store, calls } = spyStore();
+    const book = new ContactBook({ store });
+    learnContacts([{ id: ALICE, name: 'Minha amiga' }], book);
+    book.observe({ id: ALICE, name: 'Alice', phone: '5511911110000' });
+    await book.flush();
+    expect(calls.set).toEqual([{ [ALICE]: 'Alice' }]);
+    expect(await book.nameFor(ALICE, env)).toBe('Alice');
+  });
+});

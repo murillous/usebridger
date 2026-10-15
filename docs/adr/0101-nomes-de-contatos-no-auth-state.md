@@ -28,6 +28,11 @@ no caminho quente de cada mensagem.
 - `contact.updated` não muda: nomes lidos do storage não emitem evento, e após o restart o contato
   conta como visto pela primeira vez.
 
+- **Nome da agenda não persiste e vale por último.** O `name` que a sincronização traz é o nome
+  salvo na agenda do aparelho do bot, não o que a pessoa escolheu. Ele não é gravado e só é usado
+  quando nem a memória nem o storage têm um pushName. Sem isso, depois de um restart a agenda
+  chegaria antes da leitura lazy e tomaria o lugar do pushName gravado.
+
 ## Alternativas descartadas
 
 - **Storage novo no `TransportDeps`:** contrato novo no core, sem o isolamento por sessão nem o
