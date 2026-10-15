@@ -3,7 +3,7 @@
 **Status:** Aceito (2026-10-10) · Detalha **D03** ([ADR 0003](0003-transport-abstrato.md)),
 **D10** ([ADR 0010](0010-capabilities-do-transporte.md)) e **D37**
 ([ADR 0037](0037-transport-por-fabrica.md)) · Par do **D79**
-([ADR 0079](0079-acucar-no-manifesto-do-plugin.md))
+([ADR 0079](0079-acucar-no-manifesto-do-plugin.md)) · O plugin sem a capability derruba o boot desde o [ADR 0102](0102-plugin-falho-derruba-o-boot.md)
 
 ## Contexto
 

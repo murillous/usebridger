@@ -179,13 +179,21 @@ describe('createTestBot', () => {
     expect(bot.sent).toHaveLength(0);
   });
 
-  it('respeita as capabilities do FakeTransport: plugin sem a capability não carrega', async () => {
-    const transport = new FakeTransport({ capabilities: ['send.text', 'quoted'] });
-    const bot = await testBot({ transport, plugins: [sticker(), ping()] });
-
-    expect(bot.bot.plugins().find((entry) => entry.name === 'sticker')).toMatchObject({
-      status: 'skipped',
+  it('respeita as capabilities do FakeTransport: plugin sem a capability derruba o boot', async () => {
+    const capabilities = ['send.text', 'quoted'] as const;
+    await expect(
+      testBot({ transport: new FakeTransport({ capabilities }), plugins: [sticker(), ping()] }),
+    ).rejects.toMatchObject({
+      name: 'PluginBootError',
+      plugin: 'sticker',
       reason: { kind: 'capabilities' },
+    });
+
+    // Desligado de propósito, o resto sobe.
+    const bot = await testBot({
+      transport: new FakeTransport({ capabilities }),
+      plugins: [sticker(), ping()],
+      disabledPlugins: ['sticker'],
     });
     await bot.receive({ text: '!ping' });
     expect(bot.sent).toHaveReplied('pong');

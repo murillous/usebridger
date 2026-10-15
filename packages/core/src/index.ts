@@ -159,10 +159,12 @@ export { definePlugin, PluginManifestError } from '#plugin/define.ts';
 export { type PluginChangeResult, PluginConflictError } from '#plugin/host.ts';
 export { PluginCycleError } from '#plugin/order.ts';
 export {
+  PluginBootError,
   PluginLifecycleError,
   type PluginPhase,
   type PluginReportEntry,
   type PluginSkipReason,
+  type SkippedPluginEntry,
   type UnregisteredCommand,
 } from '#plugin/report.ts';
 export { PluginDiscoveryError } from '#plugin/sources.ts';

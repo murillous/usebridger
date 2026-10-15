@@ -123,17 +123,23 @@ describe('services por comando (ADR 0099)', () => {
     await expect.poll(() => sentTexts(transport)).toEqual(['figurinha v1']);
   });
 
-  it('o provedor que falha no setup não impede o plugin', async () => {
-    const broken = definePlugin({
+  it('o provedor que falha no setup do reload não derruba o plugin', async () => {
+    // No boot, o provedor que falha derruba o boot (ADR 0102); em runtime, o dependente opcional
+    // segue sem ele.
+    let broken = false;
+    const flaky = definePlugin({
       name: 'sticker',
       version: '1.0.0',
       engine: ENGINE,
-      setup() {
-        throw new Error('sem ffmpeg');
+      setup(ctx) {
+        if (broken) throw new Error('sem ffmpeg');
+        ctx.services.provide('figurinhas', { cria: () => 'figurinha' });
       },
     });
-    const { bot, menu } = start([download, broken]);
+    const { bot, menu } = start([download, flaky]);
     await bot.start();
+    broken = true;
+    await bot.plugins.reload('sticker');
 
     expect(bot.plugins()).toContainEqual(
       expect.objectContaining({ name: 'download', status: 'loaded' }),

@@ -433,16 +433,17 @@ describe('Bot: resposta esperada (ADR 0060)', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('define com nome vazio ou repetido falha o setup do plugin', async () => {
+  it('define com nome vazio ou repetido falha o setup do plugin e derruba o boot', async () => {
     const transport = new RecordingTransport();
     const vazio = plugin('vazio', (ctx) => ctx.conversations.define('', () => undefined));
     const repetido = plugin('repetido', (ctx) => {
       ctx.conversations.define('passo', () => undefined);
       ctx.conversations.define('passo', () => undefined);
     });
-    const bot = await startBot(transport, [vazio, repetido]);
+    const error = await startBot(transport, [vazio, repetido]).catch((caught: unknown) => caught);
 
-    const skipped = bot.plugins().filter((entry) => entry.status === 'skipped');
-    expect(skipped.map((entry) => entry.name).sort()).toEqual(['repetido', 'vazio']);
+    expect(error).toMatchObject({ name: 'PluginBootError' });
+    const { failures } = error as { failures: readonly { name: string }[] };
+    expect(failures.map((entry) => entry.name).sort()).toEqual(['repetido', 'vazio']);
   });
 });

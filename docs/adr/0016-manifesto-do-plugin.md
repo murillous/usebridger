@@ -1,6 +1,7 @@
 # ADR 0016 — Manifesto do plugin
 
 **Status:** Aceito (2026-10-06) · Decisão **D16** do [plano](../../BRIDGER_PLAN.md#4-decisões)
+· Plugin não carregado no boot: substituído pelo [ADR 0102](0102-plugin-falho-derruba-o-boot.md), que derruba o boot
 
 ## Contexto
 

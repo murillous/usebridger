@@ -162,12 +162,15 @@ describe('commands no manifesto', () => {
     });
     const transport = new RecordingTransport();
     const b = bot({ transport, plugins: [plugin] });
-    await b.start();
+    await expect(b.start()).rejects.toMatchObject({
+      name: 'PluginBootError',
+      plugin: 'p',
+      reason: { kind: 'setup-failed' },
+    });
 
     await send(b, transport, '!ping');
     await send(b, transport, 'oi');
 
-    expect(b.plugins()).toEqual([expect.objectContaining({ name: 'p', status: 'skipped' })]);
     expect(sentTexts(transport)).toEqual([]);
     expect(seen).toEqual([]);
   });
@@ -286,15 +289,12 @@ describe('requires deduzido', () => {
       commands: { ping: { run: () => 'pong' } },
     });
     const b = bot({ transport: new RecordingTransport([]), plugins: [plugin] });
-    await b.start();
 
-    expect(b.plugins()).toEqual([
-      expect.objectContaining({
-        name: 'p',
-        status: 'skipped',
-        reason: { kind: 'capabilities', missing: ['send.text'] },
-      }),
-    ]);
+    await expect(b.start()).rejects.toMatchObject({
+      name: 'PluginBootError',
+      plugin: 'p',
+      reason: { kind: 'capabilities', missing: ['send.text'] },
+    });
   });
 
   it('plugin só com on não exige nada', async () => {

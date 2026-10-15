@@ -1,6 +1,7 @@
 # ADR 0032 — Camadas e convenções da config de plugin
 
 **Status:** Aceito (2026-10-07) · Detalha a decisão **D17** ([ADR 0017](0017-config-por-plugin-zod.md))
+· Config inválida no boot: substituído pelo [ADR 0102](0102-plugin-falho-derruba-o-boot.md), que derruba o boot
 
 ## Contexto
 

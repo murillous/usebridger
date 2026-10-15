@@ -301,7 +301,7 @@ Destino dos erros de plugin — todos viram `plugin.error` no barramento e linha
 
 | Fase | Origem |
 | --- | --- |
-| `setup` | fábrica de contexto ou `setup` lançou/estourou o prazo (o plugin fica ignorado na tabela) |
+| `setup` | fábrica de contexto ou `setup` lançou/estourou o prazo num `reload`/`enable` (o plugin fica ignorado na tabela). No boot, a falha derruba o boot com `PluginBootError` e não vira `plugin.error` |
 | `teardown` | `teardown`/limpeza no reload ou no `stop()` (no `stop()`, também no `AggregateError`) |
 | `command` | `run`, `onReject` ou a consulta de admin lançou, ou um deles estourou `timeouts.commandMs` (`timedOut: true`) |
 | `role` | `check` de um papel custom lançou, rejeitou ou estourou `timeouts.commandMs` (`event` = papel; vai para o plugin **dono do papel**, e o comando é recusado) |

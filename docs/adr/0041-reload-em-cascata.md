@@ -1,7 +1,8 @@
 # ADR 0041 — Reload de plugin em cascata pelos dependentes
 
 **Status:** Aceito (2026-10-07) · Detalha **D17** ([ADR 0017](0017-config-por-plugin-zod.md)) e
-**D18** ([ADR 0018](0018-service-registry.md))
+**D18** ([ADR 0018](0018-service-registry.md)) · `dependency-skipped` no boot: substituído pelo
+[ADR 0102](0102-plugin-falho-derruba-o-boot.md), que derruba o boot; o reload em runtime segue este ADR
 
 ## Contexto
 

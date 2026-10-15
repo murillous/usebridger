@@ -106,6 +106,39 @@ export function describeSkipReason(reason: PluginSkipReason): string {
   }
 }
 
+/** Linha da tabela de um plugin que não carregou. */
+export type SkippedPluginEntry = Extract<PluginReportEntry, { status: 'skipped' }>;
+
+/**
+ * Boot abortado porque um ou mais plugins não carregaram por motivo diferente de `disabled`
+ * (ADR 0102). `plugin`, `version` e `reason` são da primeira falha na ordem de carga — a raiz,
+ * já que dependentes vêm depois; `failures` traz todas, para corrigir de uma vez. Em
+ * `setup-failed`, `cause` é o `PluginLifecycleError` (com o erro original no `cause` dele).
+ */
+export class PluginBootError extends Error {
+  override readonly name = 'PluginBootError';
+  readonly plugin: string;
+  readonly version: string;
+  readonly reason: PluginSkipReason;
+  readonly failures: readonly SkippedPluginEntry[];
+
+  constructor(failures: readonly [SkippedPluginEntry, ...SkippedPluginEntry[]]) {
+    const [first] = failures;
+    const lines = failures.map(
+      (entry) => `${entry.name}@${entry.version}: ${describeSkipReason(entry.reason)}`,
+    );
+    super(
+      `${failures.length} plugin(s) não carregaram; boot abortado. ${lines.join('; ')}. ` +
+        'Para subir sem um plugin de propósito, use disabledPlugins.',
+      first.reason.kind === 'setup-failed' ? { cause: first.reason.error } : undefined,
+    );
+    this.plugin = first.name;
+    this.version = first.version;
+    this.reason = first.reason;
+    this.failures = failures;
+  }
+}
+
 /** Situação do plugin em texto curto, como aparece na tabela de boot. */
 function describeStatus(entry: PluginReportEntry): string {
   if (entry.status === 'skipped') return `ignorado (${describeSkipReason(entry.reason)})`;

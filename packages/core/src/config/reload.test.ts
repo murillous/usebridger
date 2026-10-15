@@ -108,17 +108,18 @@ describe('reload por mudança de config', () => {
     expect((await configs.resolve('echo')).config).toMatchObject({ greeting: 'oi' });
   });
 
-  it('config inválida no boot ignora o plugin, com o motivo na tabela', async () => {
+  it('config inválida no boot derruba o boot, com o plugin e o motivo', async () => {
     const { host, calls } = harness({ echo: { token: 'x' } });
-    const table = await host.start();
-    const echo = table.find((entry) => entry.name === 'echo');
-    expect(echo?.status).toBe('skipped');
-    if (echo?.status !== 'skipped' || echo.reason.kind !== 'setup-failed') {
-      throw new Error('esperava setup-failed');
-    }
-    expect(echo.reason.error.phase).toBe('context');
-    expect(echo.reason.error.cause).toBeInstanceOf(PluginConfigError);
-    expect(calls).toEqual(['setup:other']);
+    await expect(host.start()).rejects.toMatchObject({
+      name: 'PluginBootError',
+      plugin: 'echo',
+      reason: {
+        kind: 'setup-failed',
+        error: { phase: 'context', cause: expect.any(PluginConfigError) },
+      },
+    });
+    // O que subiu antes da falha desce junto.
+    expect(calls).toEqual(['setup:other', 'teardown:other']);
   });
 
   it('o segredo inicial e o alterado no reload nunca aparecem no log', async () => {

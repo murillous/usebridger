@@ -485,10 +485,11 @@ describe('Bot: esperas persistidas (ADR 0098)', () => {
         throw new Error('banco fora do ar');
       },
     });
-    // Outro plugin com passo persistido faz o boot ler a coleção.
-    const second = await boot(storage, [broken, outro()]);
-    expect(orphanWarnings(second.lines)).toEqual([]);
-    await stop(second.bot);
+    // O boot abortado (ADR 0102) não varre as esperas: elas ficam para o boot corrigido.
+    await expect(boot(storage, [broken, outro()])).rejects.toMatchObject({
+      name: 'PluginBootError',
+      plugin: 'notas',
+    });
     expect(await waits(storage).find()).toHaveLength(1);
 
     const third = await boot(storage, [notas()]);

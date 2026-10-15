@@ -1,7 +1,8 @@
 # ADR 0099 — Comando que exige serviço e `optionalDependsOn`
 
 **Status:** Aceito (2026-10-13) · Detalha **D18** ([ADR 0018](0018-service-registry.md)),
-**D41** ([ADR 0041](0041-reload-em-cascata.md)) e **D90** ([ADR 0090](0090-requires-por-comando.md))
+**D41** ([ADR 0041](0041-reload-em-cascata.md)) e **D90** ([ADR 0090](0090-requires-por-comando.md)) · Provedor que falha no boot derruba o boot
+desde o [ADR 0102](0102-plugin-falho-derruba-o-boot.md)
 
 ## Contexto
 

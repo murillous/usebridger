@@ -913,18 +913,17 @@ describe('Bot: boot', () => {
     expect(transport.calls).toEqual([]);
   });
 
-  it('setup que falha vira plugin.error (phase setup) e o plugin fica ignorado', async () => {
+  it('setup que falha derruba o boot com o plugin e o motivo, e desce quem já subiu', async () => {
     const transport = new RecordingTransport();
-    const errors: PluginErrorEvent[] = [];
+    const teardowns: string[] = [];
     const observador = definePlugin({
       name: 'observador',
       version: '1.0.0',
       engine: ENGINE,
       priority: 10,
-      setup(ctx) {
-        ctx.events.on('plugin.error', (e) => {
-          errors.push(e.payload);
-        });
+      setup: () => undefined,
+      teardown() {
+        teardowns.push('observador');
       },
     });
     const boom = new Error('setup quebrou');
@@ -938,15 +937,16 @@ describe('Bot: boot', () => {
     });
     const b = bot({ transport, plugins: [quebrado, observador] });
 
-    await b.start();
-
-    expect(errors).toEqual([
-      { plugin: 'quebrado', phase: 'setup', event: null, error: boom, timedOut: false },
-    ]);
-    expect(b.plugins().map((entry) => [entry.name, entry.status])).toEqual([
-      ['observador', 'loaded'],
-      ['quebrado', 'skipped'],
-    ]);
+    await expect(b.start()).rejects.toMatchObject({
+      name: 'PluginBootError',
+      plugin: 'quebrado',
+      reason: { kind: 'setup-failed', error: { phase: 'setup', cause: boom } },
+      message: expect.stringContaining('quebrado@1.0.0: falha no setup: setup quebrou'),
+    });
+    expect(teardowns).toEqual(['observador']);
+    expect(b.state).toBe('stopped');
+    // O transport nunca conectou.
+    expect(transport.calls).toEqual([]);
   });
 
   it('o contexto recusa registros depois do dispose (setup que estourou o prazo)', async () => {
@@ -974,7 +974,7 @@ describe('Bot: boot', () => {
       },
     });
     const b = bot({ transport, plugins: [lento], timeouts: { setupMs: 10 } });
-    await b.start();
+    await expect(b.start()).rejects.toMatchObject({ name: 'PluginBootError' });
     gate.resolve();
     await vi.waitFor(() => expect(late).toHaveLength(4));
 
