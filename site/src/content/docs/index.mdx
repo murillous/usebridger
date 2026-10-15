@@ -1,0 +1,31 @@
+---
+title: Bridger
+description: Kernel de bot de mensageria com transports, storage e plugins.
+template: splash
+hero:
+  tagline: Um kernel de bot de mensageria em TypeScript. Você escolhe o transport e o storage, escreve plugins, e o Bridger cuida do resto.
+  actions:
+    - text: Começar
+      link: /usebridger/comecando/o-que-e/
+      icon: right-arrow
+    - text: Pacotes
+      link: /usebridger/pacotes/core/
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid>
+  <Card title="Guias" icon="open-book">
+    Como escrever um plugin: comandos, eventos, storage, scheduler e testes. Comece por [O que é o Bridger](/usebridger/comecando/o-que-e/).
+  </Card>
+  <Card title="Referência" icon="puzzle">
+    Documentação de cada pacote, do [`core`](/usebridger/pacotes/core/) aos transports e storages.
+  </Card>
+  <Card title="Decisões" icon="document">
+    O porquê de cada escolha de arquitetura, registrado em [ADRs](/usebridger/decisoes/).
+  </Card>
+  <Card title="Contribuindo" icon="github">
+    Como o [release](/usebridger/contribuindo/release/) dos pacotes funciona.
+  </Card>
+</CardGrid>

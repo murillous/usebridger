@@ -1,12 +1,13 @@
 // Plugin local do TypeDoc: dá a cada módulo o nome do import público (`@usebridger/core/adapter`)
 // em vez do caminho do arquivo (`core/src/adapter`). O nome sai dos `exports` de cada
 // package.json, fonte única das entradas públicas; entrada sem export ou export sem entrada vira
-// warning, e o build (com `treatWarningsAsErrors`) falha até a lista do typedoc.json acompanhar.
+// warning, e o build (com `treatWarningsAsErrors`) falha até o `entryPoints` do
+// astro.config.mjs acompanhar.
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, normalize, resolve } from 'node:path';
 import { Converter, ReflectionKind } from 'typedoc';
 
-const packagesDir = resolve(import.meta.dirname, '../../packages');
+const packagesDir = resolve(import.meta.dirname, '../packages');
 
 function publicEntries() {
   const entries = new Map();

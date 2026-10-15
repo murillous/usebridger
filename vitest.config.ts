@@ -4,16 +4,19 @@ import { configDefaults, defineConfig } from 'vitest/config';
 
 // Um projeto por pacote do workspace, o `bench/` inclusive. Projetos inline herdam esta config
 // (extends: true); por glob ('packages/*') não herdariam o resolve abaixo.
-const projects = globSync(['{packages,plugins,apps}/*/package.json', 'bench/package.json']).map(
-  (manifest) => {
-    const { name } = JSON.parse(readFileSync(manifest, 'utf8')) as { name: string };
-    // `template/` é o projeto que o create-bridger-plugin copia: o teste dele roda no projeto
-    // gerado (e2e do pacote), não aqui, onde os marcadores `__export__` não resolvem.
-    return {
-      test: { name, root: dirname(manifest), exclude: [...configDefaults.exclude, 'template/**'] },
-    };
-  },
-);
+const projects = globSync([
+  '{packages,plugins,apps}/*/package.json',
+  'bench/package.json',
+  'site/package.json',
+  'examples/*/package.json',
+]).map((manifest) => {
+  const { name } = JSON.parse(readFileSync(manifest, 'utf8')) as { name: string };
+  // `template/` é o projeto que o create-bridger-plugin copia: o teste dele roda no projeto
+  // gerado (e2e do pacote), não aqui, onde os marcadores `__export__` não resolvem.
+  return {
+    test: { name, root: dirname(manifest), exclude: [...configDefaults.exclude, 'template/**'] },
+  };
+});
 
 export default defineConfig({
   // Resolve @usebridger/* direto no src/ (condição de exports), sem build antes dos testes.

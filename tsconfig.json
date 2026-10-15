@@ -11,7 +11,7 @@
     "noEmit": true
   },
   // Scripts de pacote (fora do `src/` de cada um) também passam pelo typecheck daqui.
-  "include": ["*.config.ts", "packages/*/scripts", "tooling/*.ts"],
+  "include": ["*.config.ts", "packages/*/scripts", "tooling/*.ts", "site/scripts"],
   "references": [
     { "path": "packages/core" },
     { "path": "packages/transport-baileys" },
@@ -20,6 +20,9 @@
     { "path": "packages/storage-postgres" },
     { "path": "packages/testing" },
     { "path": "packages/create-plugin" },
-    { "path": "bench" }
+    { "path": "bench" },
+    { "path": "examples/primeiro-bot" },
+    { "path": "examples/primeiro-bot-web" },
+    { "path": "examples/primeiro-plugin" }
   ]
 }

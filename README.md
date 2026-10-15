@@ -12,7 +12,7 @@ Quer contribuir? Veja o [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Desenvolvimento
 
-Monorepo pnpm (`packages/*`, `bench/` e `tooling/typedoc/`). A versão do
+Monorepo pnpm (`packages/*`, `bench/` e `site/`). A versão do
 pnpm vem de `packageManager` no `package.json` — com `corepack enable`, basta rodar
 `pnpm install` na raiz.
 
@@ -25,8 +25,8 @@ Requer Node 24+ (`engines` na raiz; `.nvmrc` para `nvm use`/`fnm use`).
 | `pnpm lint` / `pnpm lint:fix` | Biome: lint + formatação + organização de imports |
 | `pnpm typecheck` | `tsc -b` em todos os pacotes (project references) |
 | `pnpm test` | Vitest em todos os pacotes |
-| `pnpm build` | `tsdown` em cada pacote (ESM + `.d.ts` em `dist/`) e a referência da API |
-| `pnpm run docs` | Só a referência da API: TypeDoc sobre as entradas públicas, em `docs/referencia/` ([`tooling/typedoc/`](tooling/typedoc/docs/README.md)). O `run` é obrigatório: no pnpm 12, `pnpm docs` é um comando nativo que abre a página de um pacote do registry |
+| `pnpm build` | `tsdown` em cada pacote (ESM + `.d.ts` em `dist/`) |
+| `pnpm run docs` | Site de documentação ([`site/`](site)): sincroniza o Markdown do repo, gera a referência da API com o TypeDoc e o `llms.txt`, em `site/dist/`. O `run` é obrigatório: no pnpm 12, `pnpm docs` é um comando nativo que abre a página de um pacote do registry |
 | `pnpm bench` | Build e benchmark das metas de performance ([`bench/`](bench/docs/README.md)) |
 | `pnpm changeset` | Registra a mudança de um pacote publicável |
 | `pnpm version-packages` | Consome os changesets (versões e changelogs) e sincroniza o `CORE_VERSION` |
@@ -125,6 +125,34 @@ PR que muda um pacote publicável leva um changeset (`pnpm changeset`) — ver
 levá-los para a `main`, onde o workflow de release abre o PR de versão e publica no npm depois
 do merge dele: fluxo, segredos e como reverter em [`docs/release.md`](docs/release.md).
 
+### Site de documentação
+
+`pnpm run docs` builda o site em `site/dist/`; `pnpm --filter @usebridger/site dev` sobe o
+servidor de desenvolvimento. Os dois sincronizam o Markdown antes. Onde cada página vive:
+
+- `docs/` da raiz e `packages/*/docs/`: Markdown do repositório, sincronizado para o site no
+  build. Edite aqui, nunca a cópia.
+- `site/src/content/docs/`: páginas escritas à mão (home, getting started).
+- `examples/`: código dos exemplos do getting started, pacotes privados verificados no
+  typecheck e no teste.
+
+A referência da API é gerada do fonte pelo TypeDoc (rode `pnpm build` antes). Cada subpath dos
+`exports` com a condição `@usebridger/source` vira um módulo com o nome do import
+(`@usebridger/core/adapter`); internos do core não aparecem, e o `create-bridger-plugin` fica de
+fora (binário, sem API importável). O texto vem do TSDoc no código.
+
+**Novo pacote ou novo export:** acrescente o arquivo de fonte em `entryPoints`, no
+`starlightTypeDoc` de `site/astro.config.mjs`. O plugin `site/module-names.js` compara a lista com
+os `exports` dos `package.json`: export sem entrada ou entrada sem export vira warning, e o
+`treatWarningsAsErrors` falha o build até as duas baterem.
+
+**Por que TypeScript 6 no site:** o repositório usa o TypeScript 7, cuja API de compilador ainda é
+experimental; o TypeDoc 0.28 depende da API do 6 e aceita no máximo o 6.0 (peer dependency). Por
+isso o `site/` fixa `typescript@6.0.3` só para ele; a checagem de tipos e o build dos pacotes
+seguem no 7. Quando o TypeDoc suportar o 7, basta remover a dependência.
+
+Decisões em [ADR 0103](docs/adr/0103-site-de-documentacao.md).
+
 ### CI
 
 Todo push e PR para `develop` ou `main` roda o [`ci.yml`](.github/workflows/ci.yml), com os jobs
@@ -134,7 +162,8 @@ instala, testa e builda ([e2e](packages/create-plugin/docs/README.md#e2e)). O jo
 um Postgres em container para o `@usebridger/storage-postgres`. O job `Benchmark` mede as metas
 de performance e falha com piora > 10% sobre o baseline do commit-base, medido no mesmo runner
 e intercalado com o commit testado ([ADR 0054](docs/adr/0054-baseline-do-benchmark.md),
-[ADR 0089](docs/adr/0089-benchmark-intercalado.md)). O job `Pacotes` builda e roda o
+[ADR 0089](docs/adr/0089-benchmark-intercalado.md)). O job `Docs` builda o site e falha com link quebrado ou warning do TypeDoc; o
+[`docs.yml`](.github/workflows/docs.yml) o publica no GitHub Pages a cada push na `main`. O job `Pacotes` builda e roda o
 `pnpm check:packages`, para um pacote que não publicaria quebrar no PR e não no release.
 
 O setup comum (Node do `.nvmrc`, pnpm do `packageManager`, `pnpm install --frozen-lockfile`)

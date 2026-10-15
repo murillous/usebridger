@@ -1,0 +1,86 @@
+---
+title: Seu primeiro bot
+description: Instale, pareie o WhatsApp por QR ou código e veja o !ping responder.
+---
+
+import Exemplo from '../../../components/Exemplo.astro';
+
+Você vai subir um bot no WhatsApp que responde `pong` ao `!ping`. Precisa do Node 24 ou mais novo (`node --version`) e de um WhatsApp para parear. Se não quiser usar seu número, vá direto para a [versão web](#sem-o-seu-número-transport-web).
+
+## 1. Instalar
+
+```sh
+mkdir meu-bot && cd meu-bot
+npm init -y
+npm pkg set type=module
+npm install @usebridger/core @usebridger/transport-baileys @usebridger/storage-sqlite qrcode-terminal
+```
+
+O `type=module` faz o Node tratar os arquivos como ES modules, e o Node 24 roda `.ts` direto, sem etapa de build.
+
+## 2. Escrever o bot
+
+Crie `ping.ts`, o plugin com o comando:
+
+<Exemplo arquivo="primeiro-bot/src/ping.ts" regiao="plugin-ping" />
+
+Crie `pareamento.ts`. O transport só avisa que há um QR ou código para mostrar, pelo barramento de eventos. Quem exibe é um plugin:
+
+<Exemplo arquivo="primeiro-bot/src/pareamento.ts" regiao="plugin-pareamento" />
+
+E `main.ts`, que junta tudo:
+
+<Exemplo arquivo="primeiro-bot/src/main.ts" regiao="bot" />
+
+O projeto completo está em [`examples/primeiro-bot`](https://github.com/murillous/usebridger/tree/main/examples/primeiro-bot/src).
+
+## 3. Parear e conversar
+
+```sh
+node main.ts
+```
+
+No celular: WhatsApp, **Aparelhos conectados**, **Conectar um aparelho**, e leia o QR que aparece no terminal.
+
+Para parear por código, passe o número com DDI e só dígitos:
+
+```sh
+node main.ts 5511999999999
+```
+
+O terminal mostra `Código de pareamento: ...`. Digite-o em **Aparelhos conectados**, **Conectar com número de telefone**.
+
+Depois de conectado, mande `!ping` para o número do bot, de outro contato. A resposta é `pong`. Nas próximas execuções não há QR: as credenciais ficaram no SQLite (`data/bot.sqlite`).
+
+## O que cada peça faz
+
+| Opção do `createBot` | Em uma frase |
+| --- | --- |
+| `transport` | Fala com a plataforma: recebe as mensagens e envia as respostas. Aqui, o WhatsApp via Baileys. |
+| `storage` | Guarda as credenciais da sessão, os dados dos plugins e os jobs agendados. Sem ele, tudo fica em memória e se perde ao parar. |
+| `plugins` | A lista do que o bot faz: comandos, reações a eventos, tarefas. |
+| `http` | Um servidor HTTP opcional, dividido por todos os bots do processo. Só é preciso se um plugin ou o transport tiver rotas, como o `transport-web`. |
+
+O `createBot` aceita ainda `logger` (ou `logLevel`) para os logs. Todas as opções estão em [Bot](/usebridger/pacotes/core/bot/).
+
+## Sem o seu número: transport-web
+
+O `transport-web` é o chat que vive dentro de um sistema web seu (ERP, site). Não há pareamento: o sistema emite um JWT e o navegador conversa com o bot por WebSocket. Serve também para testar sem tocar no WhatsApp.
+
+```sh
+npm install @usebridger/transport-web
+```
+
+Copie o `ping.ts` do passo anterior para a pasta `src/` do novo bot e troque o `main.ts`:
+
+<Exemplo arquivo="primeiro-bot-web/src/main.ts" regiao="bot" />
+
+Aqui o `http` é obrigatório: o transport recebe as conexões pelo servidor do bot. O `secret` assina e valida o JWT. O plugin `pagina` (`pagina.ts`, abaixo) serve uma página de chat mínima em `/plugins/pagina` e assina um token de teste; em produção, quem assina é o seu backend.
+
+<Exemplo arquivo="primeiro-bot-web/src/pagina.ts" regiao="pagina" />
+
+Veja o exemplo completo em [`examples/primeiro-bot-web`](https://github.com/murillous/usebridger/tree/main/examples/primeiro-bot-web/src) e em [transport-web](/usebridger/pacotes/transport-web/).
+
+## Próximo passo
+
+[Escreva seu primeiro plugin](/usebridger/comecando/primeiro-plugin/).

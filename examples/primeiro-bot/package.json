@@ -1,0 +1,31 @@
+{
+  "name": "@usebridger/example-primeiro-bot",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Primeiro bot: baileys + sqlite + !ping.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    "./pareamento": {
+      "@usebridger/source": "./src/pareamento.ts",
+      "default": "./src/pareamento.ts"
+    },
+    "./ping": {
+      "@usebridger/source": "./src/ping.ts",
+      "default": "./src/ping.ts"
+    }
+  },
+  "scripts": {
+    "start": "node src/main.ts"
+  },
+  "dependencies": {
+    "@usebridger/core": "workspace:*",
+    "@usebridger/storage-sqlite": "workspace:*",
+    "@usebridger/transport-baileys": "workspace:*",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "@types/qrcode-terminal": "^0.12.2",
+    "@usebridger/testing": "workspace:*"
+  }
+}
