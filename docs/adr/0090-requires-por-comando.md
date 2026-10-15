@@ -1,7 +1,8 @@
 # ADR 0090 — `requires` por comando
 
 **Status:** Aceito (2026-10-11) · Detalha **D16** ([ADR 0016](0016-manifesto-do-plugin.md)) e
-**D64** ([ADR 0064](0064-comandos-nativos.md))
+**D64** ([ADR 0064](0064-comandos-nativos.md)) · O `requires` do manifesto derruba o boot desde o [ADR 0102](0102-plugin-falho-derruba-o-boot.md);
+o por comando segue este ADR
 
 ## Contexto
 

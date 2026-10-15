@@ -111,7 +111,7 @@ decisão anterior.
 | D07 | **Plugins via npm (config) e via pasta (`pluginDirs`)**, ambos produzem o mesmo objeto `Plugin` | Só npm; só auto-discovery | Flexibilidade com 3 regras: ordem explícita (`priority`/`after`), `name` obrigatório com enable/disable por nome, conflito de nome/comando = erro no boot |
 | D08 | **Sem hot-reload de código** na v1 | Hot-reload | Vazamento de listeners e estado órfão; restart via PM2/Docker |
 | D09 | **Modelo de mensagem normalizado** com union discriminada (`msg.type`), `msg.is()`, `msg.quoted` recursivo, `media.download()`/`stream()` lazy com cache por mensagem; `voice` (PTT) separado de `audio` | Expor objeto Baileys | DX tipada; resolve mídia própria vs citada uma vez só |
-| D10 | **Capabilities do transporte**; plugin declara `requires`; kernel não carrega plugin incompatível (com aviso) + `UnsupportedError` em runtime como rede de segurança | Mínimo denominador comum; só erro em runtime | Não castra o Baileys; erro cedo e explícito (modelo Fabric/Forge) |
+| D10 | **Capabilities do transporte**; plugin declara `requires`; plugin incompatível derruba o boot com `PluginBootError` (ADR 0102; antes: não carregava, com aviso) + `UnsupportedError` em runtime como rede de segurança | Mínimo denominador comum; só erro em runtime | Não castra o Baileys; erro cedo e explícito (modelo Fabric/Forge) |
 | D11 | **Escape hatch `ctx.unsafe.native`** tipado como `unknown`, com aviso no log; uso implica `transports: ['baileys']` | Não expor; expor normalmente | Comunidade não trava esperando o core; uso medido indica o que promover a API |
 | D12 | **Pipeline de 3 estágios**: middlewares onion (Koa) → comando (token exato, consome a mensagem) → listeners em paralelo com `ctx.claim()` | Listeners em série com "primeiro que retornar true" | Performance + isolamento; resolve conflito Luma × Spontaneous |
 | D13 | **Escopo do core**: conexão/reconexão/QR/pairing, Transport + Baileys, modelo de mensagem + envio, filas de entrada e saída, middlewares, comandos, eventos, lifecycle de plugins, storage, scheduler, logger, config, mídia | — | Ver seção 5 |
@@ -597,7 +597,7 @@ critérios de aceite. Toda issue herda os critérios gerais:
   - `definePlugin`; validação de manifesto (`engine`, `requires`, `transports`, `dependsOn`)
   - Fontes: lista da config (npm) + `pluginDirs`
   - Ordenação topológica (`priority`, `after`, `dependsOn`); detecção de ciclo
-  - Enable/disable por nome; tabela de boot "carregado / ignorado (motivo)"
+  - Enable/disable por nome; tabela de boot "carregado / ignorado (motivo)"; plugin falho no boot derruba o boot (ADR 0102)
   - `setup`/`teardown` com timeout
 - **#M1-9 Service registry**
   - `provide`/`get` tipados por declaration merging; erro claro se serviço ausente

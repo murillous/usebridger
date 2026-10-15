@@ -72,8 +72,8 @@ plugin inteiro. Declare o provedor em `optionalDependsOn`
 
 - o formato é o do `dependsOn` (nome do plugin → faixa semver, faixa inválida é erro de
   manifesto);
-- o provedor carrega antes, se existir, e o plugin carrega mesmo sem ele (ausente, ignorado,
-  com `setup` falho ou desligado);
+- o provedor carrega antes, se existir, e o plugin carrega mesmo sem ele (ausente ou desligado;
+  num reload, também com `setup` falho — no boot, o provedor falho derruba o boot);
 - provedor carregado fora da faixa também não impede a carga: o boot avisa em `warn`
   (`dependency`, `range`, `version`), e o serviço dele segue visível para `has`, `get` e
   `services` do comando;

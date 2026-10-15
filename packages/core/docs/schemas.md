@@ -6,7 +6,7 @@ de cada campo fica no guia do módulo; aqui fica o mapa.
 | Formato | Tipo | Conferido por | Quando | Erro |
 | --- | --- | --- | --- | --- |
 | [Manifesto do plugin](#manifesto-do-plugin) | `PluginDefinition` | `definePlugin` e o loader | ao declarar; no boot, para plugins de `pluginDirs` | `PluginManifestError`, derruba o boot |
-| [Compatibilidade do plugin](#compatibilidade-do-plugin) | campos do manifesto | host de plugins | no boot | plugin ignorado, na tabela de boot |
+| [Compatibilidade do plugin](#compatibilidade-do-plugin) | campos do manifesto | host de plugins | no boot | `PluginBootError` (exceto `disabledPlugins`) |
 | [Config do plugin](#config-do-plugin) | schema Zod do plugin | config de plugin | no `setup`, no reload e em `setOverrides` | `PluginConfigError` |
 | [Config do bot](#config-do-bot) | `BotConfig` | `createBot` | ao criar o bot | `BotConfigError`, `TypeError`, `RangeError` |
 | [Comando](#comando) | `CommandDefinition` | `command()` e `ctx.commands.add` | ao declarar e ao registrar | `TypeError`/`RangeError`; conflito: `CommandConflictError` |
@@ -46,8 +46,9 @@ Regras de cada campo, faixas semver aceitas e a forma curta (`commands`/`on`):
 Um manifesto válido ainda pode não carregar. No boot o host confere, nesta ordem, e para no
 primeiro motivo: `disabledPlugins`, `engine` contra `CORE_VERSION`, `transports` contra o
 transport ativo, `requires` contra as capabilities dele e as dependências de `dependsOn`. O
-plugin incompatível é ignorado e aparece na tabela de boot com o motivo (`PluginSkipReason`); o
-bot sobe sem ele. Ver [Plugins → Boot](plugins.md#boot-start).
+plugin incompatível derruba o boot com `PluginBootError`, que traz o motivo
+(`PluginSkipReason`) de cada um; só o desligado em `disabledPlugins` sobe ausente. Ver
+[Plugins → Boot](plugins.md#boot-start).
 
 ## Config do plugin
 
@@ -66,7 +67,8 @@ const pluginConfig = {
 
 | Quando | O que acontece com config inválida |
 | --- | --- |
-| Boot ou reload | `PluginConfigError` no `setup`: o plugin fica `setup-failed` e o bot sobe sem ele |
+| Boot | `PluginConfigError` na criação do contexto: o boot rejeita com `PluginBootError` (`setup-failed`) |
+| Reload | `PluginConfigError` na criação do contexto: o plugin fica `setup-failed` e o bot segue sem ele |
 | `bot.config.setOverrides` | Rejeita com `PluginConfigError` e nada é salvo; o plugin segue com a config atual |
 
 `PluginConfigError` lista todos os problemas, cada um com `path`, `message` e `source` (`env`,

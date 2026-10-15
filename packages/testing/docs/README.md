@@ -194,8 +194,9 @@ const transport = new FakeTransport({
 });
 ```
 
-O plugin que exige uma capability fora do perfil (`requires`) é ignorado no boot, como seria no
-transport real. Owner por telefone não casa com o remetente sem telefone; use `{ id }`.
+O plugin que exige no manifesto uma capability fora do perfil (`requires`) derruba o boot com
+`PluginBootError`, como no transport real. Para degradar por perfil, ponha o `requires` no
+comando: só ele fica de fora. Owner por telefone não casa com o remetente sem telefone; use `{ id }`.
 
 ### O mesmo teste em todos os perfis
 
@@ -414,8 +415,8 @@ const bot = await createTestBot({ transport, plugins: [meuPlugin()] });
 | `clear()` | Esvazia os registros de saída |
 
 Um método ligado a uma capability que o transport não declara lança `UnsupportedError`, como no
-transport real. Um plugin que exige essa capability (`requires`) é ignorado no boot, e
-`bot.bot.plugins()` mostra o motivo.
+transport real. Um plugin que exige essa capability no manifesto (`requires`) faz o
+`createTestBot` rejeitar com `PluginBootError`, com o motivo em `reason`.
 
 O `self` é `null` até o `connect()` e depois vale o `self` passado nas opções, o do perfil ou
 `DEFAULT_SELF`.

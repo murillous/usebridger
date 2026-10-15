@@ -358,15 +358,17 @@ describe('Bot: onExpire do passo (ADR 0097)', () => {
     expect(() => ctx?.expectReply('nome')).toThrow(ContextExpiredError);
   });
 
-  it('onExpire que não é função falha o setup do plugin', async () => {
+  it('onExpire que não é função falha o setup do plugin e derruba o boot', async () => {
     const transport = new RecordingTransport();
     const invalido = plugin('invalido', (ctx) =>
       ctx.conversations.define('passo', () => undefined, {
         onExpire: 'nao' as unknown as () => void,
       }),
     );
-    const bot = await startBot(transport, [invalido]);
-
-    expect(bot.plugins().find((entry) => entry.name === 'invalido')?.status).toBe('skipped');
+    await expect(startBot(transport, [invalido])).rejects.toMatchObject({
+      name: 'PluginBootError',
+      plugin: 'invalido',
+      reason: { kind: 'setup-failed' },
+    });
   });
 });

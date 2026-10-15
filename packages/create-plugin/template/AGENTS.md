@@ -16,8 +16,9 @@ mensageria. O plugin (`name: '__name__'`, export `__export__`) fica em `src/inde
 
 ## Regras do plugin
 
-- **`requires` só com o essencial.** Plugin que exige uma capability que o transport não tem é
-  ignorado no boot. O que é opcional se confere em runtime: `ctx.capabilities.has('reactions')`.
+- **`requires` só com o essencial.** Plugin que exige uma capability que o transport não tem
+  derruba o boot. Para degradar por transport, ponha o `requires` no comando: só ele fica de
+  fora. O que é opcional se confere em runtime: `ctx.capabilities.has('reactions')`.
 - **Tudo que o `setup` cria, o `teardown` libera** (timer, listener, conexão), ou se amarra ao
   `ctx.signal`. Config mudou ou o plugin foi recarregado: o contexto antigo é descartado, e o que
   ficou solto roda em dobro.

@@ -7,10 +7,12 @@ import { sortPlugins } from './order.ts';
 import {
   describeSkipReason,
   formatBootTable,
+  PluginBootError,
   PluginLifecycleError,
   type PluginPhase,
   type PluginReportEntry,
   type PluginSkipReason,
+  type SkippedPluginEntry,
   type UnregisteredCommand,
 } from './report.ts';
 import { isExactCaret, parseVersion, satisfies } from './semver.ts';
@@ -84,8 +86,10 @@ export interface PluginHost {
   /**
    * Valida, ordena e roda o `setup` de cada plugin compatível, em ordem topológica. Devolve a
    * tabela de boot (também logada). Rejeita — sem rodar nenhum `setup` — com
-   * `PluginManifestError`, `PluginConflictError` ou `PluginCycleError`. Falha de um `setup`
-   * não rejeita: o plugin e quem depende dele viram "ignorado".
+   * `PluginManifestError`, `PluginConflictError` ou `PluginCycleError`. Plugin que não carrega
+   * por motivo diferente de `disabled` rejeita com `PluginBootError` (ADR 0102): sem `setup`,
+   * se o motivo é estático; depois dos `setup`s, com `teardown`/`dispose` de quem subiu, se um
+   * falhou. Em ambos, o host termina em `stopped`.
    */
   start(): Promise<PluginReportEntry[]>;
   /**
@@ -418,16 +422,42 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
       warnExactCaret(slot.entry.definition);
       warnOptionalVersion(slot.entry.definition);
     }
+    // Primeiro só o estático (engine, transport, capabilities, dependências): se algo já
+    // impede o boot, nenhum `setup` roda à toa. A ordem topológica propaga o
+    // `dependency-skipped` nesta mesma passada.
     for (const slot of slots) {
       const reason = incompatibility(slot.entry.definition);
-      slot.report = reason
-        ? { ...reportBase(slot.entry), status: 'skipped', reason }
-        : await bringUp(slot);
+      if (reason) slot.report = { ...reportBase(slot.entry), status: 'skipped', reason };
     }
-    const table = slots.map((slot) => slot.report);
-    logTable(table);
+    // Abortado aqui, a tabela mostraria "carregado" para quem nem rodou `setup`: só o erro conta.
+    if (bootFailures().length === 0) {
+      for (const slot of slots) {
+        const reason = incompatibility(slot.entry.definition);
+        slot.report = reason
+          ? { ...reportBase(slot.entry), status: 'skipped', reason }
+          : await bringUp(slot);
+      }
+      logTable(slots.map((slot) => slot.report));
+    }
+    const [first, ...rest] = bootFailures();
+    if (first) {
+      // Bot pela metade passa despercebido em produção (ADR 0102): desce quem subiu e rejeita.
+      for (const slot of slots.toReversed()) await bringDown(slot);
+      state = 'stopped';
+      throw new PluginBootError([first, ...rest]);
+    }
     if (state === 'starting') state = 'running';
-    return table;
+    return slots.map((slot) => slot.report);
+  }
+
+  /** Plugins que não carregaram por motivo que derruba o boot: tudo menos `disabled`. */
+  function bootFailures(): SkippedPluginEntry[] {
+    return slots
+      .map((slot) => slot.report)
+      .filter(
+        (entry): entry is SkippedPluginEntry =>
+          entry.status === 'skipped' && entry.reason.kind !== 'disabled',
+      );
   }
 
   async function runStop(signal?: AbortSignal): Promise<PluginLifecycleError[]> {

@@ -34,8 +34,9 @@ config, rotas HTTP, serviços).
 
 O mesmo plugin roda no WhatsApp, no Telegram, no Discord e no chat web, se seguir três regras:
 
-- **`requires` só com o essencial.** O plugin que exige uma capability que o transport não tem é
-  ignorado no boot. O que é opcional se confere em runtime: `capabilities.has('reactions')`.
+- **`requires` só com o essencial.** O plugin que exige uma capability que o transport não tem
+  derruba o boot. Para degradar por transport, ponha o `requires` no comando: só ele fica de
+  fora. O que é opcional se confere em runtime: `capabilities.has('reactions')`.
 - **Formatação pelos helpers.** `fmt`, `bold`, `italic`, `code`, `link` e `mention` viram a
   marcação de cada plataforma. `*negrito*` escrito à mão só funciona no WhatsApp.
 - **Teste em todos os perfis.** O `describe.each(PROFILE_NAMES)` do teste roda o plugin com as

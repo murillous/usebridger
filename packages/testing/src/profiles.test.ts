@@ -224,9 +224,18 @@ describe('createTestBot com perfil', () => {
 
 // A matriz que o template de plugin (#121) usa: o mesmo teste em todos os perfis.
 describe.each(PROFILE_NAMES)('matriz de perfis: %s', (profile) => {
-  it('o plugin que exige groups.add só carrega no whatsapp', async () => {
-    const bot = await testBot({ profile, plugins: [convite()] });
+  it('o plugin que exige groups.add só sobe no whatsapp; fora dele, derruba o boot', async () => {
+    const started = testBot({ profile, plugins: [convite()] });
+    if (profile !== 'whatsapp') {
+      await expect(started).rejects.toMatchObject({
+        name: 'PluginBootError',
+        plugin: 'convite',
+        reason: { kind: 'capabilities', missing: ['groups.add'] },
+      });
+      return;
+    }
+    const bot = await started;
     const entry = bot.bot.plugins().find((candidate) => candidate.name === 'convite');
-    expect(entry?.status).toBe(profile === 'whatsapp' ? 'loaded' : 'skipped');
+    expect(entry?.status).toBe('loaded');
   });
 });

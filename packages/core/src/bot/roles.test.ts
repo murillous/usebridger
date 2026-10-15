@@ -194,19 +194,8 @@ describe('papéis custom nomeados', () => {
     expect(line?.fields).toMatchObject({ plugin: 'sozinho', command: 'ban' });
   });
 
-  it('nome reservado falha no setup e o plugin fica ignorado', async () => {
+  it('nome reservado falha no setup e derruba o boot', async () => {
     const transport = new RecordingTransport();
-    const errors: PluginErrorEvent[] = [];
-    const observador = definePlugin({
-      name: 'observador',
-      version: '1.0.0',
-      engine: ENGINE,
-      setup: (ctx) => {
-        ctx.events.on('plugin.error', (e) => {
-          errors.push(e.payload);
-        });
-      },
-    });
     const reservado = definePlugin({
       name: 'reservado',
       version: '1.0.0',
@@ -216,14 +205,14 @@ describe('papéis custom nomeados', () => {
     });
     const b = bot({
       transport,
-      plugins: [observador, moderacao(() => false), reservado],
+      plugins: [moderacao(() => false), reservado],
     });
-    await b.start();
 
-    const status = Object.fromEntries(b.plugins().map((entry) => [entry.name, entry.status]));
-    expect(status).toMatchObject({ moderacao: 'loaded', reservado: 'skipped' });
-    const byPlugin = Object.fromEntries(errors.map((e) => [e.plugin, e.error]));
-    expect(byPlugin['reservado']).toBeInstanceOf(TypeError);
+    await expect(b.start()).rejects.toMatchObject({
+      name: 'PluginBootError',
+      plugin: 'reservado',
+      reason: { kind: 'setup-failed', error: { cause: expect.any(TypeError) } },
+    });
   });
 
   it('conflito de papel entre plugins derruba o boot (ADR 0035)', async () => {
@@ -290,7 +279,7 @@ describe('papéis custom nomeados', () => {
       },
     });
     const b = bot({ transport, plugins: [lento], timeouts: { setupMs: 10 } });
-    await b.start();
+    await expect(b.start()).rejects.toMatchObject({ name: 'PluginBootError' });
     gate.resolve();
 
     await vi.waitFor(() => expect(late).toBeInstanceOf(PluginHostStateError));

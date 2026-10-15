@@ -12,7 +12,7 @@ import {
 } from '#deadline.ts';
 import { createEventBus } from '#events/bus.ts';
 import { definePlugin } from '#plugin/define.ts';
-import { PluginLifecycleError } from '#plugin/report.ts';
+import { PluginBootError, PluginLifecycleError } from '#plugin/report.ts';
 import type { PluginContext } from '#plugin/types.ts';
 import type { BotConfig } from './bot.ts';
 import { type Bot, createBot } from './bot.ts';
@@ -342,7 +342,7 @@ describe('PluginContext.signal e contexto descartado', () => {
       plugins: [plugin],
       timeouts: { setupMs: 1000 },
     });
-    const started = b.start();
+    const started = expect(b.start()).rejects.toThrow(PluginBootError);
     await vi.advanceTimersByTimeAsync(999);
     expect(captured?.signal.aborted).toBe(false);
 

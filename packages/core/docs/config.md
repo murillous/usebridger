@@ -159,13 +159,14 @@ config inválida do plugin "sticker":
 
 A mensagem nunca traz o valor recebido (pode ser secreto).
 
-- **No boot**: a fábrica que lança faz o plugin ser **ignorado** (`setup-failed`, fase `context`),
-  com o erro na tabela de boot; o resto sobe.
+- **No boot**: a fábrica que lança **derruba o boot** com `PluginBootError` (`setup-failed`, fase
+  `context`), com o plugin e o motivo ([ADR 0102](../../../docs/adr/0102-plugin-falho-derruba-o-boot.md)).
+- **No reload**: o plugin fica ignorado (`setup-failed`) com o motivo na tabela, e o bot segue.
 - **Em runtime**: `setOverrides` inválido rejeita, nada é salvo e o plugin segue com a config
   anterior.
 - Schema que não é `z.object`, com campo `messages`, com `secret()` fora de campo de objeto ou
   com dois campos na mesma variável de ambiente é erro do autor do plugin (`TypeError`): no boot,
-  o plugin é ignorado com o motivo na tabela.
+  derruba o boot com o motivo.
 
 ## Segredos
 
