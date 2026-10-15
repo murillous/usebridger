@@ -24,7 +24,8 @@ if (msg.quoted?.is('sticker')) await msg.quoted.media.download();
   bot, prefira o texto de trabalho `ctx.text`, que reflete os middlewares (ex.: truncado).
 - `sender`/`mentions` são `Contact`: `id` (o ID nativo do transport), `name` e `phone`, mais
   os opcionais `username`, `isBot` e `claims` (ver abaixo).
-- `mentions` (`Contact[]`) e as flags `isForwarded`, `isViewOnce`, `isEdited` estão em todos
+- `mentions` (`Mention[]`: `Contact` mais `tag`, o trecho da menção em `text`; ver
+  [Texto](text.md#menções-com-o-nome)) e as flags `isForwarded`, `isViewOnce`, `isEdited` estão em todos
   os tipos.
 - `location` traz `latitude`, `longitude`, `name` e, quando a plataforma informa, `address`
   (o `venue` do Telegram, por exemplo).

@@ -1,7 +1,7 @@
 // Testes de tipo do `Contact.phone` (M1-16.4); verificados pelo `pnpm typecheck`.
 import { describe, expectTypeOf, it } from 'vitest';
 import { createMessage } from '#message/create.ts';
-import type { Contact } from '#message/types.ts';
+import type { Contact, Mention, Message } from '#message/types.ts';
 import type { JsonValue } from '#storage/types.ts';
 
 describe('Contact.phone', () => {
@@ -33,5 +33,12 @@ describe('Contact multiplataforma (ADR 0057)', () => {
     if (contact.claims === undefined) return;
     // @ts-expect-error claims são somente leitura
     contact.claims.papel = 'diretor';
+  });
+});
+
+describe('Mention', () => {
+  it('Contact é atribuível a Mention e o tag é opcional', () => {
+    expectTypeOf<Contact>().toExtend<Mention>();
+    expectTypeOf<Message['mentions'][number]['tag']>().toEqualTypeOf<string | undefined>();
   });
 });
