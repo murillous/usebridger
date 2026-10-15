@@ -33,8 +33,8 @@ await Promise.all([zap.start(), erp.start()]);
 - A porta fecha quando o **último** bot para. As conexões abertas (requisição em curso,
   keep-alive, WebSocket) caem junto.
 - Sem `http` no `createBot`, `ctx.http.route` lança `BotConfigError`: o plugin cai no `setup`
-  (status `skipped`, motivo `setup-failed`) e os outros seguem. O transport recebe `deps.http`
-  ausente.
+  (motivo `setup-failed`) e o boot rejeita com `PluginBootError`
+  ([Plugins → Boot](plugins.md#boot-start)). O transport recebe `deps.http` ausente.
 
 ## Caminhos
 

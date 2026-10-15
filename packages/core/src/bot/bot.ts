@@ -18,6 +18,7 @@ import { chatAllowed } from '#middleware/chat-filter.ts';
 import { createOutbound, enqueueAction } from '#outbound/actions.ts';
 import { OutboundQueue } from '#outbound/queue.ts';
 import { createPluginHost, type PluginHost } from '#plugin/host.ts';
+import { PluginBootError } from '#plugin/report.ts';
 import { collectPlugins } from '#plugin/sources.ts';
 import { InboundQueue } from '#queue/inbound.ts';
 import { createSchedulerService } from '#scheduler/service.ts';
@@ -452,14 +453,18 @@ export function createBot(config: BotConfig): Bot {
       teardownTimeoutMs: timeouts.teardownMs,
     });
     host = pluginHost;
-    const table = await pluginHost.start();
-    for (const entry of table) {
-      if (entry.status !== 'skipped' || entry.reason.kind !== 'setup-failed') continue;
-      const { error } = entry.reason;
-      // Conflito de nome é erro no boot (ADR 0007 e 0035), não "plugin ignorado": quem
-      // respondesse ao comando, papel ou serviço dependeria da ordem de carga.
-      if (isBootConflict(error.cause)) throw error.cause;
-      pluginErrors.lifecycle(error);
+    try {
+      await pluginHost.start();
+    } catch (error) {
+      // Conflito de nome sai com o próprio erro (ADR 0007 e 0035): diz qual comando, papel ou
+      // serviço colidiu, que é o que o autor precisa corrigir.
+      const conflict =
+        error instanceof PluginBootError &&
+        error.failures.find(
+          ({ reason }) => reason.kind === 'setup-failed' && isBootConflict(reason.error.cause),
+        );
+      if (conflict && conflict.reason.kind === 'setup-failed') throw conflict.reason.error.cause;
+      throw error;
     }
     // Depois do `setup` de todos: só então se sabe que passo existe. Antes de liberar a fila de
     // entrada, então a primeira resposta já acha a espera.

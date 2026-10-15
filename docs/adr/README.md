@@ -95,6 +95,7 @@ sendo a referência; um ADR novo entra nos dois.
 - [0032](0032-camadas-da-config-de-plugin.md) — Camadas e convenções da config de plugin (detalha D17)
 - [0033](0033-cancelamento-cooperativo.md) — Cancelamento cooperativo do código de plugin (detalha D05)
 - [0041](0041-reload-em-cascata.md) — Reload de plugin em cascata pelos dependentes (detalha D17/D18)
+- [0102](0102-plugin-falho-derruba-o-boot.md) — Plugin incompatível ou com `setup` falho derruba o boot (substitui em parte D10/D16/D32/D41)
 
 **Fila de saída e ações do transport**
 
@@ -143,13 +144,13 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0007](0007-plugins-via-npm-e-pasta.md) | D07 | Plugins via npm e via pasta (`pluginDirs`) | Aceito |
 | [0008](0008-sem-hot-reload.md) | D08 | Sem hot-reload de código na v1 | Aceito |
 | [0009](0009-modelo-de-mensagem-normalizado.md) | D09 | Modelo de mensagem normalizado | Aceito |
-| [0010](0010-capabilities-do-transporte.md) | D10 | Capabilities do transporte + `requires` | Aceito |
+| [0010](0010-capabilities-do-transporte.md) | D10 | Capabilities do transporte + `requires` | Aceito (plugin falho no boot: ADR 0102) |
 | [0011](0011-escape-hatch-unsafe-native.md) | D11 | Escape hatch `ctx.unsafe.native` | Aceito |
 | [0012](0012-pipeline-de-3-estagios.md) | D12 | Pipeline de 3 estágios | Aceito (papéis custom: ADR 0035) |
 | [0013](0013-escopo-do-core.md) | D13 | Escopo do core | Aceito |
 | [0014](0014-storage-port-sqlite-postgres.md) | D14 | `StoragePort` com SQLite e Postgres na v1; auth state no port | Aceito |
 | [0015](0015-storage-kv-e-colecoes.md) | D15 | Storage: KV com namespace + coleções | Aceito |
-| [0016](0016-manifesto-do-plugin.md) | D16 | Manifesto do plugin | Aceito |
+| [0016](0016-manifesto-do-plugin.md) | D16 | Manifesto do plugin | Aceito (plugin falho no boot: ADR 0102) |
 | [0017](0017-config-por-plugin-zod.md) | D17 | Config por plugin com Zod 4 | Aceito |
 | [0018](0018-service-registry.md) | D18 | Service registry entre plugins | Aceito |
 | [0019](0019-fila-de-saida-anti-ban.md) | D19 | Fila de saída anti-ban no core | Aceito |
@@ -165,7 +166,7 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0029](0029-open-core-repo-privado.md) | D29 | Open core com repo privado | Aceito (transports públicos: ADR 0055) |
 | [0030](0030-metas-de-performance.md) | D30 | Metas de performance com benchmark no CI | Aceito |
 | [0031](0031-nome-do-kernel.md) | D31 | Nome do kernel | Substituído por ADR 0083 |
-| [0032](0032-camadas-da-config-de-plugin.md) | D32 | Camadas e convenções da config de plugin (detalha D17) | Aceito |
+| [0032](0032-camadas-da-config-de-plugin.md) | D32 | Camadas e convenções da config de plugin (detalha D17) | Aceito (plugin falho no boot: ADR 0102) |
 | [0033](0033-cancelamento-cooperativo.md) | D33 | Cancelamento cooperativo do código de plugin (detalha D05) | Aceito |
 | [0034](0034-biblioteca-sem-runner.md) | D34 | Bridger é uma biblioteca, sem runner; API pública por público | Aceito |
 | [0035](0035-papeis-nomeados-por-plugin.md) | D35 | Papéis custom nomeados, definidos por plugin (substitui parte de D12/D24) | Aceito |
@@ -174,7 +175,7 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0038](0038-filtro-de-eventos-no-kernel.md) | D38 | chatFilter e ignoreSelf valem para os eventos que não são mensagem (detalha D24) | Aceito |
 | [0039](0039-fila-de-saida-e-conexao.md) | D39 | Fila de saída pausa com a conexão caída e tem prazo por envio (detalha D19) | Aceito |
 | [0040](0040-acoes-do-transport-no-plugin.md) | D40 | Ações e leituras do transport chegam ao plugin pela API pública (detalha D16/D19) | Aceito (atalho `react`: ADR 0093) |
-| [0041](0041-reload-em-cascata.md) | D41 | Reload de plugin em cascata pelos dependentes (detalha D17/D18) | Aceito |
+| [0041](0041-reload-em-cascata.md) | D41 | Reload de plugin em cascata pelos dependentes (detalha D17/D18) | Aceito (plugin falho no boot: ADR 0102) |
 | [0042](0042-handler-lento-segura-o-chat.md) | D42 | Comando e listener lentos seguram o chat (detalha D05/D12) | Aceito |
 | [0043](0043-prazo-de-middleware.md) | D43 | Middleware do app tem prazo, contado fora do `next()` (detalha D12) | Aceito |
 | [0044](0044-espera-pelo-bot-assentar.md) | D44 | `bot.settled()` espera o bot processar o que recebeu (detalha D22/D34) | Aceito |
@@ -235,3 +236,4 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0099](0099-comando-que-exige-servico.md) | D99 | Comando que exige serviço: `services` no comando o deixa fora do registro sem o serviço, e `optionalDependsOn` no manifesto ordena e recarrega em cascata sem impedir a carga (detalha D18/D41/D90) | Aceito |
 | [0100](0100-mencao-com-tag-no-texto.md) | D100 | Menção com `tag` literal (`Mention`) e `textWithMentionNames`, que troca o tag pelo nome vindo do cache do transport; o core não interpreta o `id` (detalha D57/D61) | Aceito |
 | [0101](0101-nomes-de-contatos-no-auth-state.md) | D101 | Nomes de contatos do transport Baileys persistidos no auth state (`bridger-contact-name`): leitura lazy com cache negativo, escrita em lote com debounce, descarte no logout (detalha D100/D49) | Aceito |
+| [0102](0102-plugin-falho-derruba-o-boot.md) | D102 | Plugin incompatível ou com `setup` falho derruba o boot com `PluginBootError`, que lista todas as falhas; só `disabled` sobe sem ele, e `reload`/`enable` em runtime seguem sem derrubar (substitui em parte D10/D16/D32/D41) | Aceito |

@@ -6,11 +6,12 @@ import {
   createPluginHost,
   PluginConflictError,
   type PluginContextFactory,
+  type PluginHost,
   type PluginHostOptions,
   PluginHostStateError,
 } from './host.ts';
 import { PluginCycleError } from './order.ts';
-import { formatBootTable, type PluginReportEntry } from './report.ts';
+import { formatBootTable, PluginBootError, type PluginReportEntry } from './report.ts';
 import type { PluginEntry } from './sources.ts';
 import type { PluginContext, PluginDefinition } from './types.ts';
 
@@ -89,6 +90,18 @@ const statusOf = (table: readonly PluginReportEntry[]) =>
     table.map((entry) => [entry.name, entry.status === 'loaded' ? 'loaded' : entry.reason.kind]),
   );
 
+/** O `PluginBootError` com que o `start()` rejeitou (ADR 0102). */
+async function bootError(started: Promise<unknown>): Promise<PluginBootError> {
+  const error = await started.then(
+    () => undefined,
+    (caught: unknown) => caught,
+  );
+  expect(error).toBeInstanceOf(PluginBootError);
+  return error as PluginBootError;
+}
+
+const failuresOf = async (h: PluginHost) => statusOf((await bootError(h.start())).failures);
+
 describe('createPluginHost — boot', () => {
   it('roda setup em ordem topológica e devolve a tabela', async () => {
     const order: string[] = [];
@@ -111,17 +124,25 @@ describe('createPluginHost — boot', () => {
     expect(setup).toHaveBeenCalledWith({ plugin: { name: 'ping' } });
   });
 
-  it('plugin incompatível (engine/transports/requires) não carrega e mostra o motivo', async () => {
+  it('plugin incompatível (engine/transports/requires) derruba o boot sem rodar setup', async () => {
     const setup = vi.fn();
-    const { host: h, log } = host([
+    const { host: h, calls } = host([
       plugin('velho', { engine: '^2.0.0', setup }),
       plugin('telegram-only', { transports: ['telegram'], setup }),
       plugin('enquete', { requires: ['polls', 'send.text', 'reactions'], setup }),
       plugin('ok', { transports: ['baileys'], requires: ['send.sticker'] }),
     ]);
-    const table = await h.start();
+    const error = await bootError(h.start());
     expect(setup).not.toHaveBeenCalled();
-    expect(table).toEqual([
+    // Abortado antes de qualquer setup: nem o compatível sobe.
+    expect(calls).toEqual([]);
+    expect(h.state).toBe('stopped');
+    expect(error).toMatchObject({
+      plugin: 'velho',
+      version: '1.0.0',
+      reason: { kind: 'engine', range: '^2.0.0', coreVersion: '1.4.0' },
+    });
+    expect(error.failures).toEqual([
       {
         name: 'velho',
         version: '1.0.0',
@@ -143,22 +164,17 @@ describe('createPluginHost — boot', () => {
         status: 'skipped',
         reason: { kind: 'capabilities', missing: ['polls', 'reactions'] },
       },
-      { name: 'ok', version: '1.0.0', origin: 'config', status: 'loaded' },
     ]);
-    const tableLine = log.lines.find((line) => line.message.startsWith('Plugins:'));
-    expect(tableLine?.level).toBe('warn');
-    expect(tableLine?.message).toContain(
-      'engine incompatível: exige core ^2.0.0, versão atual 1.4.0',
+    expect(error.message).toContain(
+      'velho@1.0.0: engine incompatível: exige core ^2.0.0, versão atual 1.4.0',
     );
-    expect(tableLine?.message).toContain('transport diferente: exige telegram, atual baileys');
-    expect(tableLine?.message).toContain('capability ausente no transport: polls, reactions');
-    expect(tableLine?.fields?.['plugins']).toContainEqual({
-      name: 'enquete',
-      version: '1.0.0',
-      origin: 'config',
-      status: 'skipped',
-      reason: 'capability ausente no transport: polls, reactions',
-    });
+    expect(error.message).toContain(
+      'telegram-only@1.0.0: transport diferente: exige telegram, atual baileys',
+    );
+    expect(error.message).toContain(
+      'enquete@1.0.0: capability ausente no transport: polls, reactions',
+    );
+    expect(error.message).toContain('disabledPlugins');
   });
 
   it('tudo carregado: tabela em info', async () => {
@@ -206,7 +222,7 @@ describe('createPluginHost — boot', () => {
         coreVersion: undefined,
       },
     );
-    expect(statusOf(await h.start())).toEqual({ dev: 'loaded', futuro: 'engine' });
+    expect(await failuresOf(h)).toEqual({ futuro: 'engine' });
   });
 
   it('disabledPlugins desliga por nome e avisa nome desconhecido', async () => {
@@ -241,7 +257,7 @@ describe('createPluginHost — boot', () => {
     ]);
   });
 
-  it('ignorado propaga para quem depende, em cadeia', async () => {
+  it('desligado não derruba o boot, mas quem depende dele sim, em cadeia', async () => {
     const { host: h } = host(
       [
         plugin('ai'),
@@ -251,14 +267,12 @@ describe('createPluginHost — boot', () => {
       ],
       { disabledPlugins: ['ai'] },
     );
-    const table = await h.start();
-    expect(statusOf(table)).toEqual({
-      ai: 'disabled',
+    const error = await bootError(h.start());
+    expect(statusOf(error.failures)).toEqual({
       resumo: 'dependency-skipped',
       digest: 'dependency-skipped',
-      solto: 'loaded',
     });
-    expect(formatBootTable(table)).toContain('dependência ignorada: ai');
+    expect(error.message).toContain('resumo@1.0.0: dependência ignorada: ai');
   });
 
   it('dependência ausente ou com versão incompatível', async () => {
@@ -267,7 +281,7 @@ describe('createPluginHost — boot', () => {
       plugin('resumo', { dependsOn: { ai: '^1.0.0' } }),
       plugin('agenda', { dependsOn: { 'user-names': '^1.0.0' } }),
     ]);
-    const table = await h.start();
+    const table = (await bootError(h.start())).failures;
     expect(table.find((entry) => entry.name === 'resumo')).toMatchObject({
       status: 'skipped',
       reason: { kind: 'dependency-version', dependency: 'ai', range: '^1.0.0', version: '0.9.0' },
@@ -331,7 +345,7 @@ describe('createPluginHost — setup/teardown com timeout', () => {
     vi.useRealTimers();
   });
 
-  it('setup que falha vira ignorado, faz dispose e não derruba o boot nem os outros', async () => {
+  it('setup que falha faz dispose, roda os outros e derruba o boot descendo quem subiu', async () => {
     const {
       host: h,
       calls,
@@ -345,14 +359,12 @@ describe('createPluginHost — setup/teardown com timeout', () => {
       plugin('resumo', { dependsOn: { ai: '*' } }),
       plugin('ping'),
     ]);
-    const table = await h.start();
-    expect(statusOf(table)).toEqual({
-      ai: 'setup-failed',
-      resumo: 'dependency-skipped',
-      ping: 'loaded',
-    });
-    expect(calls).toEqual(['context:ai', 'dispose:ai', 'context:ping']);
-    expect(formatBootTable(table)).toContain('falha no setup: sem chave de API');
+    const error = await bootError(h.start());
+    expect(statusOf(error.failures)).toEqual({ ai: 'setup-failed', resumo: 'dependency-skipped' });
+    expect(calls).toEqual(['context:ai', 'dispose:ai', 'context:ping', 'dispose:ping']);
+    expect(h.state).toBe('stopped');
+    expect(error.message).toContain('ai@1.0.0: falha no setup: sem chave de API');
+    expect(error.cause).toMatchObject({ plugin: 'ai', phase: 'setup' });
     expect(log.lines).toContainEqual(
       expect.objectContaining({
         level: 'error',
@@ -365,25 +377,24 @@ describe('createPluginHost — setup/teardown com timeout', () => {
     const { host: h, calls } = host([plugin('lento', { setup: pending }), plugin('ping')], {
       setupTimeoutMs: 1000,
     });
-    const started = h.start();
+    const started = bootError(h.start());
     await vi.advanceTimersByTimeAsync(1000);
-    const table = await started;
-    const lento = table[0];
-    expect(lento?.status === 'skipped' && lento.reason).toMatchObject({
+    const error = await started;
+    expect(error.reason).toMatchObject({
       kind: 'setup-failed',
       error: { phase: 'setup', timedOut: true },
     });
-    expect(formatBootTable(table)).toContain('falha no setup: excedeu 1000 ms');
-    expect(calls).toEqual(['context:lento', 'dispose:lento', 'context:ping']);
+    expect(error.message).toContain('falha no setup: excedeu 1000 ms');
+    expect(calls).toEqual(['context:lento', 'dispose:lento', 'context:ping', 'dispose:ping']);
   });
 
   it('prazo padrão de setup é 10 s', async () => {
     const { host: h } = host([plugin('lento', { setup: pending })]);
-    const started = h.start();
+    const started = bootError(h.start());
     await vi.advanceTimersByTimeAsync(9999);
     expect(h.state).toBe('starting');
     await vi.advanceTimersByTimeAsync(1);
-    expect(statusOf(await started)).toEqual({ lento: 'setup-failed' });
+    expect(statusOf((await started).failures)).toEqual({ lento: 'setup-failed' });
   });
 
   it('setup que rejeita depois do timeout não vira rejeição não tratada', async () => {
@@ -399,7 +410,7 @@ describe('createPluginHost — setup/teardown com timeout', () => {
         ],
         { setupTimeoutMs: 1000 },
       );
-      const started = h.start();
+      const started = bootError(h.start());
       await vi.advanceTimersByTimeAsync(3000);
       await started;
       await vi.runAllTimersAsync();
@@ -409,14 +420,14 @@ describe('createPluginHost — setup/teardown com timeout', () => {
     }
   });
 
-  it('falha da fábrica de contexto também vira ignorado', async () => {
+  it('falha da fábrica de contexto também derruba o boot', async () => {
     const { host: h } = host([plugin('ping')], {
       createContext: () => {
         throw new Error('storage fora');
       },
     });
-    const table = await h.start();
-    expect(formatBootTable(table)).toContain('falha na criação do contexto: storage fora');
+    const error = await bootError(h.start());
+    expect(error.message).toContain('falha na criação do contexto: storage fora');
   });
 
   it('stop: teardown em ordem inversa, dispose depois de cada teardown', async () => {
@@ -563,7 +574,7 @@ describe('createPluginHost — reload', () => {
   });
 
   it('setup novo que falha deixa o plugin ignorado; reload seguinte pode recuperar', async () => {
-    let broken = true;
+    let broken = false;
     const { host: h } = host([
       plugin('ai', {
         setup: () => {
@@ -571,11 +582,27 @@ describe('createPluginHost — reload', () => {
         },
       }),
     ]);
-    expect(statusOf(await h.start())).toEqual({ ai: 'setup-failed' });
+    await h.start();
+    broken = true;
+    // Em runtime, o setup novo que falha não derruba o host (ADR 0102).
+    expect((await h.reload('ai')).plugin.status).toBe('skipped');
+    expect(h.state).toBe('running');
+    expect(statusOf(h.report())).toEqual({ ai: 'setup-failed' });
     broken = false;
     const result = await h.reload('ai');
     expect(result.plugin.status).toBe('loaded');
     expect(statusOf(h.report())).toEqual({ ai: 'loaded' });
+  });
+
+  it('enable de plugin incompatível não derruba o host: só fica ignorado (ADR 0102)', async () => {
+    const { host: h } = host([plugin('velho', { engine: '^2.0.0' }), plugin('ping')], {
+      disabledPlugins: ['velho'],
+    });
+    await h.start();
+    const result = await h.enable('velho');
+    expect(result.plugin).toMatchObject({ status: 'skipped', reason: { kind: 'engine' } });
+    expect(h.state).toBe('running');
+    expect(statusOf(h.report())).toEqual({ velho: 'engine', ping: 'loaded' });
   });
 
   it('devolve falhas do teardown anterior', async () => {

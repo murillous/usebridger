@@ -1,6 +1,7 @@
 # ADR 0010 — Capabilities do transporte + `requires`
 
 **Status:** Aceito (2026-10-06) · Decisão **D10** do [plano](../../BRIDGER_PLAN.md#4-decisões)
+· Plugin incompatível no boot: substituído pelo [ADR 0102](0102-plugin-falho-derruba-o-boot.md), que derruba o boot em vez de ignorá-lo
 
 ## Contexto
 

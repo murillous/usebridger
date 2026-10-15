@@ -212,7 +212,9 @@ const errors = await host.stop();           // PluginLifecycleError[]
    prontos, `priority` maior primeiro e, no empate, a ordem de declaração. Nome citado que não
    existe não cria aresta. A ordenação considera todos os plugins, inclusive os desabilitados:
    ciclo é erro do código, não da config.
-3. **Quem carrega**, na ordem, parando no primeiro motivo:
+3. **Quem carrega**, na ordem, parando no primeiro motivo. O host confere isto para todos os
+   plugins antes de qualquer `setup`; qualquer motivo que não seja `disabled` derruba o boot
+   (passo 5) sem rodar nenhum `setup`:
 
    | Motivo (`reason.kind`) | Quando |
    | --- | --- |
@@ -222,25 +224,48 @@ const errors = await host.stop();           // PluginLifecycleError[]
    | `capabilities` | `requires` com capabilities que o transport não tem (lista todas) |
    | `dependency-missing` | `dependsOn` cita plugin que não existe |
    | `dependency-version` | a versão da dependência não satisfaz a faixa |
-   | `dependency-skipped` | a dependência existe mas foi ignorada — propaga em cadeia |
+   | `dependency-skipped` | a dependência existe mas não carregou (inclusive `disabled`) — propaga em cadeia |
    | `setup-failed` | a fábrica de contexto ou o `setup` lançou ou estourou o prazo |
 
 4. **Setup**: para cada compatível, `createContext(plugin)` e depois `setup(ctx)`, cada um com
    `setupTimeoutMs`. Se falhar, o loader chama `dispose()` (sem `teardown`, que só pareia com
-   setup concluído), loga em `error` e marca o plugin — e quem depende dele — como ignorado. O
-   boot segue.
+   setup concluído), loga em `error` e marca o plugin — e quem depende dele — como ignorado. Os
+   outros `setup`s rodam mesmo assim, para o erro listar todas as falhas de uma vez.
+5. **Falha derruba o boot** ([ADR 0102](../../../docs/adr/0102-plugin-falho-derruba-o-boot.md)):
+   se algum plugin ficou ignorado por motivo diferente de `disabled`, o host desce quem subiu
+   (`teardown` + `dispose`, ordem inversa), fica em `stopped` e rejeita com `PluginBootError`. No
+   `Bot`, o transport não conecta e `bot.start()` rejeita com o mesmo erro (o conflito de nome de
+   comando, papel ou serviço sai com o próprio erro). O erro traz:
+
+   | Campo | O quê |
+   | --- | --- |
+   | `failures` | as linhas ignoradas que derrubaram o boot, na ordem de carga |
+   | `plugin`, `version`, `reason` | da primeira delas (a raiz: dependentes vêm depois) |
+   | `cause` | em `setup-failed`, o `PluginLifecycleError` (com o erro original no `cause` dele) |
+
+   A mensagem lista `nome@versão: motivo` de cada falha:
+
+   ```
+   1 plugin(s) não carregaram; boot abortado. enquete@1.0.0: capability ausente no transport:
+   polls. Para subir sem um plugin de propósito, use disabledPlugins.
+   ```
+
+   Para subir sem um plugin (ex.: só existe em outro transport), liste-o em `disabledPlugins`,
+   junto com quem depende dele por `dependsOn`. `reload`, `disable` e `enable` em runtime não
+   derrubam o bot: o plugin que falha ali fica ignorado na tabela (ver abaixo).
 
 A tabela volta de `start()` como dado (`PluginReportEntry[]`, na ordem de carga) e vai para o
 log formatada — em `info` se tudo carregou, `warn` se algo foi ignorado ou se um plugin carregou
-sem algum comando — com os mesmos dados em `fields.plugins`:
+sem algum comando — com os mesmos dados em `fields.plugins`. Ela é logada quando os `setup`s
+rodam, inclusive antes de um `PluginBootError` por `setup` falho; no boot que sobe, o único
+ignorado possível é o `disabled`:
 
 ```
-Plugins: 3 carregado(s), 2 ignorado(s)
+Plugins: 3 carregado(s), 1 ignorado(s)
   user-names  1.0.0  carregado
   sticker     1.2.0  carregado
   media       1.0.0  carregado; sem figurinha (send.sticker)
-  enquete     1.0.0  ignorado (capability ausente no transport: polls)
-  resumo      0.3.0  ignorado (dependência ignorada: ai)
+  enquete     1.0.0  ignorado (desabilitado em disabledPlugins)
 ```
 
 `carregado; sem ...` lista os comandos com `requires` que o transport não sustenta e as

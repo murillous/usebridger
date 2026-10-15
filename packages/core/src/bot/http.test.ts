@@ -251,11 +251,12 @@ describe('HTTP do core (ADR 0076)', () => {
 
   it('ctx.http sem servidor derruba o setup do plugin', async () => {
     const created = bot({ plugins: [api] });
-    await created.start();
 
-    const [entry] = created.plugins();
-    expect(entry).toMatchObject({ name: 'api', status: 'skipped' });
-    expect(entry?.status === 'skipped' && entry.reason.kind).toBe('setup-failed');
+    await expect(created.start()).rejects.toMatchObject({
+      name: 'PluginBootError',
+      plugin: 'api',
+      reason: { kind: 'setup-failed' },
+    });
   });
 
   it('WebSocket: eco, recusa com Response e fecha com 1001 no reload', async () => {
