@@ -1,5 +1,16 @@
 # @usebridger/testing
 
+## 0.5.0
+
+### Minor Changes
+
+- 513051d: `Mention` (`Contact` mais `tag`, o trecho literal da menção em `text`) e o helper `textWithMentionNames`, que troca o `tag` de cada menção por `@nome`. No WhatsApp o texto traz `@859302458` e não o nome; o helper entrega ao plugin de IA um texto legível. O `IncomingMessage` do kit de testes aceita `tag` em `mentions`.
+
+### Patch Changes
+
+- Updated dependencies [513051d]
+  - @usebridger/core@0.5.0
+
 ## 0.4.0
 
 ### Minor Changes
