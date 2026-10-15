@@ -1,6 +1,6 @@
+// #region plugin
 import { bold, definePlugin, fmt, type PluginDefinition } from '@usebridger/core';
 
-// #region plugin
 /** `!ola` → cumprimenta quem chamou pelo nome, com uma reação onde a plataforma tem. */
 export const ola: PluginDefinition = definePlugin({
   name: 'ola',

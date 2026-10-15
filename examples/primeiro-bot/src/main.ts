@@ -1,10 +1,10 @@
+// #region bot
 import { createBot } from '@usebridger/core';
 import { sqlite } from '@usebridger/storage-sqlite';
 import { baileys } from '@usebridger/transport-baileys';
 import { pareamento } from './pareamento.ts';
 import { ping } from './ping.ts';
 
-// #region bot
 // Sem argumento, pareia por QR. Com um número (`pnpm start 5511999999999`), por código.
 const phone = process.argv[2];
 

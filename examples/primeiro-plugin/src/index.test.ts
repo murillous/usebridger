@@ -1,8 +1,8 @@
+// #region teste
 import { createTestBot, PROFILE_NAMES, PROFILES } from '@usebridger/testing';
 import { describe, expect, it } from 'vitest';
 import { ola } from './index.ts';
 
-// #region teste
 // O mesmo teste em todas as plataformas do kit: cada perfil traz as capabilities e o remetente
 // da plataforma, e um plugin que só passa no WhatsApp falha aqui.
 describe.each(PROFILE_NAMES)('no %s', (profile) => {

@@ -1,7 +1,7 @@
+// #region plugin-pareamento
 import { definePlugin } from '@usebridger/core';
 import qrcode from 'qrcode-terminal';
 
-// #region plugin-pareamento
 // O transport avisa o pareamento pelo barramento de eventos; quem mostra ao usuário é um plugin.
 export const pareamento = definePlugin({
   name: 'pareamento',

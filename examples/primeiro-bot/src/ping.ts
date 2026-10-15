@@ -1,6 +1,6 @@
+// #region plugin-ping
 import { definePlugin } from '@usebridger/core';
 
-// #region plugin-ping
 // Um plugin é um objeto: nome, versão, a faixa do core que ele aceita e o que ele oferece.
 export const ping = definePlugin({
   name: 'ping',

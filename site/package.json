@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "imports": {
+    "#regiao": "./scripts/regiao.ts"
+  },
   "scripts": {
     "sync": "node scripts/sync-content.ts",
     "dev": "pnpm sync && astro dev",

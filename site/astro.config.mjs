@@ -80,6 +80,7 @@ export default defineConfig({
       // base vale só para as escritas à mão em site/.
       editLink: { baseUrl: 'https://github.com/murillous/usebridger/edit/main/site/' },
       sidebar: [
+        { label: 'Começando', items: [{ autogenerate: { directory: 'comecando' } }] },
         { label: 'Guias', items: [{ autogenerate: { directory: 'guias' } }] },
         {
           label: 'Referência',

@@ -1,0 +1,23 @@
+---
+import { Code } from '@astrojs/starlight/components';
+import { extrairRegiao } from '#regiao';
+
+interface Props {
+  /** Caminho relativo a `examples/`, ex.: `primeiro-bot/src/main.ts`. */
+  arquivo: string;
+  /** Nome da `// #region` dentro do arquivo. */
+  regiao: string;
+  titulo?: string;
+}
+
+const { arquivo, regiao, titulo } = Astro.props;
+const fontes = import.meta.glob('../../../examples/*/src/*.ts', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>;
+const fonte = fontes[`../../../examples/${arquivo}`];
+if (fonte === undefined) throw new Error(`Exemplo não encontrado: ${arquivo}`);
+---
+
+<Code code={extrairRegiao(fonte, regiao)} lang="ts" title={titulo ?? arquivo.split('/').pop()} />
