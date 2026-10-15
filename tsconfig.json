@@ -23,6 +23,9 @@
     { "path": "bench" },
     { "path": "examples/primeiro-bot" },
     { "path": "examples/primeiro-bot-web" },
-    { "path": "examples/primeiro-plugin" }
+    { "path": "examples/primeiro-plugin" },
+    { "path": "examples/conversa-guiada" },
+    { "path": "examples/configuracao" },
+    { "path": "examples/producao" }
   ]
 }
