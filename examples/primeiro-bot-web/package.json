@@ -12,8 +12,5 @@
     "@usebridger/core": "workspace:*",
     "@usebridger/example-primeiro-bot": "workspace:*",
     "@usebridger/transport-web": "workspace:*"
-  },
-  "devDependencies": {
-    "@usebridger/testing": "workspace:*"
   }
 }

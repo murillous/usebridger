@@ -6,6 +6,7 @@ export const ola: PluginDefinition = definePlugin({
   name: 'ola',
   version: '0.1.0',
   engine: '<1.0.0',
+  // `commands` já exige `send.text`. Em `requires` vai só o que o plugin não funciona sem.
   commands: {
     ola: {
       description: 'Cumprimenta quem chamou',

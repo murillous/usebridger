@@ -1,10 +1,10 @@
+// #region bot
 import { randomBytes } from 'node:crypto';
 import { createBot, createHttp } from '@usebridger/core';
-import { ping } from '@usebridger/example-primeiro-bot/ping';
 import { web } from '@usebridger/transport-web';
 import { pagina } from './pagina.ts';
+import { ping } from './ping.ts';
 
-// #region bot
 // Segredo do JWT (mínimo de 32 bytes), novo a cada execução: serve para o exemplo.
 const secret = randomBytes(32).toString('hex');
 

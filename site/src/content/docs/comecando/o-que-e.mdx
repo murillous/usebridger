@@ -46,7 +46,7 @@ O core também não conhece nenhuma plataforma: ele só conhece o contrato do `T
        ▼
  middlewares ───── em camadas, por prioridade; qualquer um pode barrar a mensagem
        ▼
- resposta esperada ─ há uma conversa aguardando? o passo dela roda e consome a mensagem
+ resposta esperada ─ há uma conversa aguardando e a mensagem não é comando? o passo dela roda e consome a mensagem
        ▼
  roteador ───────── "!ping" casa com um comando? o `run` do plugin roda e consome a mensagem
        ▼

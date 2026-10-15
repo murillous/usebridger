@@ -136,8 +136,22 @@ servidor de desenvolvimento. Os dois sincronizam o Markdown antes. Onde cada pá
 - `examples/`: código dos exemplos do getting started, pacotes privados verificados no
   typecheck e no teste.
 
-A referência da API é gerada do fonte pelo TypeDoc (rode `pnpm build` antes). Decisões em
-[ADR 0103](docs/adr/0103-site-de-documentacao.md).
+A referência da API é gerada do fonte pelo TypeDoc (rode `pnpm build` antes). Cada subpath dos
+`exports` com a condição `@usebridger/source` vira um módulo com o nome do import
+(`@usebridger/core/adapter`); internos do core não aparecem, e o `create-bridger-plugin` fica de
+fora (binário, sem API importável). O texto vem do TSDoc no código.
+
+**Novo pacote ou novo export:** acrescente o arquivo de fonte em `entryPoints`, no
+`starlightTypeDoc` de `site/astro.config.mjs`. O plugin `site/module-names.js` compara a lista com
+os `exports` dos `package.json`: export sem entrada ou entrada sem export vira warning, e o
+`treatWarningsAsErrors` falha o build até as duas baterem.
+
+**Por que TypeScript 6 no site:** o repositório usa o TypeScript 7, cuja API de compilador ainda é
+experimental; o TypeDoc 0.28 depende da API do 6 e aceita no máximo o 6.0 (peer dependency). Por
+isso o `site/` fixa `typescript@6.0.3` só para ele; a checagem de tipos e o build dos pacotes
+seguem no 7. Quando o TypeDoc suportar o 7, basta remover a dependência.
+
+Decisões em [ADR 0103](docs/adr/0103-site-de-documentacao.md).
 
 ### CI
 

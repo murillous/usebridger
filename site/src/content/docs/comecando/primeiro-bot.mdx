@@ -71,11 +71,15 @@ O `transport-web` é o chat que vive dentro de um sistema web seu (ERP, site). N
 npm install @usebridger/transport-web
 ```
 
-Reaproveite o `ping.ts` e troque o `main.ts`:
+Copie o `ping.ts` do passo anterior para a pasta `src/` do novo bot e troque o `main.ts`:
 
 <Exemplo arquivo="primeiro-bot-web/src/main.ts" regiao="bot" />
 
-Aqui o `http` é obrigatório: o transport recebe as conexões pelo servidor do bot. O `secret` assina e valida o JWT. O exemplo completo traz o plugin `pagina`, que serve uma página de chat mínima em `/plugins/pagina` e assina um token de teste; em produção, quem assina é o seu backend. Veja em [`examples/primeiro-bot-web`](https://github.com/murillous/usebridger/tree/main/examples/primeiro-bot-web/src) e em [transport-web](/usebridger/pacotes/transport-web/).
+Aqui o `http` é obrigatório: o transport recebe as conexões pelo servidor do bot. O `secret` assina e valida o JWT. O plugin `pagina` (`pagina.ts`, abaixo) serve uma página de chat mínima em `/plugins/pagina` e assina um token de teste; em produção, quem assina é o seu backend.
+
+<Exemplo arquivo="primeiro-bot-web/src/pagina.ts" regiao="pagina" />
+
+Veja o exemplo completo em [`examples/primeiro-bot-web`](https://github.com/murillous/usebridger/tree/main/examples/primeiro-bot-web/src) e em [transport-web](/usebridger/pacotes/transport-web/).
 
 ## Próximo passo
 

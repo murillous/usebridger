@@ -236,10 +236,6 @@ importers:
       '@usebridger/transport-web':
         specifier: workspace:*
         version: link:../../packages/transport-web
-    devDependencies:
-      '@usebridger/testing':
-        specifier: workspace:*
-        version: link:../../packages/testing
 
   examples/primeiro-plugin:
     dependencies:

@@ -1,5 +1,8 @@
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { expect, it } from 'vitest';
-import { extractTitle, type LinkContext, rewriteLinks } from './sync-content.ts';
+import { extractTitle, type LinkContext, rewriteLinks, syncContent } from './sync-content.ts';
 
 const ctx: LinkContext = {
   routes: new Map([
@@ -46,4 +49,33 @@ it('deixa intactos links absolutos, âncoras e código', () => {
 
 it('falha em link para caminho inexistente', () => {
   expect(() => rewriteLinks('[a](nada.ts)', 'docs/guias/storage.md', ctx)).toThrow(/inexistente/);
+});
+
+it('syncContent limpa só o gerado e transforma README.md em index.md', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'sync-content-'));
+  const write = (path: string, text: string) => {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, text);
+  };
+  try {
+    const root = join(tmp, 'repo');
+    const site = join(tmp, 'site');
+    write(join(root, 'docs/guias/README.md'), '# Guias\n\nTexto.\n');
+    write(join(root, 'docs/release.md'), '# Release\n');
+    mkdirSync(join(root, 'packages'));
+    write(join(site, 'guias/velho.md'), 'sobra de uma execução anterior');
+    write(join(site, 'comecando/primeiro-bot.mdx'), 'à mão');
+    write(join(site, 'index.mdx'), 'à mão');
+
+    syncContent(root, site);
+
+    expect(readFileSync(join(site, 'comecando/primeiro-bot.mdx'), 'utf8')).toBe('à mão');
+    expect(readFileSync(join(site, 'index.mdx'), 'utf8')).toBe('à mão');
+    expect(existsSync(join(site, 'guias/velho.md'))).toBe(false);
+    const index = readFileSync(join(site, 'guias/index.md'), 'utf8');
+    expect(index).toContain('title: "Guias"');
+    expect(index).toContain('/edit/develop/docs/guias/README.md');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
 });

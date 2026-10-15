@@ -44,7 +44,16 @@ No bot do [passo anterior](/usebridger/comecando/primeiro-bot/), o plugin entra 
 
 <Exemplo arquivo="primeiro-plugin/src/bot.ts" regiao="plugar" />
 
-Num bot fora do monorepo, `ola` vem do pacote: `import { ola } from 'bridger-plugin-ola'`. Rode o bot e mande `!ola`.
+Num bot fora do monorepo, `ola` vem do pacote `bridger-plugin-ola`. Enquanto ele não está no npm, gere o build no plugin e instale a pasta no bot:
+
+```sh
+# na pasta do plugin
+npm run build
+# na pasta do bot
+npm install ../bridger-plugin-ola
+```
+
+Aí o import é `import { ola } from 'bridger-plugin-ola'`. Rode o bot e mande `!ola`.
 
 ## Próximos passos
 

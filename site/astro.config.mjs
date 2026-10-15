@@ -25,7 +25,7 @@ export default defineConfig({
       plugins: [
         starlightLinksValidator(),
         // Gera /llms.txt, /llms-full.txt e /llms-small.txt. As ADRs (registro histórico) e a API
-        // gerada (>10 MB) saem do full/small e ficam só como conjuntos à parte listados no índice.
+        // gerada (que inflaria o full) saem do full/small e ficam só como conjuntos à parte listados no índice.
         // O `exclude` valer também para o full depende de patches/ (o plugin só o aplica ao small).
         starlightLlmsTxt({
           projectName: 'Bridger',
@@ -83,8 +83,9 @@ export default defineConfig({
         }),
       ],
       // Páginas sincronizadas trazem `editUrl` próprio apontando para o Markdown de origem; esta
-      // base vale só para as escritas à mão em site/.
-      editLink: { baseUrl: 'https://github.com/murillous/usebridger/edit/main/site/' },
+      // base vale só para as escritas à mão em site/. Edita-se na develop: os PRs vão para ela
+      // (ADR 0085), e a main só recebe o release.
+      editLink: { baseUrl: 'https://github.com/murillous/usebridger/edit/develop/site/' },
       sidebar: [
         { label: 'Começando', items: [{ autogenerate: { directory: 'comecando' } }] },
         { label: 'Guias', items: [{ autogenerate: { directory: 'guias' } }] },

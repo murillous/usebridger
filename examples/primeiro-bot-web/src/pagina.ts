@@ -1,3 +1,4 @@
+// #region pagina
 import { createHmac } from 'node:crypto';
 import { definePlugin } from '@usebridger/core';
 
@@ -13,7 +14,6 @@ function assinar(secret: string): string {
   return `${corpo}.${createHmac('sha256', secret).update(corpo).digest('base64url')}`;
 }
 
-// #region pagina
 // Página mínima do chat: abre o WebSocket do transport, autentica com o token e mostra as mensagens.
 export function pagina(secret: string) {
   return definePlugin({

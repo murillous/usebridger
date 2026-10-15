@@ -13,15 +13,18 @@ pudesse copiar e rodar, e nada que um agente de IA lesse de uma vez (#91).
 
 - **Starlight (Astro) em `site/`**, pacote privado `@usebridger/site`. Pesou a favor: i18n
   nativo, busca Pagefind sem serviço externo e os plugins `starlight-typedoc` (API) e
-  `starlight-llms-txt`. Alternativas descartadas: **VitePress** (i18n e busca pedem montagem
-  própria, e não há plugin de TypeDoc ou `llms.txt` equivalente) e **Docusaurus** (mais pesado,
+  `starlight-llms-txt`. Alternativas descartadas: **VitePress**, que tem
+  `typedoc-vitepress-theme` e `vitepress-plugin-llms` e serviria; o que pesou foi o i18n e a busca
+  integrados, que lá pedem montagem própria. **Docusaurus** (mais pesado,
   com React e versionamento que o projeto não usa).
 - **O Markdown fica onde está** (`docs/`, `packages/*/docs`, `docs/adr/`) e é sincronizado para
   o site no build (`site/scripts/sync-content.ts`). O GitHub continua mostrando a mesma
   documentação e não há cópia para manter. Páginas escritas à mão (home, getting started) vivem
   em `site/src/content/docs/`.
 - **GitHub Pages em `https://murillous.github.io/usebridger`**, publicado pelo `docs.yml` a cada
-  push na `main`, que só recebe a `develop` no release (ADR 0085). O PR roda só o build, no job
+  push na `main`, que só recebe a `develop` no release (ADR 0085). O deploy roda no merge da
+  `develop`, um pouco antes de o PR de versão publicar no npm: o site pode adiantar a API por
+  alguns minutos ou horas. Aceito. O PR roda só o build, no job
   `Docs` do `ci.yml`: link quebrado (`starlight-links-validator`) ou warning do TypeDoc
   (`treatWarningsAsErrors`) falha o PR.
 - **PT-BR na raiz, EN estruturado.** O português é o idioma de verdade; o inglês existe como
@@ -31,7 +34,7 @@ pudesse copiar e rodar, e nada que um agente de IA lesse de uma vez (#91).
 - **TypeDoc absorvido no site.** A referência da API é gerada pelo `starlight-typedoc` a partir do
   fonte; o pacote `tooling/typedoc` deixa de existir.
 - **`llms.txt` e `llms-full.txt`** pelo `starlight-llms-txt`, sem as ADRs (registro histórico) e
-  sem a API gerada (>10 MB) no `full`; ambas ficam como conjuntos à parte listados no índice. O
+  sem a API gerada no `full`, que o inflaria; ambas ficam como conjuntos à parte listados no índice. O
   plugin só aplica `exclude` ao `small`, então o `llms-full.txt` usa um patch
   (`patches/starlight-llms-txt@0.12.0.patch`, via `patchedDependencies`) até isso ir ao upstream.
 - **Exemplos do getting started são pacotes em `examples/`** (privados, parte do workspace). O
