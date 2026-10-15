@@ -170,7 +170,7 @@ export class BaileysTransport implements Transport {
    */
   readonly #groups = new Map<string, Promise<BaileysGroupMetadata>>();
   /** Contatos já vistos, entre conexões: o `contact.updated` sai só no que é novo. */
-  readonly #contacts = new ContactBook();
+  readonly #contacts: ContactBook;
   /** Enquetes vistas, para decifrar os votos (ADR 0071); o `disconnect()` as esquece. */
   readonly #polls = new PollBook();
 
@@ -179,6 +179,8 @@ export class BaileysTransport implements Transport {
     this.#driver = options.driver;
     this.#logLevel = options.logLevel;
     this.#deps = deps;
+    // Os nomes persistem no auth state da sessão, que o logout apaga (ADR 0101).
+    this.#contacts = new ContactBook({ store: deps.auth, log: deps.log });
     this.#events = new TypedEmitter<TransportEvents>((error, event) =>
       this.#log.error('handler de evento do transport falhou', { err: error, event }),
     );
@@ -300,6 +302,8 @@ export class BaileysTransport implements Transport {
     const learn = (list: readonly Partial<BaileysContact>[]) => {
       if (!current()) return;
       enqueue(async () => {
+        // Fila atrasada: a conexão pode ter caído (e a sessão sido encerrada) até aqui.
+        if (!current()) return;
         for (const update of learnContacts(list, contacts)) {
           if (current()) this.#events.emit('contact.updated', update);
         }
@@ -407,6 +411,9 @@ export class BaileysTransport implements Transport {
           this.#socket = null;
           const error = lastDisconnect?.error;
           const reason = toDisconnectReason(error, { pairing });
+          // Sessão encerrada: o kernel apaga o auth state em seguida, e os nomes (memória e lote
+          // pendente) não podem sobreviver a ele nem voltar com um flush atrasado.
+          if (reason === 'logged-out' || reason === 'auth-failed') contacts.reset();
           this.#events.emit('connection.status', { status: 'closed', reason, error });
           return;
         }
@@ -418,6 +425,7 @@ export class BaileysTransport implements Transport {
     this.#attempt++;
     this.#endSocket();
     this.#polls.clear();
+    await this.#contacts.flush();
   }
 
   /** Encerra o socket atual sem emitir nada: quem chamou já sabe que a conexão acabou. */
