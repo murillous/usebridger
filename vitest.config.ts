@@ -8,6 +8,7 @@ const projects = globSync([
   '{packages,plugins,apps}/*/package.json',
   'bench/package.json',
   'site/package.json',
+  'examples/*/package.json',
 ]).map((manifest) => {
   const { name } = JSON.parse(readFileSync(manifest, 'utf8')) as { name: string };
   // `template/` é o projeto que o create-bridger-plugin copia: o teste dele roda no projeto

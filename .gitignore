@@ -18,3 +18,5 @@ site/.astro/
 site/dist/
 # Referência da API: gerada pelo starlight-typedoc no build do site.
 site/src/content/docs/api/
+# Banco gerado ao rodar os exemplos (credenciais do WhatsApp incluídas).
+examples/*/data/

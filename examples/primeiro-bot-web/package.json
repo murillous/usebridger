@@ -1,0 +1,19 @@
+{
+  "name": "@usebridger/example-primeiro-bot-web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Primeiro bot no navegador, com transport-web.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/main.ts"
+  },
+  "dependencies": {
+    "@usebridger/core": "workspace:*",
+    "@usebridger/example-primeiro-bot": "workspace:*",
+    "@usebridger/transport-web": "workspace:*"
+  },
+  "devDependencies": {
+    "@usebridger/testing": "workspace:*"
+  }
+}

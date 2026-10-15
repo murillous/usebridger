@@ -203,6 +203,63 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
 
+  examples/primeiro-bot:
+    dependencies:
+      '@usebridger/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@usebridger/storage-sqlite':
+        specifier: workspace:*
+        version: link:../../packages/storage-sqlite
+      '@usebridger/transport-baileys':
+        specifier: workspace:*
+        version: link:../../packages/transport-baileys
+      qrcode-terminal:
+        specifier: ^0.12.0
+        version: 0.12.0
+    devDependencies:
+      '@types/qrcode-terminal':
+        specifier: ^0.12.2
+        version: 0.12.2
+      '@usebridger/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
+
+  examples/primeiro-bot-web:
+    dependencies:
+      '@usebridger/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@usebridger/example-primeiro-bot':
+        specifier: workspace:*
+        version: link:../primeiro-bot
+      '@usebridger/transport-web':
+        specifier: workspace:*
+        version: link:../../packages/transport-web
+    devDependencies:
+      '@usebridger/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
+
+  examples/primeiro-plugin:
+    dependencies:
+      '@usebridger/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@usebridger/example-primeiro-bot':
+        specifier: workspace:*
+        version: link:../primeiro-bot
+      '@usebridger/storage-sqlite':
+        specifier: workspace:*
+        version: link:../../packages/storage-sqlite
+      '@usebridger/transport-baileys':
+        specifier: workspace:*
+        version: link:../../packages/transport-baileys
+    devDependencies:
+      '@usebridger/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
+
   packages/core:
     dependencies:
       '@hono/node-server':
@@ -1263,6 +1320,9 @@ packages:
 
   '@types/pg@8.23.1':
     resolution: {integrity: sha512-fKVHpikPdg4GKks3JuLEhvwSyvwzF23hnabPy6DD8ljVbC7+6J5dQzdv4arV6jqq57djnMgs1HKBxX4P8aBI3A==}
+
+  '@types/qrcode-terminal@0.12.2':
+    resolution: {integrity: sha512-v+RcIEJ+Uhd6ygSQ0u5YYY7ZM+la7GgPbs0V/7l/kFs2uO4S8BcIUEMoP7za4DNIqNnUD5npf0A/7kBhrCKG5Q==}
 
   '@types/sax@1.2.7':
     resolution: {integrity: sha512-rO73L89PJxeYM3s3pPPjiPgVVcymqU490g0YO5n5By0k2Erzj6tay/4lr1CHAAU4JyOWd1rpQ8bCf6cZfHU96A==}
@@ -2556,6 +2616,10 @@ packages:
   qified@0.10.1:
     resolution: {integrity: sha512-+Owyggi9IxT1ePKGafcI87ubSmxol6smwJ+RAHDQlx9+9cPwFWDiKFFCPuWhr9ignlGpZ9vDQLw67N4dcTVFEA==}
     engines: {node: '>=20'}
+
+  qrcode-terminal@0.12.0:
+    resolution: {integrity: sha512-EXtzRZmC+YGmGlDFbXKxQiMZNwCLEO6BANKXG4iCtSIM0yqc/pappSx3RIKr4r0uh5JsBckOXeKrB3Iz7mdQpQ==}
+    hasBin: true
 
   quansync@1.0.0:
     resolution: {integrity: sha512-5xZacEEufv3HSTPQuchrvV6soaiACMFnq1H8wkVioctoH3TRha9Sz66lOxRwPK/qZj7HPiSveih9yAyh98gvqA==}
@@ -4044,6 +4108,8 @@ snapshots:
       pg-protocol: 1.16.1
       pg-types: 2.2.0
 
+  '@types/qrcode-terminal@0.12.2': {}
+
   '@types/sax@1.2.7':
     dependencies:
       '@types/node': 24.19.1
@@ -5501,6 +5567,8 @@ snapshots:
   qified@0.10.1:
     dependencies:
       hookified: 2.2.0
+
+  qrcode-terminal@0.12.0: {}
 
   quansync@1.0.0: {}
 

@@ -20,6 +20,9 @@
     { "path": "packages/storage-postgres" },
     { "path": "packages/testing" },
     { "path": "packages/create-plugin" },
-    { "path": "bench" }
+    { "path": "bench" },
+    { "path": "examples/primeiro-bot" },
+    { "path": "examples/primeiro-bot-web" },
+    { "path": "examples/primeiro-plugin" }
   ]
 }
