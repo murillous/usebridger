@@ -2,7 +2,7 @@
 // envelopes (ephemeral, viewOnce, documentWithCaption), resolve o telefone de cada contato,
 // inclusive com LID (M1-16.4, ADR 0046), e monta a citada como `Message` também.
 
-import type { Contact, Message } from '@usebridger/core';
+import type { Contact, Mention, Message } from '@usebridger/core';
 import { createMessage, type MediaSource, type MessageInit } from '@usebridger/core/adapter';
 import {
   isJidGroup,
@@ -15,6 +15,10 @@ import {
   type WAMessage,
   type WAMessageKey,
 } from 'baileys';
+import { mentionTag } from './format.ts';
+
+/** O nome já visto de um contato; `null` se nunca apareceu. Quem chama liga ao `ContactBook`. */
+export type NameOf = (id: string) => Promise<string | null>;
 
 /** O que a normalização precisa da sessão; o transport liga ao socket, os testes a falsos. */
 export interface NormalizeEnv {
@@ -91,16 +95,24 @@ function contentKey(content: Content): keyof Content | undefined {
  * Converte uma mensagem do Baileys. `null` quando não há o que entregar: sem conteúdo (aviso de
  * grupo, mensagem que não deu para decifrar) ou só controle (edição, reação, apagamento).
  */
-export function toMessage(raw: WAMessage, env: NormalizeEnv): Promise<Message | null> {
-  return build(raw, env, toNumber(raw.messageTimestamp) * 1000, false);
+export function toMessage(
+  raw: WAMessage,
+  env: NormalizeEnv,
+  nameOf?: NameOf,
+): Promise<Message | null> {
+  return build(raw, env, toNumber(raw.messageTimestamp) * 1000, false, nameOf);
 }
 
 /**
  * Nova versão de uma mensagem editada, com `isEdited: true`. `raw` é a chave da original com o
  * conteúdo novo; o Baileys não manda o `pushName` na edição, então o nome vem de quem chama.
  */
-export function toEditedMessage(raw: WAMessage, env: NormalizeEnv): Promise<Message | null> {
-  return build(raw, env, toNumber(raw.messageTimestamp) * 1000, true);
+export function toEditedMessage(
+  raw: WAMessage,
+  env: NormalizeEnv,
+  nameOf?: NameOf,
+): Promise<Message | null> {
+  return build(raw, env, toNumber(raw.messageTimestamp) * 1000, true, nameOf);
 }
 
 async function build(
@@ -108,6 +120,7 @@ async function build(
   env: NormalizeEnv,
   timestamp: number,
   isEdited: boolean,
+  nameOf?: NameOf,
 ): Promise<Message | null> {
   const chatId = raw.key.remoteJid;
   const id = raw.key.id;
@@ -129,7 +142,7 @@ async function build(
     fromMe,
     quoted: context ? await quoted(context, chatId, env, timestamp) : null,
     mentions: await Promise.all(
-      (context?.mentionedJid ?? []).map((jid) => resolveContact(env, jid, undefined, null)),
+      (context?.mentionedJid ?? []).map((jid) => mentionOf(env, jid, nameOf)),
     ),
     isForwarded: context?.isForwarded === true,
     isViewOnce: viewOnce || raw.key.isViewOnce === true || flag(node, 'viewOnce'),
@@ -292,6 +305,16 @@ function quoted(
     timestamp,
     false,
   );
+}
+
+/**
+ * Menção com o nome já visto e o `tag` do texto. O tag sai do JID cru: a normalização só tira o
+ * aparelho, mas é o JID da lista que o WhatsApp usou para escrever o token. Quem nunca foi visto
+ * (nem o PN/LID par dele) fica com `name: null`; o core cai no tag literal.
+ */
+async function mentionOf(env: NormalizeEnv, jid: string, nameOf?: NameOf): Promise<Mention> {
+  const contact = await resolveContact(env, jid, undefined, null);
+  return { ...contact, name: (await nameOf?.(contact.id)) ?? null, tag: mentionTag(jid) };
 }
 
 /**
