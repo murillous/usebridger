@@ -12,7 +12,7 @@ Quer contribuir? Veja o [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Desenvolvimento
 
-Monorepo pnpm (`packages/*`, `bench/` e `tooling/typedoc/`). A versão do
+Monorepo pnpm (`packages/*`, `bench/` e `site/`). A versão do
 pnpm vem de `packageManager` no `package.json` — com `corepack enable`, basta rodar
 `pnpm install` na raiz.
 
@@ -25,8 +25,8 @@ Requer Node 24+ (`engines` na raiz; `.nvmrc` para `nvm use`/`fnm use`).
 | `pnpm lint` / `pnpm lint:fix` | Biome: lint + formatação + organização de imports |
 | `pnpm typecheck` | `tsc -b` em todos os pacotes (project references) |
 | `pnpm test` | Vitest em todos os pacotes |
-| `pnpm build` | `tsdown` em cada pacote (ESM + `.d.ts` em `dist/`) e a referência da API |
-| `pnpm run docs` | Só a referência da API: TypeDoc sobre as entradas públicas, em `docs/referencia/` ([`tooling/typedoc/`](tooling/typedoc/docs/README.md)). O `run` é obrigatório: no pnpm 12, `pnpm docs` é um comando nativo que abre a página de um pacote do registry |
+| `pnpm build` | `tsdown` em cada pacote (ESM + `.d.ts` em `dist/`) |
+| `pnpm run docs` | Site de documentação ([`site/`](site)): sincroniza o Markdown do repo, gera a referência da API com o TypeDoc e o `llms.txt`, em `site/dist/`. O `run` é obrigatório: no pnpm 12, `pnpm docs` é um comando nativo que abre a página de um pacote do registry |
 | `pnpm bench` | Build e benchmark das metas de performance ([`bench/`](bench/docs/README.md)) |
 | `pnpm changeset` | Registra a mudança de um pacote publicável |
 | `pnpm version-packages` | Consome os changesets (versões e changelogs) e sincroniza o `CORE_VERSION` |

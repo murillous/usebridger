@@ -6,7 +6,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, normalize, resolve } from 'node:path';
 import { Converter, ReflectionKind } from 'typedoc';
 
-const packagesDir = resolve(import.meta.dirname, '../../packages');
+const packagesDir = resolve(import.meta.dirname, '../packages');
 
 function publicEntries() {
   const entries = new Map();

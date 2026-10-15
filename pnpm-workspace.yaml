@@ -1,7 +1,6 @@
 packages:
   - packages/*
   - bench
-  - tooling/typedoc
   - site
 # Scripts de instalação dispensáveis: o do baileys só checa a versão do Node (o `engines` da raiz
 # já cobre) e o do protobufjs só avisa sobre versões. Negados explicitamente, o install não pede
@@ -15,3 +14,5 @@ minimumReleaseAgeExclude:
   - '@astrojs/prism@4.1.0'
   - '@astrojs/telemetry@3.4.0'
   - astro@7.4.0
+patchedDependencies:
+  starlight-llms-txt@0.12.0: patches/starlight-llms-txt@0.12.0.patch

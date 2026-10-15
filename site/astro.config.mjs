@@ -1,6 +1,8 @@
 import starlight from '@astrojs/starlight';
 import { defineConfig } from 'astro/config';
 import starlightLinksValidator from 'starlight-links-validator';
+import starlightLlmsTxt from 'starlight-llms-txt';
+import starlightTypeDoc, { typeDocSidebarGroup } from 'starlight-typedoc';
 import { BASE } from './scripts/sync-content.ts';
 
 // Astro só lê a config como `export default` (por isso a exceção no biome.json).
@@ -20,7 +22,60 @@ export default defineConfig({
         { icon: 'github', label: 'GitHub', href: 'https://github.com/murillous/usebridger' },
       ],
       // Link quebrado (rota ou âncora) falha o build.
-      plugins: [starlightLinksValidator()],
+      plugins: [
+        starlightLinksValidator(),
+        // Gera /llms.txt, /llms-full.txt e /llms-small.txt. As ADRs (registro histórico) e a API
+        // gerada (>10 MB) saem do full/small e ficam só como conjuntos à parte listados no índice.
+        // O `exclude` valer também para o full depende de patches/ (o plugin só o aplica ao small).
+        starlightLlmsTxt({
+          projectName: 'Bridger',
+          description:
+            'Kernel de bot de mensageria em TypeScript: core, transports, storages e plugins.',
+          exclude: ['decisoes/**', 'api/**'],
+          customSets: [
+            {
+              label: 'Decisões (ADRs)',
+              paths: ['decisoes/**'],
+              description: 'registro histórico das decisões de arquitetura',
+            },
+            {
+              label: 'Referência da API',
+              paths: ['api/**'],
+              description: 'tipos e funções públicas de cada pacote, gerada do código',
+            },
+          ],
+        }),
+        // Entradas públicas dos pacotes: o plugin local nomeia cada módulo
+        // pelo import público e o treatWarningsAsErrors falha o build se a lista divergir dos exports.
+        starlightTypeDoc({
+          entryPoints: [
+            '../packages/core/src/index.ts',
+            '../packages/core/src/adapter.ts',
+            '../packages/core/src/storage/contract/index.ts',
+            '../packages/core/src/zod.ts',
+            '../packages/storage-sqlite/src/index.ts',
+            '../packages/storage-postgres/src/index.ts',
+            '../packages/transport-baileys/src/index.ts',
+            '../packages/transport-web/src/index.ts',
+            '../packages/transport-web/src/client.ts',
+            '../packages/testing/src/index.ts',
+            '../packages/testing/src/bot.ts',
+          ],
+          tsconfig: './tsconfig.typedoc.json',
+          output: 'api',
+          typeDoc: {
+            entryPointStrategy: 'resolve',
+            plugin: ['./module-names.js'],
+            readme: 'none',
+            // Starlight só trata `index` como índice da pasta; com o `README` padrão os links quebram.
+            entryFileName: 'index',
+            treatWarningsAsErrors: true,
+            // O zod reexportado em core/zod não é nosso: sem isso o TypeDoc expande milhares de páginas.
+            excludeExternals: true,
+            externalPattern: ['**/node_modules/**'],
+          },
+        }),
+      ],
       // Páginas sincronizadas trazem `editUrl` próprio apontando para o Markdown de origem; esta
       // base vale só para as escritas à mão em site/.
       editLink: { baseUrl: 'https://github.com/murillous/usebridger/edit/main/site/' },
@@ -28,7 +83,10 @@ export default defineConfig({
         { label: 'Guias', items: [{ autogenerate: { directory: 'guias' } }] },
         {
           label: 'Referência',
-          items: [{ autogenerate: { directory: 'pacotes', collapsed: true } }],
+          items: [
+            { autogenerate: { directory: 'pacotes', collapsed: true } },
+            { ...typeDocSidebarGroup, label: 'API', collapsed: true },
+          ],
         },
         {
           label: 'Decisões',
