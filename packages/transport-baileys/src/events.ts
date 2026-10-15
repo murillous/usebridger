@@ -6,10 +6,13 @@
 import type { Chat, Contact, Message } from '@usebridger/core';
 import type { TransportEvents } from '@usebridger/core/adapter';
 import {
+  type Contact as BaileysContact,
   type BaileysEventMap,
   type GroupMetadata as BaileysGroupMetadata,
   isJidGroup,
   isJidStatusBroadcast,
+  isLidUser,
+  jidDecode,
   jidNormalizedUser,
   type WAMessageUpdate,
 } from 'baileys';
@@ -33,17 +36,27 @@ export class ContactBook {
     string,
     { readonly name: string | null; readonly phone: string | null }
   >();
+  /**
+   * Nome sob o id par (LID ↔ telefone) de quem foi observado. Fica fora de `#known` para o
+   * `contact.updated` seguir por id, sem evento duplicado por causa do apelido.
+   */
+  readonly #aliasNames = new Map<string, string>();
 
   /**
    * Registra um remetente. Devolve o `contact.updated` quando há o que contar: na primeira vez
    * que o contato aparece (ADR 0049) ou quando o nome ou o telefone mudou. Campo desconhecido
    * (`null`) não apaga o que já se sabia.
    */
-  observe(contact: Contact): TransportEvents['contact.updated'] | null {
+  observe(contact: Contact, alias?: string): TransportEvents['contact.updated'] | null {
     const known = this.#known.get(contact.id);
     const name = contact.name ?? known?.name ?? null;
     const phone = contact.phone ?? known?.phone ?? null;
     this.#known.set(contact.id, { name, phone });
+    if (name !== null) {
+      // O mesmo contato aparece ora por LID, ora por telefone (ADR 0046): o nome vale nos dois.
+      const peer = alias ?? (isLidUser(contact.id) && phone ? `${phone}@s.whatsapp.net` : null);
+      if (peer) this.#aliasNames.set(jidNormalizedUser(peer) || peer, name);
+    }
     const update: { id: string; name?: string; phone?: string } = { id: contact.id };
     if (name !== null && name !== known?.name) update.name = name;
     if (phone !== null && phone !== known?.phone) update.phone = phone;
@@ -51,13 +64,54 @@ export class ContactBook {
   }
 
   nameOf(id: string): string | null {
-    return this.#known.get(id)?.name ?? null;
+    return this.#known.get(id)?.name ?? this.#aliasNames.get(id) ?? null;
+  }
+
+  /**
+   * Como `nameOf`, e para um LID sem entrada tenta o telefone par da sessão: o nome pode ter sido
+   * aprendido pelo telefone. O inverso (telefone → LID) não tem consulta; vale o apelido
+   * registrado quando o LID foi observado com o telefone.
+   */
+  async nameFor(id: string, env: Pick<NormalizeEnv, 'pnForLid'>): Promise<string | null> {
+    const direct = this.nameOf(id);
+    if (direct !== null || !isLidUser(id)) return direct;
+    const pn = await env.pnForLid(id);
+    return pn ? this.nameOf(jidNormalizedUser(pn) || pn) : null;
   }
 
   /** O contato com o nome já visto, quando o evento não trouxe nenhum. */
   named(contact: Contact): Contact {
     return contact.name === null ? { ...contact, name: this.nameOf(contact.id) } : contact;
   }
+}
+
+/**
+ * Aprende nomes dos contatos que o Baileys sincroniza (`contacts.upsert`, `contacts.update`,
+ * `messaging-history.set`). Prioridade: `notify` (o pushName que a pessoa escolheu, o mesmo que
+ * vem nas mensagens), depois `verifiedName` (conta comercial). O `name` é o nome salvo na agenda
+ * do aparelho do bot: só entra quando não há nome nenhum, para não trocar o pushName já visto
+ * por um apelido privado. Contato sem nome nenhum não gera evento (a sincronização traz milhares
+ * e o telefone sozinho não vale um `contact.updated`).
+ */
+export function learnContacts(
+  list: readonly Partial<BaileysContact>[],
+  contacts: ContactBook,
+): TransportEvents['contact.updated'][] {
+  const updates: TransportEvents['contact.updated'][] = [];
+  for (const c of list) {
+    if (!c.id) continue;
+    const id = jidNormalizedUser(c.id) || c.id;
+    // `||` e não `??`: o WhatsApp manda `notify` vazio para quem não definiu nome.
+    const name =
+      c.notify || c.verifiedName || (contacts.nameOf(id) === null ? c.name || null : null);
+    if (name === null) continue;
+    const other = isLidUser(id) ? c.phoneNumber : c.lid;
+    const pn = isLidUser(id) ? c.phoneNumber : id;
+    const phone = pn ? (jidDecode(pn)?.user ?? null) : null;
+    const update = contacts.observe({ id, name, phone }, other);
+    if (update !== null) updates.push(update);
+  }
+  return updates;
 }
 
 /** O `Chat` de um JID; os eventos de grupo também o usam (ADR 0059). */
@@ -107,6 +161,7 @@ export function toEdited(
       pushName: contacts.nameOf(jidNormalizedUser(authorJid(key, chatId, env.selfIds))),
     },
     env,
+    (id) => contacts.nameFor(id, env),
   );
 }
 

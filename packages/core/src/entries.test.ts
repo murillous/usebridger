@@ -61,6 +61,7 @@ const entries: Record<string, { file: string; load: () => Promise<object> } & En
       'rateLimit',
       'sanitize',
       'secret',
+      'textWithMentionNames',
     ],
     types: [
       'AcceptSpec',
@@ -149,6 +150,7 @@ const entries: Record<string, { file: string; load: () => Promise<object> } & En
       'MediaCommandContext',
       'MediaInput',
       'MediaMessageType',
+      'Mention',
       'MentionTarget',
       'Message',
       'MessageAction',

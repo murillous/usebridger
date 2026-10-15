@@ -2,6 +2,7 @@ import { WAMessageStubType } from 'baileys';
 import { describe, expect, it } from 'vitest';
 import {
   ContactBook,
+  learnContacts,
   toDeleted,
   toEdited,
   toGroupUpdated,
@@ -281,5 +282,76 @@ describe('toGroupUpdated', () => {
     expect(toGroupUpdated({ id: GROUP, subject: 'Igual', participants: [] })).toBeNull();
     expect(toGroupUpdated({ id: GROUP, inviteCode: 'abc' })).toBeNull();
     expect(toGroupUpdated({ subject: 'Sem id' })).toBeNull();
+  });
+});
+
+describe('ContactBook: apelidos LID ↔ telefone', () => {
+  it('nome visto com LID e telefone vale também para o telefone, sem evento extra', () => {
+    const book = new ContactBook();
+    expect(book.observe({ id: BOB_LID, name: 'Bob', phone: '5521922220000' })).toEqual({
+      id: BOB_LID,
+      name: 'Bob',
+      phone: '5521922220000',
+    });
+    expect(book.nameOf(BOB)).toBe('Bob');
+    // O apelido não conta como visto: o telefone ainda gera o próprio evento na primeira vez.
+    expect(book.observe({ id: BOB, name: 'Bob', phone: '5521922220000' })).toEqual({
+      id: BOB,
+      name: 'Bob',
+      phone: '5521922220000',
+    });
+  });
+
+  it('nameFor resolve LID sem entrada pelo telefone par da sessão', async () => {
+    const book = new ContactBook();
+    book.observe({ id: BOB, name: 'Bob', phone: '5521922220000' });
+    expect(await book.nameFor(BOB_LID, env)).toBe('Bob');
+    expect(await book.nameFor('333@lid', env)).toBeNull();
+  });
+});
+
+describe('learnContacts', () => {
+  const LID = '222222222222222@lid';
+
+  it('notify tem prioridade, depois verifiedName; o nome da agenda é só fallback', () => {
+    const book = new ContactBook();
+    const events = learnContacts(
+      [
+        { id: ALICE, notify: 'Ali', verifiedName: 'Loja', name: 'Agenda' },
+        { id: BOB, verifiedName: 'Loja Bob', name: 'Agenda' },
+        { id: '5531900000000@s.whatsapp.net', name: 'Só agenda' },
+        { id: '5541900000000@s.whatsapp.net' },
+      ],
+      book,
+    );
+    expect(events.map((e) => e.name)).toEqual(['Ali', 'Loja Bob', 'Só agenda']);
+  });
+
+  it('notify vazio não vira nome: cai no seguinte', () => {
+    const book = new ContactBook();
+    const events = learnContacts([{ id: ALICE, notify: '', verifiedName: 'Loja' }], book);
+    expect(events.map((e) => e.name)).toEqual(['Loja']);
+  });
+
+  it('nome da agenda não sobrescreve um pushName já visto', () => {
+    const book = new ContactBook();
+    book.observe({ id: ALICE, name: 'Alice', phone: '5511911110000' });
+    expect(learnContacts([{ id: ALICE, name: 'Minha amiga' }], book)).toEqual([]);
+    expect(book.nameOf(ALICE)).toBe('Alice');
+  });
+
+  it('usa lid e phoneNumber do contato como apelido', () => {
+    const book = new ContactBook();
+    const [event] = learnContacts([{ id: LID, phoneNumber: BOB, notify: 'Bob' }], book);
+    expect(event).toEqual({ id: LID, name: 'Bob', phone: '5521922220000' });
+    expect(book.nameOf(BOB)).toBe('Bob');
+    learnContacts([{ id: ALICE, lid: '111@lid', notify: 'Alice' }], book);
+    expect(book.nameOf('111@lid')).toBe('Alice');
+  });
+
+  it('segunda sincronização igual não gera evento', () => {
+    const book = new ContactBook();
+    learnContacts([{ id: ALICE, notify: 'Alice' }], book);
+    expect(learnContacts([{ id: ALICE, notify: 'Alice' }], book)).toEqual([]);
   });
 });

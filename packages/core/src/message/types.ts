@@ -47,6 +47,16 @@ export interface Contact {
   readonly claims?: Readonly<Record<string, JsonValue>>;
 }
 
+/** Contato mencionado numa mensagem (ADR 0100). */
+export interface Mention extends Contact {
+  /**
+   * Trecho literal que a menção ocupa em `text` (no WhatsApp, `@<usuário do JID>`). É por ele que
+   * `textWithMentionNames` acha a menção no texto sem interpretar o `id`, que é opaco. Ausente se
+   * o transport não marca a menção no texto.
+   */
+  readonly tag?: string;
+}
+
 /**
  * Tipo de chat (ADR 0058). `group` é a conversa de várias pessoas solta (grupo do WhatsApp ou do
  * Telegram, DM em grupo do Discord, sala do web); `channel`, o canal de servidor do Discord ou o
@@ -108,7 +118,7 @@ interface BaseMessage<T extends MessageType> {
   /** Mensagem enviada pela própria sessão do bot. */
   readonly fromMe: boolean;
   readonly quoted: Message | null;
-  readonly mentions: readonly Contact[];
+  readonly mentions: readonly Mention[];
   /**
    * Todas as mídias da mensagem, na ordem da plataforma (ADR 0065); vazio sem mídia. Nos tipos de
    * mídia, o primeiro é o próprio `media`, e o `type` é o dele: imagem seguida de PDF é `image`.
