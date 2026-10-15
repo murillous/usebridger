@@ -125,6 +125,20 @@ PR que muda um pacote publicável leva um changeset (`pnpm changeset`) — ver
 levá-los para a `main`, onde o workflow de release abre o PR de versão e publica no npm depois
 do merge dele: fluxo, segredos e como reverter em [`docs/release.md`](docs/release.md).
 
+### Site de documentação
+
+`pnpm run docs` builda o site em `site/dist/`; `pnpm --filter @usebridger/site dev` sobe o
+servidor de desenvolvimento. Os dois sincronizam o Markdown antes. Onde cada página vive:
+
+- `docs/` da raiz e `packages/*/docs/`: Markdown do repositório, sincronizado para o site no
+  build. Edite aqui, nunca a cópia.
+- `site/src/content/docs/`: páginas escritas à mão (home, getting started).
+- `examples/`: código dos exemplos do getting started, pacotes privados verificados no
+  typecheck e no teste.
+
+A referência da API é gerada do fonte pelo TypeDoc (rode `pnpm build` antes). Decisões em
+[ADR 0103](docs/adr/0103-site-de-documentacao.md).
+
 ### CI
 
 Todo push e PR para `develop` ou `main` roda o [`ci.yml`](.github/workflows/ci.yml), com os jobs
@@ -134,7 +148,8 @@ instala, testa e builda ([e2e](packages/create-plugin/docs/README.md#e2e)). O jo
 um Postgres em container para o `@usebridger/storage-postgres`. O job `Benchmark` mede as metas
 de performance e falha com piora > 10% sobre o baseline do commit-base, medido no mesmo runner
 e intercalado com o commit testado ([ADR 0054](docs/adr/0054-baseline-do-benchmark.md),
-[ADR 0089](docs/adr/0089-benchmark-intercalado.md)). O job `Pacotes` builda e roda o
+[ADR 0089](docs/adr/0089-benchmark-intercalado.md)). O job `Docs` builda o site e falha com link quebrado ou warning do TypeDoc; o
+[`docs.yml`](.github/workflows/docs.yml) o publica no GitHub Pages a cada push na `main`. O job `Pacotes` builda e roda o
 `pnpm check:packages`, para um pacote que não publicaria quebrar no PR e não no release.
 
 O setup comum (Node do `.nvmrc`, pnpm do `packageManager`, `pnpm install --frozen-lockfile`)

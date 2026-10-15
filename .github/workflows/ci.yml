@@ -73,6 +73,18 @@ jobs:
       - run: pnpm build
       - run: pnpm check:packages
 
+  # O build do site falha com link quebrado (starlight-links-validator) ou warning do TypeDoc
+  # (treatWarningsAsErrors); o deploy só roda no release (docs.yml). O TypeDoc lê o fonte dos
+  # pacotes, que resolve os imports entre eles pelo dist, por isso o build antes.
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: pnpm build
+      - run: pnpm run docs
+
   # Aceite do create-bridger-plugin (ADR 0081): o projeto gerado instala, passa no typecheck e no
   # teste e builda, sobre os tarballs do core, do kit e do scaffold.
   scaffold:
