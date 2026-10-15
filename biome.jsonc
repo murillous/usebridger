@@ -52,8 +52,8 @@
   },
   "overrides": [
     {
-      // Arquivos de config de ferramentas (vitest, tsdown...) exigem export default.
-      "includes": ["**/*.config.ts", "**/*.config.mts", "**/*.config.js"],
+      // Arquivos de config de ferramentas (vitest, tsdown, astro...) exigem export default; o astro.config.mjs só é lido assim.
+      "includes": ["**/*.config.ts", "**/*.config.mts", "**/*.config.js", "**/*.config.mjs"],
       "linter": { "rules": { "style": { "noDefaultExport": "off" } } }
     },
     {

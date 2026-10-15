@@ -11,3 +11,10 @@ dist/
 apps/lumabot/data/
 # Referência da API: gerada pelo TypeDoc no build (tooling/typedoc).
 docs/referencia/
+# Site (Starlight): páginas sincronizadas do Markdown do repo por site/scripts/sync-content.ts.
+site/src/content/docs/guias/
+site/src/content/docs/pacotes/
+site/src/content/docs/decisoes/
+site/src/content/docs/contribuindo/release.md
+site/.astro/
+site/dist/

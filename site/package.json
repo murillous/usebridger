@@ -1,0 +1,16 @@
+{
+  "name": "@usebridger/site",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync-content.ts",
+    "dev": "pnpm sync && astro dev",
+    "docs": "pnpm sync && astro build"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.42.6",
+    "astro": "7.4.0",
+    "starlight-links-validator": "0.27.0"
+  }
+}

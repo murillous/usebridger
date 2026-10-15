@@ -2,7 +2,7 @@
 
 Registros de decisão de arquitetura (o PORQUÊ) do monorepo. Cada ADR corresponde a uma
 decisão da [seção 4 do plano](../../BRIDGER_PLAN.md#4-decisões) (`ADR 00NN` = `DNN`).
-Os ADRs do LumaBot atual continuam em [`legacy/docs/adr/`](../../legacy/docs/adr/).
+Os ADRs do LumaBot atual continuam em [`legacy/docs/adr/`](https://github.com/murillous/LumaBot/tree/main/legacy/docs/adr).
 
 ## Formato
 
