@@ -73,6 +73,12 @@ export default defineConfig({
             // O zod reexportado em core/zod não é nosso: sem isso o TypeDoc expande milhares de páginas.
             excludeExternals: true,
             externalPattern: ['**/node_modules/**'],
+            // Uma página por entrada pública, com os símbolos como seções: uma por símbolo dava
+            // ~350 páginas e uma sidebar ilegível; a busca acha o símbolo dentro da página.
+            outputFileStrategy: 'modules',
+            // Com tudo numa página, nomes repetidos ganham sufixo (`#botconfig-1`) que o slug do
+            // Starlight não reproduz; âncoras HTML explícitas mantêm os links do TypeDoc válidos.
+            useHTMLAnchors: true,
           },
         }),
       ],
