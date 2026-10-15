@@ -126,8 +126,30 @@ o link expirou.
 4. sem par conhecido (ou se a consulta falhar, com log em `warn`): `null`. Os papéis `owner` e
    `group-admin` falham fechados nesse caso.
 
-`sender.name` é o `pushName`; menções e o autor da citada vêm com `name: null`. Na conversa
-privada, o remetente de uma mensagem da própria sessão é a sessão.
+`sender.name` é o `pushName`; o autor da citada vem com `name: null`. Na conversa privada, o
+remetente de uma mensagem da própria sessão é a sessão.
+
+#### Nome e tag das menções
+
+Cada item de `mentions` traz `tag`, o trecho literal da menção em `text`: `@` + a parte de
+usuário do JID mencionado, sem o aparelho (o mesmo token que o transport escreve ao enviar uma
+menção). O `name` vem de um cache em memória de nomes já vistos, por ordem de prioridade:
+
+1. `notify` (o `pushName` que a pessoa escolheu), de mensagens (`messages.upsert`) e das
+   sincronizações de contatos (`contacts.upsert`, `contacts.update` e o campo `contacts` do
+   `messaging-history.set`);
+2. `verifiedName` (conta comercial);
+3. `name` (nome salvo na agenda do aparelho do bot), só quando não se sabe nenhum outro nome:
+   nunca troca um `pushName` já visto.
+
+LID e telefone da mesma pessoa são tratados como apelidos: o nome aprendido por um vale para o
+outro (pelo `phone` do contato, pelos `lid`/`phoneNumber` que o Baileys manda e, para um LID sem
+entrada, pelo mapeamento da sessão).
+
+Limites: quem nunca foi visto fica com `name: null` e o `tag` é a única pista. O cache vive só
+em memória e zera no restart. A menção ao próprio remetente na mesma mensagem sai sem nome na
+primeira vez. A sincronização inicial pode emitir muitos `contact.updated` de uma vez (um por
+contato com nome novo).
 
 ### Citada
 

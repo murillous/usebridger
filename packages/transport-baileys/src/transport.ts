@@ -54,6 +54,7 @@ import { toDisconnectReason } from './disconnect-reason.ts';
 import {
   ContactBook,
   chatOf,
+  learnContacts,
   toDeleted,
   toEdited,
   toGroupUpdated,
@@ -279,7 +280,10 @@ export class BaileysTransport implements Transport {
               }
               return;
             }
-            const message = await toMessage(raw, env);
+            // Menção a si próprio no mesmo envio sai sem nome: o remetente só é observado depois, e
+            // o nome dele pode não ter chegado ainda. Adiantar o `observe` mudaria a ordem dos
+            // eventos para ganhar pouco.
+            const message = await toMessage(raw, env, (id) => contacts.nameFor(id, env));
             if (message === null || !current()) return;
             // Antes da mensagem: quem guarda nomes já o tem ao tratá-la.
             const contact = message.fromMe ? null : contacts.observe(message.sender);
@@ -291,6 +295,19 @@ export class BaileysTransport implements Transport {
         );
       }
     });
+
+    // Nomes sincronizados pelo Baileys alimentam as menções (e o `contact.updated`, ADR 0040).
+    const learn = (list: readonly Partial<BaileysContact>[]) => {
+      if (!current()) return;
+      enqueue(async () => {
+        for (const update of learnContacts(list, contacts)) {
+          if (current()) this.#events.emit('contact.updated', update);
+        }
+      }, 'falha ao aprender nomes de contatos do Baileys; descartados');
+    };
+    socket.ev.on('contacts.upsert', learn);
+    socket.ev.on('contacts.update', learn);
+    socket.ev.on('messaging-history.set', ({ contacts: list }) => learn(list));
 
     socket.ev.on('messages.reaction', (reactions) => {
       if (!current()) return;

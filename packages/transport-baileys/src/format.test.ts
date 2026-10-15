@@ -2,7 +2,7 @@
 
 import { bold, code, fmt, italic, link, mention } from '@usebridger/core';
 import { describe, expect, it } from 'vitest';
-import { renderWhatsApp } from './format.ts';
+import { mentionTag, renderWhatsApp } from './format.ts';
 
 const ALICE = { id: '5511911110000@s.whatsapp.net', name: 'Alice', phone: '5511911110000' };
 const BOB_LID = { id: '222222222222222@lid', name: 'Bob', phone: null };
@@ -41,5 +41,14 @@ describe('renderWhatsApp', () => {
 
   it('texto literal vai como está', () => {
     expect(renderWhatsApp(fmt`${'2*3*4'}`).text).toBe('2*3*4');
+  });
+});
+
+describe('mentionTag', () => {
+  it('o tag de entrada é o token que a saída escreve para o mesmo JID', () => {
+    for (const jid of [ALICE.id, BOB_LID.id, '5511911110000:12@s.whatsapp.net']) {
+      const token = renderWhatsApp(mention({ id: jid, name: null, phone: null })).text;
+      expect(mentionTag(jid)).toBe(token);
+    }
   });
 });

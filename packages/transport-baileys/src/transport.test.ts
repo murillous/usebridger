@@ -956,3 +956,67 @@ describe('BaileysTransport: metadados de grupo (ADR 0046)', () => {
     expect(await cached(GROUP)).toMatchObject({ id: GROUP, subject: 'Família' });
   });
 });
+
+describe('BaileysTransport: nomes das menções (#109)', () => {
+  const GROUP_ID = '120363000000000001@g.us';
+  const BOB = '5521922220000@s.whatsapp.net';
+  const BOB_LID = '222222222222222@lid';
+
+  const mentioning = (id: string, jid: string): WAMessage => ({
+    key: { remoteJid: GROUP_ID, id, fromMe: false, participant: 'a@s.whatsapp.net' },
+    message: {
+      extendedTextMessage: { text: 'oi', contextInfo: { mentionedJid: [jid] } },
+    },
+    messageTimestamp: 1_760_000_000,
+  });
+
+  async function connected() {
+    const ctx = setup();
+    const messages: Message[] = [];
+    const updates: unknown[] = [];
+    ctx.transport.on('message', (m) => {
+      messages.push(m);
+    });
+    ctx.transport.on('contact.updated', (u) => {
+      updates.push(u);
+    });
+    await ctx.transport.connect();
+    return { messages, updates, socket: ctx.driver.last };
+  }
+
+  it('contacts.upsert dá nome à menção; contato nunca visto fica sem nome', async () => {
+    const { socket, messages, updates } = await connected();
+    socket.emit('contacts.upsert', [{ id: BOB, notify: 'Bob' }]);
+    await vi.waitFor(() => expect(updates).toHaveLength(1));
+    socket.emit('messages.upsert', {
+      type: 'notify',
+      messages: [mentioning('M1', BOB), mentioning('M2', '5599900000000@s.whatsapp.net')],
+    });
+    await vi.waitFor(() => expect(messages).toHaveLength(2));
+    expect(messages[0]?.mentions[0]).toMatchObject({ name: 'Bob', tag: '@5521922220000' });
+    expect(messages[1]?.mentions[0]).toMatchObject({ name: null, tag: '@5599900000000' });
+  });
+
+  it('nome aprendido pelo telefone resolve a menção por LID (e vice-versa)', async () => {
+    const { socket, messages } = await connected();
+    socket.lids.set(BOB_LID, BOB);
+    socket.emit('messaging-history.set', {
+      chats: [],
+      contacts: [{ id: BOB, notify: 'Bob' }],
+      messages: [],
+    });
+    socket.emit('contacts.update', [
+      { id: '111@lid', phoneNumber: 'x@s.whatsapp.net', notify: 'X' },
+    ]);
+    socket.emit('messages.upsert', { type: 'notify', messages: [mentioning('M1', BOB_LID)] });
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    expect(messages[0]?.mentions[0]).toMatchObject({ id: BOB_LID, name: 'Bob' });
+  });
+
+  it('contacts.update com nome emite contact.updated', async () => {
+    const { socket, updates } = await connected();
+    socket.emit('contacts.update', [{ id: BOB, notify: 'Bob' }]);
+    await vi.waitFor(() => expect(updates).toHaveLength(1));
+    expect(updates[0]).toEqual({ id: BOB, name: 'Bob', phone: '5521922220000' });
+  });
+});

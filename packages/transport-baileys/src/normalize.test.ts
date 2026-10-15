@@ -92,8 +92,8 @@ describe('toMessage: tipos', () => {
       env(),
     );
     expect(msg?.mentions).toEqual([
-      { id: BOB_LID, name: null, phone: '5521922220000' },
-      { id: ALICE, name: null, phone: '5511911110000' },
+      { id: BOB_LID, name: null, phone: '5521922220000', tag: '@222222222222222' },
+      { id: ALICE, name: null, phone: '5511911110000', tag: '@5511911110000' },
     ]);
     expect(msg?.isForwarded).toBe(true);
     expect(msg?.key.senderId).toBe(ALICE);
@@ -405,5 +405,43 @@ describe('toMessage: citada', () => {
       env(),
     );
     expect(msg?.quoted).toBeNull();
+  });
+});
+
+describe('toMessage: menções com nome e tag', () => {
+  const mentioning = raw(
+    {
+      extendedTextMessage: {
+        text: 'oi @222222222222222 e @5511911110000',
+        contextInfo: { mentionedJid: [BOB_LID, ALICE] },
+      },
+    },
+    inGroup,
+  );
+
+  it('nome conhecido vem com nome e tag; desconhecido vem com name null e tag', async () => {
+    const names: Record<string, string> = { [ALICE]: 'Alice' };
+    const msg = await toMessage(mentioning, env(), async (id) => names[id] ?? null);
+    expect(msg?.mentions).toEqual([
+      { id: BOB_LID, name: null, phone: '5521922220000', tag: '@222222222222222' },
+      { id: ALICE, name: 'Alice', phone: '5511911110000', tag: '@5511911110000' },
+    ]);
+    for (const m of msg?.mentions ?? []) expect(msg?.text).toContain(m.tag);
+  });
+
+  it('o tag vem do JID cru, sem o aparelho', async () => {
+    const msg = await toMessage(
+      raw(
+        {
+          extendedTextMessage: {
+            text: '@5511911110000',
+            contextInfo: { mentionedJid: ['5511911110000:12@s.whatsapp.net'] },
+          },
+        },
+        inGroup,
+      ),
+      env(),
+    );
+    expect(msg?.mentions[0]).toMatchObject({ id: ALICE, tag: '@5511911110000' });
   });
 });
