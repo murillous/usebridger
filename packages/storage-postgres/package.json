@@ -1,6 +1,6 @@
 {
   "name": "@usebridger/storage-postgres",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Storage do Bridger em Postgres, para vários processos dividindo o banco.",
   "license": "Apache-2.0",
   "repository": {

@@ -1,6 +1,6 @@
 {
   "name": "@usebridger/transport-web",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Transport do Bridger para chat web: WebSocket com JWT, conversas e mídia por HTTP.",
   "license": "Apache-2.0",
   "repository": {
