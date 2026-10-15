@@ -223,6 +223,7 @@ export {
   type TextNode,
   type TextPart,
 } from '#text/format.ts';
+export { textWithMentionNames } from '#text/mentions.ts';
 export { type Capability, UnsupportedError } from '#transport/capabilities.ts';
 export type {
   AlbumItem,

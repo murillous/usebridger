@@ -64,3 +64,19 @@ O `edit` não divide: acima do limite, rejeita com `RangeError`.
 `message.text` é o texto que a pessoa escreveu, com as menções legíveis: no Discord, o transport
 troca `<@123>` por `@nome`. Os mencionados ficam em `message.mentions`. A formatação da entrada
 (as entities do Telegram, por exemplo) não entra na `Message`.
+
+### Menções com o nome
+
+No WhatsApp o texto traz o token da menção (`luma fale bem de @859302458`), não o nome. Cada
+`Mention` em `message.mentions` tem `tag` (o trecho literal em `text`) e `name`.
+`textWithMentionNames` troca o `tag` por `@nome`; menção sem `tag` ou sem `name` fica como veio.
+
+```ts
+import { textWithMentionNames } from '@usebridger/core';
+
+// num plugin de IA: o prompt recebe "luma fale bem de @Murilo"
+const prompt = textWithMentionNames(ctx.message) ?? '';
+```
+
+O nome vem do cache do transport: contato que ele nunca viu fica sem `name`, e o `@número`
+permanece ([ADR 0100](../../../docs/adr/0100-mencao-com-tag-no-texto.md)).
