@@ -108,7 +108,10 @@ export async function toPollVote(
   return {
     chat: chatOf(chatId),
     messageId: pollKey.id,
-    sender: contacts.named(await authorOf(raw.key, chatId, env, raw.pushName ?? null)),
+    sender: await contacts.withName(
+      await authorOf(raw.key, chatId, env, raw.pushName ?? null),
+      env,
+    ),
     options: [...options].sort((a, b) => a - b),
     fromMe: raw.key.fromMe === true,
   };
