@@ -327,6 +327,12 @@ describe('learnContacts', () => {
     expect(events.map((e) => e.name)).toEqual(['Ali', 'Loja Bob', 'Só agenda']);
   });
 
+  it('notify vazio não vira nome: cai no seguinte', () => {
+    const book = new ContactBook();
+    const events = learnContacts([{ id: ALICE, notify: '', verifiedName: 'Loja' }], book);
+    expect(events.map((e) => e.name)).toEqual(['Loja']);
+  });
+
   it('nome da agenda não sobrescreve um pushName já visto', () => {
     const book = new ContactBook();
     book.observe({ id: ALICE, name: 'Alice', phone: '5511911110000' });

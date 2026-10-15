@@ -101,8 +101,9 @@ export function learnContacts(
   for (const c of list) {
     if (!c.id) continue;
     const id = jidNormalizedUser(c.id) || c.id;
+    // `||` e não `??`: o WhatsApp manda `notify` vazio para quem não definiu nome.
     const name =
-      c.notify ?? c.verifiedName ?? (contacts.nameOf(id) === null ? (c.name ?? null) : null);
+      c.notify || c.verifiedName || (contacts.nameOf(id) === null ? c.name || null : null);
     if (name === null) continue;
     const other = isLidUser(id) ? c.phoneNumber : c.lid;
     const pn = isLidUser(id) ? c.phoneNumber : id;
