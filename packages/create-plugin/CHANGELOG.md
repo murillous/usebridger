@@ -1,5 +1,12 @@
 # create-bridger-plugin
 
+## 0.3.2
+
+### Patch Changes
+
+- 1fcc0c3: A pasta `docs/` de cada pacote passa a entrar no tarball do npm (#91), para a documentação viajar
+  com a versão instalada. Sem mudança de API.
+
 ## 0.3.1
 
 ### Patch Changes

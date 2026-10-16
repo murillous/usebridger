@@ -1,5 +1,12 @@
 # @usebridger/core
 
+## 0.6.1
+
+### Patch Changes
+
+- 1fcc0c3: A pasta `docs/` de cada pacote passa a entrar no tarball do npm (#91), para a documentação viajar
+  com a versão instalada. Sem mudança de API.
+
 ## 0.6.0
 
 ### Minor Changes

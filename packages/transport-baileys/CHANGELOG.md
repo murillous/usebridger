@@ -1,5 +1,14 @@
 # @usebridger/transport-baileys
 
+## 0.4.2
+
+### Patch Changes
+
+- 1fcc0c3: A pasta `docs/` de cada pacote passa a entrar no tarball do npm (#91), para a documentação viajar
+  com a versão instalada. Sem mudança de API.
+- Updated dependencies [1fcc0c3]
+  - @usebridger/core@0.6.1
+
 ## 0.4.1
 
 ### Patch Changes
