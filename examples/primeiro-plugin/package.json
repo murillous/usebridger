@@ -1,0 +1,20 @@
+{
+  "name": "@usebridger/example-primeiro-plugin",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Plugin no formato do create-bridger-plugin, com teste.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/bot.ts"
+  },
+  "devDependencies": {
+    "@usebridger/testing": "workspace:*"
+  },
+  "dependencies": {
+    "@usebridger/core": "workspace:*",
+    "@usebridger/example-primeiro-bot": "workspace:*",
+    "@usebridger/storage-sqlite": "workspace:*",
+    "@usebridger/transport-baileys": "workspace:*"
+  }
+}

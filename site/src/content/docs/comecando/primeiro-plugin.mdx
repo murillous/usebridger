@@ -1,0 +1,62 @@
+---
+title: Seu primeiro plugin
+description: Gere um plugin com create-bridger-plugin, teste com @usebridger/testing e plugue no bot.
+sidebar:
+  order: 3
+---
+
+import Exemplo from '../../../components/Exemplo.astro';
+
+Aqui o plugin vira um projeto próprio, com teste, que você pode publicar no npm. Esta página mostra o caminho curto. O passo a passo, com um segundo comando e um chat local pelo terminal, está no guia [Seu primeiro plugin em 5 minutos](/usebridger/guias/primeiro-plugin/).
+
+## 1. Gerar o projeto
+
+```sh
+npm create bridger-plugin@latest bridger-plugin-ola
+cd bridger-plugin-ola
+npm install
+```
+
+O nome do plugin é o do pacote sem o prefixo `bridger-plugin-`: aqui, `ola`. O gerador cria `src/index.ts` (o plugin), `src/index.test.ts` (o teste) e a configuração de build.
+
+## 2. O plugin e o comando
+
+<Exemplo arquivo="primeiro-plugin/src/index.ts" regiao="plugin" />
+
+- `definePlugin` valida o manifesto na hora. `engine` é a faixa do core com que o plugin roda.
+- A chave `ola` em `commands` vira o comando `!ola`. O que o `run` devolve é a resposta, citando a mensagem.
+- Reação é opcional: `capabilities.has('reactions')` confere se a plataforma tem. Onde não tem, o plugin responde só o texto.
+- `fmt` e `bold` viram o negrito de cada plataforma, em vez de um `*negrito*` que só vale no WhatsApp.
+
+## 3. O teste
+
+<Exemplo arquivo="primeiro-plugin/src/index.test.ts" regiao="teste" />
+
+O `@usebridger/testing` sobe um bot de verdade sobre um transport falso, sem rede. O `describe.each` roda o mesmo caso nos perfis de WhatsApp, Telegram, Discord e web. `bot.receive()` só resolve depois que o bot terminou de processar a mensagem, então a resposta já está em `bot.sent`.
+
+```sh
+npm test
+```
+
+Mais sobre o kit em [Testes](/usebridger/guias/testes/).
+
+## 4. Plugar no bot
+
+No bot do [passo anterior](/usebridger/comecando/primeiro-bot/), o plugin entra na lista `plugins`:
+
+<Exemplo arquivo="primeiro-plugin/src/bot.ts" regiao="plugar" />
+
+Num bot fora do monorepo, `ola` vem do pacote `bridger-plugin-ola`. Enquanto ele não está no npm, gere o build no plugin e instale a pasta no bot:
+
+```sh
+# na pasta do plugin
+npm run build
+# na pasta do bot
+npm install ../bridger-plugin-ola
+```
+
+Aí o import é `import { ola } from 'bridger-plugin-ola'`. Rode o bot e mande `!ola`.
+
+## Próximos passos
+
+O próximo passo é uma [conversa guiada](/usebridger/comecando/conversa-guiada/): o bot pergunta, a pessoa responde, e o plugin segue o fluxo. Comandos com argumentos, eventos e storage estão nos [Guias](/usebridger/guias/). Para publicar o plugin no npm, veja o `README.md` que o gerador criou no projeto.

@@ -1,0 +1,136 @@
+---
+title: Rodar em produção
+description: Processo, supervisor (PM2 ou Docker), /health, logs, backup do storage e re-pareamento.
+sidebar:
+  order: 6
+---
+
+import Exemplo from '../../../components/Exemplo.astro';
+
+Em produção, o bot roda sem ninguém olhando: precisa voltar sozinho quando cai, parar sem perder mensagem, avisar se está de pé e guardar as credenciais num lugar que entra no backup.
+
+## O processo
+
+<Exemplo arquivo="producao/src/main.ts" regiao="main" />
+
+- O Node 24 roda o `.ts` direto, sem build: `node src/main.ts`.
+- **Sinais.** O core não instala handler de `SIGTERM` nem de `SIGINT`. Sem o seu, o processo morre na hora, com mensagens no meio do caminho. O `stop()` para de aceitar mensagens, termina as que já entraram, envia o que está na fila de saída e fecha o storage. Isso leva até 15 segundos.
+- **Uma sessão por banco.** Dois processos com a mesma sessão no mesmo banco respondem em dobro. O bot impede isso: o segundo espera até 30 s e desiste com erro. Num deploy, pare o antigo antes de subir o novo.
+
+## Supervisor
+
+O supervisor reinicia o processo quando ele cai e manda o `SIGTERM` no deploy. Dê a ele mais de 15 s entre o `SIGTERM` e o `SIGKILL`, ou o `stop()` é cortado no meio.
+
+### PM2
+
+```js
+// ecosystem.config.cjs
+module.exports = {
+  apps: [
+    {
+      name: 'bot',
+      script: 'src/main.ts',
+      // O Node 24 roda o .ts direto; sem isto, o PM2 pode procurar outro interpretador pela extensão.
+      interpreter: 'node',
+      // O padrão do PM2 é 1,6 s: pouco para o stop() terminar.
+      kill_timeout: 20_000,
+      // Um processo por sessão: o bot não divide a sessão entre instâncias.
+      instances: 1,
+      exec_mode: 'fork',
+    },
+  ],
+};
+```
+
+```sh
+pm2 start ecosystem.config.cjs
+pm2 save
+```
+
+### Docker
+
+```dockerfile
+FROM node:24-slim
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+COPY src ./src
+CMD ["node", "src/main.ts"]
+```
+
+```yaml
+# compose.yaml
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    # O padrão do Docker é 10 s: pouco para o stop() terminar.
+    stop_grace_period: 20s
+    volumes:
+      - ./data:/app/data
+    ports:
+      - '127.0.0.1:3000:3000'
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/health').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 30s
+      start_period: 60s
+```
+
+O `CMD` em forma de lista é o que faz o `SIGTERM` chegar ao Node. Na forma de texto (`CMD node src/main.ts`), quem recebe o sinal é um shell, que não o repassa.
+
+## `/health`
+
+`GET /health` responde 200 quando o bot está rodando e 503 enquanto ele sobe ou para:
+
+```json
+{ "status": "ok", "sessions": { "default": "running" } }
+```
+
+É o endereço do `healthcheck` do Docker, do balanceador ou do monitor de uptime.
+
+- Ele diz se o processo está de pé, não se o WhatsApp está conectado. Durante uma queda de rede, o bot continua `running` enquanto reconecta, e o `/health` segue 200.
+
+- O `/health` sai do servidor HTTP do bot, que só abre a porta quando algum plugin tem rota. No exemplo, a rota é a do plugin `avisos`, do [passo anterior](/usebridger/comecando/configuracao/). Sem nenhuma rota, não há porta nem `/health`.
+- O corpo mostra o nome das sessões. Se isso não pode ser público, não exponha o `/health` no proxy. O `compose.yaml` acima já publica a porta só em `127.0.0.1`.
+
+## Logs
+
+O bot escreve uma linha JSON por evento no stdout:
+
+```json
+{"level":30,"time":1760572800000,"pid":1,"hostname":"bot","msg":"conexão aberta"}
+```
+
+- Deixe no stdout: o PM2 (`pm2 logs`) e o Docker (`docker compose logs`) já guardam e giram os arquivos, e um agregador lê dali.
+- O nível padrão é `info`. Para investigar, suba com `logLevel: 'debug'`.
+- Para ler no terminal, `logFormat: 'pretty'` troca o JSON por texto. Em produção, mantenha o JSON.
+- Segredos da config não aparecem: saem como `[REDACTED]`. Pelo mesmo motivo, o QR e o código de pareamento só aparecem em `debug`, porque quem lê o log poderia parear o número.
+
+## Backup do storage
+
+Tudo o que o bot guarda está no banco: as credenciais do WhatsApp, o storage dos plugins, os jobs agendados e as conversas persistidas. Perder o banco é parear de novo e perder os dados.
+
+Com o SQLite, o banco são três arquivos: `bot.sqlite`, `bot.sqlite-wal` e `bot.sqlite-shm`. Copiar só o primeiro com o bot rodando pode dar uma cópia incompleta. Há dois jeitos seguros:
+
+- pare o bot e copie os três arquivos;
+- com o bot rodando, gere uma cópia consistente num arquivo só:
+
+```sh
+sqlite3 data/bot.sqlite "VACUUM INTO 'backup/bot-$(date +%F).sqlite'"
+```
+
+O backup tem as credenciais do número: guarde-o como guardaria uma senha. Com o Postgres, use o `pg_dump` de sempre.
+
+## Re-pareamento
+
+O bot só pede pareamento quando não tem credenciais. Depois do primeiro, sobrevive a reinícios e deploys.
+
+Se o número for desconectado pelo celular (*Aparelhos conectados → Desconectar*), o WhatsApp avisa o logout. O bot apaga as credenciais velhas sozinho e começa um pareamento novo. O plugin `pareamento` do [primeiro bot](/usebridger/comecando/primeiro-bot/) imprime o QR ou o código no stdout, então ele aparece no `pm2 logs` ou no `docker compose logs`.
+
+- Num servidor, o código é mais prático do que o QR: suba com o número (`node src/main.ts 5511999999999`), leia os 8 caracteres no log e digite no celular em *Conectar com número de telefone*.
+- O QR gira a cada 20 s. Se ninguém parear depois de alguns QRs, o bot recomeça o pareamento do zero, com QRs novos: basta acompanhar o log.
+- Queda de rede não apaga credenciais: o bot reconecta sozinho, sem limite de tentativas.
+
+## Próximos passos
+
+O ciclo de vida completo (estados, prazos, reconexão, trava de sessão) está em [Bot](/usebridger/pacotes/core/bot/). Para vários números no mesmo processo, veja [Sessão](/usebridger/pacotes/core/bot/#sessão).

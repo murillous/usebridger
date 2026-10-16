@@ -1,0 +1,21 @@
+{
+  "name": "@usebridger/example-producao",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Bot pronto para produção: sinais, /health e logs em JSON.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/main.ts"
+  },
+  "dependencies": {
+    "@usebridger/core": "workspace:*",
+    "@usebridger/example-configuracao": "workspace:*",
+    "@usebridger/example-primeiro-bot": "workspace:*",
+    "@usebridger/storage-sqlite": "workspace:*",
+    "@usebridger/transport-baileys": "workspace:*"
+  },
+  "devDependencies": {
+    "@usebridger/testing": "workspace:*"
+  }
+}

@@ -10,7 +10,8 @@ o plugin diz do que precisa. O detalhe está em
 Há dois jeitos de lidar com uma capability, e a escolha é do plugin:
 
 **Exigir em `requires`**, quando o plugin não faz sentido sem ela. Num transport sem a capability,
-o plugin nem sobe, e a tabela de boot diz o que faltou:
+o boot para antes de conectar, com um erro que diz o que faltou
+([ADR 0102](../adr/0102-plugin-falho-derruba-o-boot.md)):
 
 ```ts
 export const figurinha = definePlugin({
@@ -23,9 +24,13 @@ export const figurinha = definePlugin({
 ```
 
 ```
-Plugins: 1 carregado(s), 1 ignorado(s)
-  figurinha  0.1.0  ignorado (capability ausente no transport: send.sticker)
+1 plugin(s) não carregaram; boot abortado. figurinha@0.1.0: capability ausente no transport:
+send.sticker. Para subir sem um plugin de propósito, use disabledPlugins.
 ```
+
+Para subir o bot nesse transport sem o plugin, ponha `figurinha` em `disabledPlugins`. Para o plugin
+subir sem um comando só, use o `requires` do comando
+([Comandos](../../packages/core/docs/commands.md#capability-por-comando)).
 
 **Conferir em `ctx.capabilities`**, quando é um extra. O plugin sobe em todo transport e usa o
 recurso onde ele existe:

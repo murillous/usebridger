@@ -84,9 +84,10 @@ O que vale para onde, de fora para dentro:
   `delete`, `typing`) e alterações de grupo; leituras (metadados de grupo) vão direto ao transport.
 - **Erro de plugin não derruba o bot.** Exceção ou prazo estourado em comando, listener, passo,
   job ou rota vira `plugin.error` e uma linha de log; o chat segue. Erro de manifesto, conflito
-  de nomes ou ciclo de dependências derruba o boot, antes de o transport conectar.
+  de nomes, ciclo de dependências, plugin incompatível ou `setup` que falha derrubam o boot, antes
+  de o transport conectar ([ADR 0102](../../../docs/adr/0102-plugin-falho-derruba-o-boot.md)).
 - **Capabilities decidem o que roda.** O plugin declara em `requires` o que é essencial (sem ele,
-  não carrega) e confere o opcional em `ctx.capabilities`. Uso de capability ausente lança
+  o boot para) e confere o opcional em `ctx.capabilities`. Uso de capability ausente lança
   `UnsupportedError`. → [Transport → Capabilities](transport.md#capabilities)
 - **O modelo é neutro.** `Message`, `Contact` e `Chat` são os mesmos em toda plataforma; o objeto
   bruto da plataforma fica atrás de `ctx.unsafe`. → [Modelo de mensagem](message.md),

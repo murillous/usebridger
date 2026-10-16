@@ -1,0 +1,47 @@
+name: Docs
+
+# Publica o site (site/) no GitHub Pages, em murillous.github.io/usebridger (ADR 0103). A `main` só
+# recebe a `develop` no release (ADR 0085), então o site sai a cada release.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Sem cancel-in-progress: um deploy em andamento nunca é cortado no meio. Os seguintes esperam.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    # Fork ou branch errada no workflow_dispatch não publicam.
+    if: github.repository == 'murillous/usebridger' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      # O TypeDoc do site lê o fonte dos pacotes, que resolve os imports entre eles pelo dist.
+      - run: pnpm build
+      - run: pnpm run docs
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site/dist
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    # Só o deploy precisa escrever no Pages e assinar o token OIDC.
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

@@ -1,0 +1,82 @@
+---
+title: O que é o Bridger
+description: Um kernel de bot de mensageria em TypeScript, e como uma mensagem passa por ele.
+sidebar:
+  order: 1
+---
+
+Bridger é um **kernel** para bots de mensageria, escrito em TypeScript para Node 24 ou mais novo. Ele cuida do que todo bot precisa e não depende de uma plataforma: filas, comandos, eventos, agendamento, config, logs. Você escolhe a plataforma e o banco, e escreve o comportamento do bot em plugins.
+
+## As quatro peças
+
+| Peça | O que é | Pacote |
+| --- | --- | --- |
+| **Core** | O kernel: `createBot`, filas, roteador de comandos, middlewares, eventos, scheduler, HTTP. | `@usebridger/core` |
+| **Transport** | O adaptador de uma plataforma. Recebe as mensagens e envia as respostas. | `@usebridger/transport-baileys`, `@usebridger/transport-web` |
+| **Storage** | Onde ficam os dados do bot, as credenciais da sessão e os jobs agendados. | `@usebridger/storage-sqlite`, `@usebridger/storage-postgres` |
+| **Plugin** | O comportamento do bot: comandos, reações a eventos, tarefas. | o seu, ou de terceiros |
+
+## SDK, framework ou kernel?
+
+O Bridger é uma **biblioteca com inversão de controle**: não há um programa `bridger` para rodar. Seu app importa `createBot`, passa transport, storage e plugins, e chama `start()`. A partir daí **o kernel chama os seus plugins**, não o contrário: um plugin declara seus comandos e listeners e o kernel decide quando rodá-los. Importar o core não conecta nem agenda nada até o `start()` ([ADR 0034](/usebridger/decisoes/0034-biblioteca-sem-runner/)).
+
+## O que é core e o que é plugin
+
+O core tem um escopo fechado: conexão, filas de entrada e saída, middlewares, comandos, eventos, ciclo de vida dos plugins, storage, scheduler, logger, config, papéis, HTTP e mídia. **Todo o resto é plugin**: ajuda, lembretes, ranking, IA, painel. Entrar algo novo no core exige um ADR ([ADR 0013](/usebridger/decisoes/0013-escopo-do-core/)). O motivo é que, sem essa fronteira, o kernel acumula funcionalidades "porque todo bot precisa" e passa a obrigar todo mundo a carregá-las.
+
+O core também não conhece nenhuma plataforma: ele só conhece o contrato do `Transport`. Um plugin que usa só o que o contrato descreve roda em qualquer transport.
+
+## Plataformas
+
+| Plataforma | Transport | Situação |
+| --- | --- | --- |
+| WhatsApp | [`transport-baileys`](/usebridger/pacotes/transport-baileys/) | disponível |
+| Sistema web próprio (chat em ERP, site) | [`transport-web`](/usebridger/pacotes/transport-web/) | disponível |
+| Telegram e Discord | `transport-telegram`, `transport-discord` | planejados, depois do 1.0 |
+
+## O caminho de uma mensagem
+
+```text
+ plataforma
+     │ mensagem
+     ▼
+ ┌───────────┐
+ │ Transport │  traduz para o modelo neutro (Message, Contact, Chat)
+ └─────┬─────┘
+       ▼
+ fila de entrada ─ mensagens do mesmo chat em série, chats diferentes em paralelo
+       ▼
+ middlewares ───── em camadas, por prioridade; qualquer um pode barrar a mensagem
+       ▼
+ resposta esperada ─ há uma conversa aguardando e a mensagem não é comando? o passo dela roda e consome a mensagem
+       ▼
+ roteador ───────── "!ping" casa com um comando? o `run` do plugin roda e consome a mensagem
+       ▼
+ eventos ────────── senão, os listeners de `message` dos plugins, em paralelo
+       │
+       │ o plugin responde (retorno do comando, ctx.reply, ctx.send)
+       ▼
+ fila de saída ──── ritmo por chat, prioridade, retry, divisão de texto longo
+       ▼
+ ┌───────────┐
+ │ Transport │  envia à plataforma
+ └───────────┘
+```
+
+Duas consequências práticas:
+
+- **Tudo o que o bot envia passa pela fila de saída**, então o ritmo de envio é controlado em um lugar só.
+- **Erro de plugin não derruba o bot**: uma exceção num comando ou listener vira o evento `plugin.error` e uma linha de log, e o chat segue.
+
+Os prazos e erros de cada etapa estão em [Bot → Fluxo de uma mensagem](/usebridger/pacotes/core/bot/#fluxo-de-uma-mensagem), e a visão completa das peças em [Visão geral do core](/usebridger/pacotes/core/overview/).
+
+## Quando não usar
+
+- **Para uma chamada avulsa à API de uma plataforma.** Se você só quer mandar uma mensagem de um script, a biblioteca da plataforma (por exemplo, o próprio Baileys) é menos código.
+- **Para rodar vários processos com a mesma sessão.** Uma trava no storage impede dois processos na mesma sessão ([ADR 0004](/usebridger/decisoes/0004-uma-sessao-por-processo/)).
+- **Se você precisa de Telegram ou Discord agora.** Os transports ainda não existem.
+- **Se você não quer escrever código.** O Bridger não traz um construtor visual nem um bot pronto: ele é a base sobre a qual você escreve o seu.
+
+## Próximo passo
+
+[Suba seu primeiro bot](/usebridger/comecando/primeiro-bot/).
