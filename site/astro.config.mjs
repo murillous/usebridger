@@ -89,6 +89,25 @@ export default defineConfig({
       sidebar: [
         { label: 'Começando', items: [{ autogenerate: { directory: 'comecando' } }] },
         { label: 'Guias', items: [{ autogenerate: { directory: 'guias' } }] },
+        // Lista explícita: as páginas vêm de docs/conceitos/ sem frontmatter de ordem, e a ordem
+        // alfabética espalharia a trilha de leitura.
+        {
+          label: 'Conceitos',
+          items: [
+            'conceitos',
+            'conceitos/visao-geral',
+            'conceitos/comparacao',
+            'conceitos/bot-e-sessao',
+            'conceitos/mensagem',
+            'conceitos/plugins',
+            'conceitos/distribuicao',
+            'conceitos/configuracao',
+            'conceitos/testes',
+            'conceitos/operacao',
+            'conceitos/contribuindo',
+            'conceitos/perguntas',
+          ],
+        },
         {
           label: 'Referência',
           items: [

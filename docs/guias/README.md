@@ -22,4 +22,6 @@ quando o detalhe importa.
 
 - **Referência da API**: `pnpm run docs` gera no site (seção Referência → API), com cada entrada pública (`@usebridger/core`, `@usebridger/core/adapter`, …) e os comentários do código.
 - **Documentação do core** (como cada módulo funciona): [`packages/core/docs/`](../../packages/core/docs/README.md) (#126).
+- **Como o Bridger funciona e por quê**: [Conceitos](../conceitos/README.md), com as
+  [perguntas frequentes](../conceitos/perguntas.md).
 - **O porquê das decisões**: [ADRs](../adr/README.md).
