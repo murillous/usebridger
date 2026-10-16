@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": "src", "outDir": ".tsbuild", "isolatedDeclarations": false },
+  "include": ["src"],
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/testing" },
+    { "path": "../primeiro-bot" }
+  ]
+}

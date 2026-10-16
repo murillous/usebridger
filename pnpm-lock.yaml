@@ -203,6 +203,38 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
 
+  examples/configuracao:
+    dependencies:
+      '@usebridger/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@usebridger/example-primeiro-bot':
+        specifier: workspace:*
+        version: link:../primeiro-bot
+      '@usebridger/storage-sqlite':
+        specifier: workspace:*
+        version: link:../../packages/storage-sqlite
+      '@usebridger/transport-baileys':
+        specifier: workspace:*
+        version: link:../../packages/transport-baileys
+    devDependencies:
+      '@usebridger/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
+
+  examples/conversa-guiada:
+    dependencies:
+      '@usebridger/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+    devDependencies:
+      '@usebridger/example-primeiro-bot':
+        specifier: workspace:*
+        version: link:../primeiro-bot
+      '@usebridger/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
+
   examples/primeiro-bot:
     dependencies:
       '@usebridger/core':
@@ -242,6 +274,28 @@ importers:
       '@usebridger/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@usebridger/example-primeiro-bot':
+        specifier: workspace:*
+        version: link:../primeiro-bot
+      '@usebridger/storage-sqlite':
+        specifier: workspace:*
+        version: link:../../packages/storage-sqlite
+      '@usebridger/transport-baileys':
+        specifier: workspace:*
+        version: link:../../packages/transport-baileys
+    devDependencies:
+      '@usebridger/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
+
+  examples/producao:
+    dependencies:
+      '@usebridger/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@usebridger/example-configuracao':
+        specifier: workspace:*
+        version: link:../configuracao
       '@usebridger/example-primeiro-bot':
         specifier: workspace:*
         version: link:../primeiro-bot

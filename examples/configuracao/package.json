@@ -1,0 +1,26 @@
+{
+  "name": "@usebridger/example-configuracao",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Config de plugin: schema Zod, env BRIDGER_*, pluginConfig e segredo.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    "./avisos": {
+      "@usebridger/source": "./src/avisos.ts",
+      "default": "./src/avisos.ts"
+    }
+  },
+  "scripts": {
+    "start": "node src/bot.ts"
+  },
+  "dependencies": {
+    "@usebridger/core": "workspace:*",
+    "@usebridger/example-primeiro-bot": "workspace:*",
+    "@usebridger/storage-sqlite": "workspace:*",
+    "@usebridger/transport-baileys": "workspace:*"
+  },
+  "devDependencies": {
+    "@usebridger/testing": "workspace:*"
+  }
+}

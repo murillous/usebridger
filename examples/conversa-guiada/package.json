@@ -1,0 +1,15 @@
+{
+  "name": "@usebridger/example-conversa-guiada",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Conversa guiada: expectReply e conversations.define.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "dependencies": {
+    "@usebridger/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@usebridger/example-primeiro-bot": "workspace:*",
+    "@usebridger/testing": "workspace:*"
+  }
+}

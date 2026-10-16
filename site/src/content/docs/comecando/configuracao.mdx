@@ -1,0 +1,87 @@
+---
+title: Configurar sem mexer no código
+description: Schema Zod no plugin, valores por variável de ambiente ou pluginConfig, e segredos fora do log.
+sidebar:
+  order: 5
+---
+
+import Exemplo from '../../../components/Exemplo.astro';
+
+O mesmo plugin roda em bots diferentes: muda o chat, muda o texto, muda o token. Em vez de editar o código, o plugin declara o que é configurável, e quem roda o bot preenche.
+
+O exemplo é um plugin de avisos: um sistema externo faz um `POST` com um texto, e o bot manda esse texto num grupo. Ele precisa de três valores: o chat, um token para recusar quem não tem permissão e, opcionalmente, um prefixo.
+
+## O schema
+
+<Exemplo arquivo="configuracao/src/avisos.ts" regiao="plugin" />
+
+- `config` é um `z.object` do Zod. O `z` vem de `@usebridger/core/zod`, a mesma cópia do Zod que o core usa: não precisa instalar o `zod`.
+- No `setup`, `ctx.config` já vem validado e tipado, com os defaults aplicados.
+- Campo sem default é obrigatório. Sem `chat` ou `token`, o bot nem sobe.
+- `secret(...)` marca o token como segredo (veja [abaixo](#segredos)).
+
+A rota HTTP só existe porque o plugin pediu: o servidor é o do bot, em `/plugins/avisos`. O passo 6 volta a ele.
+
+## De onde vêm os valores
+
+Cada campo é procurado em camadas. A primeira que tiver o valor vence:
+
+| Camada | Exemplo |
+| --- | --- |
+| Variável de ambiente | `BRIDGER_AVISOS__TOKEN=...` |
+| `pluginConfig` no `createBot` | `{ avisos: { prefixo: '🚨' } }` |
+| Override salvo no storage | um dashboard que muda a config com o bot rodando |
+| `.default(...)` do schema | `prefixo: '📢'` |
+
+O nome da variável é `BRIDGER_<PLUGIN>__<CAMPO>`, em maiúsculas, com `__` separando os níveis. `chat` do plugin `avisos` vira `BRIDGER_AVISOS__CHAT`. Número e booleano são convertidos do texto (`'42'`, `true`).
+
+No bot, o que não é segredo pode ir no `pluginConfig`:
+
+<Exemplo arquivo="configuracao/src/bot.ts" regiao="bot" />
+
+E o token vem do ambiente:
+
+```sh
+BRIDGER_AVISOS__TOKEN=um-token-longo-e-aleatorio node src/bot.ts
+```
+
+Para testar a rota:
+
+```sh
+curl -X POST http://localhost:3000/plugins/avisos \
+  -H "Authorization: Bearer um-token-longo-e-aleatorio" \
+  -d "deploy feito"
+```
+
+## Quando a config está errada
+
+O bot não sobe, e o erro lista todos os problemas de uma vez, com a origem de cada um:
+
+```text
+config inválida do plugin "avisos":
+- token: Invalid input: expected string, received undefined (fonte: ausente, sem default no schema)
+```
+
+A mensagem nunca mostra o valor recebido, porque ele pode ser um segredo.
+
+## Segredos
+
+Um campo marcado com `secret()`:
+
+- some do log: qualquer linha que contenha o valor sai com `[REDACTED]`;
+- aparece como `********` no `bot.config.describe('avisos')`;
+- só pode vir da variável de ambiente ou do `pluginConfig`, nunca de override, porque o override fica em texto puro no banco e nos backups.
+
+Na prática, deixe segredo só no ambiente. O `pluginConfig` fica no código, e o código vai para o Git.
+
+## O teste
+
+O kit de testes não lê o `process.env` da máquina. O ambiente do teste é só o que vai em `env`, então o mesmo teste dá o mesmo resultado em qualquer lugar. Com `port: 0`, o servidor escolhe uma porta livre:
+
+<Exemplo arquivo="configuracao/src/avisos.test.ts" regiao="teste" />
+
+O arquivo do exemplo testa o envio, o token errado, a precedência entre env e `pluginConfig` e o bot que não sobe sem o token.
+
+## Próximos passos
+
+Mensagens sobrescrevíveis, placeholders e reload estão no guia [Config](/usebridger/guias/config/). A seguir, [rode o bot em produção](/usebridger/comecando/producao/).

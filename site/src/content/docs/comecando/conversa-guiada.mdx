@@ -1,0 +1,56 @@
+---
+title: Conversa guiada
+description: Pergunta, resposta e próxima pergunta com expectReply e conversations.define.
+sidebar:
+  order: 4
+---
+
+import Exemplo from '../../../components/Exemplo.astro';
+
+Um cadastro, uma triagem ou um pedido são uma sequência de perguntas. Aqui o plugin pergunta o nome, depois a cidade, e confirma:
+
+```text
+você: !cadastro
+bot:  Qual é o seu nome?
+você: Ana
+bot:  Prazer, Ana! De que cidade você é?
+você: Recife
+bot:  Cadastro feito: Ana, de Recife.
+```
+
+## Por que não esperar a próxima mensagem
+
+O bot processa uma mensagem por chat de cada vez. Um comando que fica esperando a próxima mensagem do mesmo chat espera algo que está na fila atrás dele, e trava até o prazo do comando estourar.
+
+Por isso o plugin não espera. Ele manda a pergunta, avisa qual **passo** trata a resposta e termina. O chat fica livre, e a próxima mensagem daquela pessoa vai para o passo.
+
+## O plugin
+
+<Exemplo arquivo="conversa-guiada/src/cadastro.ts" regiao="plugin" />
+
+- `ctx.conversations.define(nome, handler)`, no `setup`, cria um passo. O passo recebe a mensagem que respondeu: `c.text`, `c.reply`, e o `c.data` que veio do `expectReply`.
+- `c.expectReply(passo, { data, ttlMs })` diz que a próxima mensagem **desta pessoa, neste chat** vai para o passo. Em grupo, a mensagem de outra pessoa segue o caminho normal.
+- Para a próxima pergunta, o passo chama `expectReply` de novo. O `data` leva o que já foi respondido: o JSON que você passar chega inteiro no passo seguinte.
+- O `ttlMs` é quanto tempo a pergunta espera. O padrão é 5 minutos.
+
+## O que acontece quando…
+
+**A pessoa manda um comando no meio.** Se o texto é um comando registrado (`!ping`), a espera é descartada e o comando roda. A conversa acaba ali; para recomeçar, `!cadastro` de novo.
+
+**A pessoa quer desistir.** O kernel não tem palavra reservada para isso. Para ele, `cancelar` é uma resposta como outra qualquer: quem decide é o passo, como o `nome` faz no exemplo.
+
+**A pessoa não responde.** Passado o `ttlMs`, a espera some e a próxima mensagem segue o fluxo normal. Sem `onExpire`, some em silêncio, como no passo `nome`. Com ele, o plugin avisa, como no passo `cidade`.
+
+**O bot reinicia.** As esperas ficam em memória e se perdem. Para um fluxo de horas, que não pode cair num deploy, defina o passo com `{ persist: true }`: a espera vai para o storage e volta no próximo boot.
+
+## O teste
+
+Com o kit de testes, a conversa é uma sequência de `receive`:
+
+<Exemplo arquivo="conversa-guiada/src/cadastro.test.ts" regiao="teste" />
+
+O arquivo do exemplo testa também o comando no meio, o `cancelar` e o `onExpire`, este com os fake timers do Vitest. Coloque o plugin na lista `plugins` do bot e mande `!cadastro`.
+
+## Próximos passos
+
+Todas as regras (prazo, erros, menu numerado, persistência) estão em [Conversas](/usebridger/pacotes/core/conversations/). A seguir, [configure um plugin sem mexer no código](/usebridger/comecando/configuracao/).
