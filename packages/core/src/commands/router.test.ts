@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { recordingLogger } from '#bot/harness.test-support.ts';
 import type { MessageContext } from '#context.ts';
 import type { Chat, Contact, Media, Message, MessageType } from '#message/types.ts';
 import { type CommandContext, type CommandDefinition, command } from './command.ts';
@@ -783,5 +784,65 @@ describe('roteador: comando dado, sem casar o texto (ADR 0062)', () => {
 
     expect(result).toMatchObject({ status: 'rejected', rejection: { reason: 'role' } });
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe('allowed: comandos que o remetente pode rodar (#133)', () => {
+  const group = { isGroup: true, chatId: 'grupo' };
+  const def = (name: string, role?: CommandDefinition['role']) =>
+    command({ name, ...(role && { role }), run: () => undefined });
+
+  function roleCtx(message: Message) {
+    return {
+      message,
+      text: message.text,
+      log: recordingLogger(),
+      signal: new AbortController().signal,
+    };
+  }
+
+  it('aplica a regra do dispatch e consulta o admin uma vez só', async () => {
+    const isGroupAdmin = vi.fn(() => Promise.resolve(true));
+    const roles = createRoleRegistry();
+    const seen: string[] = [];
+    roles.define('mod', 'moderador', (c) => {
+      seen.push(c.command);
+      return c.command === 'ban';
+    });
+    const router = createCommandRouter({ owners: ['5511999999999'], isGroupAdmin, roles });
+    router.registry.add('p', def('ping'));
+    router.registry.add('p', def('kick', 'group-admin'));
+    router.registry.add('p', def('mute', 'group-admin'));
+    router.registry.add('p', def('reboot', 'owner'));
+    router.registry.add('p', def('ban', 'moderador'));
+    router.registry.add('p', def('warn', 'moderador'));
+    router.registry.add('p', def('sumido', 'inexistente' as never));
+
+    const membro = await router.allowed(roleCtx(fakeMessage({ ...group, text: '!ajuda' })));
+    const dono = await router.allowed(
+      roleCtx(fakeMessage({ ...group, text: '!ajuda', phone: '5511999999999' })),
+    );
+
+    const names = (list: { definition: CommandDefinition }[]) => list.map((e) => e.definition.name);
+    expect(names(membro)).toEqual(['ping', 'kick', 'mute', 'ban']);
+    expect(names(dono)).toEqual(['ping', 'kick', 'mute', 'reboot', 'ban', 'warn', 'sumido']);
+    expect(isGroupAdmin).toHaveBeenCalledTimes(1);
+    expect(seen.sort()).toEqual(['ban', 'warn']);
+  });
+
+  it('consulta que falha tira o comando, registra no log e não rejeita', async () => {
+    const router = createCommandRouter({
+      isGroupAdmin: () => Promise.reject(new Error('fora do ar')),
+    });
+    router.registry.add('p', def('ping'));
+    router.registry.add('p', def('kick', 'group-admin'));
+    const ctx = roleCtx(fakeMessage({ ...group, text: '!ajuda' }));
+
+    const list = await router.allowed(ctx);
+
+    expect(list.map((e) => e.definition.name)).toEqual(['ping']);
+    expect(ctx.log.lines).toMatchObject([
+      { level: 'warn', fields: { role: 'group-admin', command: 'kick' } },
+    ]);
   });
 });

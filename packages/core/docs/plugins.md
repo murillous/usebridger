@@ -398,6 +398,7 @@ setup(ctx) {
 | `ctx.groups.metadata(groupId)` | nome (`title`), descrição, participantes (se a plataforma lista) | `groups` | não (leitura) |
 | `ctx.groups.updateParticipants(groupId, ids, action)` | add, remove, promote, demote | `groups.add`, `groups.remove` ou `groups.promote` (também para `demote`) | sim |
 | `ctx.commands.list()` | comandos de todos os plugins (`plugin`, `name`, `aliases`, `description`, `role`) | — | — |
+| `ctx.commands.list({ for: message })` | só os que o remetente passa no papel ([commands.md](commands.md#comandos-que-o-remetente-pode-rodar)); `Promise` | — | — |
 | `ctx.self` | contato da sessão; `null` até a primeira conexão | — | — |
 | `ctx.transportName` | `name` do transport (`baileys`, `web`...), para compor chaves de ID no [`ctx.storage.shared`](storage.md#dados-comuns-a-vários-bots) | — | — |
 | `ctx.capabilities` | `ReadonlySet` do que o transport suporta | — | — |
