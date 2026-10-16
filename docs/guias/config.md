@@ -18,7 +18,7 @@ export const clima = definePlugin({
   config: z.object({
     cidade: z.string().default('São Paulo'),
     unidade: z.enum(['C', 'F']).default('C'),
-    apiKey: secret(z.string().min(8)), // obrigatório: sem default, o plugin não sobe sem ele
+    apiKey: secret(z.string().min(8)), // obrigatório: sem default, o bot não sobe sem ele
   }),
   messages: {
     semDados: 'Não consegui ver o clima agora.',

@@ -65,8 +65,9 @@ export const ingles = definePlugin({
 
 - **O tipo vem do pacote do provedor.** Importar o pacote, ou só um tipo dele, traz a declaração
   de `Services` para o consumidor.
-- **Sem o provedor, o consumidor não sobe.** O `dependsOn` faz o boot ignorar o consumidor, com o
-  motivo na tabela de boot, em vez de ele falhar em runtime.
+- **Sem o provedor, o boot para.** O `dependsOn` faz o boot falhar antes de conectar, com o motivo
+  no `PluginBootError`, em vez de o consumidor falhar em runtime. Num reload em runtime, o
+  consumidor só fica de fora (`dependency-skipped`) e o bot segue.
 - **Faixa no 0.x:** `^0.0.0` aceita só `0.0.0` e quebra no primeiro bump do provedor. Entre
   plugins do mesmo repositório, use `0.x`
   ([Plugins → faixa no `dependsOn`](../../packages/core/docs/plugins.md#qual-faixa-declarar-no-dependson)).

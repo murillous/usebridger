@@ -8,7 +8,6 @@ alternativas descartadas.
 | Página | Assunto |
 | --- | --- |
 | [Visão geral](visao-geral.md) | Kernel, quem chama quem, o que é core e o que é plugin, plataformas e estabilidade antes do 1.0 |
-| [Comparação](comparacao.md) | No que o Bridger se parece e no que difere de Baileys, whatsapp-web.js, BuilderBot, Koishi, NoneBot2 e Chat SDK |
 | [Bot e sessão](bot-e-sessao.md) | As peças do `createBot`, pareamento, quedas, vários bots, SQLite ou Postgres, HTTP |
 | [O caminho da mensagem](mensagem.md) | Filas, prazos, cancelamento, conversa de vários passos e fila de saída |
 | [Plugins](plugins.md) | Manifesto e `setup`, capabilities, plugins que usam e estendem outros, dados, mídia e escape hatch |

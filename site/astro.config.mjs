@@ -96,7 +96,6 @@ export default defineConfig({
           items: [
             'conceitos',
             'conceitos/visao-geral',
-            'conceitos/comparacao',
             'conceitos/bot-e-sessao',
             'conceitos/mensagem',
             'conceitos/plugins',
