@@ -17,3 +17,17 @@ index 03f408bf7106a64f1730c381d422ac4a911aeea9..2ba72aba26f49c7b9c702154c9ec3b55
  		description: `This is the full developer documentation for ${getSiteTitle()}`,
  	});
  	return new Response(body);
+diff --git a/package.json b/package.json
+index 4e620bcf361a5f7cae591103de4b18d87b4d450d..3ee8f17c51aa606de6fd53ae01c8d1e72a380899 100644
+--- a/package.json
++++ b/package.json
+@@ -6,7 +6,8 @@
+   "author": "delucis",
+   "type": "module",
+   "exports": {
+-    ".": "./index.ts"
++    ".": "./index.ts",
++    "./entryToSimpleMarkdown": "./entryToSimpleMarkdown.ts"
+   },
+   "dependencies": {
+     "@astrojs/mdx": "^8.0.1",

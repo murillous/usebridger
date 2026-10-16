@@ -37,6 +37,10 @@ pudesse copiar e rodar, e nada que um agente de IA lesse de uma vez (#91).
   sem a API gerada no `full`, que o inflaria; ambas ficam como conjuntos à parte listados no índice. O
   plugin só aplica `exclude` ao `small`, então o `llms-full.txt` usa um patch
   (`patches/starlight-llms-txt@0.12.0.patch`, via `patchedDependencies`) até isso ir ao upstream.
+- **O `.md` de cada página** ao lado do HTML (`/guias/comandos.md`), sem menu nem layout, por um
+  endpoint próprio (`site/src/pages/[...slug].md.ts`): não há plugin mantido para isso. Ele reusa a
+  conversão HTML → Markdown do `starlight-llms-txt`, que o mesmo patch exporta, para o MDX sair
+  renderizado (exemplos inclusos) e não cru (#124).
 - **Exemplos do getting started são pacotes em `examples/`** (privados, parte do workspace). O
   typecheck e o teste do CI os verificam; o site mostra o código desses arquivos, não uma cópia
   que envelheça.
