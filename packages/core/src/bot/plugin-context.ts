@@ -38,7 +38,7 @@ import type { Groups } from '#groups/groups.ts';
 import type { SessionHttp } from '#http/server.ts';
 import type { HttpRoutes } from '#http/types.ts';
 import type { Logger } from '#logger/types.ts';
-import type { Contact } from '#message/types.ts';
+import type { Contact, Message } from '#message/types.ts';
 import type { Outbound } from '#outbound/types.ts';
 import { type PluginContextFactory, PluginHostStateError } from '#plugin/host.ts';
 import { formatMessage } from '#plugin/messages.ts';
@@ -240,7 +240,13 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
             wrapCommand(name, definition, commandViews, lifetime, deps),
           );
         },
-        list: () => deps.router.registry.list().map(commandInfo),
+        list: ((options?: { readonly for: Message }) => {
+          if (options === undefined) return deps.router.registry.list().map(commandInfo);
+          const message = options.for;
+          return deps.router
+            .allowed({ message, text: message.text, log, signal: lifetime.signal })
+            .then((entries) => entries.map(commandInfo));
+        }) as PluginContext['commands']['list'],
       },
       roles: {
         define(role, check) {

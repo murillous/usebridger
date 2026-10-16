@@ -301,6 +301,33 @@ ctx.commands.add(command({ name: 'ban', role: 'moderador', run: (c) => c.reply('
 Fora do bot, passe `roles` (de `createRoleRegistry()`) e, se quiser, `onUnknownRole` às opções
 do roteador; o `check` cru não tem prazo nem fail-closed para erros, que viram `failed`.
 
+### Comandos que o remetente pode rodar
+
+Um menu de ajuda mostra a cada pessoa só o que ela pode rodar. `ctx.commands.list({ for: message })`
+devolve os comandos cujo papel o remetente de `message` passa, na ordem de registro:
+
+```ts
+command({
+  name: 'ajuda',
+  run: async (c) => {
+    const comandos = await ctx.commands.list({ for: c.message });
+    return comandos.map((info) => `!${info.name}: ${info.description ?? ''}`).join('\n');
+  },
+});
+```
+
+- A regra é a do roteador: owner passa em todos, `group-admin` só em grupo, e o papel custom
+  chama o `check` do plugin dono, com o mesmo prazo e fail-closed. O `check` recebe o `command`
+  de cada comando avaliado e o texto original da mensagem em `text`.
+- A consulta de admin do grupo sai uma vez por chamada, não uma por comando.
+- Não confere `accepts`: o comando aparece mesmo que a mensagem atual não traga a mídia pedida.
+- Nunca rejeita. Uma consulta que falha (o transport fora do ar, por exemplo) tira o comando da
+  lista e loga um `warn` no plugin que chamou; papel sem dono recusa e loga como no roteador.
+- Sem `for`, `list()` segue síncrono e devolve todos os comandos.
+
+Fora do bot, o roteador oferece o mesmo como `router.allowed({ message, text, log, signal })`,
+que devolve os `RegisteredCommand`.
+
 ## Recusa e `onReject`
 
 A ordem é: papel → `accepts` → `run`. Na recusa, o roteador chama
