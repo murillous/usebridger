@@ -77,6 +77,7 @@ setup(ctx) {
 | `find({ where, orderBy, limit, offset })` | Os documentos, cada um com `id` |
 | `update(alvo, patch)` | Troca os campos do patch; devolve quantos casaram |
 | `delete(alvo)` | Remove; devolve quantos removeu |
+| `increment(where, campo, by?, { insert }?)` | Soma `by` (padrão 1) ao campo numérico; devolve quantos mudou |
 
 O alvo de `update` e `delete` é um `id` ou um filtro: `lembretes.delete({ chatId })`.
 
@@ -84,6 +85,27 @@ O filtro combina campos de primeiro nível com E. Um valor direto compara iguald
 são `eq`, `ne`, `in`, `gt`, `gte`, `lt` e `lte`. Não há OU, campo aninhado (`'a.b'`) nem busca de
 texto. `indexes` só acelera a consulta; o resultado é o mesmo sem ele. As regras de comparação
 estão em [Filtros](../../packages/core/docs/storage.md#filtros-where).
+
+### Contador atômico
+
+`increment` soma ao campo numérico de todos os documentos que casam com o filtro, sem a corrida
+ler-alterar-gravar: chamadas concorrentes (e processos que dividem o banco) não perdem soma.
+Campo ausente ou `null` vale 0, `by` pode ser negativo ou fracionário. Se nenhum documento casa
+e você passa `insert`, ele é inserido já com o campo somado, na mesma operação atômica (duas
+chamadas ao mesmo tempo não criam dois documentos). Sem `insert`, nada é criado e o retorno é 0.
+
+```ts
+// Interações por chat: cria o documento na primeira vez, soma nas seguintes.
+await contagens.increment({ chat }, 'count', 1, { insert: { chat, count: 0 } });
+```
+
+O `insert` precisa casar com o `where` (já com o campo somado), senão a chamada seguinte não o
+acharia e criaria outro; o `increment` valida isso e rejeita. A garantia de não duplicar vale
+entre chamadas de `increment`: um `insert` comum concorrente com a mesma chave pode duplicar.
+
+Rejeita com `TypeError`, sem gravar nada, se `by` não é número finito, se o campo é inválido (ou
+`id`) se o `where` é inválido, se o `insert` não casa com o `where`, se algum documento alvo tem nele
+um valor que não é número ou se a soma estoura.
 
 ## Tenants: um bot, vários clientes
 
@@ -129,8 +151,9 @@ run: async (c, { storage, transportName }) => {
 },
 ```
 
-Não há transação: ler, somar e gravar a mesma chave em dois chats ao mesmo tempo pode perder um
-incremento. Quando isso importa, guarde um documento por pessoa numa coleção.
+O KV não tem operação atômica: ler, somar e gravar a mesma chave em dois chats ao mesmo tempo
+pode perder um incremento. Quando isso importa, use `increment` numa coleção (veja
+[Contador atômico](#contador-atômico)).
 
 ## Testar
 

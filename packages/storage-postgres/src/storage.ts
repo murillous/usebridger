@@ -7,17 +7,22 @@ import type {
   Collection,
   CollectionOptions,
   FindQuery,
+  IncrementOptions,
+  JsonObject,
   JsonValue,
   KeyValueStore,
   Patch,
   PluginStorage,
   Target,
+  Where,
   WithId,
 } from '@usebridger/core';
 import {
   type AuthKeyData,
   type AuthStateStore,
+  incrementedValue,
   normalizeDocument,
+  normalizeIncrement,
   normalizeIndexes,
   normalizeQuery,
   normalizeWhere,
@@ -181,6 +186,56 @@ export function createPostgresStorage(pool: Pool, schema: string): StoragePort {
           params,
         );
         return rowCount ?? 0;
+      },
+      async increment(
+        where: Where<T>,
+        field: keyof T & string,
+        by?: number,
+        options?: IncrementOptions<T>,
+      ): Promise<number> {
+        ensureOpen();
+        const step = normalizeIncrement(where, field, by, options?.insert);
+        const params = scope();
+        const filter = whereSql(normalizeWhere(where), params);
+        await prepare();
+        return transaction(pool, async (client) => {
+          // Só o `insert` precisa do lock: sem unique no JSON, "nenhum casa, então insere" não se
+          // protege com ON CONFLICT, e o lock consultivo por coleção serializa os increments com
+          // insert (entre conexões e processos) mesmo quando não há linha para travar. Sem
+          // `insert`, o FOR UPDATE abaixo já serializa as linhas existentes e "nenhum casou"
+          // devolve 0 corretamente.
+          if (step.insert !== undefined) {
+            await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+              // JSON em vez de separador: texto do Postgres não aceita NUL e o array não é ambíguo.
+              JSON.stringify([s, namespace, name]),
+            ]);
+          }
+          const { rows } = await client.query<{ id: string; doc: JsonObject }>(
+            `SELECT id, doc FROM ${s}.documents WHERE namespace = $1 AND collection = $2 AND ` +
+              `${filter} FOR UPDATE`,
+            params,
+          );
+          // Calcula tudo antes de gravar; lançar aqui faz rollback e nada muda.
+          const docs = rows.map((row) => ({
+            id: row.id,
+            doc: { ...row.doc, [step.field]: incrementedValue(row.doc[step.field], step.by) },
+          }));
+          for (const { id, doc } of docs) {
+            await client.query(
+              `UPDATE ${s}.documents SET doc = $4::jsonb ` +
+                'WHERE namespace = $1 AND collection = $2 AND id = $3',
+              [namespace, name, id, serialize(doc)],
+            );
+          }
+          if (docs.length === 0 && step.insert !== undefined) {
+            await client.query(
+              `INSERT INTO ${s}.documents (namespace, collection, id, doc) VALUES ($1, $2, $3, $4)`,
+              [namespace, name, randomUUID(), serialize(step.insert)],
+            );
+            return 1;
+          }
+          return docs.length;
+        });
       },
       async delete(target: Target<T>): Promise<number> {
         ensureOpen();

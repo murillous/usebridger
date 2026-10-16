@@ -198,6 +198,7 @@ export type {
   FieldName,
   FieldOperators,
   FindQuery,
+  IncrementOptions,
   JsonObject,
   JsonValue,
   KeyValueStore,

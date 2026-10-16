@@ -93,6 +93,12 @@ export type Patch<T> = { readonly [K in keyof T]?: T[K] };
 /** Alvo de `update`/`delete`: um `id` ou um filtro. */
 export type Target<T> = string | Where<T>;
 
+/** Opções de `increment`. */
+export interface IncrementOptions<T> {
+  /** Documento inserido quando nenhum casa com `where`; sem ele, nada é inserido. */
+  readonly insert?: T;
+}
+
 /**
  * Coleção de documentos do plugin. Documentos são objetos JSON; `id` é reservado (gerado pelo
  * adapter, nunca gravado como campo). Tudo que entra e sai é cópia.
@@ -106,6 +112,23 @@ export interface Collection<T extends { readonly [key: string]: JsonValue }> {
   update(target: Target<T>, patch: Patch<T>): Promise<number>;
   /** Remove os documentos do alvo; devolve quantos removeu. `delete({})` esvazia a coleção. */
   delete(target: Target<T>): Promise<number>;
+  /**
+   * Soma `by` (padrão 1) ao campo numérico `field` de todos os documentos que casam com `where`,
+   * atômico entre chamadas concorrentes e entre processos que dividem o banco. Campo ausente ou
+   * `null` vale 0. Se nenhum casa e há `options.insert`, insere esse documento com `field` já
+   * somado pela mesma regra, atômico com a busca: chamadas concorrentes não inserem duas vezes.
+   * O `insert` precisa casar com o `where` (já com `field` somado), senão a chamada seguinte não o
+   * acharia e inseriria outro. Devolve quantos documentos mudou (o inserido conta 1). Rejeita com
+   * `TypeError`, sem gravar nada, se `by` não é número finito, se `field` não é nome de campo
+   * válido (ou é `id`), se `where` é inválido, se o `insert` não casa com o `where`, se algum
+   * documento alvo tem no campo valor que não é número ou se a soma estoura (não é finita).
+   */
+  increment(
+    where: Where<T>,
+    field: keyof T & string,
+    by?: number,
+    options?: IncrementOptions<T>,
+  ): Promise<number>;
 }
 
 /** Storage visto por um plugin (`ctx.storage`), já isolado no namespace dele. */
