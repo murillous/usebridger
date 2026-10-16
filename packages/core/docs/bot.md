@@ -269,7 +269,7 @@ instância, sempre em nome do plugin:
 | Campo | Ligado a |
 | --- | --- |
 | `plugin` | `name`, `version` e `messages` já mesclados com a config |
-| `config` | config validada (`PluginConfigError` ignora o plugin, ADR 0032) |
+| `config` | config validada (`PluginConfigError` derruba o boot; num reload, ignora o plugin; ADR 0102) |
 | `log` | logger do bot com `{ plugin }` |
 | `signal` | aborta no descarte do contexto (teardown, reload, `setup` que falhou ou estourou o prazo) |
 | `commands.add` | roteador do bot; o `run`/`onReject` recebem `log` com `plugin` e `chatId` |
@@ -311,8 +311,9 @@ Destino dos erros de plugin — todos viram `plugin.error` no barramento e linha
 **Conflito de nome derruba o boot** ([ADR 0007](../../../docs/adr/0007-plugins-via-npm-e-pasta.md),
 [ADR 0035](../../../docs/adr/0035-papeis-nomeados-por-plugin.md)): se o `setup` de um plugin falha
 com `CommandConflictError`, `RoleConflictError` ou `ServiceConflictError`, o `start()` encerra o
-que subiu e rejeita com esse erro. Os demais erros de `setup`, e os conflitos num `reload`, só
-ignoram o plugin.
+que subiu e rejeita com esse erro. Os demais erros de `setup` no boot também o derrubam, com
+`PluginBootError` ([ADR 0102](../../../docs/adr/0102-plugin-falho-derruba-o-boot.md)); num
+`reload`, conflitos e falhas só ignoram o plugin.
 
 ## Prazos e cancelamento (`ctx.signal`)
 

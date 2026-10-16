@@ -11,6 +11,7 @@ dist/
 apps/lumabot/data/
 # Site (Starlight): páginas sincronizadas do Markdown do repo por site/scripts/sync-content.ts.
 site/src/content/docs/guias/
+site/src/content/docs/conceitos/
 site/src/content/docs/pacotes/
 site/src/content/docs/decisoes/
 site/src/content/docs/contribuindo/release.md

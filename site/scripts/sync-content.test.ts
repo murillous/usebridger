@@ -61,6 +61,7 @@ it('syncContent limpa só o gerado e transforma README.md em index.md', () => {
     const root = join(tmp, 'repo');
     const site = join(tmp, 'site');
     write(join(root, 'docs/guias/README.md'), '# Guias\n\nTexto.\n');
+    write(join(root, 'docs/conceitos/README.md'), '# Conceitos\n');
     write(join(root, 'docs/release.md'), '# Release\n');
     mkdirSync(join(root, 'packages'));
     write(join(site, 'guias/velho.md'), 'sobra de uma execução anterior');
@@ -75,6 +76,7 @@ it('syncContent limpa só o gerado e transforma README.md em index.md', () => {
     const index = readFileSync(join(site, 'guias/index.md'), 'utf8');
     expect(index).toContain('title: "Guias"');
     expect(index).toContain('/edit/develop/docs/guias/README.md');
+    expect(readFileSync(join(site, 'conceitos/index.md'), 'utf8')).toContain('title: "Conceitos"');
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
