@@ -26,7 +26,7 @@ Requer Node 24+ (`engines` na raiz; `.nvmrc` para `nvm use`/`fnm use`).
 | `pnpm typecheck` | `tsc -b` em todos os pacotes (project references) |
 | `pnpm test` | Vitest em todos os pacotes |
 | `pnpm build` | `tsdown` em cada pacote (ESM + `.d.ts` em `dist/`) |
-| `pnpm run docs` | Site de documentação ([`site/`](site)): sincroniza o Markdown do repo, gera a referência da API com o TypeDoc e o `llms.txt`, em `site/dist/`. O `run` é obrigatório: no pnpm 12, `pnpm docs` é um comando nativo que abre a página de um pacote do registry |
+| `pnpm run docs` | Site de documentação ([`site/`](site)): sincroniza o Markdown do repo, gera a referência da API com o TypeDoc, o `llms.txt` e o `.md` de cada página (`/guias/comandos/` → `/guias/comandos.md`), em `site/dist/`. O `run` é obrigatório: no pnpm 12, `pnpm docs` é um comando nativo que abre a página de um pacote do registry |
 | `pnpm bench` | Build e benchmark das metas de performance ([`bench/`](bench/docs/README.md)) |
 | `pnpm changeset` | Registra a mudança de um pacote publicável |
 | `pnpm version-packages` | Consome os changesets (versões e changelogs) e sincroniza o `CORE_VERSION` |

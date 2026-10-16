@@ -32,6 +32,9 @@ export default defineConfig({
           description:
             'Kernel de bot de mensageria em TypeScript: core, transports, storages e plugins.',
           exclude: ['decisoes/**', 'api/**'],
+          // O link de âncora dos títulos viraria "[Seção intitulada …](#…)" sob cada título, aqui
+          // e no `.md` de cada página (src/pages/[...slug].md.ts), que usa a mesma conversão.
+          customSelectors: { all: ['.sl-anchor-link'] },
           customSets: [
             {
               label: 'Decisões (ADRs)',

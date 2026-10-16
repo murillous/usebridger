@@ -163,7 +163,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  starlight-llms-txt@0.12.0: de6bfc64887be90d312b5d9c4292864fa4bfa393185fcfb497bbfc5ecb68a6a6
+  starlight-llms-txt@0.12.0: 606c443db72a5b3a35d3df596802e9a0f9a455717ffd7182c6438f63f4eef888
 
 importers:
 
@@ -401,7 +401,7 @@ importers:
         version: 0.27.0(@astrojs/starlight@0.42.6(astro@7.4.0(@types/node@24.19.1)(yaml@2.9.1))(supports-color@10.2.2)(typescript@6.0.3))(astro@7.4.0(@types/node@24.19.1)(yaml@2.9.1))(supports-color@10.2.2)
       starlight-llms-txt:
         specifier: 0.12.0
-        version: 0.12.0(patch_hash=de6bfc64887be90d312b5d9c4292864fa4bfa393185fcfb497bbfc5ecb68a6a6)(@astrojs/markdown-satteri@0.4.4)(@astrojs/starlight@0.42.6(astro@7.4.0(@types/node@24.19.1)(yaml@2.9.1))(supports-color@10.2.2)(typescript@6.0.3))(astro@7.4.0(@types/node@24.19.1)(yaml@2.9.1))(supports-color@10.2.2)
+        version: 0.12.0(patch_hash=606c443db72a5b3a35d3df596802e9a0f9a455717ffd7182c6438f63f4eef888)(@astrojs/markdown-satteri@0.4.4)(@astrojs/starlight@0.42.6(astro@7.4.0(@types/node@24.19.1)(yaml@2.9.1))(supports-color@10.2.2)(typescript@6.0.3))(astro@7.4.0(@types/node@24.19.1)(yaml@2.9.1))(supports-color@10.2.2)
       starlight-typedoc:
         specifier: 0.23.1
         version: 0.23.1(@astrojs/starlight@0.42.6(astro@7.4.0(@types/node@24.19.1)(yaml@2.9.1))(supports-color@10.2.2)(typescript@6.0.3))(astro@7.4.0(@types/node@24.19.1)(yaml@2.9.1))(typedoc-plugin-markdown@4.14.0(typedoc@0.28.20(typescript@6.0.3)))(typedoc@0.28.20(typescript@6.0.3))
@@ -5876,7 +5876,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  starlight-llms-txt@0.12.0(patch_hash=de6bfc64887be90d312b5d9c4292864fa4bfa393185fcfb497bbfc5ecb68a6a6)(@astrojs/markdown-satteri@0.4.4)(@astrojs/starlight@0.42.6(astro@7.4.0(@types/node@24.19.1)(yaml@2.9.1))(supports-color@10.2.2)(typescript@6.0.3))(astro@7.4.0(@types/node@24.19.1)(yaml@2.9.1))(supports-color@10.2.2):
+  starlight-llms-txt@0.12.0(patch_hash=606c443db72a5b3a35d3df596802e9a0f9a455717ffd7182c6438f63f4eef888)(@astrojs/markdown-satteri@0.4.4)(@astrojs/starlight@0.42.6(astro@7.4.0(@types/node@24.19.1)(yaml@2.9.1))(supports-color@10.2.2)(typescript@6.0.3))(astro@7.4.0(@types/node@24.19.1)(yaml@2.9.1))(supports-color@10.2.2):
     dependencies:
       '@astrojs/mdx': 8.0.3(@astrojs/markdown-satteri@0.4.4)(astro@7.4.0(@types/node@24.19.1)(yaml@2.9.1))
       '@astrojs/starlight': 0.42.6(astro@7.4.0(@types/node@24.19.1)(yaml@2.9.1))(supports-color@10.2.2)(typescript@6.0.3)
