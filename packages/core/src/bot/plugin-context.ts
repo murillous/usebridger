@@ -357,7 +357,7 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         return deps.observers.add(name, signal, observer);
       },
       unsafe: deps.unsafe.forPlugin(plugin),
-      admin: deps.adminPlugins.has(name) ? selfSafeAdmin(name, deps.admin) : undefined,
+      admin: deps.adminPlugins.has(name) ? liveAdmin(name, deps.admin, live) : undefined,
     };
 
     return {
@@ -381,10 +381,12 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
 }
 
 /**
- * `ctx.admin` do plugin `self`: as mesmas instâncias do bot, mas recusando o que derrubaria o
- * próprio plugin no meio da chamada (reload/disable dele, ou `setOverrides`, que recarrega).
+ * `ctx.admin` do plugin `self`: delega às instâncias de `bot.plugins`/`bot.config`. As únicas
+ * diferenças: recusa o que derrubaria o próprio plugin no meio da chamada (reload/disable dele,
+ * ou `setOverrides`, que recarrega) e, como as demais ações do contexto, as que mudam estado
+ * rejeitam depois do `dispose` (`live`, ADR 0033). As leituras ficam livres.
  */
-function selfSafeAdmin(self: string, admin: PluginAdmin): PluginAdmin {
+function liveAdmin(self: string, admin: PluginAdmin, live: Live): PluginAdmin {
   const refuse = (action: string): Promise<never> =>
     Promise.reject(
       new PluginHostStateError(
@@ -392,20 +394,23 @@ function selfSafeAdmin(self: string, admin: PluginAdmin): PluginAdmin {
       ),
     );
   const plugins = Object.assign(() => admin.plugins(), {
-    reload: (target: string) =>
+    reload: live('admin.plugins.reload', (target: string) =>
       target === self ? refuse('admin.plugins.reload') : admin.plugins.reload(target),
-    disable: (target: string) =>
+    ),
+    disable: live('admin.plugins.disable', (target: string) =>
       target === self ? refuse('admin.plugins.disable') : admin.plugins.disable(target),
-    enable: (target: string) => admin.plugins.enable(target),
+    ),
+    enable: live('admin.plugins.enable', (target: string) => admin.plugins.enable(target)),
   });
   return {
     plugins,
     config: {
       ...admin.config,
-      setOverrides: (target, overrides) =>
+      setOverrides: live('admin.config.setOverrides', (target: string, overrides) =>
         target === self
           ? refuse('admin.config.setOverrides')
           : admin.config.setOverrides(target, overrides),
+      ),
     },
   };
 }

@@ -21,8 +21,11 @@ gravar override de config), que não pode ir a todo plugin.
 ## Decisão
 
 - `PluginContext.admin: PluginAdmin | undefined`, com `PluginAdmin = { plugins, config }`: as
-  mesmas instâncias de `bot.plugins` (`BotPlugins`) e `bot.config` (`BotPluginConfigs`), sem
-  reimplementação.
+  delega às instâncias de `bot.plugins` (`BotPlugins`) e `bot.config` (`BotPluginConfigs`), sem
+  reimplementação da lógica. Só duas diferenças: a recusa sobre si mesmo (abaixo) e o `live`.
+- `reload`/`disable`/`enable` e `setOverrides` passam pelo `live` do contexto (ADR 0033): depois
+  do `dispose` (setup que estourou o prazo, plugin admin desligado) rejeitam com
+  `ContextExpiredError`. As leituras (`plugins()`, `describe`, `jsonSchema`) ficam livres.
 - Só os plugins em `createBot({ adminPlugins })` recebem o objeto; os demais, `undefined`. Nome
   que não existe entre os plugins gera `warn` no boot, como `disabledPlugins`.
 - `admin.plugins.reload`/`disable` e `admin.config.setOverrides` sobre o próprio plugin rejeitam
@@ -32,6 +35,9 @@ gravar override de config), que não pode ir a todo plugin.
 
 ## Consequências
 
+- Não dê `await` em ação de admin dentro do próprio `setup`/`teardown`: a fila do host roda uma
+  operação por vez, então o plugin trava até o prazo e cai como `setup-failed`. Use as ações a
+  partir de comandos, rotas e jobs.
 - Campo novo no `PluginContext` é minor; mocks de contexto fora do core passam a exigir `admin`.
 - Plugin em `adminPlugins` tem poder sobre todos os outros: a lista é parte da config de
   confiança do app.
