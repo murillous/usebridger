@@ -452,6 +452,15 @@ function liveStorage(storage: PluginStorage, live: Live): PluginStorage {
         delete: live(op('delete'), (target: Parameters<C['delete']>[0]) =>
           collection.delete(target),
         ),
+        increment: live(
+          op('increment'),
+          (
+            where: Parameters<C['increment']>[0],
+            field: Parameters<C['increment']>[1],
+            by?: number,
+            options?: Parameters<C['increment']>[3],
+          ) => collection.increment(where, field, by, options),
+        ),
       };
     },
   };

@@ -91,6 +91,7 @@ export function tenantStorage(
         find: (query?: Parameters<C['find']>[0]) => resolve().find(query),
         update: (target, patch) => resolve().update(target, patch),
         delete: (target) => resolve().delete(target),
+        increment: (where, field, by, options) => resolve().increment(where, field, by, options),
       };
     },
     forTenant(tenantId) {

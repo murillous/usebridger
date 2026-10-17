@@ -407,4 +407,163 @@ export function collectionContract(api: ContractTestApi, test: ContractCase): vo
       assert.deepEqual(tags(await items.find()), ['a']);
     });
   });
+
+  api.describe('coleções: increment', () => {
+    const counts = async (items: Collection<Doc>): Promise<JsonValue[]> =>
+      (await items.find()).map((doc) => doc['n'] ?? null);
+
+    test('soma em documento existente; ausente e null valem 0; by padrão 1', async (port) => {
+      const items = port.forNamespace('p').collection<Doc>('items');
+      await seed(items, [{ k: 'a', n: 5 }, { k: 'b' }, { k: 'c', n: null }]);
+      assert.equal(await items.increment({ k: 'a' }, 'n'), 1);
+      assert.equal(await items.increment({ k: 'b' }, 'n', 3), 1);
+      assert.equal(await items.increment({ k: 'c' }, 'n', 2), 1);
+      assert.deepEqual(await counts(items), [6, 3, 2]);
+    });
+
+    test('by negativo e fracionário', async (port) => {
+      const items = port.forNamespace('p').collection<Doc>('items');
+      await seed(items, [{ k: 'a', n: 5 }]);
+      await items.increment({ k: 'a' }, 'n', -2);
+      await items.increment({ k: 'a' }, 'n', 0.5);
+      assert.deepEqual(await counts(items), [3.5]);
+    });
+
+    test('vários documentos casando: todos mudam e o retorno é a quantidade', async (port) => {
+      const items = port.forNamespace('p').collection<Doc>('items');
+      await seed(items, [{ g: 1, n: 1 }, { g: 1 }, { g: 2, n: 10 }]);
+      assert.equal(await items.increment({ g: 1 }, 'n', 2), 2);
+      assert.deepEqual(await counts(items), [3, 2, 10]);
+    });
+
+    test('sem documento casando e sem insert: retorna 0 e não insere', async (port) => {
+      const items = port.forNamespace('p').collection<Doc>('items');
+      assert.equal(await items.increment({ k: 'x' }, 'n'), 0);
+      assert.deepEqual(await items.find(), []);
+    });
+
+    test('sem documento casando e com insert: insere com o campo somado', async (port) => {
+      const items = port.forNamespace('p').collection<Doc>('items');
+      assert.equal(await items.increment({ k: 'a' }, 'n', 2, { insert: { k: 'a' } }), 1);
+      assert.equal(await items.increment({ k: 'b' }, 'n', 2, { insert: { k: 'b', n: 10 } }), 1);
+      assert.deepEqual(
+        (await items.find()).map((d) => [d['k'], d['n']]),
+        [
+          ['a', 2],
+          ['b', 12],
+        ],
+      );
+    });
+
+    test('com documento casando o insert é ignorado', async (port) => {
+      const items = port.forNamespace('p').collection<Doc>('items');
+      await seed(items, [{ k: 'a', n: 1 }]);
+      assert.equal(await items.increment({ k: 'a' }, 'n', 1, { insert: { k: 'a', n: 0 } }), 1);
+      assert.deepEqual(await counts(items), [2]);
+    });
+
+    test('valor não numérico em um alvo rejeita e nenhum documento muda', async (port) => {
+      const items = port.forNamespace('p').collection<Doc>('items');
+      await seed(items, [
+        { g: 1, n: 1 },
+        { g: 1, n: '2' },
+        { g: 1, n: 3 },
+      ]);
+      await assert.rejects(items.increment({ g: 1 }, 'n'), TypeError);
+      assert.deepEqual(await counts(items), [1, '2', 3]);
+      await assert.rejects(
+        items.increment({ g: 9 }, 'n', 1, { insert: { g: 9, n: 'x' } }),
+        TypeError,
+      );
+      assert.equal((await items.find()).length, 3);
+    });
+
+    test('by inválido e campo inválido rejeitam com TypeError', async (port) => {
+      const items = port.forNamespace('p').collection<Doc>('items');
+      await seed(items, [{ k: 'a', n: 1 }]);
+      for (const by of [Number.NaN, Number.POSITIVE_INFINITY, '1' as never]) {
+        await assert.rejects(items.increment({ k: 'a' }, 'n', by), TypeError);
+      }
+      for (const field of ['id', 'a.b', ''] as const) {
+        await assert.rejects(items.increment({ k: 'a' }, field), TypeError);
+      }
+      assert.deepEqual(await counts(items), [1]);
+    });
+
+    test('overflow para Infinity rejeita e não muda nada', async (port) => {
+      const items = port.forNamespace('p').collection<Doc>('items');
+      await seed(items, [{ n: Number.MAX_VALUE }]);
+      await assert.rejects(items.increment({}, 'n', Number.MAX_VALUE), TypeError);
+      assert.deepEqual(await counts(items), [Number.MAX_VALUE]);
+      await assert.rejects(
+        items.increment({ k: 'z' }, 'n', Number.MAX_VALUE, {
+          insert: { k: 'z', n: Number.MAX_VALUE },
+        }),
+        TypeError,
+      );
+      assert.equal((await items.find()).length, 1);
+    });
+
+    test('insert que não casa com o where rejeita e nada é inserido', async (port) => {
+      const items = port.forNamespace('p').collection<Doc>('items');
+      await assert.rejects(
+        items.increment({ chat: 'a' }, 'count', 1, { insert: { count: 0 } }),
+        TypeError,
+      );
+      assert.deepEqual(await items.find(), []);
+    });
+
+    test('where vazio incrementa todos', async (port) => {
+      const items = port.forNamespace('p').collection<Doc>('items');
+      await seed(items, [{ n: 1 }, { n: 2 }, {}]);
+      assert.equal(await items.increment({}, 'n', 10), 3);
+      assert.deepEqual(await counts(items), [11, 12, 10]);
+    });
+
+    test('by 0 mantém o valor e conta os casados', async (port) => {
+      const items = port.forNamespace('p').collection<Doc>('items');
+      await seed(items, [
+        { k: 'a', n: 4 },
+        { k: 'a', n: 5 },
+        { k: 'b', n: 6 },
+      ]);
+      assert.equal(await items.increment({ k: 'a' }, 'n', 0), 2);
+      assert.deepEqual(await counts(items), [4, 5, 6]);
+    });
+
+    test('where inválido rejeita com TypeError', async (port) => {
+      const items = port.forNamespace('p').collection<Doc>('items');
+      await seed(items, [{ k: 'a', n: 1 }]);
+      await assert.rejects(items.increment({ 'a.b': 1 } as never, 'n'), TypeError);
+      assert.deepEqual(await counts(items), [1]);
+    });
+
+    test('concorrência: 25 increments com insert criam um só documento', async (port) => {
+      const items = port.forNamespace('p').collection<Doc>('items');
+      const calls = Array.from({ length: 25 }, () =>
+        items.increment({ k: 'a' }, 'n', 1, { insert: { k: 'a' } }),
+      );
+      await Promise.all(calls);
+      const all = await items.find();
+      assert.equal(all.length, 1);
+      assert.equal(all[0]?.['n'], 25);
+    });
+
+    test('concorrência: 25 increments num documento existente somam 25', async (port) => {
+      const items = port.forNamespace('p').collection<Doc>('items');
+      await seed(items, [{ k: 'a', n: 10 }]);
+      await Promise.all(Array.from({ length: 25 }, () => items.increment({ k: 'a' }, 'n')));
+      assert.deepEqual(await counts(items), [35]);
+    });
+
+    test('outro namespace não muda', async (port) => {
+      const a = port.forNamespace('a').collection<Doc>('items');
+      const b = port.forNamespace('b').collection<Doc>('items');
+      await seed(a, [{ k: 'a', n: 1 }]);
+      await seed(b, [{ k: 'a', n: 1 }]);
+      await a.increment({ k: 'a' }, 'n', 5);
+      assert.deepEqual(await counts(a), [6]);
+      assert.deepEqual(await counts(b), [1]);
+    });
+  });
 }

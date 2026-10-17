@@ -9,18 +9,22 @@ import type {
   Collection,
   CollectionOptions,
   FindQuery,
+  IncrementOptions,
   JsonObject,
   JsonValue,
   KeyValueStore,
   Patch,
   PluginStorage,
   Target,
+  Where,
   WithId,
 } from '@usebridger/core';
 import {
   type AuthKeyData,
   type AuthStateStore,
+  incrementedValue,
   normalizeDocument,
+  normalizeIncrement,
   normalizeIndexes,
   normalizeQuery,
   normalizeWhere,
@@ -173,6 +177,44 @@ export function createSqliteStorage(db: DatabaseSync): StoragePort {
             write.run(serialize({ ...parse<JsonObject>(row.doc), ...changes }), row.seq);
           }
           return rows.length;
+        });
+      },
+      async increment(
+        where: Where<T>,
+        field: keyof T & string,
+        by?: number,
+        options?: IncrementOptions<T>,
+      ): Promise<number> {
+        prepare();
+        const step = normalizeIncrement(where, field, by, options?.insert);
+        const filter = whereSql(normalizeWhere(where));
+        // O BEGIN IMMEDIATE trava a escrita entre conexões e processos: leitura, soma e
+        // gravação (ou o insert) acontecem sem ninguém no meio.
+        return transaction(db, () => {
+          const rows = db
+            .prepare(
+              'SELECT seq, doc FROM documents WHERE namespace = ? AND collection = ? AND ' +
+                filter.sql,
+            )
+            .all(namespace, name, ...filter.params) as { seq: number; doc: string }[];
+          // Calcula tudo antes de gravar: se um documento não é numérico, lança e o rollback
+          // deixa a coleção intacta.
+          const docs = rows.map((row) => {
+            const doc = parse<JsonObject>(row.doc);
+            return {
+              seq: row.seq,
+              doc: { ...doc, [step.field]: incrementedValue(doc[step.field], step.by) },
+            };
+          });
+          const write = statement('UPDATE documents SET doc = ? WHERE seq = ?');
+          for (const { seq, doc } of docs) write.run(serialize(doc), seq);
+          if (docs.length === 0 && step.insert !== undefined) {
+            statement(
+              'INSERT INTO documents (namespace, collection, id, doc) VALUES (?, ?, ?, ?)',
+            ).run(namespace, name, randomUUID(), serialize(step.insert));
+            return 1;
+          }
+          return docs.length;
         });
       },
       async delete(target: Target<T>): Promise<number> {
