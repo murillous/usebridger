@@ -245,4 +245,35 @@ describe('ctx.observe("log") (ADR 0109)', () => {
     );
     expect(lines).toEqual([]);
   });
+
+  it('campo com getter que lança não faz o log lançar e o sinal vai com o fallback', async () => {
+    const lines: LogSignal[] = [];
+    let threw = false;
+    // Logger que ignora os campos: o que se testa é a montagem do sinal, não o logger do app.
+    const blind = (): Logger => ({
+      ...createNoopLogger(),
+      level: 'trace' as LogLevel,
+      info: () => undefined,
+      child: blind,
+    });
+    const logger = blind();
+    await startBot(
+      (ctx) => {
+        ctx.observe('log', (signal) => lines.push(signal));
+        const fields = {
+          get ruim(): never {
+            throw new Error('getter');
+          },
+        };
+        try {
+          ctx.log.info('getter', fields);
+        } catch {
+          threw = true;
+        }
+      },
+      { logger },
+    );
+    expect(threw).toBe(false);
+    expect(lines.find((l) => l.message === 'getter')?.fields).toEqual({ unserializable: true });
+  });
 });

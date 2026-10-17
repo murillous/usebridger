@@ -77,6 +77,15 @@ export function createLogSignalTap(observers: Observers, secrets: SecretSource):
     );
   };
 
+  // Getter ou Proxy que lança não pode fazer o `log.info()` lançar no chamador.
+  const safeFields = (bindings: LogFields, fields: LogFields | undefined): LogFields => {
+    try {
+      return clean({ ...bindings, ...fields }, 0, []) as LogFields;
+    } catch {
+      return { unserializable: true };
+    }
+  };
+
   const wrap = (logger: Logger, bindings: LogFields): Logger => {
     const at =
       (level: EmitLevel) =>
@@ -92,7 +101,7 @@ export function createLogSignalTap(observers: Observers, secrets: SecretSource):
             level,
             time,
             message: censor(message),
-            fields: clean({ ...bindings, ...fields }, 0, []) as LogFields,
+            fields: safeFields({ ...bindings }, fields),
           }),
         );
       };

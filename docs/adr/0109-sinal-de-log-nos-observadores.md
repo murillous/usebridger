@@ -40,4 +40,11 @@ Alternativas consideradas:
 - Sinal novo é minor. Mudar ou remover campo é major.
 - Cada linha emitida com observador paga a cópia dos `fields`; o custo é do plugin que assina.
 - Linhas feitas dentro de um observador de `log` ficam fora do sinal, por desenho.
+- O silêncio vem do `AsyncLocalStorage` e é herdado por trabalho agendado dentro do observador
+  (timer, `ctx.send`, `ctx.schedule`). Os timers da fila de saída e do scheduler criados nesse
+  contexto deixam de gerar sinal, inclusive para linhas de outros chats e plugins, até a fila
+  esvaziar. Evite `ctx.send` e `ctx.schedule` num observador de `log`. Isolar os timers fica para
+  uma issue futura.
+- Se montar os `fields` lançar (getter ou Proxy), o log segue e o sinal sai com
+  `fields: { unserializable: true }`.
 - Uma linha logada antes do `start()` (logger no-op) não existe, então também não vira sinal.
