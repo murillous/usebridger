@@ -269,6 +269,8 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
       } while (rerun && started);
     })().finally(() => {
       loop = undefined;
+      // Um `rerun` pedido depois do `while` e antes daqui não teria volta nem timer (#142).
+      if (rerun) wake();
     });
   }
 
