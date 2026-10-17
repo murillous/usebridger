@@ -110,6 +110,7 @@ const entries: Record<string, { file: string; load: () => Promise<object> } & En
       'ExpireContext',
       'ExpireHandler',
       'ExtensionPoint',
+      'ExtensionPointEntry',
       'ExtensionPointName',
       'ExtensionPoints',
       'FieldCondition',

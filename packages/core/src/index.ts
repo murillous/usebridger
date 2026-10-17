@@ -192,6 +192,7 @@ export type { JobContext, JobHandler, Scheduler } from '#scheduler/types.ts';
 export { ServiceConflictError, ServiceNotFoundError } from '#services/registry.ts';
 export type {
   ExtensionPoint,
+  ExtensionPointEntry,
   ExtensionPointName,
   ExtensionPoints,
   ServiceAccess,

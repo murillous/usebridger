@@ -153,6 +153,9 @@ setup(ctx) {
   do contribuidor não duplica a etapa, e o plugin desligado para de rodar.
 - **Visão viva.** `extensionPoint(name)` devolve `{ list() }`; guarde a visão no `setup` e chame
   `list()` a cada uso. Cada chamada devolve uma cópia já com as entradas e saídas recentes.
+- **Quem contribuiu.** `extensionPoint(name).entries()` devolve `{ plugin, value }[]`, na mesma
+  ordem e com a mesma semântica de cópia do `list()`; serve a quem precisa do dono de cada
+  contribuição (chave `<plugin>/<id>`, atribuição de erro). Tipo: `ExtensionPointEntry<T>`.
 - **Ordem: a de carga** dos plugins que contribuíram (ajustável com `after`/`priority`, como a
   carga), e dentro do mesmo plugin a ordem dos `contribute`. O reload de um contribuidor não o
   manda para o fim.

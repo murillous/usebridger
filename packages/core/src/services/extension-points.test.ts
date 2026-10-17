@@ -27,6 +27,29 @@ describe('pontos de extensão do registry', () => {
     expect(steps.list()).toEqual([caption]);
   });
 
+  it('entries traz o plugin dono, na ordem do list, e reflete removePlugin e reload', () => {
+    const registry = createServiceRegistry({ loadOrder: () => ['b', 'a'] });
+    registry.forPlugin('a').contribute('test.tags', 'a1');
+    registry.forPlugin('b').contribute('test.tags', 'b1');
+    registry.forPlugin('b').contribute('test.tags', 'b2');
+    const tags = registry.forPlugin('x').extensionPoint('test.tags');
+
+    expect(tags.entries()).toEqual([
+      { plugin: 'b', value: 'b1' },
+      { plugin: 'b', value: 'b2' },
+      { plugin: 'a', value: 'a1' },
+    ]);
+    expect(tags.entries().map((entry) => entry.value)).toEqual(tags.list());
+
+    registry.removePlugin('b');
+    expect(tags.entries()).toEqual([{ plugin: 'a', value: 'a1' }]);
+    registry.forPlugin('b').contribute('test.tags', 'b3');
+    expect(tags.entries()).toEqual([
+      { plugin: 'b', value: 'b3' },
+      { plugin: 'a', value: 'a1' },
+    ]);
+  });
+
   it('contribuir não exige que alguém já tenha pedido o ponto', () => {
     const registry = createServiceRegistry();
     registry.forPlugin('a').contribute('test.tags', 'x');
