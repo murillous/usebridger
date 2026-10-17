@@ -27,8 +27,11 @@ Alternativas consideradas:
   logger, lido a cada linha.
 - **Secrets mascarados** no sinal com o mesmo `SecretSet` do log (`[REDACTED]` em `message` e em
   todo valor string de `fields`; `Error` vira `{ type, message, stack, cause }`).
-- **Reentrada:** enquanto um observador de `log` roda, o que se loga não gera sinal, inclusive o
-  `plugin.error` do próprio observador que falha (o reporte também roda nesse modo).
+- **Reentrada:** o observador de `log` e o reporte do `plugin.error` dele rodam dentro de um
+  `AsyncLocalStorage`; o que se loga ali, inclusive depois de um `await`, não gera sinal. O `has`
+  vem primeiro, então sem observador o ALS não é tocado.
+- **Sempre serializável:** `bigint` vira string, `Date` ISO, buffer `'[Buffer N bytes]'`, `Map`
+  objeto, `Set` array, e o `Error` leva também as propriedades próprias (`code`...).
 - Erro do observador segue o ADR 0106: `plugin.error` com `phase: 'observer'`.
 - Sem observador de `log`, a linha só é repassada ao logger: o sinal não é montado.
 

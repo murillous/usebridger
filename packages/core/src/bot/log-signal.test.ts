@@ -38,7 +38,7 @@ async function startBot(
     logger: recordingLogger(),
     env: {},
     ...config,
-    plugins: [plugin],
+    plugins: [plugin, ...(config.plugins ?? [])],
   });
   bots.push(bot);
   await bot.start();
@@ -141,5 +141,108 @@ describe('ctx.observe("log") (ADR 0109)', () => {
     const logger = { ...createNoopLogger(), level: 'trace' as LogLevel, info: () => undefined };
     await startBot((ctx) => ctx.log.info('sem observador', fields), { logger });
     expect(read).toBe(0);
+  });
+
+  it('observador async que loga depois de await não gera sinal novo', async () => {
+    let calls = 0;
+    await startBot((ctx) => {
+      ctx.observe('log', async () => {
+        calls += 1;
+        await Promise.resolve();
+        ctx.log.info('depois do await');
+      });
+      ctx.log.info('gatilho');
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    const settled = calls;
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(calls).toBe(settled);
+  });
+
+  it('listener de plugin.error que loga após await não reentra', async () => {
+    let calls = 0;
+    await startBot((ctx) => {
+      ctx.events.on('plugin.error', async () => {
+        await Promise.resolve();
+        ctx.log.warn('depois do erro');
+      });
+      ctx.observe('log', () => {
+        calls += 1;
+        throw new Error('sempre falha');
+      });
+      ctx.log.info('gatilho');
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    const settled = calls;
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(calls).toBe(settled);
+  });
+
+  it('serializa tipos especiais: bigint, Date, buffer, Map, Set e props do Error', async () => {
+    const lines: LogSignal[] = [];
+    await startBot((ctx) => {
+      ctx.observe('log', (signal) => lines.push(signal));
+      const err = Object.assign(new Error('e'), { code: 'E_X' });
+      ctx.log.info('tipos', {
+        n: 10n,
+        d: new Date(0),
+        b: Buffer.alloc(3),
+        m: new Map([['k', 1]]),
+        s: new Set([1]),
+        err,
+      });
+    });
+    const line = lines.find((l) => l.message === 'tipos');
+    expect(() => JSON.stringify(line)).not.toThrow();
+    expect(line?.fields).toMatchObject({
+      n: '10',
+      d: '1970-01-01T00:00:00.000Z',
+      b: '[Buffer 3 bytes]',
+      m: { k: 1 },
+      s: [1],
+      err: { type: 'Error', message: 'e', code: 'E_X' },
+    });
+  });
+
+  it('depois do dispose do plugin o observador some', async () => {
+    const lines: string[] = [];
+    let log: PluginContext['log'] | undefined;
+    const outro = definePlugin({
+      name: 'outro',
+      version: '1.0.0',
+      engine: '>=0.0.0',
+      setup(ctx) {
+        ctx.observe('log', (signal) => lines.push(signal.message));
+      },
+    });
+    const { bot } = await startBot(
+      (ctx) => {
+        log = ctx.log;
+      },
+      { plugins: [outro] },
+    );
+    log?.info('antes');
+    await bot.plugins.disable('outro');
+    log?.info('depois');
+    expect(lines).toContain('antes');
+    expect(lines).not.toContain('depois');
+  });
+
+  it('config.logger com level silent não emite sinal', async () => {
+    const lines: LogSignal[] = [];
+    const silent = (inner: Logger): Logger => ({
+      ...inner,
+      level: 'silent' as LogLevel,
+      child: (bindings) => silent(inner.child(bindings)),
+    });
+    const logger = silent(recordingLogger());
+    await startBot(
+      (ctx) => {
+        ctx.observe('log', (signal) => lines.push(signal));
+        ctx.log.error('muda');
+      },
+      { logger },
+    );
+    expect(lines).toEqual([]);
   });
 });

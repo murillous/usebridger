@@ -2,6 +2,7 @@
 // pino, para cobrir também o `config.logger` do app. Sem observador de `log`, a linha passa
 // direto: nada é montado.
 
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Observers } from '#observers/observers.ts';
 import { MIN_SECRET_LENGTH } from './logger.ts';
 import type { SecretSource } from './secrets.ts';
@@ -20,21 +21,13 @@ export interface LogSignalTap {
 }
 
 export function createLogSignalTap(observers: Observers, secrets: SecretSource): LogSignalTap {
-  // Um flag por bot: o observador roda síncrono, então tudo que ele (ou o `plugin.error` dele)
-  // loga durante a chamada cai aqui e não volta ao sinal.
-  let emitting = false;
+  // ALS e não um flag: o log depois de um `await` no observador (ou no listener do `plugin.error`
+  // dele) ainda precisa saber que veio de dentro, senão cada linha dispara o sinal de novo.
+  const inside = new AsyncLocalStorage<true>();
   let seen = -1;
   let needles: string[] = [];
 
-  const quiet = <T>(fn: () => T): T => {
-    const before = emitting;
-    emitting = true;
-    try {
-      return fn();
-    } finally {
-      emitting = before;
-    }
-  };
+  const quiet = <T>(fn: () => T): T => inside.run(true, fn);
 
   const censor = (text: string): string => {
     if (secrets.version !== seen) {
@@ -52,13 +45,27 @@ export function createLogSignalTap(observers: Observers, secrets: SecretSource):
   // Cópia com os segredos trocados; `Error` vira objeto simples, como o `err` do log.
   const clean = (value: unknown, depth: number, path: object[]): unknown => {
     if (typeof value === 'string') return censor(value);
+    // JSON.stringify lança em bigint: o sinal tem de ser sempre serializável.
+    if (typeof value === 'bigint') return value.toString();
     if (typeof value !== 'object' || value === null) return value;
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString();
+    if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) {
+      return `[Buffer ${value.byteLength} bytes]`;
+    }
     if (path.includes(value)) return '[Circular]';
     if (depth >= MAX_DEPTH) return '[Object]';
     const next = [...path, value];
     if (Array.isArray(value)) return value.map((item) => clean(item, depth + 1, next));
+    if (value instanceof Map) {
+      return Object.fromEntries(
+        [...value].map(([key, item]) => [String(key), clean(item, depth + 1, next)]),
+      );
+    }
+    if (value instanceof Set) return [...value].map((item) => clean(item, depth + 1, next));
     if (value instanceof Error) {
       return {
+        // Propriedades próprias (`code`, `statusCode`...) primeiro: não pisam nos campos fixos.
+        ...(clean({ ...value }, depth + 1, next) as object),
         type: value.name,
         message: censor(value.message),
         ...(value.stack !== undefined && { stack: censor(value.stack) }),
@@ -75,7 +82,7 @@ export function createLogSignalTap(observers: Observers, secrets: SecretSource):
       (level: EmitLevel) =>
       (message: string, fields?: LogFields): void => {
         logger[level](message, fields);
-        if (emitting || !observers.has('log')) return;
+        if (!observers.has('log') || inside.getStore()) return;
         // O nível é lido a cada linha: o do logger do app pode mudar em runtime.
         const min = LEVELS.indexOf(logger.level);
         if (min < 0 || LEVELS.indexOf(level) < min) return; // `silent` não está em LEVELS
