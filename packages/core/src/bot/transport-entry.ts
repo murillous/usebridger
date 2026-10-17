@@ -11,7 +11,7 @@ import type { Observers } from '#observers/observers.ts';
 import type { OutboundQueue } from '#outbound/queue.ts';
 import type { InboundQueue } from '#queue/inbound.ts';
 import type { TenantScope } from '#tenant/scope.ts';
-import type { Interaction, Transport } from '#transport/types.ts';
+import type { ConnectionStatus, Interaction, Transport } from '#transport/types.ts';
 import { DIRECT_EVENTS, type DirectEvent } from './direct-events.ts';
 import type { InboundFlow } from './inbound-flow.ts';
 import type { ExpireOrigin, KernelMessageContext } from './message-context.ts';
@@ -37,6 +37,8 @@ export interface TransportEntryDeps {
   readonly dropsBots: boolean;
   /** `true` em `stopping`/`stopped`: a espera vencida some em silêncio. */
   readonly stopping: () => boolean;
+  /** Guarda o último `connection.status`, antes de reemitir no barramento (ADR 0110). */
+  readonly recordStatus?: (status: ConnectionStatus) => void;
   /** Getter: o logger nasce no `start()`. */
   readonly log: () => Logger;
 }
@@ -136,6 +138,7 @@ export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
         // Com a conexão caída, o envio falharia e esgotaria o retry antes da reconexão (#198).
         if (status.status === 'closed') deps.outbound.pause();
         else if (status.status === 'open') deps.outbound.resume();
+        deps.recordStatus?.(status);
         deps.reconnector?.onStatus(status);
         void deps.bus.emit('connection.status', status);
       }),

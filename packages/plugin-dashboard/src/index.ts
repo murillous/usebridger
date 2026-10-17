@@ -1,4 +1,5 @@
 import {
+  type ConnectionStatus,
   definePlugin,
   type HttpHandler,
   type HttpSocket,
@@ -11,6 +12,8 @@ import { createLogBuffer, filterByLevel, type LogEntry } from '#logs.ts';
 
 export interface StatusView {
   transport: string;
+  /** Sessão do bot (ADR 0110): `/plugins/dashboard` é a `default`; as outras ficam sob `/sessions/<sessão>`. */
+  session: string;
   status: 'connecting' | 'open' | 'closed';
   reason?: string;
   message?: string;
@@ -59,6 +62,7 @@ export const dashboard: PluginDefinition = definePlugin({
     const sockets = new Set<HttpSocket>();
     const state: StatusView = {
       transport: ctx.transportName,
+      session: ctx.session,
       status: 'connecting',
       updatedAt: Date.now(),
     };
@@ -76,7 +80,8 @@ export const dashboard: PluginDefinition = definePlugin({
 
     const status = (): StatusView => ({ ...state });
 
-    ctx.events.on('connection.status', ({ payload }) => {
+    // Mesma regra para o evento e para o snapshot do core no setup.
+    const applyStatus = (payload: ConnectionStatus): void => {
       delete state.reason;
       delete state.message;
       state.status = payload.status;
@@ -90,6 +95,13 @@ export const dashboard: PluginDefinition = definePlugin({
         // Só o texto do erro, truncado: o objeto cru pode carregar sockets e credenciais.
         if (payload.error instanceof Error) state.message = payload.error.message.slice(0, 300);
       }
+    };
+
+    // Depois de um reload (ou plugin tardio) o último status já passou: parte do snapshot do core.
+    const initial = ctx.connectionStatus();
+    if (initial !== undefined) applyStatus(initial);
+    ctx.events.on('connection.status', ({ payload }) => {
+      applyStatus(payload);
       broadcast(JSON.stringify({ type: 'status', ...status() }));
     });
     ctx.events.on('connection.qr', ({ payload }) => {
