@@ -37,6 +37,13 @@ describe('createStaticHandler', () => {
     }
   });
 
+  it('index.html pedido direto também leva o <base>, e o basePath é escapado', async () => {
+    expect(await (await get(`${BASE}/index.html`)).text()).toContain(`<base href="${BASE}/" />`);
+    const odd = createStaticHandler(dir, '/a&b');
+    const res = await odd(new Request('http://x/a&b/'), { params: {} });
+    expect(await res.text()).toContain('<base href="/a&#38;b/" />');
+  });
+
   it('serve assets com o content-type certo e cache longo só em assets/', async () => {
     const asset = await get(`${BASE}/assets/app-abc123.js`);
     expect(asset.headers.get('content-type')).toContain('text/javascript');

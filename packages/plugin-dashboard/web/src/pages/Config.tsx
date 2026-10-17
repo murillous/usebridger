@@ -21,6 +21,10 @@ interface Loaded {
   sources: Record<string, string>;
   /** Issues da config atual inválida (`view: null`). */
   loadIssues: ConfigIssue[];
+  /** `messages.<k>` da view: não são campos do form, mas o PUT precisa devolvê-los se eram override. */
+  extra: FlatValues;
+  /** Falso com `view: null`: sem `sources` não se sabe quais overrides existem. */
+  known: boolean;
 }
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -92,13 +96,11 @@ function FieldView(props: {
   const id = `f-${field.path}`;
   const helpId = `${id}-help`;
   const errId = `${id}-err`;
-  const describedBy =
-    [field.description || props.source ? helpId : '', errors.length ? errId : '']
-      .filter(Boolean)
-      .join(' ') || undefined;
   const help = [field.description, props.source ? SOURCE_LABEL[props.source] : undefined]
     .filter(Boolean)
     .join(' · ');
+  const describedBy =
+    [help ? helpId : '', errors.length ? errId : ''].filter(Boolean).join(' ') || undefined;
 
   let control: ReactNode;
   if (field.secret) {
@@ -116,7 +118,7 @@ function FieldView(props: {
       <input
         id={id}
         type="checkbox"
-        style={{ width: 24, height: 24 }}
+        style={{ width: 24, height: 24, accentColor: 'var(--ink)' }}
         checked={props.value === true}
         aria-describedby={describedBy}
         onChange={(e) => props.onChange(e.target.checked)}
@@ -201,11 +203,16 @@ export function Config() {
     setError(undefined);
     try {
       const data = await api<ConfigResponse>(`config/${encodeURIComponent(name)}`);
-      const initial = data.view ? flatten(data.view.config) : {};
+      const nodes = buildFields(data.schema);
+      const stop = new Set(leaves(nodes).map((f) => f.path));
+      const initial = data.view ? flatten(data.view.config, '', stop) : {};
+      const messages = (data.view?.messages ?? {}) as Record<string, unknown>;
       setLoaded({
-        nodes: buildFields(data.schema),
+        nodes,
         initial,
         sources: data.view?.sources ?? {},
+        extra: flatten({ messages }),
+        known: data.view !== null,
         loadIssues: data.issues ?? [],
       });
       setValues(initial);
@@ -228,12 +235,25 @@ export function Config() {
 
   const save = async () => {
     if (!plugin || !loaded) return;
+    // Sem `sources` o PUT não consegue preservar os overrides que já existem: só segue se a pessoa confirmar.
+    if (
+      !loaded.known &&
+      !window.confirm('Salvar substitui todos os overrides deste plugin. Continuar?')
+    ) {
+      return;
+    }
     setSaving(true);
     setIssues([]);
     setError(undefined);
     setResult(undefined);
     try {
-      const overrides = buildOverrides(fields, loaded.initial, values, loaded.sources);
+      const overrides = buildOverrides(
+        fields,
+        loaded.initial,
+        values,
+        loaded.sources,
+        loaded.extra,
+      );
       const data = await api<ChangeResult | null>(`config/${encodeURIComponent(plugin)}`, {
         method: 'PUT',
         body: overrides,
@@ -309,7 +329,8 @@ export function Config() {
         <div className="card">
           {loaded.loadIssues.length > 0 && (
             <div className="notice warn" role="alert">
-              A config atual é inválida. Corrija pelo formulário:
+              A config atual é inválida. Salvar substitui todos os overrides deste plugin. Corrija
+              pelo formulário:
               <ul>
                 {loaded.loadIssues.map((i) => (
                   <li key={`${i.path}-${i.message}`}>

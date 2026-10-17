@@ -1,4 +1,4 @@
-/* Tokens do design.md; componente nenhum usa hex direto. Fontes: pilha do sistema (sem fonte externa em runtime). */
+/* Tokens do design.md; componente nenhum usa hex direto. Fontes empacotadas (fonts.css), sem CDN. */
 :root {
   --bg: #f4f4f1;
   --raised: #ffffff;
@@ -24,9 +24,12 @@
   --display: "Funnel Display Variable", "Onest Variable", system-ui, sans-serif;
   --mono: "Martian Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --target: 40px;
+  --qr-bg: #ffffff;
+  --scrim: #0008;
+  color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0f0f0e;
     --raised: #1c1c1b;
     --sunken: #0a0a09;
@@ -47,7 +50,38 @@
     --e1: 0 1px 2px #00000080, 0 0 0 1px var(--line);
     --e3: 0 28px 64px -16px #000c, 0 0 0 1px var(--line2);
     --top: inset 0 1px 0 #ffffff14;
+    --qr-bg: #ffffff;
+    --scrim: #000000b3;
+    color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #0f0f0e;
+  --raised: #1c1c1b;
+  --sunken: #0a0a09;
+  --ink: #efefec;
+  --ink-fg: #0f0f0e;
+  --muted: #a3a39e;
+  --line: #ffffff1a;
+  --line2: #ffffff26;
+  --plate: #7f7f7f26;
+  --agent: #5aa8ff;
+  --agent-soft: #11253f;
+  --ok: #5fc48a;
+  --ok-soft: #13291c;
+  --warn: #e0a84a;
+  --warn-soft: #33260e;
+  --danger: #f08a80;
+  --danger-soft: #3a1714;
+  --e1: 0 1px 2px #00000080, 0 0 0 1px var(--line);
+  --e3: 0 28px 64px -16px #000c, 0 0 0 1px var(--line2);
+  --top: inset 0 1px 0 #ffffff14;
+  --qr-bg: #ffffff;
+  --scrim: #000000b3;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 @media (max-width: 767px) {
   :root {
@@ -316,7 +350,7 @@ td {
 .qr {
   width: 200px;
   height: 200px;
-  background: #fff;
+  background: var(--qr-bg);
   padding: 8px;
   border-radius: 10px;
 }
@@ -354,7 +388,7 @@ td {
 .overlay {
   position: fixed;
   inset: 0;
-  background: #0008;
+  background: var(--scrim);
   display: grid;
   place-items: center;
   padding: 16px;
@@ -409,6 +443,9 @@ td {
     font-size: 12px;
     color: var(--muted);
     text-decoration: none;
+  }
+  .tabbar a svg {
+    margin-bottom: 2px;
   }
   .tabbar a[aria-current="page"] {
     color: var(--ink);

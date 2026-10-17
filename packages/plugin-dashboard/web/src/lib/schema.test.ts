@@ -106,6 +106,39 @@ describe('buildOverrides', () => {
   });
 });
 
+describe('record e messages', () => {
+  const rec = {
+    type: 'object',
+    properties: {
+      modo: { enum: ['a', 'b'] },
+      extra: { type: 'object', additionalProperties: { type: 'string' } },
+    },
+  };
+  const fields = leaves(buildFields(rec));
+  const stop = new Set(fields.map((f) => f.path));
+
+  it('o record é uma folha json com o valor atual', () => {
+    expect(fields.find((f) => f.path === 'extra')?.control).toBe('json');
+    expect(flatten({ modo: 'a', extra: { a: 'b' } }, '', stop)).toEqual({
+      modo: 'a',
+      extra: { a: 'b' },
+    });
+  });
+
+  it('salvar só o modo preserva o record e messages.* que eram override', () => {
+    const initial = flatten({ modo: 'a', extra: { a: 'b' } }, '', stop);
+    const sources = {
+      modo: 'default',
+      'extra.a': 'override',
+      'messages.ola': 'override',
+      'messages.x': 'default',
+    };
+    const extra = flatten({ messages: { ola: 'Oi, {nome}!', x: 'padrão' } });
+    const out = buildOverrides(fields, initial, { ...initial, modo: 'b' }, sources, extra);
+    expect(out).toEqual({ modo: 'b', extra: { a: 'b' }, messages: { ola: 'Oi, {nome}!' } });
+  });
+});
+
 describe('entradas', () => {
   it('number: vazio some, inválido segue cru', () => {
     expect(parseNumber('')).toBeUndefined();

@@ -108,12 +108,17 @@ export function leaves(nodes: Node[]): Field[] {
   return nodes.flatMap((n) => (n.node === 'group' ? leaves(n.fields) : [n]));
 }
 
-/** `{a:{b:1}}` -> `{'a.b':1}`. Só desce em objetos simples; array e valor ficam folhas. */
-export function flatten(value: unknown, prefix = ''): FlatValues {
-  if (!isObject(value)) return prefix ? { [prefix]: value } : {};
+/**
+ * `{a:{b:1}}` -> `{'a.b':1}`. Só desce em objetos simples; array e valor ficam folhas, e `stop`
+ * lista os caminhos que são campos do form (um `z.record` é uma folha `json`, não várias chaves).
+ */
+export function flatten(value: unknown, prefix = '', stop?: ReadonlySet<string>): FlatValues {
+  if (!isObject(value) || (prefix !== '' && stop?.has(prefix))) {
+    return prefix ? { [prefix]: value } : {};
+  }
   const out: FlatValues = {};
   for (const [key, child] of Object.entries(value)) {
-    Object.assign(out, flatten(child, prefix ? `${prefix}.${key}` : key));
+    Object.assign(out, flatten(child, prefix ? `${prefix}.${key}` : key, stop));
   }
   return out;
 }
@@ -148,14 +153,26 @@ export function buildOverrides(
   initial: FlatValues,
   current: FlatValues,
   sources: Record<string, string>,
+  /** Valores fora do form (`messages.<k>` de `view.messages`): repassados se eram override. */
+  extra: FlatValues = {},
 ): Json {
   const flat: FlatValues = {};
+  const overridden = Object.keys(sources).filter((path) => sources[path] === 'override');
+  const known = new Set<string>();
   for (const field of fields) {
+    known.add(field.path);
     if (field.secret) continue;
     const value = current[field.path];
     const dirty = !sameValue(value, initial[field.path]);
     if (value === undefined) continue;
-    if (dirty || sources[field.path] === 'override') flat[field.path] = value;
+    // Record: o servidor lista as chaves (`extra.a`) como fonte, não o campo em si.
+    const wasOverride = overridden.some((p) => p === field.path || p.startsWith(`${field.path}.`));
+    if (dirty || wasOverride) flat[field.path] = value;
+  }
+  // O PUT substitui todos os overrides: o que o form não edita (messages) precisa ir junto.
+  for (const path of overridden) {
+    if (known.has(path) || [...known].some((k) => path.startsWith(`${k}.`))) continue;
+    if (extra[path] !== undefined) flat[path] = extra[path];
   }
   return unflatten(flat);
 }

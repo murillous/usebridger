@@ -52,7 +52,8 @@ export function createStaticHandler(dir: string, basePath: string): HttpHandler 
       return NOT_FOUND();
     }
     const file = resolve(join(root, rel));
-    if (rel !== '' && file.startsWith(root + sep)) {
+    // `index.html` pedido direto cai no fim, que injeta o <base>.
+    if (rel !== '' && rel !== 'index.html' && file.startsWith(root + sep)) {
       const body = await load(file);
       if (body !== undefined) {
         const type = TYPES[extname(file)] ?? 'application/octet-stream';
@@ -69,7 +70,9 @@ export function createStaticHandler(dir: string, basePath: string): HttpHandler 
     }
     const html = await load(join(root, 'index.html'));
     if (html === undefined) return NOT_FOUND();
-    const text = html.toString('utf8').replace('<head>', `<head><base href="${base}" />`);
+    // Defesa em profundidade: o basePath vem do core, mas entra em HTML.
+    const href = base.replace(/[&"<>]/g, (c) => `&#${c.charCodeAt(0)};`);
+    const text = html.toString('utf8').replace('<head>', () => `<head><base href="${href}" />`);
     return new Response(text, {
       headers: { 'content-type': TYPES['.html'] ?? 'text/html', 'cache-control': 'no-cache' },
     });

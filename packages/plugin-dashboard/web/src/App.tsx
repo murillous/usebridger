@@ -7,11 +7,60 @@ import {
   reduceLive,
   type SocketLike,
 } from './lib/live.ts';
+import { applyTheme, loadTheme, saveTheme, THEMES, type Theme } from './lib/theme.ts';
 import { Config } from './pages/Config.tsx';
 import { Login } from './pages/Login.tsx';
 import { Logs } from './pages/Logs.tsx';
 import { Overview } from './pages/Overview.tsx';
 import { Plugins } from './pages/Plugins.tsx';
+
+const THEME_LABEL: Record<Theme, string> = { auto: 'Automático', light: 'Claro', dark: 'Escuro' };
+
+function ThemeSwitch({ theme, onChange }: { theme: Theme; onChange: (theme: Theme) => void }) {
+  return (
+    <div className="field">
+      <label htmlFor="theme">Tema</label>
+      <select
+        id="theme"
+        className="input"
+        value={theme}
+        onChange={(e) => onChange(e.target.value as Theme)}
+      >
+        {THEMES.map((t) => (
+          <option key={t} value={t}>
+            {THEME_LABEL[t]}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+// Ícones simples (traço de 2 px); o texto da aba continua ao lado, o ícone é decorativo.
+const ICONS: Record<string, string> = {
+  inicio: 'M3 11l9-8 9 8M5 10v10h14V10',
+  plugins: 'M9 3v4M15 3v4M6 7h12v5a6 6 0 0 1-12 0zM12 18v3',
+  config: 'M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6',
+  mais: 'M5 12h.01M12 12h.01M19 12h.01',
+};
+
+function Icon({ id }: { id: string }) {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d={ICONS[id]} />
+    </svg>
+  );
+}
 
 // Roteamento por hash: o servidor só conhece `/` e os estáticos, e o app funciona em qualquer basePath.
 const ROUTES = [
@@ -59,6 +108,12 @@ function useLive(enabled: boolean): LiveState {
 export function App() {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [route, setRoute] = useState(current);
+  const [theme, setTheme] = useState<Theme>(loadTheme);
+  useEffect(() => applyTheme(theme), [theme]);
+  const chooseTheme = (next: Theme) => {
+    saveTheme(next);
+    setTheme(next);
+  };
   const live = useLive(authed === true);
 
   useEffect(() => {
@@ -100,9 +155,12 @@ export function App() {
             ))}
           </div>
         ))}
-        <button type="button" className="btn" style={{ marginTop: 'auto' }} onClick={logout}>
-          Sair
-        </button>
+        <div style={{ marginTop: 'auto' }}>
+          <ThemeSwitch theme={theme} onChange={chooseTheme} />
+          <button type="button" className="btn" onClick={logout}>
+            Sair
+          </button>
+        </div>
       </nav>
       <main className="main">
         {route === 'logs' ? (
@@ -118,6 +176,7 @@ export function App() {
               <p>
                 <a href="#/logs">Logs</a>
               </p>
+              <ThemeSwitch theme={theme} onChange={chooseTheme} />
               <button type="button" className="btn" onClick={logout}>
                 Sair
               </button>
@@ -138,6 +197,7 @@ export function App() {
                 : undefined
             }
           >
+            <Icon id={t.id} />
             {t.label}
           </a>
         ))}

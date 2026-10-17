@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, api } from '#web/lib/api.ts';
 import type { ChangeResult, PluginRow, SkipReason } from '#web/lib/types.ts';
 
@@ -31,12 +31,30 @@ function reasonText(reason: SkipReason | undefined): string {
 const errorText = (e: unknown): string =>
   e instanceof ApiError ? `${e.status}: ${e.message}` : 'Falha de rede.';
 
+// O plugin do dashboard não age sobre si mesmo (o servidor responde 409): o nome vem do `basePath`
+// em que o app foi servido (`/plugins/<nome>/`).
+const SELF = /\/plugins\/([^/]+)\/?$/.exec(new URL(document.baseURI).pathname)?.[1];
+
 export function Plugins() {
+  const dialog = useRef<HTMLDivElement>(null);
   const [rows, setRows] = useState<PluginRow[]>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState<string>();
   const [result, setResult] = useState<{ action: Action; data: ChangeResult }>();
   const [confirm, setConfirm] = useState<PluginRow>();
+  const opener = useRef<HTMLElement | null>(null);
+  const ask = (row: PluginRow) => {
+    opener.current = document.activeElement as HTMLElement | null;
+    setConfirm(row);
+  };
+  // Foco inicial no Cancelar (a ação segura) quando o modal abre.
+  useEffect(() => {
+    if (confirm) dialog.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
+  }, [confirm]);
+  const close = () => {
+    setConfirm(undefined);
+    opener.current?.focus();
+  };
 
   const load = useCallback(async () => {
     try {
@@ -51,7 +69,7 @@ export function Plugins() {
   }, [load]);
 
   const run = async (name: string, action: Action) => {
-    setConfirm(undefined);
+    close();
     setBusy(name);
     setResult(undefined);
     try {
@@ -72,7 +90,9 @@ export function Plugins() {
     const disabled = busy !== undefined;
     return (
       <span className="row">
-        {row.status === 'loaded' ? (
+        {row.name === SELF ? (
+          <span className="muted">Este painel (não pode ser alterado por aqui)</span>
+        ) : row.status === 'loaded' ? (
           <>
             <button
               type="button"
@@ -86,7 +106,7 @@ export function Plugins() {
               type="button"
               className="btn danger"
               disabled={disabled}
-              onClick={() => setConfirm(row)}
+              onClick={() => ask(row)}
             >
               Desativar
             </button>
@@ -187,7 +207,27 @@ export function Plugins() {
       )}
       {confirm && (
         <div className="overlay">
-          <div className="modal" role="alertdialog" aria-modal="true" aria-labelledby="cf-t">
+          <div
+            ref={dialog}
+            className="modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="cf-t"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') close();
+              if (e.key !== 'Tab') return;
+              const items = e.currentTarget.querySelectorAll<HTMLElement>('button');
+              const first = items[0];
+              const last = items[items.length - 1];
+              if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault();
+                last?.focus();
+              } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first?.focus();
+              }
+            }}
+          >
             <h2 id="cf-t">Desativar {confirm.name}?</h2>
             <p>O plugin é desmontado e os plugins que dependem dele também saem do ar.</p>
             <div className="row">
@@ -198,7 +238,7 @@ export function Plugins() {
               >
                 Desativar
               </button>
-              <button type="button" className="btn" onClick={() => setConfirm(undefined)}>
+              <button type="button" className="btn" data-autofocus onClick={close}>
                 Cancelar
               </button>
             </div>

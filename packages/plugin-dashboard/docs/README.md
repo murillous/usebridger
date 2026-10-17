@@ -115,6 +115,8 @@ token e navegue pelas telas (rotas por hash: `#/logs`, `#/plugins`, `#/config`).
   cache longo (`immutable`); o resto é `no-cache`. Os estáticos não pedem login (os dados passam
   pela API autenticada).
 - **Sem fonte externa:** Onest, Funnel Display e Martian Mono (latin e latin-ext) vão empacotadas em `dist/web/assets` via `@fontsource-variable`, com a pilha do sistema como fallback e `font-display: swap`. Nada vem de CDN.
+- **Tema:** segue o `prefers-color-scheme`; a conta (sidebar, ou Mais no celular) permite fixar claro ou escuro, guardado em `localStorage`.
+- **Config:** o Salvar devolve os overrides que o formulário não edita (`messages.*`, chaves de `z.record`); com a config atual inválida (`view: null`) ele substitui todos os overrides e pede confirmação.
 - **Portão de login:** sem sessão, ou com 401 em qualquer chamada, o app mostra só a tela de login; depois de entrar, volta à rota em que estava. Sair fica na sidebar (desktop) e em Mais (celular).
 
 ### Buildar
