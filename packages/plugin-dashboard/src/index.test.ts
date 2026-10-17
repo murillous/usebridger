@@ -1,0 +1,204 @@
+import { createHttp, definePlugin, type Logger } from '@usebridger/core';
+import { createTestBot } from '@usebridger/testing';
+import { afterEach, describe, expect, it } from 'vitest';
+import { createSessions } from './auth.ts';
+import { dashboard, type StatusView } from './index.ts';
+import { createLogBuffer } from './logs.ts';
+
+const TOKEN = 'segredo-do-painel';
+const bots: { stop(): Promise<void> }[] = [];
+afterEach(async () => {
+  for (const bot of bots.splice(0)) await bot.stop();
+});
+
+// Plugin que expõe o logger do bot, para os testes gerarem linhas de log.
+let botLog: Logger;
+const logger = definePlugin({
+  name: 'logger',
+  version: '1.0.0',
+  engine: '<1.0.0',
+  setup(ctx) {
+    botLog = ctx.log;
+  },
+});
+
+async function start(config: Record<string, unknown> = {}) {
+  const http = createHttp({ port: 0, hostname: '127.0.0.1' });
+  const bot = await createTestBot({
+    plugins: [dashboard, logger],
+    http,
+    logLevel: 'info',
+    pluginConfig: { dashboard: { token: TOKEN, ...config } },
+  });
+  bots.push(bot);
+  const host = `127.0.0.1:${http.port}`;
+  const base = `http://${host}/plugins/dashboard`;
+  const login = (token: string) =>
+    fetch(`${base}/api/login`, { method: 'POST', body: JSON.stringify({ token }) });
+  const cookie = async (): Promise<string> => {
+    const res = await login(TOKEN);
+    return (res.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+  };
+  return { bot, host, base, login, cookie };
+}
+
+async function until(check: () => boolean): Promise<void> {
+  for (let i = 0; i < 200 && !check(); i++) await new Promise((r) => setTimeout(r, 5));
+  expect(check()).toBe(true);
+}
+
+function connect(url: string, headers: Record<string, string>) {
+  // WebSocket do Node (undici) aceita headers no segundo argumento.
+  const socket = new WebSocket(url, { headers } as never);
+  const messages: Record<string, unknown>[] = [];
+  socket.addEventListener('message', (e) => messages.push(JSON.parse(String(e.data))));
+  const opened = new Promise<boolean>((resolve) => {
+    socket.addEventListener('open', () => resolve(true));
+    socket.addEventListener('error', () => resolve(false));
+  });
+  return { socket, messages, opened };
+}
+
+describe('autenticação', () => {
+  it('login certo dá 204 e cookie HttpOnly/SameSite/Path, sem o token da config', async () => {
+    const { login } = await start();
+    const res = await login(TOKEN);
+    const set = res.headers.get('set-cookie') ?? '';
+    expect(res.status).toBe(204);
+    expect(set).toContain('HttpOnly');
+    expect(set).toContain('SameSite=Strict');
+    expect(set).toContain('Path=/plugins/dashboard');
+    expect(set).not.toContain(TOKEN);
+    expect(set).not.toContain('Secure');
+  });
+
+  it('Secure quando o pedido veio por https (proxy)', async () => {
+    const { base } = await start();
+    const res = await fetch(`${base}/api/login`, {
+      method: 'POST',
+      headers: { 'x-forwarded-proto': 'https' },
+      body: JSON.stringify({ token: TOKEN }),
+    });
+    expect(res.headers.get('set-cookie')).toContain('Secure');
+  });
+
+  it('login errado ou sem token dá 401; corpo inválido dá 400', async () => {
+    const { login, base } = await start();
+    expect((await login('errado')).status).toBe(401);
+    const vazio = await fetch(`${base}/api/login`, { method: 'POST', body: '{}' });
+    expect(vazio.status).toBe(401);
+    const lixo = await fetch(`${base}/api/login`, { method: 'POST', body: 'x' });
+    expect(lixo.status).toBe(400);
+  });
+
+  it('rotas sem cookie ou com cookie inválido dão 401', async () => {
+    const { base } = await start();
+    for (const path of ['/api/status', '/api/logs']) {
+      expect((await fetch(base + path)).status).toBe(401);
+      const forged = await fetch(base + path, { headers: { cookie: 'bridger_dashboard=falso' } });
+      expect(forged.status).toBe(401);
+    }
+  });
+
+  it('logout invalida a sessão', async () => {
+    const { base, cookie } = await start();
+    const c = await cookie();
+    expect((await fetch(`${base}/api/status`, { headers: { cookie: c } })).status).toBe(200);
+    const out = await fetch(`${base}/api/logout`, { method: 'POST', headers: { cookie: c } });
+    expect(out.status).toBe(204);
+    expect((await fetch(`${base}/api/status`, { headers: { cookie: c } })).status).toBe(401);
+  });
+
+  it('sessão expira', () => {
+    let now = 0;
+    const sessions = createSessions(10, () => now);
+    const id = sessions.create();
+    const req = new Request('http://x', { headers: { cookie: `bridger_dashboard=${id}` } });
+    expect(sessions.valid(req)).toBe(true);
+    now = 10_000;
+    expect(sessions.valid(req)).toBe(false);
+  });
+});
+
+describe('estado', () => {
+  it('status reflete a conexão; QR e código saem no open; closed expõe só reason e mensagem', async () => {
+    const { bot, base, cookie } = await start();
+    const headers = { cookie: await cookie() };
+    const get = async (): Promise<StatusView> =>
+      (await (await fetch(`${base}/api/status`, { headers })).json()) as StatusView;
+
+    await bot.emit('connection.qr', { qr: 'QR1' });
+    await bot.emit('connection.pairing-code', { code: 'ABCD-1234' });
+    expect(await get()).toMatchObject({
+      transport: expect.any(String),
+      qr: 'QR1',
+      pairingCode: 'ABCD-1234',
+    });
+
+    await bot.emit('connection.status', { status: 'open' });
+    const open = await get();
+    expect(open.status).toBe('open');
+    expect(open.qr).toBeUndefined();
+    expect(open.pairingCode).toBeUndefined();
+
+    await bot.emit('connection.status', {
+      status: 'closed',
+      reason: 'connection-lost',
+      error: Object.assign(new Error('caiu'), { socket: { secret: 1 } }),
+    });
+    const closed = await get();
+    expect(closed).toMatchObject({ status: 'closed', reason: 'connection-lost', message: 'caiu' });
+    expect(JSON.stringify(closed)).not.toContain('socket');
+  });
+
+  it('buffer de logs corta no tamanho', () => {
+    const buffer = createLogBuffer(3);
+    for (let i = 1; i <= 5; i++) {
+      buffer.push({ level: 'info', time: i, message: `m${i}`, fields: {} });
+    }
+    expect(buffer.list().map((e) => e.message)).toEqual(['m3', 'm4', 'm5']);
+  });
+
+  it('GET /api/logs devolve as linhas do bot, limitadas por logBufferSize', async () => {
+    const { base, cookie } = await start({ logBufferSize: 2 });
+    const headers = { cookie: await cookie() };
+    for (const n of [1, 2, 3]) botLog.info(`linha ${n}`);
+    const logs = (await (await fetch(`${base}/api/logs`, { headers })).json()) as {
+      message: string;
+    }[];
+    expect(logs.map((l) => l.message)).toEqual(['linha 2', 'linha 3']);
+  });
+});
+
+describe('WebSocket', () => {
+  it('recusa sem cookie e com Origin de outro host', async () => {
+    const { host, cookie } = await start();
+    const url = `ws://${host}/plugins/dashboard/api/ws`;
+    expect(await connect(url, {}).opened).toBe(false);
+    const c = await cookie();
+    expect(await connect(url, { cookie: c, origin: 'http://evil.example' }).opened).toBe(false);
+  });
+
+  it('manda snapshot e empurra status e log', async () => {
+    const { bot, host, cookie } = await start();
+    const c = await cookie();
+    const ws = connect(`ws://${host}/plugins/dashboard/api/ws`, {
+      cookie: c,
+      origin: `http://${host}`,
+    });
+    expect(await ws.opened).toBe(true);
+    await until(() => ws.messages.length >= 1);
+    expect(ws.messages[0]).toMatchObject({ type: 'snapshot', status: { status: 'open' } });
+    expect(Array.isArray(ws.messages[0]?.['logs'])).toBe(true);
+
+    await bot.emit('connection.status', { status: 'connecting' });
+    await until(() =>
+      ws.messages.some((m) => m['type'] === 'status' && m['status'] === 'connecting'),
+    );
+    await bot.emit('connection.qr', { qr: 'Q' });
+    await until(() => ws.messages.some((m) => m['type'] === 'qr' && m['qr'] === 'Q'));
+    botLog.warn('olá painel');
+    await until(() => ws.messages.some((m) => m['type'] === 'log'));
+    ws.socket.close();
+  });
+});
