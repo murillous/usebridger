@@ -33,6 +33,15 @@ gravar override de config), que não pode ir a todo plugin.
   `enable` e as leituras não têm restrição. O resto segue o comportamento de `bot.plugins` e
   `bot.config`.
 
+- Tudo o que sai pelo `ctx.admin` (retornos e erros rejeitados) é uma cópia com os segredos do
+  bot trocados por `[REDACTED]`, os mesmos que o logger censura: uma mensagem como
+  "invalid key sk-…" de um `setup` ou de uma issue de config não chega crua ao cliente do
+  dashboard. O `Error` mantém a classe e os campos próprios (`cause`, `issues`, `detail`). A
+  máscara fica no `ctx.admin`; `bot.plugins`/`bot.config` não mudam. Foi escolhida em vez de
+  expor um `redact`, para o consumidor não precisar lembrar de chamá-lo.
+- `PluginConfigIssue` ganha `kind: 'secret' | 'invalid'`, para o dashboard distinguir a recusa de
+  override secreto da validação sem ler o texto.
+
 ## Consequências
 
 - Não dê `await` em ação de admin dentro do próprio `setup`/`teardown`: a fila do host roda uma
