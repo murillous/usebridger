@@ -1,4 +1,4 @@
-import type { LogSignal } from '@usebridger/core';
+import type { LogLevel, LogSignal } from '@usebridger/core';
 
 export type LogEntry = Pick<LogSignal, 'level' | 'time' | 'message' | 'fields'>;
 
@@ -19,4 +19,14 @@ export function createLogBuffer(size: number): {
     },
     list: () => [...items.slice(head), ...items.slice(0, head)],
   };
+}
+
+/** Ordem crescente de severidade; o core exporta só o tipo, sem a ordem. `silent` não é nível de linha. */
+const LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'] as const satisfies LogLevel[];
+
+/** Linhas com nível >= `level`; `undefined` se `level` não for um nível válido. */
+export function filterByLevel(entries: LogEntry[], level: string): LogEntry[] | undefined {
+  const min = LEVELS.indexOf(level as (typeof LEVELS)[number]);
+  if (min < 0) return undefined;
+  return entries.filter((e) => LEVELS.indexOf(e.level as (typeof LEVELS)[number]) >= min);
 }
