@@ -1,4 +1,5 @@
 import {
+  ContextExpiredError,
   type HttpHandler,
   type JsonObject,
   type PluginAdmin,
@@ -42,17 +43,20 @@ export function registerConfigRoutes(
         return text('config indisponível: inclua "dashboard" em createBot({ adminPlugins })', 503);
       }
       const name = info.params['plugin'] ?? '';
-      if (!admin.plugins().some((entry) => entry.name === name)) {
-        return text('plugin desconhecido', 404);
+      try {
+        if (!admin.plugins().some((entry) => entry.name === name)) {
+          return Promise.resolve(text('plugin desconhecido', 404));
+        }
+      } catch (error) {
+        return Promise.resolve(fail('checar', name, error));
       }
       return handler(admin, name, request, info);
     };
 
-  const fail = (what: string, name: string, error: unknown): Response => {
-    ctx.log.error(`dashboard: falha ao ${what} config do plugin "${name}"`, {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return text('erro interno', 500);
+  const fail = (what: string, name: string, error: unknown, body = 'erro interno'): Response => {
+    // O erro inteiro (stack incluso): o logger do core já censura os secrets.
+    ctx.log.error(`dashboard: falha ao ${what} config do plugin "${name}"`, { error });
+    return text(body, 500);
   };
 
   ctx.http.route(
@@ -121,10 +125,16 @@ export function registerConfigRoutes(
               409,
             );
           }
-          ctx.log.error(`dashboard: falha ao gravar config do plugin "${name}"`, {
-            error: error instanceof Error ? error.message : String(error),
-          });
-          return text('erro interno (o override pode ter sido salvo sem o reload)', 500);
+          // Rejeitado antes de gravar: nada ficou salvo, é só tentar de novo.
+          if (error instanceof ContextExpiredError) {
+            return text('dashboard sendo recarregado, tente de novo', 503);
+          }
+          return fail(
+            'gravar',
+            name,
+            error,
+            'erro interno (o override pode ter sido salvo sem o reload)',
+          );
         }
       }),
     ),

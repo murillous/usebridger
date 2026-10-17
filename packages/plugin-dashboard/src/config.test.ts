@@ -1,7 +1,15 @@
-import { createHttp, definePlugin, secret } from '@usebridger/core';
+import {
+  ContextExpiredError,
+  createHttp,
+  definePlugin,
+  type HttpHandler,
+  type PluginContext,
+  secret,
+} from '@usebridger/core';
 import { z } from '@usebridger/core/zod';
 import { createTestBot } from '@usebridger/testing';
 import { afterEach, describe, expect, it } from 'vitest';
+import { registerConfigRoutes } from './config.ts';
 import { dashboard } from './index.ts';
 
 const TOKEN = 'segredo-do-painel';
@@ -240,5 +248,57 @@ describe('casos de falha', () => {
   it('o JSON Schema não vaza o default de um campo secret', async () => {
     const { get } = await start();
     expect(await (await get('flaky')).text()).not.toContain('padrao-secreto-xyz');
+  });
+});
+
+describe('ctx.admin com falha', () => {
+  // Contexto falso: só o que `registerConfigRoutes` usa.
+  function fake(setOverrides: () => Promise<never>) {
+    const routes = new Map<string, HttpHandler>();
+    const errors: unknown[][] = [];
+    const ctx = {
+      plugin: { name: 'dashboard' },
+      log: { error: (...args: unknown[]) => errors.push(args) },
+      http: { route: (m: string, p: string, h: HttpHandler) => routes.set(`${m} ${p}`, h) },
+      admin: {
+        plugins: () => [{ name: 'target' }],
+        config: { setOverrides },
+      },
+    } as unknown as PluginContext;
+    registerConfigRoutes(ctx, (h) => h);
+    const put = () =>
+      routes.get('PUT /api/config/:plugin')?.(
+        new Request('http://x/', { method: 'PUT', body: '{}' }),
+        {
+          params: { plugin: 'target' },
+        },
+      ) as Promise<Response>;
+    return { put, errors };
+  }
+
+  it('ContextExpiredError dá 503 sem aviso de salvo e sem log de erro', async () => {
+    const { put, errors } = fake(() =>
+      Promise.reject(
+        new ContextExpiredError(
+          'dashboard',
+          'config.setOverrides',
+          'contexto do plugin',
+          undefined,
+        ),
+      ),
+    );
+    const res = await put();
+    expect(res.status).toBe(503);
+    const msg = await res.text();
+    expect(msg).toContain('tente de novo');
+    expect(msg).not.toContain('salv');
+    expect(errors).toHaveLength(0);
+  });
+
+  it('erro qualquer dá 500 e o log recebe o erro inteiro', async () => {
+    const boom = new Error('boom');
+    const { put, errors } = fake(() => Promise.reject(boom));
+    expect((await put()).status).toBe(500);
+    expect(errors[0]?.[1]).toEqual({ error: boom });
   });
 });
