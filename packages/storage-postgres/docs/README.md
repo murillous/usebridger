@@ -70,6 +70,13 @@ todas as coleções.
 O `jsonb` não guarda o caractere `\u0000` em texto: um documento com ele num campo é recusado pelo
 banco. KV e auth state guardam o JSON como texto e aceitam.
 
+## Incremento com insert
+
+`Collection.increment` com `insert` toma um advisory lock por coleção (namespace + nome) até o fim
+da transação: não há unique no JSON para um `ON CONFLICT`. Os incrementos com `insert` na mesma
+coleção são serializados, entre conexões e processos; sem `insert`, só o `SELECT ... FOR UPDATE`
+das linhas casadas serializa.
+
 ## Migrations
 
 A cada boot, o adapter aplica numa transação só as migrations que faltam, com um advisory lock

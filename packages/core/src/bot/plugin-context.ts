@@ -38,12 +38,13 @@ import type { Groups } from '#groups/groups.ts';
 import type { SessionHttp } from '#http/server.ts';
 import type { HttpRoutes } from '#http/types.ts';
 import type { Logger } from '#logger/types.ts';
-import type { Contact } from '#message/types.ts';
+import type { Contact, Message } from '#message/types.ts';
 import type { Outbound } from '#outbound/types.ts';
 import { type PluginContextFactory, PluginHostStateError } from '#plugin/host.ts';
 import { formatMessage } from '#plugin/messages.ts';
 import type { UnregisteredCommand } from '#plugin/report.ts';
 import type { PluginContext } from '#plugin/types.ts';
+import type { RecurrenceRule } from '#scheduler/rule.ts';
 import type { SchedulerService } from '#scheduler/service.ts';
 import type { Scheduler } from '#scheduler/types.ts';
 import type { ServiceRegistry } from '#services/registry.ts';
@@ -240,7 +241,13 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
             wrapCommand(name, definition, commandViews, lifetime, deps),
           );
         },
-        list: () => deps.router.registry.list().map(commandInfo),
+        list: ((options?: { readonly for: Message }) => {
+          if (options === undefined) return deps.router.registry.list().map(commandInfo);
+          const message = options.for;
+          return deps.router
+            .allowed({ message, text: message.text, log, signal: lifetime.signal })
+            .then((entries) => entries.map(commandInfo));
+        }) as PluginContext['commands']['list'],
       },
       roles: {
         define(role, check) {
@@ -304,6 +311,10 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         at: live('scheduler.at', (when: Date | number, job: string, payload?: JsonValue) =>
           scheduler.at(when, job, payload),
         ),
+        every: live('scheduler.every', (rule: RecurrenceRule, job: string, payload?: JsonValue) =>
+          scheduler.every(rule, job, payload),
+        ),
+        next: live('scheduler.next', (id: string) => scheduler.next(id)),
         cancel: live('scheduler.cancel', (id: string) => scheduler.cancel(id)),
         on(job, handler) {
           guard('scheduler.on');
@@ -440,6 +451,15 @@ function liveStorage(storage: PluginStorage, live: Live): PluginStorage {
         ),
         delete: live(op('delete'), (target: Parameters<C['delete']>[0]) =>
           collection.delete(target),
+        ),
+        increment: live(
+          op('increment'),
+          (
+            where: Parameters<C['increment']>[0],
+            field: Parameters<C['increment']>[1],
+            by?: number,
+            options?: Parameters<C['increment']>[3],
+          ) => collection.increment(where, field, by, options),
         ),
       };
     },

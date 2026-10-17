@@ -6,8 +6,10 @@ import { z } from 'zod';
 import { command } from '#commands/command.ts';
 import { RoleConflictError, type RoleContext, RoleTimeoutError } from '#commands/roles.ts';
 import type { PluginErrorEvent } from '#events/types.ts';
+import type { Message } from '#message/types.ts';
 import { definePlugin } from '#plugin/define.ts';
 import { PluginHostStateError } from '#plugin/host.ts';
+import type { PluginContext } from '#plugin/types.ts';
 import { type Bot, type BotConfig, createBot } from './bot.ts';
 import {
   deferred,
@@ -283,5 +285,56 @@ describe('papéis custom nomeados', () => {
     gate.resolve();
 
     await vi.waitFor(() => expect(late).toBeInstanceOf(PluginHostStateError));
+  });
+});
+
+describe('ctx.commands.list({ for }) (#133)', () => {
+  /** Plugin de ajuda: guarda o `ctx` para listar depois, como o menu do `help`. */
+  function ajuda() {
+    let saved: PluginContext | undefined;
+    const plugin = definePlugin({
+      name: 'ajuda',
+      version: '1.0.0',
+      engine: ENGINE,
+      setup(ctx) {
+        saved = ctx;
+        ctx.commands.add(command({ name: 'reboot', role: 'owner', run: () => undefined }));
+      },
+    });
+    return { plugin, list: (m: Message) => saved?.commands.list({ for: m }) };
+  }
+
+  const names = async (pending: Promise<{ name: string }[]> | undefined) =>
+    (await pending)?.map((info) => info.name);
+
+  it('lista só o que o remetente passa, com o check do dono do papel', async () => {
+    const transport = new RecordingTransport();
+    const check = vi.fn((ctx: RoleContext) => ctx.message.sender.id === 'mod@test');
+    const help = ajuda();
+    const b = bot({ transport, plugins: [moderacao(check), banimento(), help.plugin] });
+    await b.start();
+
+    expect(await names(help.list(message('!ajuda', from('outro@test'))))).toEqual(['ping']);
+    expect(await names(help.list(message('!ajuda', from('mod@test'))))).toEqual(['ban', 'ping']);
+    expect(await names(help.list(message('!ajuda', from('dono@lid', OWNER))))).toEqual([
+      'ban',
+      'ping',
+      'reboot',
+    ]);
+    expect(check).toHaveBeenCalledWith(expect.objectContaining({ command: 'ban' }));
+    expect(help.list(message('x'))).toBeInstanceOf(Promise);
+  });
+
+  it('check preso estoura o prazo: o comando sai da lista e a lista resolve', async () => {
+    const transport = new RecordingTransport();
+    const help = ajuda();
+    const b = bot({
+      transport,
+      timeouts: { commandMs: 20 },
+      plugins: [moderacao(() => new Promise<boolean>(() => undefined)), banimento(), help.plugin],
+    });
+    await b.start();
+
+    expect(await names(help.list(message('!ajuda')))).toEqual(['ping']);
   });
 });

@@ -15,7 +15,12 @@ import {
 } from './command.ts';
 import { DEFAULT_PREFIX, validatePrefix } from './prefixes.ts';
 import { type CommandRegistry, createCommandRegistry, type RegisteredCommand } from './registry.ts';
-import { createRoleRegistry, type RoleContext, type RoleRegistry } from './roles.ts';
+import {
+  createRoleRegistry,
+  RESERVED_ROLES,
+  type RoleContext,
+  type RoleRegistry,
+} from './roles.ts';
 
 /**
  * Porta para consultar admins de grupo. Vem do transport (`isChatAdmin` ou capability `groups`,
@@ -116,6 +121,12 @@ export interface CommandRouter {
    * comando nativo da plataforma, ADR 0064).
    */
   dispatch(ctx: MessageContext, invocation?: CommandInvocation): Promise<DispatchResult>;
+  /**
+   * Comandos registrados que o remetente de `ctx.message` passa no papel, com a regra do
+   * `dispatch`: owner passa em todos, e papel sem dono, erro ou prazo recusam (ADR 0035). Não
+   * confere `accepts`. Nunca rejeita: a falha de uma consulta vai para `ctx.log` e tira o comando.
+   */
+  allowed(ctx: Omit<RoleContext, 'command'>): Promise<RegisteredCommand[]>;
 }
 
 /**
@@ -286,10 +297,43 @@ export function createCommandRouter(options: CommandRouterOptions = {}): Command
     return (await definition.onReject?.(ctx, rejection)) ?? null;
   }
 
+  async function allowed(ctx: Omit<RoleContext, 'command'>): Promise<RegisteredCommand[]> {
+    // Só o papel custom depende do comando; o embutido (a consulta de admin) sai uma vez só.
+    const builtin = new Map<string, Promise<boolean>>();
+    const passes = (entry: RegisteredCommand): Promise<boolean> => {
+      const role = entry.definition.role ?? 'everyone';
+      const name = entry.definition.name;
+      const run = () =>
+        hasRole(
+          role,
+          { ...ctx, command: name },
+          { plugin: entry.plugin, name, invokedAs: name },
+        ).catch((error: unknown) => {
+          ctx.log.warn(`consulta do papel "${role}" falhou: comando fora da lista`, {
+            role,
+            command: name,
+            err: error,
+          });
+          return false;
+        });
+      if (!RESERVED_ROLES.has(role)) return run();
+      let result = builtin.get(role);
+      if (!result) {
+        result = run();
+        builtin.set(role, result);
+      }
+      return result;
+    };
+    const entries = registry.list();
+    const granted = await Promise.all(entries.map(passes));
+    return entries.filter((_, i) => granted[i]);
+  }
+
   return {
     registry,
     roles,
     match,
+    allowed,
 
     async dispatch(ctx, invocation) {
       // O texto de trabalho (M1-16.2) vem do contexto: um middleware pode tê-lo reescrito.

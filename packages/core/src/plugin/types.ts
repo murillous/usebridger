@@ -18,7 +18,7 @@ import type { BotEventName, EventSubscriber, ListenerContext } from '#events/typ
 import type { Groups } from '#groups/groups.ts';
 import type { HttpRoutes } from '#http/types.ts';
 import type { Logger } from '#logger/types.ts';
-import type { Contact } from '#message/types.ts';
+import type { Contact, Message } from '#message/types.ts';
 import type { Outbound } from '#outbound/types.ts';
 import type { Scheduler } from '#scheduler/types.ts';
 import type { ServiceAccess } from '#services/types.ts';
@@ -81,6 +81,12 @@ export interface PluginContext<
     add(definition: CommandDefinition): void;
     /** Comandos registrados por todos os plugins carregados, na ordem de registro (ADR 0040). */
     list(): CommandInfo[];
+    /**
+     * Só os comandos que o remetente de `for` passa no papel, com a regra do roteador: owner
+     * passa em todos, e erro, prazo ou papel sem dono recusam. O `check` de papel custom recebe
+     * o texto original da mensagem. Não confere `accepts`. Nunca rejeita.
+     */
+    list(options: { readonly for: Message }): Promise<CommandInfo[]>;
   };
   /**
    * Papéis custom (ADR 0035): `define('moderador', check)` deixa qualquer plugin exigir

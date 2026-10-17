@@ -6,9 +6,13 @@
 import { randomUUID } from 'node:crypto';
 import { StorageClosedError } from './errors.ts';
 import {
-  type NormalizedCondition,
+  compareStrings,
+  fieldValue,
+  incrementedValue,
+  matches,
   type NormalizedSort,
   normalizeDocument,
+  normalizeIncrement,
   normalizeIndexes,
   normalizeQuery,
   normalizeWhere,
@@ -18,14 +22,15 @@ import type {
   AuthStateStore,
   Collection,
   FindQuery,
+  IncrementOptions,
   JsonObject,
   JsonValue,
   KeyValueStore,
   Patch,
   PluginStorage,
-  Scalar,
   StoragePort,
   Target,
+  Where,
   WithId,
 } from './types.ts';
 
@@ -56,62 +61,6 @@ function serialize(value: unknown): string {
 
 function parse<T>(text: string): T {
   return JSON.parse(text) as T;
-}
-
-function fieldValue(row: Row, field: string): JsonValue {
-  if (field === 'id') return row.id;
-  // Campo ausente vale null, igual ao `json_extract`/`->>` dos adapters SQL.
-  return Object.hasOwn(row.doc, field) ? (row.doc[field] as JsonValue) : null;
-}
-
-// Igualdade estrita de tipo e valor: o adapter SQLite precisa conferir `json_type`, porque
-// `json_extract` devolve `true` como 1.
-function equals(value: JsonValue, operand: Scalar): boolean {
-  if (operand === null) return value === null;
-  return typeof value === typeof operand && value === operand;
-}
-
-// Ordem de code point (= ordem de bytes UTF-8, a do SQLite BINARY e do Postgres COLLATE "C").
-// O `<` do JS compara unidades UTF-16 e erra quando um lado é surrogate.
-function compareStrings(a: string, b: string): number {
-  if (a === b) return 0;
-  const length = Math.min(a.length, b.length);
-  for (let i = 0; i < length; i++) {
-    if (a.charCodeAt(i) !== b.charCodeAt(i)) {
-      return (a.codePointAt(i) as number) - (b.codePointAt(i) as number);
-    }
-  }
-  return a.length - b.length;
-}
-
-function compareOrdered(value: JsonValue, operand: string | number): number | undefined {
-  if (typeof value === 'number' && typeof operand === 'number') return value - operand;
-  if (typeof value === 'string' && typeof operand === 'string') {
-    return compareStrings(value, operand);
-  }
-  return undefined;
-}
-
-function matches(row: Row, conditions: readonly NormalizedCondition[]): boolean {
-  return conditions.every((condition) => {
-    const value = fieldValue(row, condition.field);
-    switch (condition.op) {
-      case 'eq':
-        return equals(value, condition.value);
-      case 'ne':
-        return !equals(value, condition.value);
-      case 'in':
-        return condition.value.some((operand) => equals(value, operand));
-      default: {
-        const diff = compareOrdered(value, condition.value);
-        if (diff === undefined) return false;
-        if (condition.op === 'gt') return diff > 0;
-        if (condition.op === 'gte') return diff >= 0;
-        if (condition.op === 'lt') return diff < 0;
-        return diff <= 0;
-      }
-    }
-  });
 }
 
 // null/ausente < booleano < número < texto < array/objeto (iguais entre si).
@@ -254,6 +203,30 @@ export function createMemoryStorage(): StoragePort {
         const targets = targetRows(target);
         for (const row of targets) docs.delete(row.id);
         return targets.length;
+      },
+      async increment(
+        where: Where<T>,
+        field: keyof T & string,
+        by?: number,
+        options?: IncrementOptions<T>,
+      ): Promise<number> {
+        ensureOpen();
+        const step = normalizeIncrement(where, field, by, options?.insert);
+        const docs = documents(namespace, name);
+        // Sem `await` daqui até o fim: o event loop não intercala outra chamada, e é isso que
+        // torna a busca + gravação (ou a inserção) atômica no processo.
+        const targets = targetRows(where);
+        // Valida todos os alvos antes de gravar, para um valor ruim não deixar a soma pela metade.
+        const updated = targets.map((row) => ({
+          id: row.id,
+          text: serialize({ ...row.doc, [field]: incrementedValue(row.doc[field], step.by) }),
+        }));
+        for (const { id, text } of updated) docs.set(id, text);
+        if (updated.length === 0 && step.insert !== undefined) {
+          docs.set(randomUUID(), serialize(step.insert));
+          return 1;
+        }
+        return updated.length;
       },
     };
   }
