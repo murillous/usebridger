@@ -1,8 +1,8 @@
 # @usebridger/plugin-dashboard — documentação
 
 Base do dashboard ([ADR 0107](../../../docs/adr/0107-plugins-oficiais-de-metricas-e-dashboard.md)):
-autenticação, status, QR, logs e WebSocket sobre o HTTP do core. Telas, formulários de config e
-abas ainda não estão aqui; o desenho está em [design.md](./design.md).
+autenticação, status, QR, logs e WebSocket sobre o HTTP do core. O app web (telas Login, Visão geral, Logs, Plugins e Config)
+vem junto; o desenho está em [design.md](./design.md). Abas de extensão e métricas ainda não estão aqui.
 
 ## Instalar
 
@@ -96,6 +96,32 @@ createBot({ plugins: [dashboard], adminPlugins: ['dashboard'] });
 Os `POST` exigem o cookie de sessão e `Origin` do mesmo host (senão 403). Nome desconhecido 404;
 ação inválida no estado (o próprio dashboard em `disable`/`reload`, plugin ignorado em `reload`,
 host parado) 409 com a mensagem; outro erro é logado e responde 500.
+
+## App web
+
+O plugin serve o app React em `GET /` e `GET /*` sob o próprio `basePath`: abra
+`http://<host>:<porta>/plugins/dashboard/` (ou `/sessions/<sessão>/plugins/dashboard/`), entre com o
+token e navegue pelas telas (rotas por hash: `#/logs`, `#/plugins`, `#/config`).
+
+- **Telas:** Visão geral (status, QR, código de pareamento com Copiar, indicador "ao vivo" que
+  vira "Desatualizado" quando o WebSocket cai e reconecta com backoff de 1 a 15 s), Logs (filtro
+  por nível e pausar), Plugins (enable/disable/reload com confirmação ao desativar e resultado da
+  cascata) e Config (formulário gerado do JSON Schema; secret só como máscara; erros do 400 junto do
+  campo). Abaixo de 768 px a navegação vira a barra inferior.
+- **Sem caminho fixo:** o plugin injeta `<base href>` no `index.html` e o app chama `api/...`
+  relativo a ele; funciona atrás de qualquer prefixo de sessão.
+- **Rotas:** o app só atende GET de arquivos e o fallback do SPA (`index.html`); `api/*` que não
+  existe responde 404 e nada fora da pasta do app é servido. Os arquivos de `assets/` têm hash e
+  cache longo (`immutable`); o resto é `no-cache`. Os estáticos não pedem login (os dados passam
+  pela API autenticada).
+- **Sem fonte externa:** o app usa a pilha de fontes do sistema.
+
+### Buildar
+
+O fonte está em `web/` (React + Vite, só `devDependencies`). O `pnpm build` do pacote roda o
+`tsdown` e depois `vite build --config web/vite.config.ts`, que gera `dist/web/`; a pasta vai no
+tarball (`files: ["dist"]`). O plugin lê `dist/web` do pacote, então rode o build antes de abrir o
+dashboard a partir do fonte.
 
 ## Limites conhecidos
 

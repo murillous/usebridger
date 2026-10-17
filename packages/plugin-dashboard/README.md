@@ -1,7 +1,8 @@
 # @usebridger/plugin-dashboard
 
-Plugin oficial do [Bridger](https://www.npmjs.com/package/@usebridger/core): API do dashboard com
-autenticação por token, status da conexão, QR, logs recentes e WebSocket ao vivo.
+Plugin oficial do [Bridger](https://www.npmjs.com/package/@usebridger/core): Dashboard com
+autenticação por token, status da conexão, QR, logs ao vivo, controle de plugins e config, e o app
+web que serve tudo isso (em `/plugins/dashboard/`).
 
 ```sh
 npm install @usebridger/plugin-dashboard

@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   type ConnectionStatus,
   definePlugin,
@@ -12,6 +14,7 @@ import { readLimited } from '#body.ts';
 import { registerConfigRoutes } from '#config.ts';
 import { createLogBuffer, filterByLevel, type LogEntry } from '#logs.ts';
 import { registerPluginRoutes } from '#plugins.ts';
+import { createStaticHandler } from '#static.ts';
 
 export interface StatusView {
   transport: string;
@@ -28,6 +31,14 @@ export interface StatusView {
 export type { LogEntry } from '#logs.ts';
 
 const MAX_LOGIN_BODY = 1024;
+
+// No pacote publicado o app fica em `dist/web`, ao lado do bundle; no fonte (`src/`), um nível acima.
+const WEB_DIR = fileURLToPath(
+  new URL(
+    existsSync(new URL('./web/', import.meta.url)) ? './web/' : '../dist/web/',
+    import.meta.url,
+  ),
+);
 
 const unauthorized = (): Response => new Response('não autorizado', { status: 401 });
 
@@ -193,6 +204,12 @@ export const dashboard: PluginDefinition = definePlugin({
         },
       };
     });
+
+    // App web (SPA). Por último: as rotas `/api/*` registradas acima ganham do `/*`. Sem auth: são só
+    // estáticos; os dados passam por `guarded`.
+    const serveApp = createStaticHandler(WEB_DIR, ctx.http.basePath);
+    ctx.http.route('GET', '/', serveApp);
+    ctx.http.route('GET', '/*', serveApp);
 
     // O core fecha as conexões (1001) ao descer a rota; aqui só limpa o estado.
     ctx.signal.addEventListener(
