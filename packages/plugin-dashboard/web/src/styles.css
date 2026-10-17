@@ -20,8 +20,9 @@
   --e1: 0 1px 1px #1717160a, 0 2px 4px -1px #1717160d, 0 0 0 1px var(--line);
   --e3: 0 2px 4px #1717160a, 0 24px 56px -16px #1717164d, 0 0 0 1px var(--line2);
   --top: inset 0 1px 0 #ffffffe6;
-  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: "Onest Variable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --display: "Funnel Display Variable", "Onest Variable", system-ui, sans-serif;
+  --mono: "Martian Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --target: 40px;
 }
 @media (prefers-color-scheme: dark) {
@@ -62,6 +63,10 @@ body {
   background: var(--bg);
   color: var(--ink);
   font: 14.5px / 1.5 var(--sans);
+}
+h1,
+.brand {
+  font-family: var(--display);
 }
 h1 {
   font-size: 28px;
@@ -332,10 +337,18 @@ td {
   background: var(--ok-soft);
   color: var(--ok);
 }
+.gate {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: var(--bg);
+}
 .login {
+  width: 100%;
   max-width: 400px;
-  margin: 15vh auto;
-  padding: 0 16px;
+  margin: 0;
+  padding: 24px;
 }
 
 .overlay {

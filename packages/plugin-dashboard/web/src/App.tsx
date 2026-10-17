@@ -21,17 +21,35 @@ const ROUTES = [
   { id: 'config', label: 'Config', group: 'Administração' },
 ] as const;
 
+// TabBar do celular (design.md): Logs e a conta ficam em "Mais".
+const TABS = [
+  { id: 'inicio', label: 'Início', match: ['inicio'] },
+  { id: 'plugins', label: 'Plugins', match: ['plugins'] },
+  { id: 'config', label: 'Config', match: ['config'] },
+  { id: 'mais', label: 'Mais', match: ['mais', 'logs'] },
+];
+const KNOWN = ['inicio', 'logs', 'plugins', 'config', 'mais'];
+
 const current = (): string => location.hash.replace(/^#\/?/, '') || 'inicio';
 
 function useLive(enabled: boolean): LiveState {
   const [state, setState] = useState<LiveState>(initialLive);
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      // Deslogado: nenhum dado da sessão anterior sobra na memória.
+      setState(initialLive);
+      return;
+    }
     const client = createLiveClient({
       // A WebSocket do navegador cumpre o subconjunto que o cliente usa.
       open: () => new WebSocket(liveUrl()) as unknown as SocketLike,
       onMessage: (message) => setState((s) => reduceLive(s, message, Date.now())),
-      onConnection: (connected) => setState((s) => ({ ...s, connected })),
+      onConnection: (connected) => {
+        setState((s) => ({ ...s, connected }));
+        // O navegador não expõe o 401 do upgrade do WS: ao cair, uma chamada simples descobre se a
+        // sessão acabou (o 401 aciona o portão); outras falhas são só rede fora e o backoff segue.
+        if (!connected) api('status').catch(() => undefined);
+      },
     });
     return () => client.close();
   }, [enabled]);
@@ -93,19 +111,36 @@ export function App() {
           <Plugins />
         ) : route === 'config' ? (
           <Config />
+        ) : route === 'mais' ? (
+          <section aria-labelledby="mais-t">
+            <h1 id="mais-t">Mais</h1>
+            <div className="card">
+              <p>
+                <a href="#/logs">Logs</a>
+              </p>
+              <button type="button" className="btn" onClick={logout}>
+                Sair
+              </button>
+            </div>
+          </section>
         ) : (
           <Overview live={live} />
         )}
       </main>
       <nav className="tabbar" aria-label="Principal">
-        {ROUTES.map((r) => (
-          <a key={r.id} href={`#/${r.id}`} aria-current={route === r.id ? 'page' : undefined}>
-            {r.label}
+        {TABS.map((t) => (
+          <a
+            key={t.id}
+            href={`#/${t.id}`}
+            aria-current={
+              t.match.includes(route) || (t.id === 'inicio' && !KNOWN.includes(route))
+                ? 'page'
+                : undefined
+            }
+          >
+            {t.label}
           </a>
         ))}
-        <button type="button" className="btn" onClick={logout}>
-          Sair
-        </button>
       </nav>
     </div>
   );

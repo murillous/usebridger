@@ -340,6 +340,15 @@ importers:
         specifier: workspace:^
         version: link:../core
     devDependencies:
+      '@fontsource-variable/funnel-display':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource-variable/martian-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource-variable/onest':
+        specifier: ^5.3.1
+        version: 5.3.1
       '@types/qrcode':
         specifier: ^1.5.6
         version: 1.5.6
@@ -821,6 +830,15 @@ packages:
 
   '@expressive-code/plugin-text-markers@0.44.2':
     resolution: {integrity: sha512-SNI7EgUSiADqbqUzzMbj1ZeC/r2pa5eg3KyFOGAd3a7EsIA4qzjXQLp+ODWQtHVDKFCdGs4J3ovSJUqvKIK96g==}
+
+  '@fontsource-variable/funnel-display@5.3.0':
+    resolution: {integrity: sha512-o/12lyrfflx5QAQFa+hAl0uBeWoBUAm5w71j+KssBseo++XJT3tnveDSg5IAnAdiclQHfFuEZiL5Wn2BjuFxtw==}
+
+  '@fontsource-variable/martian-mono@5.3.0':
+    resolution: {integrity: sha512-0wVODx9ILwNnaYC4XCuSaFRYtj1Prd89MRVaSuv2ng6zLiQkS4SepaWEPefs7vqCZS8sbEOA8jb/4F5KNMnGdg==}
+
+  '@fontsource-variable/onest@5.3.1':
+    resolution: {integrity: sha512-xaaw6G4HDB2/RczsWLD/2bnib4ykmQlTlBUN3GOEOiyErilZukQWVJG95h9zwAy0i8KY+QzDa+COPfqhI72Acw==}
 
   '@gerrit0/mini-shiki@3.23.0':
     resolution: {integrity: sha512-bEMORlG0cqdjVyCEuU0cDQbORWX+kYCeo0kV1lbxF5bt4r7SID2l9bqsxJEM0zndaxpOUT7riCyIVEuqq/Ynxg==}
@@ -3908,6 +3926,12 @@ snapshots:
   '@expressive-code/plugin-text-markers@0.44.2':
     dependencies:
       '@expressive-code/core': 0.44.2
+
+  '@fontsource-variable/funnel-display@5.3.0': {}
+
+  '@fontsource-variable/martian-mono@5.3.0': {}
+
+  '@fontsource-variable/onest@5.3.1': {}
 
   '@gerrit0/mini-shiki@3.23.0':
     dependencies:
