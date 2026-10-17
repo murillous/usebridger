@@ -32,7 +32,7 @@ function serializeEntry(entry: PluginReportEntry) {
   };
 }
 
-function serializeResult(result: PluginChangeResult) {
+export function serializeResult(result: PluginChangeResult): object {
   return {
     plugin: serializeEntry(result.plugin),
     dependents: result.dependents.map(serializeEntry),
