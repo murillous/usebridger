@@ -8,6 +8,8 @@ import {
 } from '@usebridger/core';
 import { z } from '@usebridger/core/zod';
 import { COOKIE, createSessions, sameOrigin, tokenMatches } from '#auth.ts';
+import { readLimited } from '#body.ts';
+import { registerConfigRoutes } from '#config.ts';
 import { createLogBuffer, filterByLevel, type LogEntry } from '#logs.ts';
 
 export interface StatusView {
@@ -25,20 +27,6 @@ export interface StatusView {
 export type { LogEntry } from '#logs.ts';
 
 const MAX_LOGIN_BODY = 1024;
-
-/** Lê o corpo até `max` bytes; `undefined` se passar (cobre pedido sem content-length). */
-async function readLimited(request: Request, max: number): Promise<string | undefined> {
-  if (Number(request.headers.get('content-length') ?? 0) > max) return undefined;
-  if (request.body === null) return '';
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  for await (const chunk of request.body) {
-    size += chunk.byteLength;
-    if (size > max) return undefined;
-    chunks.push(chunk);
-  }
-  return Buffer.concat(chunks).toString('utf8');
-}
 
 const unauthorized = (): Response => new Response('não autorizado', { status: 401 });
 
@@ -188,6 +176,8 @@ export const dashboard: PluginDefinition = definePlugin({
         return filtered ? Response.json(filtered) : new Response('nível inválido', { status: 400 });
       }),
     );
+
+    registerConfigRoutes(ctx, guarded);
 
     ctx.http.ws('/api/ws', (request) => {
       if (!sessions.valid(request) || !sameOrigin(request)) return unauthorized();

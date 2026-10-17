@@ -33,6 +33,25 @@ Todas sob `/plugins/dashboard` (ou `/sessions/<sessão>/plugins/dashboard` fora 
 `session` é o nome da sessão do bot. Depois de um reload do plugin, o status parte do último
 `ConnectionStatus` guardado pelo core (`ctx.connectionStatus()`, ADR 0110).
 
+## Config dos plugins
+
+Base dos formulários gerados dos schemas Zod. Exige `createBot({ adminPlugins: ['dashboard'] })`
+(`ctx.admin`, ADR 0111); sem isso as duas rotas respondem 503 e o resto do dashboard segue.
+
+| Rota                       | Resposta                                                                 |
+| -------------------------- | ------------------------------------------------------------------------ |
+| `GET /api/config/:plugin`  | `{ view: { config, messages, sources }, schema }`. `schema` é o JSON Schema da config (`null` se o plugin não declara `config`). Plugin desconhecido 404. |
+| `PUT /api/config/:plugin`  | Corpo (objeto JSON de overrides, até 64 KiB, senão 413); exige `Origin` do mesmo host (senão 403). 200 com o resultado do reload (`{ plugin, dependents, teardownErrors }`, erros só com `name` e `message`). |
+
+Erros do `PUT`: config inválida ou campo `secret` 400 com
+`{ "error": "invalid" | "secret", "issues": [{ "path": "campo.aninhado", "message": "..." }] }`
+(o `path` liga o erro ao campo do formulário); JSON inválido ou corpo que não é objeto 400;
+plugin desconhecido 404; ação no próprio dashboard 409; outro erro vai ao log e dá 500.
+
+**Secrets são só leitura no dashboard.** O `GET` os devolve mascarados (o valor real nunca sai) e o
+`PUT` recusa qualquer campo `secret`: o valor vem do arquivo (`pluginConfig`) ou do env. A
+`view.sources` diz de onde vem cada campo.
+
 ## WebSocket
 
 Mensagens do servidor, em JSON (o cliente não precisa enviar nada):
