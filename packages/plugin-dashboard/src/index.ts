@@ -7,7 +7,7 @@ import {
 } from '@usebridger/core';
 import { z } from '@usebridger/core/zod';
 import { COOKIE, createSessions, sameOrigin, tokenMatches } from '#auth.ts';
-import { createLogBuffer, type LogEntry } from '#logs.ts';
+import { createLogBuffer, filterByLevel, type LogEntry } from '#logs.ts';
 
 export interface StatusView {
   transport: string;
@@ -169,7 +169,12 @@ export const dashboard: PluginDefinition = definePlugin({
     ctx.http.route(
       'GET',
       '/api/logs',
-      guarded(() => Response.json(logs.list())),
+      guarded((request) => {
+        const level = new URL(request.url).searchParams.get('level');
+        if (level === null) return Response.json(logs.list());
+        const filtered = filterByLevel(logs.list(), level);
+        return filtered ? Response.json(filtered) : new Response('nível inválido', { status: 400 });
+      }),
     );
 
     ctx.http.ws('/api/ws', (request) => {

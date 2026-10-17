@@ -25,7 +25,7 @@ Todas sob `/plugins/dashboard` (ou `/sessions/<sessão>/plugins/dashboard` fora 
 | `POST /api/login`   | Corpo (até 1 KiB, senão 413) `{ "token": "..." }`. 204 + cookie; token errado 401; JSON inválido 400. |
 | `POST /api/logout`  | 204; invalida a sessão e expira o cookie.                                 |
 | `GET /api/status`   | `{ transport, status, reason?, message?, qr?, pairingCode?, updatedAt }`   |
-| `GET /api/logs`     | Array de `{ level, time, message, fields }`, do mais antigo ao mais novo.  |
+| `GET /api/logs`     | Array de `{ level, time, message, fields }`, do mais antigo ao mais novo. `?level=<nível>` (`trace`, `debug`, `info`, `warn`, `error`, `fatal`) devolve só esse nível e os acima; nível inválido 400. |
 | `GET /api/ws`       | WebSocket (abaixo).                                                       |
 
 `status` é `connecting`, `open` ou `closed`. `qr` e `pairingCode` somem quando a conexão abre.
