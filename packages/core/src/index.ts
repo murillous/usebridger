@@ -178,6 +178,7 @@ export type {
   PluginMessages,
 } from '#plugin/types.ts';
 export type { InboundQueueStats } from '#queue/inbound.ts';
+export type { RecurrenceRule } from '#scheduler/rule.ts';
 export { JobHandlerConflictError } from '#scheduler/service.ts';
 export type { JobContext, JobHandler, Scheduler } from '#scheduler/types.ts';
 export { ServiceConflictError, ServiceNotFoundError } from '#services/registry.ts';

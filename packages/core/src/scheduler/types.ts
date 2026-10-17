@@ -3,6 +3,7 @@
 
 import type { JsonValue } from '#storage/types.ts';
 import type { Unsubscribe } from '#transport/types.ts';
+import type { RecurrenceRule } from './rule.ts';
 
 /** Segundo argumento do handler de job. */
 export interface JobContext {
@@ -11,6 +12,10 @@ export interface JobContext {
    * timeout. Repasse a `fetch`/SDKs para parar o trabalho a tempo (ADR 0033).
    */
   readonly signal: AbortSignal;
+  /** Horário previsto (`fireAt`) desta ocorrência; após downtime, é o horário antigo. */
+  readonly scheduledAt: Date;
+  /** Id da série (o de `every`); ausente em job de `at`. */
+  readonly seriesId?: string;
 }
 
 /**
@@ -27,7 +32,21 @@ export interface Scheduler {
    * `TypeError` para horário inválido, nome vazio ou payload que não é JSON.
    */
   at(when: Date | number, job: string, payload?: JsonValue): Promise<string>;
-  /** `true` se o agendamento existia e ainda não tinha disparado. */
+  /**
+   * Agenda `job` de forma recorrente e devolve o id da série (não muda entre ocorrências). Após
+   * downtime, a ocorrência vencida dispara uma vez e a próxima segue a regra a partir de agora.
+   * Rejeita com `TypeError` para regra inválida, nome vazio ou payload que não é JSON.
+   */
+  every(rule: RecurrenceRule, job: string, payload?: JsonValue): Promise<string>;
+  /**
+   * Horário da próxima ocorrência pendente do job ou série do plugin; `undefined` se não existe
+   * (ou é de outro plugin) ou se o job `at` já disparou.
+   */
+  next(id: string): Promise<Date | undefined>;
+  /**
+   * `true` se o agendamento existia e ainda não tinha disparado. Série: encerra as ocorrências
+   * futuras e devolve `true` mesmo com o handler rodando.
+   */
   cancel(id: string): Promise<boolean>;
   /** Um handler por job; um segundo `on` do mesmo job lança `JobHandlerConflictError`. */
   on(job: string, handler: JobHandler): Unsubscribe;

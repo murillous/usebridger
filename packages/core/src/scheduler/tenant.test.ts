@@ -50,4 +50,25 @@ describe('scheduler com tenant (ADR 0072)', () => {
 
     await vi.waitFor(() => expect(seen.sort()).toEqual(['escola-a', undefined]));
   });
+
+  it('série agendada num tenant roda no escopo dele em todas as ocorrências', async () => {
+    const tenants = new TenantScope();
+    const { service, storage } = create(tenants);
+    const scheduler = service.forPlugin('lembretes');
+    const seen: (string | undefined)[] = [];
+    scheduler.on('aviso', () => {
+      seen.push(tenants.current);
+    });
+
+    await tenants.run('escola-a', () => scheduler.every({ everyMs: 60_000 }, 'aviso'));
+    const jobs = kernelStorage(storage, 'scheduler').collection('jobs');
+    // Vence agora, duas vezes: a segunda ocorrência vem do reagendamento depois do handler.
+    await jobs.update({}, { fireAt: Date.now() - 1000 });
+    service.start();
+    await vi.waitFor(() => expect(seen).toEqual(['escola-a']));
+    await jobs.update({}, { fireAt: Date.now() - 1000 });
+    await service.stop();
+    service.start();
+    await vi.waitFor(() => expect(seen).toEqual(['escola-a', 'escola-a']));
+  });
 });
