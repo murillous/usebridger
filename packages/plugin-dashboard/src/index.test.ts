@@ -162,14 +162,14 @@ describe('endurecimento', () => {
     expect((await fetch(`${base}/api/status`, { headers: { cookie: c } })).status).toBe(401);
   });
 
-  it('linha de log não serializável não envenena /api/logs nem o snapshot do WS', async () => {
+  it('linha de log com bigint (o core a converte) não envenena /api/logs nem o snapshot do WS', async () => {
     const { host, base, cookie } = await start();
     const c = await cookie();
     botLog.info('com bigint', { n: 10n });
     const res = await fetch(`${base}/api/logs`, { headers: { cookie: c } });
     expect(res.status).toBe(200);
     const logs = (await res.json()) as { message: string; fields: unknown }[];
-    expect(logs.find((l) => l.message === 'com bigint')?.fields).toEqual({ unserializable: true });
+    expect(logs.find((l) => l.message === 'com bigint')?.fields).toMatchObject({ n: '10' });
     const ws = connect(`ws://${host}/plugins/dashboard/api/ws`, { cookie: c });
     expect(await ws.opened).toBe(true);
     await until(() => ws.messages.length >= 1);
