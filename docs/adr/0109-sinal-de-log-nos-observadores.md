@@ -43,8 +43,8 @@ Alternativas consideradas:
 - O silêncio vem do `AsyncLocalStorage` e é herdado por trabalho agendado dentro do observador
   (timer, `ctx.send`, `ctx.schedule`). Os timers da fila de saída e do scheduler criados nesse
   contexto deixam de gerar sinal, inclusive para linhas de outros chats e plugins, até a fila
-  esvaziar. Evite `ctx.send` e `ctx.schedule` num observador de `log`. Isolar os timers fica para
-  uma issue futura.
+  esvaziar. Evite `ctx.send` e `ctx.schedule` num observador de `log`. Isolar os timers fica
+  na [#163](https://github.com/murillous/usebridger/issues/163).
 - Se montar os `fields` lançar (getter ou Proxy), o log segue e o sinal sai com
   `fields: { unserializable: true }`.
 - Uma linha logada antes do `start()` (logger no-op) não existe, então também não vira sinal.

@@ -108,7 +108,7 @@ ctx.observe('log', (s) => {
   O silêncio é herdado por trabalho agendado dentro do observador (timer, `ctx.send`,
   `ctx.schedule`): os timers da fila de saída e do scheduler criados ali deixam de gerar sinal,
   até para linhas de outros chats e plugins, até a fila esvaziar. Não use `ctx.send` nem
-  `ctx.schedule` num observador de `log`; isolar os timers fica para uma issue futura.
+  `ctx.schedule` num observador de `log`; isolar os timers fica na [#163](https://github.com/murillous/usebridger/issues/163).
 - `chatId`, `senderId` e `messageId` existem só em memória. Não os persista nem exporte.
 
 ## Métricas de performance
