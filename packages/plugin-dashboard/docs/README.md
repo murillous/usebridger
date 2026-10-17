@@ -129,3 +129,4 @@ dashboard a partir do fonte.
 ## Limites conhecidos
 
 - Depois de um reload, o QR e o código de pareamento não voltam: o snapshot do core só guarda o status de conexão, e eles valem até o próximo evento.
+- No app web, um override guardado num campo que o arquivo ou o env decidem (`sources` = `file`/`env`) não é reenviado pelo Salvar e some, já que o PUT substitui todos os overrides. Ele não tinha efeito mesmo; se a camada de cima sair, o valor volta ao default.

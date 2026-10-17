@@ -37,6 +37,7 @@ const SELF = /\/plugins\/([^/]+)\/?$/.exec(new URL(document.baseURI).pathname)?.
 
 export function Plugins() {
   const dialog = useRef<HTMLDivElement>(null);
+  const notice = useRef<HTMLDivElement>(null);
   const [rows, setRows] = useState<PluginRow[]>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState<string>();
@@ -47,6 +48,10 @@ export function Plugins() {
     opener.current = document.activeElement as HTMLElement | null;
     setConfirm(row);
   };
+  // A linha é redesenhada após a ação e o foco cairia no <body>: vai para o aviso de resultado.
+  useEffect(() => {
+    if (result) notice.current?.focus();
+  }, [result]);
   // Foco inicial no Cancelar (a ação segura) quando o modal abre.
   useEffect(() => {
     if (confirm) dialog.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
@@ -141,7 +146,7 @@ export function Plugins() {
         </p>
       )}
       {result && (
-        <div className="notice ok" role="status">
+        <div className="notice ok" role="status" tabIndex={-1} ref={notice}>
           <strong>{result.data.plugin.name}</strong>: {result.action} concluído (
           {result.data.plugin.status === 'loaded' ? 'ativo' : 'ignorado'}).
           {result.data.dependents.length > 0 && (

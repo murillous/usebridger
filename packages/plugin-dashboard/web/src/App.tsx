@@ -174,7 +174,9 @@ export function App() {
             <h1 id="mais-t">Mais</h1>
             <div className="card">
               <p>
-                <a href="#/logs">Logs</a>
+                <a className="nav" href="#/logs">
+                  Logs
+                </a>
               </p>
               <ThemeSwitch theme={theme} onChange={chooseTheme} />
               <button type="button" className="btn" onClick={logout}>
