@@ -148,6 +148,13 @@ describe('ctx.admin', () => {
       );
     expect(result.plugin.status).toBe('skipped');
     expect(text(result)).toContain('[REDACTED]');
+    if (result.plugin.status !== 'skipped' || result.plugin.reason.kind !== 'setup-failed') {
+      throw new Error('esperava setup-failed');
+    }
+    // O `stack` (accessor no Node) precisa sobreviver à cópia, e censurado.
+    const cause = result.plugin.reason.error.cause as Error;
+    expect(cause.stack).toContain('[REDACTED]');
+    expect(cause.stack).not.toContain(apiKey);
     expect(text(result)).not.toContain(apiKey);
     expect(text(admin().plugins())).not.toContain(apiKey);
     // O mesmo erro, cru, em `bot.plugins`: a máscara é só do admin.

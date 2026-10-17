@@ -32,11 +32,10 @@ gravar override de config), que não pode ir a todo plugin.
   com `PluginHostStateError`: ele desceria no meio da própria chamada (`setOverrides` recarrega).
   `enable` e as leituras não têm restrição. O resto segue o comportamento de `bot.plugins` e
   `bot.config`.
-
 - Tudo o que sai pelo `ctx.admin` (retornos e erros rejeitados) é uma cópia com os segredos do
   bot trocados por `[REDACTED]`, os mesmos que o logger censura: uma mensagem como
   "invalid key sk-…" de um `setup` ou de uma issue de config não chega crua ao cliente do
-  dashboard. O `Error` mantém a classe e os campos próprios (`cause`, `issues`, `detail`). A
+  dashboard. O `Error` copiado mantém o protótipo (`instanceof` vale; `Error.isError(copia)` dá `false`) e os campos próprios (`cause`, `issues`, `detail`, `stack` censurado). `Map`/`Set` são recriados e instância de outra classe vira objeto simples com as propriedades próprias; nada devolve a referência original. Chaves `Symbol` são descartadas. A
   máscara fica no `ctx.admin`; `bot.plugins`/`bot.config` não mudam. Foi escolhida em vez de
   expor um `redact`, para o consumidor não precisar lembrar de chamá-lo.
 - `PluginConfigIssue` ganha `kind: 'secret' | 'invalid'`, para o dashboard distinguir a recusa de

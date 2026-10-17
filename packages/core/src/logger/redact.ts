@@ -12,10 +12,15 @@ const isPlain = (value: object): boolean => {
 };
 
 /**
- * Devolve uma cópia profunda de `value` com os segredos trocados em toda string. `Error` mantém a
- * classe (`instanceof` e campos próprios, como `issues` e `cause`) com `message`/`stack`
- * censurados. O original não é tocado. Valores que não são texto, objeto simples, array nem
- * `Error` passam como estão.
+ * Devolve uma cópia profunda de `value` com os segredos trocados em toda string, sem nunca devolver
+ * a referência de um objeto original. `Error` e objeto simples mantêm o protótipo (`instanceof`
+ * vale; `Error.isError(copia)` dá `false`, pois a cópia não é um Error nativo); `Map`, `Set` e
+ * arrays são recriados; instância de outra classe (ex.: `AxiosHeaders` num `cause`) vira objeto
+ * simples com as propriedades próprias enumeráveis. Propriedades são lidas com `Reflect.get` e
+ * gravadas como dado: getters (o `stack` do Error é accessor no Node 24) viram valor censurado, e
+ * um getter que lança vira `undefined`. Chaves `Symbol` são descartadas. Buffers viram um texto
+ * com o tamanho. Não usa o `clean` do `signal.ts`: ele achata o `Error` em objeto simples e a
+ * classe (`PluginHostStateError`...) é o que o consumidor testa.
  */
 export function createRedactor(secrets: SecretSource): <T>(value: T) => T {
   let seen = -1;
@@ -37,21 +42,48 @@ export function createRedactor(secrets: SecretSource): <T>(value: T) => T {
     if (typeof value === 'string') return censor(value);
     if (typeof value !== 'object' || value === null) return value;
     if (done.has(value)) return done.get(value);
+    if (value instanceof Date) return new Date(value.getTime());
+    if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) {
+      return `[Buffer ${value.byteLength} bytes]`;
+    }
     if (Array.isArray(value)) {
       const copy: unknown[] = [];
       done.set(value, copy);
       for (const item of value) copy.push(walk(item, done));
       return copy;
     }
-    if (!(value instanceof Error) && !isPlain(value)) return value;
-    const copy = Object.create(Object.getPrototypeOf(value)) as Record<string, unknown>;
+    if (value instanceof Map) {
+      const copy = new Map<unknown, unknown>();
+      done.set(value, copy);
+      for (const [key, item] of value) copy.set(walk(key, done), walk(item, done));
+      return copy;
+    }
+    if (value instanceof Set) {
+      const copy = new Set<unknown>();
+      done.set(value, copy);
+      for (const item of value) copy.add(walk(item, done));
+      return copy;
+    }
+    const keepProto = value instanceof Error || isPlain(value);
+    const copy = (keepProto ? Object.create(Object.getPrototypeOf(value)) : {}) as Record<
+      string,
+      unknown
+    >;
     done.set(value, copy);
-    // `message` e `stack` do Error são próprios e não enumeráveis: `getOwnPropertyNames` os pega.
-    for (const key of Object.getOwnPropertyNames(value)) {
-      const descriptor = Object.getOwnPropertyDescriptor(value, key) as PropertyDescriptor;
+    // `message` e `stack` do Error são próprios e não enumeráveis: só o Error os inclui todos.
+    const keys = value instanceof Error ? Object.getOwnPropertyNames(value) : Object.keys(value);
+    for (const key of keys) {
+      let item: unknown;
+      try {
+        item = Reflect.get(value, key);
+      } catch {
+        item = undefined;
+      }
       Object.defineProperty(copy, key, {
-        ...descriptor,
-        ...('value' in descriptor && { value: walk(descriptor.value, done) }),
+        value: walk(item, done),
+        enumerable: Object.getOwnPropertyDescriptor(value, key)?.enumerable ?? true,
+        writable: true,
+        configurable: true,
       });
     }
     return copy;

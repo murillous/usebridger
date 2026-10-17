@@ -441,8 +441,10 @@ leituras ficam livres. No mais, o comportamento é o de `bot.plugins` e `bot.con
 Tudo o que sai pelo `ctx.admin` passa pela máscara de segredos do bot (os mesmos valores que o
 logger censura, trocados por `[REDACTED]`): a tabela de `plugins()`, o `PluginChangeResult`
 (`reason.error`, `dependents`, `teardownErrors`), o `describe`/`jsonSchema` e o erro rejeitado
-(`message`, `stack`, `cause`, `issues`). Recebe-se uma cópia, com as mesmas classes de erro;
-`bot.plugins` e `bot.config` seguem crus.
+(`message`, `stack`, `cause`, `issues`). Recebe-se uma cópia profunda: o `Error` mantém o
+protótipo (`instanceof` vale; `Error.isError(copia)` dá `false`), `Map`/`Set` são recriados e
+instância de outra classe vira objeto simples com as propriedades próprias. Chaves `Symbol` são
+descartadas. `bot.plugins` e `bot.config` seguem crus.
 
 Não dê `await` em ação de admin dentro do `setup`/`teardown` do próprio plugin: a fila do host
 roda uma operação por vez, então o plugin trava até o prazo e cai como `setup-failed`. Use as
