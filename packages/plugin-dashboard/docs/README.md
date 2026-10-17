@@ -40,13 +40,15 @@ Base dos formulários gerados dos schemas Zod. Exige `createBot({ adminPlugins: 
 
 | Rota                       | Resposta                                                                 |
 | -------------------------- | ------------------------------------------------------------------------ |
-| `GET /api/config/:plugin`  | `{ view: { config, messages, sources }, schema }`. `schema` é o JSON Schema da config (`null` se o plugin não declara `config`). Plugin desconhecido 404. |
-| `PUT /api/config/:plugin`  | Corpo (objeto JSON de overrides, até 64 KiB, senão 413); exige `Origin` do mesmo host (senão 403). 200 com o resultado do reload (`{ plugin, dependents, teardownErrors }`, erros só com `name` e `message`). |
+| `GET /api/config/:plugin`  | `{ view: { config, messages, sources }, schema }`. `schema` é o JSON Schema da config (`null` se o plugin não declara `config`). Se a config atual está inválida, 200 com `{ view: null, schema, issues: [{ path, message }] }` para o admin corrigir pelo formulário. Plugin desconhecido 404. |
+| `PUT /api/config/:plugin`  | Corpo (objeto JSON de overrides, até 64 KiB, senão 413); recusa (403) `Origin` de outro host; sem `Origin`, passa. 200 com o resultado do reload (`{ plugin, dependents, teardownErrors }`); erros de lifecycle saem só como `{ plugin, phase, timedOut, message }` (mensagem truncada em 300), sem stack nem cause. |
 
 Erros do `PUT`: config inválida ou campo `secret` 400 com
 `{ "error": "invalid" | "secret", "issues": [{ "path": "campo.aninhado", "message": "..." }] }`
 (o `path` liga o erro ao campo do formulário); JSON inválido ou corpo que não é objeto 400;
 plugin desconhecido 404; ação no próprio dashboard 409; outro erro vai ao log e dá 500.
+
+**O override é gravado antes do reload.** Se o reload falhar (409 ou 500), a config válida já ficou salva (a mensagem avisa); corrija e recarregue pelo `reload` de plugins.
 
 **Secrets são só leitura no dashboard.** O `GET` os devolve mascarados (o valor real nunca sai) e o
 `PUT` recusa qualquer campo `secret`: o valor vem do arquivo (`pluginConfig`) ou do env. A
@@ -76,6 +78,24 @@ pedido (proteção contra CSWSH). Ao reconectar, o cliente recebe um novo snapsh
   `Host` e `X-Forwarded-Proto`.
 - As linhas de log já saem com os segredos do bot mascarados, mas `fields` pode ter dado de
   negócio: trate o token como acesso ao log.
+
+## Plugins (enable, disable, reload)
+
+Exige o acesso admin do core (ADR 0111): ponha `dashboard` em `adminPlugins`, senão as rotas abaixo
+respondem 503 e o setup loga um `warn`. Status e logs seguem funcionando.
+
+```ts
+createBot({ plugins: [dashboard], adminPlugins: ['dashboard'] });
+```
+
+| Rota | Resposta |
+| ---- | -------- |
+| `GET /api/plugins` | Tabela de boot: array de `{ name, version, origin, status: 'loaded', unregistered? }` ou `{ name, version, origin, status: 'skipped', reason }`, na ordem de carga. `reason` é `{ kind, ... }` como no core; em `setup-failed`, `error` vira `{ plugin, phase, timedOut, message }` (mensagem truncada, nunca o erro cru). |
+| `POST /api/plugins/:name/enable`, `/disable`, `/reload` | Sem corpo. 200 `{ plugin, dependents, teardownErrors }` (linhas novas do plugin e dos dependentes; falhas de teardown como `{ plugin, phase, timedOut, message }`). |
+
+Os `POST` exigem o cookie de sessão e `Origin` do mesmo host (senão 403). Nome desconhecido 404;
+ação inválida no estado (o próprio dashboard em `disable`/`reload`, plugin ignorado em `reload`,
+host parado) 409 com a mensagem; outro erro é logado e responde 500.
 
 ## Limites conhecidos
 

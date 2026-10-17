@@ -11,6 +11,7 @@ import { COOKIE, createSessions, sameOrigin, tokenMatches } from '#auth.ts';
 import { readLimited } from '#body.ts';
 import { registerConfigRoutes } from '#config.ts';
 import { createLogBuffer, filterByLevel, type LogEntry } from '#logs.ts';
+import { registerPluginRoutes } from '#plugins.ts';
 
 export interface StatusView {
   transport: string;
@@ -178,6 +179,7 @@ export const dashboard: PluginDefinition = definePlugin({
     );
 
     registerConfigRoutes(ctx, guarded);
+    registerPluginRoutes(ctx.http, ctx.admin, ctx.log, guarded);
 
     ctx.http.ws('/api/ws', (request) => {
       if (!sessions.valid(request) || !sameOrigin(request)) return unauthorized();

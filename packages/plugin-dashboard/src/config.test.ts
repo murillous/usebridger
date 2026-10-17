@@ -8,6 +8,7 @@ const TOKEN = 'segredo-do-painel';
 const API_KEY = 'chave-real-nunca-sai';
 const bots: { stop(): Promise<void> }[] = [];
 afterEach(async () => {
+  Object.assign(flags, { broken: false, boom: false, failLifecycle: false });
   for (const bot of bots.splice(0)) await bot.stop();
 });
 
@@ -24,11 +25,37 @@ const target = definePlugin({
   },
 });
 
+// Estado mutável para provocar falhas depois do boot.
+const flags = { broken: false, boom: false, failLifecycle: false };
+const flaky = definePlugin({
+  name: 'flaky',
+  version: '1.0.0',
+  engine: '<1.0.0',
+  config: z.object({
+    mode: z
+      .string()
+      .default('a')
+      .refine(() => !flags.broken, 'config quebrada')
+      .transform((value) => {
+        if (flags.boom) throw new RangeError('boom interno');
+        return value;
+      }),
+    pass: secret(z.string().default('padrao-secreto-xyz')),
+  }),
+  setup() {
+    if (flags.failLifecycle) throw new Error('setup falhou segredo', { cause: new Error('causa') });
+  },
+  teardown() {
+    if (flags.failLifecycle) throw new Error('teardown falhou');
+  },
+});
+
 async function start(admin = true) {
   const http = createHttp({ port: 0, hostname: '127.0.0.1' });
   const bot = await createTestBot({
-    plugins: [dashboard, target],
+    plugins: [dashboard, target, flaky],
     http,
+    logLevel: 'info',
     ...(admin ? { adminPlugins: ['dashboard'] } : {}),
     pluginConfig: { dashboard: { token: TOKEN }, target: { apiKey: API_KEY } },
   });
@@ -107,7 +134,11 @@ describe('PUT /api/config/:plugin', () => {
 
   it('o próprio dashboard dá 409', async () => {
     const { put } = await start();
-    expect((await put('dashboard', { logBufferSize: 10 })).status).toBe(409);
+    const res = await put('dashboard', { logBufferSize: 10 });
+    expect(res.status).toBe(409);
+    const msg = await res.text();
+    expect(msg).toContain('em si mesmo');
+    expect(msg).toContain('reload falhou');
   });
 
   it('plugin desconhecido 404, JSON inválido e não-objeto 400', async () => {
@@ -136,5 +167,78 @@ describe('sem adminPlugins', () => {
     expect(await res.text()).toContain('adminPlugins');
     expect((await put('target', {})).status).toBe(503);
     expect((await fetch(`${base}/api/status`, { headers: { cookie } })).status).toBe(200);
+  });
+});
+
+describe('casos de falha', () => {
+  it('GET com a config atual inválida dá 200 com view null, schema e issues', async () => {
+    const { get } = await start();
+    flags.broken = true;
+    const res = await get('flaky');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      view: unknown;
+      schema: unknown;
+      issues: { path: string }[];
+    };
+    expect(body.view).toBeNull();
+    expect(body.schema).toBeTruthy();
+    expect(body.issues[0]?.path).toBe('mode');
+  });
+
+  it('erro inesperado (RangeError de transform) dá 500 registrado, não 404', async () => {
+    const { put, base, cookie } = await start();
+    flags.boom = true;
+    const res = await put('flaky', { mode: 'b' });
+    expect(res.status).toBe(500);
+    const logs = (await (
+      await fetch(`${base}/api/logs?level=error`, { headers: { cookie } })
+    ).json()) as {
+      message: string;
+    }[];
+    expect(logs.some((l) => l.message.includes('falha ao gravar config'))).toBe(true);
+  });
+
+  it('falhas de setup/teardown saem só no formato combinado, sem stack nem cause', async () => {
+    const { put } = await start();
+    flags.failLifecycle = true;
+    const res = await put('flaky', { mode: 'c' });
+    expect(res.status).toBe(200);
+    const raw = await res.text();
+    expect(raw).not.toContain('"stack"');
+    expect(raw).not.toContain('"cause"');
+    const body = JSON.parse(raw) as {
+      plugin: { status: string; reason: { error: Record<string, unknown> } };
+      teardownErrors: Record<string, unknown>[];
+    };
+    const keys = ['message', 'phase', 'plugin', 'timedOut'];
+    expect(body.plugin.status).toBe('skipped');
+    expect(Object.keys(body.plugin.reason.error).sort()).toEqual(keys);
+    expect(body.teardownErrors).toHaveLength(1);
+    expect(Object.keys(body.teardownErrors[0] ?? {}).sort()).toEqual(keys);
+  });
+
+  it('413 no corte do streaming, sem content-length', async () => {
+    const { base, cookie } = await start();
+    const chunk = new TextEncoder().encode('x'.repeat(16 * 1024));
+    let sent = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (sent++ < 6) controller.enqueue(chunk);
+        else controller.close();
+      },
+    });
+    const res = await fetch(`${base}/api/config/target`, {
+      method: 'PUT',
+      headers: { cookie },
+      body,
+      duplex: 'half',
+    } as RequestInit);
+    expect(res.status).toBe(413);
+  });
+
+  it('o JSON Schema não vaza o default de um campo secret', async () => {
+    const { get } = await start();
+    expect(await (await get('flaky')).text()).not.toContain('padrao-secreto-xyz');
   });
 });
