@@ -229,6 +229,7 @@ export function createBot(config: BotConfig): Bot {
     ...config.outbound,
     transport,
   });
+  const stats = (): BotStats => ({ inbound: inbound.stats(), outbound: outbound.stats() });
   // O plugin vê o envio e as ações (ADR 0040): a fila (close, stats) fica com o kernel.
   const send = createOutbound(outbound, transport);
   const groups = createGroups(transport, enqueueAction(outbound, transport));
@@ -425,6 +426,7 @@ export function createBot(config: BotConfig): Bot {
           return transport.self;
         },
       },
+      stats,
       unsafe: createUnsafeAccess({
         transport,
         log,
@@ -659,9 +661,7 @@ export function createBot(config: BotConfig): Bot {
 
     plugins: control.plugins,
 
-    stats(): BotStats {
-      return { inbound: inbound.stats(), outbound: outbound.stats() };
-    },
+    stats,
 
     settled,
 

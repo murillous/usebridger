@@ -65,6 +65,11 @@ dela:
 `bot.stats().outbound` dá os contadores (pendentes por prioridade, enviados, falhas, re-tentativas,
 pausa) sem custo no caminho da mensagem. Detalhes em [Fila de saída](../../packages/core/docs/outbound-queue.md).
 
+Um plugin lê os mesmos contadores com `ctx.stats()`, de entrada e de saída, sempre do próprio bot.
+É um retrato do instante (gauge), não uma série: quem quer histórico amostra no próprio ritmo, num
+job do scheduler ou a cada scrape, e guarda os valores
+([ADR 0106](../adr/0106-observadores-do-core.md)).
+
 ## Métricas de performance
 
 O projeto mede, no CI e sem rede, o custo do kernel em si

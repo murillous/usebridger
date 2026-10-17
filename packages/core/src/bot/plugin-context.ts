@@ -63,6 +63,7 @@ import { isFormatted } from '#text/format.ts';
 import { type Capability, missingCapabilities } from '#transport/capabilities.ts';
 import type { Unsubscribe } from '#transport/types.ts';
 import type { UnsafeAccess } from '#unsafe/access.ts';
+import type { BotStats } from './config.ts';
 import {
   type CommandViews,
   commandViewFactory,
@@ -103,6 +104,8 @@ export interface PluginContextDeps {
     readonly capabilities: ReadonlySet<Capability>;
     readonly self: Contact | null;
   };
+  /** Contadores das filas deste bot, os mesmos de `bot.stats()` (ADR 0106). */
+  readonly stats: () => BotStats;
   readonly unsafe: UnsafeAccess;
   /** Prazo do `run` e do `onReject` de cada comando, em ms (ADR 0005). */
   readonly commandTimeoutMs: number;
@@ -336,6 +339,7 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
       get self(): Contact | null {
         return deps.transport.self;
       },
+      stats: deps.stats,
       unsafe: deps.unsafe.forPlugin(plugin),
     };
 
