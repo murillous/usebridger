@@ -34,7 +34,7 @@ import {
 } from '#storage/namespace.ts';
 import { TenantScope } from '#tenant/scope.ts';
 import { type Capability, hasCapability } from '#transport/capabilities.ts';
-import type { Transport } from '#transport/types.ts';
+import type { ConnectionStatus, Transport } from '#transport/types.ts';
 import { createUnsafeAccess } from '#unsafe/access.ts';
 import { BackgroundTasks } from './background-tasks.ts';
 import {
@@ -296,7 +296,12 @@ export function createBot(config: BotConfig): Bot {
             bot.stop().catch((error: unknown) => log.error('falha ao parar o bot', { err: error }));
           },
         });
+  // Snapshot do último status para plugin que sobe depois do evento (ADR 0110).
+  let lastConnection: ConnectionStatus | undefined;
   const entry = createTransportEntry({
+    recordStatus: (status) => {
+      lastConnection = status;
+    },
     transport,
     inbound,
     outbound,
@@ -439,6 +444,8 @@ export function createBot(config: BotConfig): Bot {
           return transport.self;
         },
       },
+      session,
+      connectionStatus: () => lastConnection,
       stats,
       observers,
       unsafe: createUnsafeAccess({

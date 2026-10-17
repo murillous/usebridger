@@ -239,6 +239,28 @@ describe('estado', () => {
     expect(JSON.stringify(closed)).not.toContain('socket');
   });
 
+  it('status traz a sessão do bot', async () => {
+    const { base, cookie } = await start();
+    const res = await fetch(`${base}/api/status`, { headers: { cookie: await cookie() } });
+    expect(((await res.json()) as StatusView).session).toBe('default');
+  });
+
+  it('depois de um reload o status reflete a conexão atual, sem evento novo', async () => {
+    const { bot, base, cookie } = await start();
+    await bot.emit('connection.status', {
+      status: 'closed',
+      reason: 'connection-lost',
+      error: new Error('caiu'),
+    });
+    await bot.bot.plugins.reload('dashboard');
+    const res = await fetch(`${base}/api/status`, { headers: { cookie: await cookie() } });
+    expect(await res.json()).toMatchObject({
+      status: 'closed',
+      reason: 'connection-lost',
+      message: 'caiu',
+    });
+  });
+
   it('buffer de logs corta no tamanho', () => {
     const buffer = createLogBuffer(3);
     for (let i = 1; i <= 5; i++) {

@@ -62,7 +62,7 @@ import type {
 import type { TenantScope } from '#tenant/scope.ts';
 import { isFormatted } from '#text/format.ts';
 import { type Capability, missingCapabilities } from '#transport/capabilities.ts';
-import type { Unsubscribe } from '#transport/types.ts';
+import type { ConnectionStatus, Unsubscribe } from '#transport/types.ts';
 import type { UnsafeAccess } from '#unsafe/access.ts';
 import type { BotStats } from './config.ts';
 import {
@@ -105,6 +105,10 @@ export interface PluginContextDeps {
     readonly capabilities: ReadonlySet<Capability>;
     readonly self: Contact | null;
   };
+  /** Nome da sessão do bot. */
+  readonly session: string;
+  /** Último status de conexão visto pelo core (ADR 0110). */
+  readonly connectionStatus: () => ConnectionStatus | undefined;
   /** Contadores das filas deste bot, os mesmos de `bot.stats()` (ADR 0106). */
   readonly stats: () => BotStats;
   /** Observadores do bot; os do plugin saem no `dispose` (ADR 0106). */
@@ -338,6 +342,8 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
       } satisfies Groups,
       http: pluginHttp(name, deps, guard),
       transportName: deps.transport.name,
+      session: deps.session,
+      connectionStatus: deps.connectionStatus,
       capabilities: deps.transport.capabilities,
       get self(): Contact | null {
         return deps.transport.self;
