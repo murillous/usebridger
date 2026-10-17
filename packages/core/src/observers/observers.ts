@@ -93,7 +93,14 @@ export class Observers {
   emit<S extends ObserverSignalName>(signal: S, payload: ObserverSignals[S]): void {
     for (const { plugin, fn } of this.#lists[signal]) {
       try {
-        (fn as Observer<S>)(payload);
+        const result: unknown = (fn as Observer<S>)(payload);
+        // Não aguarda, mas trata a rejeição: solta, ela vira `unhandledRejection` e derruba o
+        // processo.
+        if (typeof (result as PromiseLike<unknown> | undefined)?.then === 'function') {
+          (result as PromiseLike<unknown>).then(undefined, (error: unknown) => {
+            this.#onError({ plugin, phase: 'observer', event: signal, error, timedOut: false });
+          });
+        }
       } catch (error) {
         this.#onError({ plugin, phase: 'observer', event: signal, error, timedOut: false });
       }

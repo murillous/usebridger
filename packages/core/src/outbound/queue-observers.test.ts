@@ -123,6 +123,29 @@ describe('Observers', () => {
     expect(errors).toMatchObject([{ plugin: 'a', phase: 'observer', event: 'outbound.sent' }]);
   });
 
+  it('observador async que rejeita vira onError e os demais seguem', async () => {
+    const errors: unknown[] = [];
+    const observers = new Observers((event) => errors.push(event));
+    const calls: string[] = [];
+    observers.add('a', 'outbound.sent', async () => {
+      throw new Error('boom');
+    });
+    observers.add('b', 'outbound.sent', () => calls.push('b'));
+    const signal: OutboundSentSignal = {
+      chatId: 'c',
+      kind: 'text',
+      status: 'sent',
+      queuedMs: 0,
+      retries: 0,
+    };
+
+    observers.emit('outbound.sent', signal);
+    await Promise.resolve();
+
+    expect(calls).toEqual(['b']);
+    expect(errors).toMatchObject([{ plugin: 'a', phase: 'observer', event: 'outbound.sent' }]);
+  });
+
   it('`removePlugin` tira só as assinaturas do plugin, e `has` reflete a lista', () => {
     const observers = new Observers(() => undefined);
     expect(observers.has('message.handled')).toBe(false);

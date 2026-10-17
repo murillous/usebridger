@@ -84,8 +84,9 @@ ctx.observe('outbound.sent', (s) => {
 });
 ```
 
-- **Síncrono e nunca aguardado.** O observador não segura o chat; uma promise devolvida é
-  ignorada. Faça só a conta (somar num balde, empurrar num buffer) e deixe I/O para depois.
+- **Síncrono e nunca aguardado.** O observador não segura o chat; uma promise devolvida não é
+  aguardada, mas a rejeição dela também vira `plugin.error` com `phase: 'observer'`. Faça só a
+  conta (somar num balde, empurrar num buffer) e deixe I/O para depois.
 - **Erro isolado.** A exceção vira `plugin.error` com `phase: 'observer'`, e os demais
   observadores seguem.
 - **Custo zero sem assinante.** Sem observador, o core não lê o relógio nem monta o sinal.
