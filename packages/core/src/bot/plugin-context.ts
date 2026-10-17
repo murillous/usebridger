@@ -37,6 +37,8 @@ import type { BotEventName, EventSubscriber, PluginErrorEvent } from '#events/ty
 import type { Groups } from '#groups/groups.ts';
 import type { SessionHttp } from '#http/server.ts';
 import type { HttpRoutes } from '#http/types.ts';
+import { createRedactor } from '#logger/redact.ts';
+import type { SecretSource } from '#logger/secrets.ts';
 import type { Logger } from '#logger/types.ts';
 import type { Contact, Message } from '#message/types.ts';
 import type { Observers } from '#observers/observers.ts';
@@ -117,6 +119,8 @@ export interface PluginContextDeps {
   /** Plugins que recebem `ctx.admin` (ADR 0111) e o controle que ele entrega. */
   readonly adminPlugins: ReadonlySet<string>;
   readonly admin: PluginAdmin;
+  /** Segredos do bot, para mascarar o que sai pelo `ctx.admin` (ADR 0111). */
+  readonly secrets: SecretSource;
   /** Prazo do `run` e do `onReject` de cada comando, em ms (ADR 0005). */
   readonly commandTimeoutMs: number;
   /** Destino da rejeição de um `run` que chegou depois do prazo (já reportado como timeout). */
@@ -156,6 +160,8 @@ export function isMessageEvent(event: BotEventName): boolean {
 }
 
 export function createPluginContextFactory(deps: PluginContextDeps): PluginContextFactory {
+  // Um por bot: o cache de segredos é relido só quando o conjunto muda.
+  const redact = createRedactor(deps.secrets);
   return async (plugin) => {
     const { name } = plugin;
     // Lança `PluginConfigError` com config inválida: o host ignora o plugin (ADR 0032).
@@ -357,7 +363,7 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         return deps.observers.add(name, signal, observer);
       },
       unsafe: deps.unsafe.forPlugin(plugin),
-      admin: deps.adminPlugins.has(name) ? liveAdmin(name, deps.admin, live) : undefined,
+      admin: deps.adminPlugins.has(name) ? liveAdmin(name, deps.admin, live, redact) : undefined,
     };
 
     return {
@@ -386,31 +392,54 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
  * ou `setOverrides`, que recarrega) e, como as demais ações do contexto, as que mudam estado
  * rejeitam depois do `dispose` (`live`, ADR 0033). As leituras ficam livres.
  */
-function liveAdmin(self: string, admin: PluginAdmin, live: Live): PluginAdmin {
+function liveAdmin(
+  self: string,
+  admin: PluginAdmin,
+  live: Live,
+  redact: <T>(value: T) => T,
+): PluginAdmin {
   const refuse = (action: string): Promise<never> =>
     Promise.reject(
       new PluginHostStateError(
         `plugin "${self}": ${action} em si mesmo não é permitido (o plugin desceria no meio da própria chamada)`,
       ),
     );
-  const plugins = Object.assign(() => admin.plugins(), {
-    reload: live('admin.plugins.reload', (target: string) =>
-      target === self ? refuse('admin.plugins.reload') : admin.plugins.reload(target),
+  // Tudo o que sai pelo admin passa pela máscara de segredos do bot: erro de `setup` e de config
+  // carrega texto de terceiros (ex.: "invalid key sk-…") que o log já censura (ADR 0111).
+  const masked =
+    <A extends unknown[], R>(fn: (...args: A) => Promise<R>) =>
+    async (...args: A): Promise<R> => {
+      try {
+        return redact(await fn(...args));
+      } catch (error) {
+        throw redact(error);
+      }
+    };
+  const plugins = Object.assign(() => redact(admin.plugins()), {
+    reload: masked(
+      live('admin.plugins.reload', (target: string) =>
+        target === self ? refuse('admin.plugins.reload') : admin.plugins.reload(target),
+      ),
     ),
-    disable: live('admin.plugins.disable', (target: string) =>
-      target === self ? refuse('admin.plugins.disable') : admin.plugins.disable(target),
+    disable: masked(
+      live('admin.plugins.disable', (target: string) =>
+        target === self ? refuse('admin.plugins.disable') : admin.plugins.disable(target),
+      ),
     ),
-    enable: live('admin.plugins.enable', (target: string) => admin.plugins.enable(target)),
+    enable: masked(live('admin.plugins.enable', (target: string) => admin.plugins.enable(target))),
   });
   return {
     plugins,
     config: {
-      ...admin.config,
-      setOverrides: live('admin.config.setOverrides', (target: string, overrides) =>
-        target === self
-          ? refuse('admin.config.setOverrides')
-          : admin.config.setOverrides(target, overrides),
+      setOverrides: masked(
+        live('admin.config.setOverrides', (target: string, overrides) =>
+          target === self
+            ? refuse('admin.config.setOverrides')
+            : admin.config.setOverrides(target, overrides),
+        ),
       ),
+      describe: masked((target: string) => admin.config.describe(target)),
+      jsonSchema: (target: string) => redact(admin.config.jsonSchema(target)),
     },
   };
 }

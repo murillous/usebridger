@@ -1,6 +1,8 @@
 // ADR 0111: `ctx.admin` só para os plugins em `adminPlugins`.
 
 import { afterEach, describe, expect, it } from 'vitest';
+import { z } from 'zod';
+import { secret } from '#config/schema.ts';
 import { ContextExpiredError } from '#deadline.ts';
 import { definePlugin } from '#plugin/define.ts';
 import { PluginHostStateError } from '#plugin/host.ts';
@@ -29,8 +31,8 @@ function setup(config: Partial<BotConfig> = {}) {
     logger: log,
     env: {},
     transport: new RecordingTransport(),
-    plugins: [plugin('dash'), plugin('other')],
     ...config,
+    plugins: [plugin('dash'), plugin('other'), ...(config.plugins ?? [])],
   });
   bots.push(bot);
   const admin = (): NonNullable<PluginContext['admin']> => {
@@ -117,5 +119,38 @@ describe('ctx.admin', () => {
     await expect(old.config.setOverrides('other', {})).rejects.toBeInstanceOf(ContextExpiredError);
     expect(bot.plugins().find((e) => e.name === 'other')?.status).toBe('loaded');
     expect(old.plugins().length).toBe(2);
+  });
+
+  it('mascara segredos do bot nos erros que saem pelo admin', async () => {
+    const apiKey = 'sk-supersecret-123456';
+    let fail = false;
+    const leaky = definePlugin({
+      name: 'leaky',
+      version: '1.0.0',
+      engine: '>=0.0.0',
+      config: z.object({ apiKey: secret(z.string()) }),
+      setup(ctx) {
+        if (fail) throw new Error(`invalid key ${ctx.config['apiKey']}`);
+      },
+    });
+    const { bot, admin } = setup({
+      adminPlugins: ['dash'],
+      plugins: [leaky],
+      pluginConfig: { leaky: { apiKey } },
+    });
+    await bot.start();
+    fail = true;
+    const result = await admin().plugins.reload('leaky');
+    // `Error` não serializa message/stack: junta os campos à mão.
+    const text = (value: unknown): string =>
+      JSON.stringify(value, (_, v) =>
+        v instanceof Error ? { message: v.message, stack: v.stack, cause: v.cause } : v,
+      );
+    expect(result.plugin.status).toBe('skipped');
+    expect(text(result)).toContain('[REDACTED]');
+    expect(text(result)).not.toContain(apiKey);
+    expect(text(admin().plugins())).not.toContain(apiKey);
+    // O mesmo erro, cru, em `bot.plugins`: a máscara é só do admin.
+    expect(text(bot.plugins())).toContain(apiKey);
   });
 });
