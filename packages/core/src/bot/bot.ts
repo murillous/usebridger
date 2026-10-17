@@ -13,6 +13,7 @@ import { sessionHttp } from '#http/server.ts';
 import { createDeferredLogger } from '#logger/deferred.ts';
 import { createLogger, createNoopLogger } from '#logger/logger.ts';
 import { createSecretSet } from '#logger/secrets.ts';
+import { createLogSignalTap } from '#logger/signal.ts';
 import type { Logger } from '#logger/types.ts';
 import { chatAllowed } from '#middleware/chat-filter.ts';
 import { Observers } from '#observers/observers.ts';
@@ -175,7 +176,13 @@ export function createBot(config: BotConfig): Bot {
   });
   const pluginErrors = createPluginErrorReporter({ log: getLog, bus });
   // Sinais por unidade de trabalho, para métricas (ADR 0106).
-  const observers = new Observers(pluginErrors.report);
+  // O erro de um observador de `log` é logado: sem o `quiet`, ele voltaria ao próprio sinal.
+  const observers = new Observers((event) =>
+    event.event === 'log'
+      ? logTap.quiet(() => pluginErrors.report(event))
+      : pluginErrors.report(event),
+  );
+  const logTap = createLogSignalTap(observers, secrets);
   // Ordem dos pontos de extensão: a tabela do host, já na ordem de carga (ADR 0096).
   const services = createServiceRegistry({
     loadOrder: () => host?.report().map((entry) => entry.name) ?? [],
@@ -482,13 +489,14 @@ export function createBot(config: BotConfig): Bot {
 
   async function runStart(): Promise<void> {
     try {
-      log =
+      log = logTap.wrap(
         config.logger ??
-        createLogger({
-          level: config.logLevel ?? 'info',
-          ...(config.logFormat && { format: config.logFormat }),
-          secrets,
-        });
+          createLogger({
+            level: config.logLevel ?? 'info',
+            ...(config.logFormat && { format: config.logFormat }),
+            secrets,
+          }),
+      );
       transportLog = log.child({ transport: transport.name });
       // Antes de `booted`: um bot recusado aqui não fecha o storage do bot que usa a sessão.
       releaseSession = claimSession(storage, session);
