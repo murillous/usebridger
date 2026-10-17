@@ -797,6 +797,23 @@ describe('every (série recorrente)', () => {
     await vi.advanceTimersByTimeAsync(10_000);
   });
 
+  it('próxima ocorrência gravada enquanto o loop termina não perde o wakeup (#142)', async () => {
+    const service = create();
+    const scheduler = service.forPlugin('p');
+    const coll = kernelStorage(port, 'x').collection('c');
+    let fired = 0;
+    // `get` + `insert` desloca o fim do handler para a janela entre o `do/while` e o `.finally`.
+    scheduler.on('j', async () => {
+      fired++;
+      await coll.get('x');
+      await coll.insert({});
+    });
+    service.start();
+    await scheduler.every({ everyMs: MIN }, 'j');
+    for (let i = 0; i < 10; i++) await vi.advanceTimersByTimeAsync(MIN);
+    expect(fired).toBe(10);
+  });
+
   it('regra de calendário cruza a mudança de horário de verão às 08:00 locais', async () => {
     vi.setSystemTime(Date.UTC(2026, 2, 7, 12, 0)); // 07:00 em Nova York (EST)
     const service = create();
