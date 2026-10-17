@@ -1,5 +1,18 @@
 # @usebridger/storage-sqlite
 
+## 0.3.0
+
+### Minor Changes
+
+- 8649550: `Collection.increment(where, field, by?, { insert }?)`: contador atômico, sem a corrida ler-alterar-gravar. Soma ao campo numérico dos documentos que casam; com `insert`, cria o documento quando nenhum casa, sem duplicar sob concorrência. O core exporta `normalizeIncrement` e `incrementedValue` em `@usebridger/core/adapter` para os adapters. Adapter de storage de terceiros precisa implementar `Collection.increment`.
+
+### Patch Changes
+
+- Updated dependencies [8649550]
+- Updated dependencies [51a6342]
+- Updated dependencies [2f4d6d6]
+  - @usebridger/core@0.7.0
+
 ## 0.2.6
 
 ### Patch Changes
