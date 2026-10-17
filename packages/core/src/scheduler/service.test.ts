@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ContextExpiredError } from '#deadline.ts';
 import type { PluginErrorEvent } from '#events/types.ts';
@@ -1004,5 +1005,25 @@ describe('every (série recorrente)', () => {
     second.start();
     await settle();
     expect(handler).toHaveBeenCalledOnce();
+  });
+});
+
+describe('contexto assíncrono (#163)', () => {
+  it('o handler não herda o contexto de quem acordou o loop', async () => {
+    const als = new AsyncLocalStorage<string>();
+    const service = create();
+    service.start();
+    const scheduler = service.forPlugin('lembretes');
+    await scheduler.at(T0 + 1000, 'fire');
+    await vi.advanceTimersByTimeAsync(1000);
+    const seen: (string | undefined)[] = [];
+    // O `on` acorda o loop de dentro do contexto: o job vencido sai fora dele.
+    als.run('observador', () =>
+      scheduler.on('fire', () => {
+        seen.push(als.getStore());
+      }),
+    );
+    await settle();
+    expect(seen).toEqual([undefined]);
   });
 });

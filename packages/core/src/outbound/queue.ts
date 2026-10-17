@@ -2,6 +2,7 @@
 // e por chat, prioridade (comando > broadcast), retry com backoff (ou na janela que a plataforma
 // informou, ADR 0067) e humanização opcional.
 
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Observers, OutboundSentSignal } from '#observers/observers.ts';
 import type { MessageText } from '#text/format.ts';
 import { assertCanSend } from '#transport/capabilities.ts';
@@ -174,6 +175,12 @@ interface Job extends JobPart {
   readonly track: Track | undefined;
   readonly resolve: (value: unknown) => void;
   readonly reject: (error: unknown) => void;
+  /**
+   * Contexto assíncrono de quem enfileirou. O job roda nele, e não no de quem disparou o pump: um
+   * `send` feito num observador de `log` (ADR 0109) despacha jobs de outros chats e não pode
+   * emprestar o silêncio a eles (#163).
+   */
+  readonly context: ReturnType<typeof AsyncLocalStorage.snapshot>;
 }
 
 interface Track {
@@ -404,6 +411,7 @@ export class OutboundQueue implements Sender {
         track: spec.track,
         resolve,
         reject,
+        context: AsyncLocalStorage.snapshot(),
       };
       const chat = this.#chatFor(chatId);
       chat.jobs[priority].push(job);
@@ -576,7 +584,7 @@ export class OutboundQueue implements Sender {
     this.#globalReadyAt = now + this.#config.globalIntervalMs;
     chat.readyAt = now + this.#config.chatIntervalMs;
     this.#rememberCooldown(chat.id, chat.readyAt, now);
-    void this.#execute(chat, job);
+    void job.context(() => this.#execute(chat, job));
   }
 
   #rememberCooldown(chatId: string, readyAt: number, now: number): void {

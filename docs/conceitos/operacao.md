@@ -82,6 +82,9 @@ ctx.observe('outbound.sent', (s) => {
   // s.status: 'sent' | 'failed' | 'dropped'; s.queuedMs inclui taxa anti-ban e re-tentativas
   // s.replyTo: id da mensagem respondida, só nas respostas por ctx.reply
 });
+ctx.observe('log', (s) => {
+  // s.level, s.time (Date.now()), s.message, s.fields (campos + bindings: plugin, chatId...)
+});
 ```
 
 - **Síncrono e nunca aguardado.** O observador não segura o chat; uma promise devolvida não é
@@ -98,6 +101,12 @@ ctx.observe('outbound.sent', (s) => {
   quando a mensagem entrou na fila.
 - O `outbound.sent` sai uma vez por `send`, depois da última parte de um texto dividido ou de um
   álbum. O `ctx.send` direto não traz `chatType` nem `replyTo`: o core só conhece o id do chat.
+- O `log` leva toda linha do logger do bot (core, transport e plugins, inclusive o `config.logger`
+  do app) que passa do nível dele, com os secrets já mascarados em `message` e `fields` (um
+  `Error` vira objeto simples). Log feito dentro de um observador de `log`, e o `plugin.error` dele,
+  não volta ao sinal, nem depois de um `await` ([ADR 0109](../adr/0109-sinal-de-log-nos-observadores.md)).
+  O silêncio vale para o que o observador agenda (um timer, o próprio `ctx.send`), mas não passa
+  aos envios de outros chats nem aos jobs do scheduler: eles rodam no contexto de quem os criou.
 - `chatId`, `senderId` e `messageId` existem só em memória. Não os persista nem exporte.
 
 ## Métricas de performance

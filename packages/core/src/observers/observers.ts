@@ -3,6 +3,7 @@
 // `diagnostics_channel`, que é global ao processo.
 
 import type { PluginErrorEvent } from '#events/types.ts';
+import type { LogFields, LogLevel } from '#logger/types.ts';
 import type { Unsubscribe } from '#transport/types.ts';
 
 /** Mensagem que o bot terminou de tratar: o comando, o passo ou os listeners de `message`. */
@@ -37,9 +38,20 @@ export interface OutboundSentSignal {
   readonly replyTo?: string;
 }
 
+/** Linha de log que passou do nível do logger do bot, com segredos já mascarados. */
+export interface LogSignal {
+  readonly level: Exclude<LogLevel, 'silent'>;
+  /** `Date.now()` de quando a linha foi emitida. */
+  readonly time: number;
+  readonly message: string;
+  /** Campos da chamada mais os bindings do logger filho (`plugin`, `chatId`, `transport`...). */
+  readonly fields: LogFields;
+}
+
 export interface ObserverSignals {
   readonly 'message.handled': MessageHandledSignal;
   readonly 'outbound.sent': OutboundSentSignal;
+  readonly log: LogSignal;
 }
 
 export type ObserverSignalName = keyof ObserverSignals;
@@ -57,6 +69,7 @@ export class Observers {
   readonly #lists: Record<ObserverSignalName, readonly Entry[]> = {
     'message.handled': [],
     'outbound.sent': [],
+    log: [],
   };
   readonly #onError: (event: PluginErrorEvent) => void;
 
