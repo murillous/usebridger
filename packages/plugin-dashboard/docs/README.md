@@ -30,6 +30,8 @@ Todas sob `/plugins/dashboard` (ou `/sessions/<sessão>/plugins/dashboard` fora 
 
 `status` é `connecting`, `open` ou `closed`. `qr` e `pairingCode` somem quando a conexão abre.
 `closed` traz `reason` e `message` (texto do erro, truncado); o objeto de erro cru nunca sai.
+`session` é o nome da sessão do bot. Depois de um reload do plugin, o status parte do último
+`ConnectionStatus` guardado pelo core (`ctx.connectionStatus()`, ADR 0110).
 
 ## WebSocket
 
@@ -58,4 +60,4 @@ pedido (proteção contra CSWSH). Ao reconectar, o cliente recebe um novo snapsh
 
 ## Limites conhecidos
 
-- Depois de um reload, o status parte do último `ConnectionStatus` guardado pelo core (`ctx.connectionStatus()`, ADR 0110). QR e código de pareamento não: valem só até o próximo evento.
+- Depois de um reload, o QR e o código de pareamento não voltam: o snapshot do core só guarda o status de conexão, e eles valem até o próximo evento.
