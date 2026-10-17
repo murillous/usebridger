@@ -137,8 +137,8 @@ describe('PUT /api/config/:plugin', () => {
     const res = await put('dashboard', { logBufferSize: 10 });
     expect(res.status).toBe(409);
     const msg = await res.text();
-    expect(msg).toContain('em si mesmo');
-    expect(msg).toContain('reload falhou');
+    expect(msg).toContain('não altera a própria config');
+    expect(msg).not.toContain('reload falhou');
   });
 
   it('plugin desconhecido 404, JSON inválido e não-objeto 400', async () => {

@@ -84,6 +84,13 @@ export function registerConfigRoutes(
     guarded(
       withAdmin(async (admin, name, request) => {
         if (!sameOrigin(request)) return text('origem inválida', 403);
+        // O core recusaria também, mas aqui o texto é claro e o core nem é chamado.
+        if (name === ctx.plugin.name) {
+          return text(
+            'o dashboard não altera a própria config pelo painel; use o arquivo ou o env',
+            409,
+          );
+        }
         const body = await readLimited(request, MAX_CONFIG_BODY);
         if (body === undefined) return text('corpo grande demais', 413);
         let overrides: unknown;

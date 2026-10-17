@@ -46,7 +46,7 @@ Base dos formulários gerados dos schemas Zod. Exige `createBot({ adminPlugins: 
 Erros do `PUT`: config inválida ou campo `secret` 400 com
 `{ "error": "invalid" | "secret", "issues": [{ "path": "campo.aninhado", "message": "..." }] }`
 (o `path` liga o erro ao campo do formulário); JSON inválido ou corpo que não é objeto 400;
-plugin desconhecido 404; ação no próprio dashboard 409; outro erro vai ao log e dá 500.
+plugin desconhecido 404; ação no próprio dashboard 409 (sem chamar o core: a config do dashboard vem do arquivo ou do env); outro erro vai ao log e dá 500.
 
 **O override é gravado antes do reload.** Se o reload falhar (409 ou 500), a config válida já ficou salva (a mensagem avisa); corrija e recarregue pelo `reload` de plugins.
 
