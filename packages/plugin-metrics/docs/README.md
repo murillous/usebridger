@@ -39,11 +39,20 @@ negativo longo. Um id opaco fora desses formatos passa: quem usa o serviço é q
 não pôr id como rótulo. Rótulo que não é texto, valor negativo e valor não finito também lançam
 `TypeError`.
 
+A checagem olha só os **valores** dos rótulos, não os nomes. Limites conhecidos:
+
+- Falsos positivos (lançam, mas não são pessoais): data compacta (`20261017`), CEP sem hífen,
+  códigos e builds com 7+ dígitos, versões com `@` (`pkg@1.2.3`). Use outra forma (`2026-10-17`,
+  `build-1234567`).
+- Falsos negativos (passam, mas podem ser pessoais): telefone formatado (`(11) 99999-9999`) e
+  ids opacos fora dos formatos acima.
+
 ## Limite de séries
 
 Cada combinação de rótulos é uma série. Passado `maxSeriesPerMetric`, a amostra de uma série
 **nova** é descartada e o plugin registra um `warn` (uma vez por métrica); as séries que já
-existem seguem somando. O contador de séries vive em memória e recomeça no restart.
+existem seguem somando. O contador de séries vale para a vida do processo: não recomeça a cada dia, só no restart
+ou reload do plugin. Rótulo de cardinalidade alta (ids, textos livres) esgota o limite cedo.
 
 ## Agregação, flush e armazenamento
 
@@ -126,4 +135,8 @@ e o resto do plugin segue.
 
 
 - O que está só em memória se perde se o processo morrer antes do flush (até `flushIntervalMs`).
+  O flush final roda no `teardown`, que o core não executa se o bot parar com o prazo
+  (`teardownTimeoutMs`) esgotado: nesse caso o agregado ainda não gravado se perde.
+- O `query` espera o flush em andamento e refaz a leitura se um flush rodar durante ela, para não
+  contar um dado em dobro nem perdê-lo.
 - O dia de uma amostra é o UTC do momento da chamada.
