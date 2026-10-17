@@ -13,6 +13,12 @@ import type {
   Where,
 } from './types.ts';
 
+/** Documento com o `id` que o adapter lhe deu; é o que `matches` e `fieldValue` leem. */
+export interface Row {
+  readonly id: string;
+  readonly doc: JsonObject;
+}
+
 export type FilterOperator = 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'in';
 
 /** Uma condição validada; as condições de uma consulta combinam com E. */
@@ -174,6 +180,114 @@ export function normalizeDocument(document: unknown): JsonObject {
     throw new TypeError('O campo "id" é reservado: o adapter gera o id do documento.');
   }
   return copy;
+}
+
+/**
+ * Valor do campo depois de somar `by`: ausente/`null` vale 0 e o que não é número lança
+ * `TypeError`, assim como a soma que estoura para Infinity (o JSON a gravaria como `null` e
+ * zeraria o contador). Os adapters usam o mesmo cálculo para o documento alvo e para o `insert`.
+ */
+export function incrementedValue(current: unknown, by: number): number {
+  if (current !== undefined && current !== null && typeof current !== 'number') {
+    throw new TypeError('increment exige que o campo seja numérico nos documentos alvo.');
+  }
+  const result = (current ?? 0) + by;
+  if (!Number.isFinite(result)) {
+    throw new TypeError('increment estourou o limite de número do JSON.');
+  }
+  return result;
+}
+
+export interface NormalizedIncrement {
+  readonly field: string;
+  readonly by: number;
+  /** Documento do `insert` já com `field` somado; `undefined` se não houve `insert`. */
+  readonly insert: JsonObject | undefined;
+}
+
+/**
+ * Valida os argumentos de `increment` antes de qualquer leitura ou gravação. O `insert` precisa
+ * casar com o `where` (já com o campo somado): senão a próxima chamada não o acharia e inseriria
+ * outro, o duplicado que o `insert` existe para evitar; nesse caso lança `TypeError`.
+ */
+export function normalizeIncrement<T>(
+  where: Where<T> | undefined,
+  field: string,
+  by: number | undefined,
+  insert: unknown,
+): NormalizedIncrement {
+  const conditions = normalizeWhere(where);
+  assertFieldName(field);
+  if (field === 'id') throw new TypeError('O campo "id" é reservado e não pode ser incrementado.');
+  const step = by ?? 1;
+  if (typeof step !== 'number' || !Number.isFinite(step)) {
+    throw new TypeError('increment exige "by" como número finito.');
+  }
+  if (insert === undefined) return { field, by: step, insert: undefined };
+  const doc = normalizeDocument(insert);
+  const inserted = { ...doc, [field]: incrementedValue(doc[field], step) };
+  // O documento ainda não tem id; '' só serve para a condição não achar `id` no lugar errado.
+  if (!matches({ id: '', doc: inserted }, conditions)) {
+    throw new TypeError('increment exige que o "insert" case com o "where".');
+  }
+  return { field, by: step, insert: inserted };
+}
+
+// Casamento em memória: a referência de semântica que os adapters SQL reproduzem.
+export function fieldValue(row: Row, field: string): JsonValue {
+  if (field === 'id') return row.id;
+  // Campo ausente vale null, igual ao `json_extract`/`->>` dos adapters SQL.
+  return Object.hasOwn(row.doc, field) ? (row.doc[field] as JsonValue) : null;
+}
+
+// Igualdade estrita de tipo e valor: o adapter SQLite precisa conferir `json_type`, porque
+// `json_extract` devolve `true` como 1.
+function equals(value: JsonValue, operand: Scalar): boolean {
+  if (operand === null) return value === null;
+  return typeof value === typeof operand && value === operand;
+}
+
+// Ordem de code point (= ordem de bytes UTF-8, a do SQLite BINARY e do Postgres COLLATE "C").
+// O `<` do JS compara unidades UTF-16 e erra quando um lado é surrogate.
+export function compareStrings(a: string, b: string): number {
+  if (a === b) return 0;
+  const length = Math.min(a.length, b.length);
+  for (let i = 0; i < length; i++) {
+    if (a.charCodeAt(i) !== b.charCodeAt(i)) {
+      return (a.codePointAt(i) as number) - (b.codePointAt(i) as number);
+    }
+  }
+  return a.length - b.length;
+}
+
+function compareOrdered(value: JsonValue, operand: string | number): number | undefined {
+  if (typeof value === 'number' && typeof operand === 'number') return value - operand;
+  if (typeof value === 'string' && typeof operand === 'string') {
+    return compareStrings(value, operand);
+  }
+  return undefined;
+}
+
+export function matches(row: Row, conditions: readonly NormalizedCondition[]): boolean {
+  return conditions.every((condition) => {
+    const value = fieldValue(row, condition.field);
+    switch (condition.op) {
+      case 'eq':
+        return equals(value, condition.value);
+      case 'ne':
+        return !equals(value, condition.value);
+      case 'in':
+        return condition.value.some((operand) => equals(value, operand));
+      default: {
+        const diff = compareOrdered(value, condition.value);
+        if (diff === undefined) return false;
+        if (condition.op === 'gt') return diff > 0;
+        if (condition.op === 'gte') return diff >= 0;
+        if (condition.op === 'lt') return diff < 0;
+        return diff <= 0;
+      }
+    }
+  });
 }
 
 /** Cópia JSON de um valor de KV ou auth state, com a mesma semântica de `JSON.stringify`. */

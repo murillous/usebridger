@@ -62,6 +62,7 @@ esses campos) e nunca muda resultados.
 | `find(query?)` | Documentos com `id` (`WithId<T>[]`) |
 | `update(alvo, patch)` | Merge **raso** nos documentos do alvo; devolve quantos casaram |
 | `delete(alvo)` | Remove os documentos do alvo; devolve quantos removeu |
+| `increment(where, campo, by?, { insert }?)` | Soma `by` (padrão 1) ao campo numérico dos que casam, atômico entre chamadas e processos; devolve quantos mudou. Sem casar, `insert` (que precisa casar com o `where`) cria o documento já somado. `TypeError` e nada gravado se `by` não é finito, o campo é inválido/`id`, o `where` é inválido, o `insert` não casa, algum alvo não é numérico ou a soma estoura |
 
 O **alvo** é um `id` (string) ou um filtro (`where`). `delete({})` esvazia a coleção.
 
@@ -295,9 +296,14 @@ deixam os erros e a validação iguais aos dos outros adapters:
 | --- | --- |
 | `normalizeQuery(query)` | Valida e devolve `{ where, orderBy, limit, offset }` canônico |
 | `normalizeWhere(where)` | O mesmo, só para o alvo de `update`/`delete` |
+| `normalizeIncrement(where, campo, by, insert)` | Valida `increment` e devolve `{ field, by, insert }` com o `insert` já somado; recusa `insert` que não casa com o `where` |
+| `incrementedValue(atual, by)` | Soma de um alvo (ausente/`null` vale 0); `TypeError` se não é número ou se estoura |
 | `normalizeIndexes(options)` | Campos de índice validados e sem repetição |
 | `normalizeDocument(doc)` | Cópia JSON do documento/patch; recusa `id` e não-objetos |
 | `cloneJson(value)` / `assertFieldName(field)` | Cópia JSON de valor de KV; validação de campo |
+
+Todo adapter precisa implementar `increment` com garantia entre processos (transação que trava a
+escrita, ou lock equivalente), inclusive o `insert` sem duplicar sob concorrência.
 
 `where` vira uma lista de `NormalizedCondition` (`{ field, op, value }`, combinadas com E).
 Nomes de campo já validados como identificadores simples podem ser interpolados em caminho
