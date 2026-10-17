@@ -334,6 +334,16 @@ importers:
 
   packages/create-plugin: {}
 
+  packages/plugin-dashboard:
+    dependencies:
+      '@usebridger/core':
+        specifier: workspace:^
+        version: link:../core
+    devDependencies:
+      '@usebridger/testing':
+        specifier: workspace:*
+        version: link:../testing
+
   packages/plugin-metrics:
     dependencies:
       '@usebridger/core':
