@@ -28,32 +28,41 @@ function labelText(labels: Readonly<Record<string, string>>): string {
   return parts.length === 0 ? '' : `{${parts.join(',')}}`;
 }
 
-export function renderPrometheus(rows: readonly MetricRow[], gauges: readonly Gauge[]): string {
+export function renderPrometheus(
+  rows: readonly MetricRow[],
+  gauges: readonly Gauge[],
+  // Destino da série descartada quando o nome saneado colide com outro de tipo diferente.
+  onSkip: (name: string) => void = () => undefined,
+): string {
   const out: string[] = [];
-  const typed = new Set<string>();
-  const head = (name: string, type: string): void => {
-    if (typed.has(name)) return;
-    typed.add(name);
-    out.push(`# TYPE ${name} ${type}`);
-  };
-  // Mesma métrica junta: o formato pede as amostras de um nome seguidas.
-  const sorted = [...rows].sort((a, b) => (a.metric < b.metric ? -1 : a.metric > b.metric ? 1 : 0));
-  for (const row of sorted) {
+  // Agrupa pelo nome saneado: nomes que colidem ficam contíguos, com um único `# TYPE`.
+  const families = new Map<string, MetricRow[]>();
+  for (const row of rows) {
     const name = sanitizeName(row.metric);
-    if (row.type === 'counter') {
-      head(name, 'counter');
-      out.push(`${name}${labelText(row.labels)} ${row.value}`);
-      continue;
+    const family = families.get(name);
+    if (!family) families.set(name, [row]);
+    else if (family[0]?.type === row.type) family.push(row);
+    else onSkip(row.metric); // a primeira família registrada vence
+  }
+  for (const [name, family] of [...families].sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))) {
+    out.push(`# TYPE ${name} ${family[0]?.type}`);
+    for (const row of family) {
+      if (row.type === 'counter') {
+        out.push(`${name}${labelText(row.labels)} ${row.value}`);
+        continue;
+      }
+      // `le` do usuário colidiria com o dos baldes: renomeia como o Prometheus (`exported_`).
+      const { le, ...rest } = row.labels;
+      const base = le === undefined ? rest : { ...rest, exported_le: le };
+      let acc = 0;
+      const les = [...HISTOGRAM_BUCKETS.map(String), '+Inf'];
+      row.buckets.forEach((n, i) => {
+        acc += n; // no Prometheus o balde é cumulativo
+        out.push(`${name}_bucket${labelText({ ...base, le: les[i] ?? '+Inf' })} ${acc}`);
+      });
+      out.push(`${name}_sum${labelText(base)} ${row.sum}`);
+      out.push(`${name}_count${labelText(base)} ${row.count}`);
     }
-    head(name, 'histogram');
-    let acc = 0;
-    const les = [...HISTOGRAM_BUCKETS.map(String), '+Inf'];
-    row.buckets.forEach((n, i) => {
-      acc += n; // no Prometheus o balde é cumulativo
-      out.push(`${name}_bucket${labelText({ ...row.labels, le: les[i] ?? '+Inf' })} ${acc}`);
-    });
-    out.push(`${name}_sum${labelText(row.labels)} ${row.sum}`);
-    out.push(`${name}_count${labelText(row.labels)} ${row.count}`);
   }
   for (const g of gauges) {
     const name = sanitizeName(g.name);

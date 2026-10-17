@@ -193,4 +193,58 @@ describe('formato', () => {
     );
     expect(text).toBe('# TYPE a_b counter\na_b{k_1="a\\"b\\\\c\\nd"} 3\n');
   });
+
+  it('nomes que colidem após o saneamento ficam juntos com um único TYPE', () => {
+    const c = (metric: string, value: number) =>
+      ({ metric, type: 'counter', day: '', labels: {}, value }) as const;
+    const text = renderPrometheus([c('a.b', 1), c('a', 9), c('a_b', 2)], []);
+    expect(text).toBe('# TYPE a counter\na 9\n# TYPE a_b counter\na_b 1\na_b 2\n');
+  });
+
+  it('tipo diferente após o saneamento é descartado com aviso', () => {
+    const skipped: string[] = [];
+    const text = renderPrometheus(
+      [
+        { metric: 'a.b', type: 'counter', day: '', labels: {}, value: 1 },
+        {
+          metric: 'a_b',
+          type: 'histogram',
+          day: '',
+          labels: {},
+          count: 1,
+          sum: 1,
+          p50: 5,
+          p95: 5,
+          p99: 5,
+          buckets: new Array(13).fill(0),
+        },
+      ],
+      [],
+      (n) => skipped.push(n),
+    );
+    expect(skipped).toEqual(['a_b']);
+    expect(text).toBe('# TYPE a_b counter\na_b 1\n');
+  });
+
+  it('rótulo le do usuário vira exported_le no histograma', () => {
+    const text = renderPrometheus(
+      [
+        {
+          metric: 'h',
+          type: 'histogram',
+          day: '',
+          labels: { le: 'x' },
+          count: 1,
+          sum: 1,
+          p50: 5,
+          p95: 5,
+          p99: 5,
+          buckets: [1, ...new Array(12).fill(0)],
+        },
+      ],
+      [],
+    );
+    expect(text).toContain('h_bucket{exported_le="x",le="5"} 1');
+    expect(text).toContain('h_count{exported_le="x"} 1');
+  });
 });

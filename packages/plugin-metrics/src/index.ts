@@ -50,7 +50,12 @@ export const metrics: PluginDefinition = definePlugin({
     });
     // Os ativos entram no agregado só aqui, como delta: o flush nunca soma a mesma contagem duas vezes.
     const flush = async (): Promise<void> => {
-      active.sync();
+      try {
+        active.sync();
+      } catch (error) {
+        // Não impede o flush do resto; o delta fica no tracker e entra no próximo.
+        ctx.log.error('falha ao somar ativos do dia ao agregado', { error });
+      }
       await runtime.flush();
     };
 
@@ -120,9 +125,16 @@ export const metrics: PluginDefinition = definePlugin({
         'GET',
         '/metrics',
         () =>
-          new Response(renderPrometheus(runtime.totals(), gauges()), {
-            headers: { 'content-type': 'text/plain; version=0.0.4; charset=utf-8' },
-          }),
+          new Response(
+            renderPrometheus(runtime.totals(), gauges(), (name) =>
+              ctx.log.warn('métrica fora do /metrics: nome saneado colide com outro tipo', {
+                name,
+              }),
+            ),
+            {
+              headers: { 'content-type': 'text/plain; version=0.0.4; charset=utf-8' },
+            },
+          ),
       );
     } catch (error) {
       // Sem servidor HTTP o bot ainda mede e grava; só o scrape fica indisponível.

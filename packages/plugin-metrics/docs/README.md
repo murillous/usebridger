@@ -128,6 +128,12 @@ e o resto do plugin segue.
   `bridger_active_users` e `bridger_active_groups`. Os totais acumulados das filas
   (`processed`, `failed`, `dropped`...) não são expostos; `bridger_messages_handled` e
   `bridger_outbound_sent` cobrem o volume e o resultado. Os gauges não são gravados no flush.
+- Nome saneado que colide com outra métrica do mesmo tipo (`a.b` e `a_b`) sai sob um único
+  `# TYPE`; se o tipo for diferente, a segunda é **descartada do `/metrics`** com `warn` no log.
+  Um rótulo `le` de histograma é renomeado para `exported_le` (o `le` é dos baldes).
+- `reload`/`restart` do plugin recomeçam o tracker de ativos e os totais: os ativos do dia
+  superestimam (quem já contou conta de novo) e os contadores voltam a zero, o que o Prometheus
+  trata como reset de contador. O que já foi gravado no storage não se perde.
 - **Sem autenticação** (autenticação é do plugin, `http.md`): os dados não têm id pessoal, mas
   proteja a rota no proxy se a instância é pública.
 
