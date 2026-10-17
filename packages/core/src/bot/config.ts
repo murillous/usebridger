@@ -156,9 +156,11 @@ export interface BotConfig {
 export type BotPluginConfigs = Pick<PluginConfigs, 'setOverrides' | 'describe' | 'jsonSchema'>;
 
 /**
- * Controle dos plugins que `ctx.admin` dá aos listados em `adminPlugins` (ADR 0111): as mesmas
- * instâncias de `bot.plugins` e `bot.config`. Sobre o próprio plugin, `plugins.reload`/`disable` e
- * `config.setOverrides` rejeitam: o plugin desceria no meio da própria chamada.
+ * Controle dos plugins que `ctx.admin` dá aos listados em `adminPlugins` (ADR 0111): delega às
+ * instâncias de `bot.plugins` e `bot.config`. Só duas diferenças: sobre o próprio plugin,
+ * `plugins.reload`/`disable` e `config.setOverrides` rejeitam (o plugin desceria no meio da
+ * própria chamada); e as ações que mudam estado rejeitam com `ContextExpiredError` depois do
+ * `dispose` do plugin (ADR 0033).
  */
 export interface PluginAdmin {
   readonly plugins: BotPlugins;
