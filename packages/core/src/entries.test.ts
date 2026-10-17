@@ -199,6 +199,7 @@ const entries: Record<string, { file: string; load: () => Promise<object> } & En
       'RateLimitOptions',
       'RateLimitScope',
       'RejectContext',
+      'RecurrenceRule',
       'Reply',
       'ReplyAlbumOptions',
       'ReplyAudioOptions',

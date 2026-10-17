@@ -44,6 +44,7 @@ import { type PluginContextFactory, PluginHostStateError } from '#plugin/host.ts
 import { formatMessage } from '#plugin/messages.ts';
 import type { UnregisteredCommand } from '#plugin/report.ts';
 import type { PluginContext } from '#plugin/types.ts';
+import type { RecurrenceRule } from '#scheduler/rule.ts';
 import type { SchedulerService } from '#scheduler/service.ts';
 import type { Scheduler } from '#scheduler/types.ts';
 import type { ServiceRegistry } from '#services/registry.ts';
@@ -310,6 +311,10 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         at: live('scheduler.at', (when: Date | number, job: string, payload?: JsonValue) =>
           scheduler.at(when, job, payload),
         ),
+        every: live('scheduler.every', (rule: RecurrenceRule, job: string, payload?: JsonValue) =>
+          scheduler.every(rule, job, payload),
+        ),
+        next: live('scheduler.next', (id: string) => scheduler.next(id)),
         cancel: live('scheduler.cancel', (id: string) => scheduler.cancel(id)),
         on(job, handler) {
           guard('scheduler.on');

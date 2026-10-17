@@ -265,6 +265,13 @@ it('encerra quem não responde', async () => {
 Ligue os fake timers antes do `createTestBot`: a espera arma o timer dela no relógio que estiver
 valendo quando o `expectReply` roda.
 
+## Série do scheduler (`every`)
+
+Também sem API própria: ligue os fake timers antes do `createTestBot` e avance o relógio com
+`vi.advanceTimersByTimeAsync`. Cada ocorrência chega ao handler com `scheduledAt` exato e o mesmo
+`seriesId`; `cancel(id)` encerra a série. Para regra de calendário, fixe a data com
+`vi.setSystemTime`. Exemplo em [`scheduler-every.test.ts`](../src/scheduler-every.test.ts).
+
 ## Fixtures
 
 Um plugin que decodifica a mídia (sharp, ffmpeg) falha com bytes quaisquer, como

@@ -24,8 +24,10 @@ setup(ctx) {
 | Método | O que faz |
 | --- | --- |
 | `at(when, job, payload?)` | Persiste o job e devolve o id. `when` é `Date` ou epoch ms |
-| `on(job, handler)` | Registra o handler do job; devolve a função que o remove. O handler recebe `(payload, { signal })` |
-| `cancel(id)` | `true` se o job existia e ainda não tinha disparado |
+| `every(rule, job, payload?)` | Persiste uma série recorrente e devolve o id dela. `rule` é `{ everyMs }` (mín. 60 s) ou `{ time: 'HH:mm', days?, timeZone }` ([ADR 0104](../../../docs/adr/0104-jobs-recorrentes.md)) |
+| `on(job, handler)` | Registra o handler do job; devolve a função que o remove. O handler recebe `(payload, { signal, scheduledAt, seriesId? })` |
+| `next(id)` | Próxima ocorrência pendente do job ou da série; `undefined` se não existe |
+| `cancel(id)` | `true` se o job existia e ainda não tinha disparado; numa série, encerra as próximas mesmo com o handler rodando |
 
 - **Namespace por plugin.** Dois plugins podem usar o mesmo nome de job sem colidir. Um plugin
   não dispara nem cancela os jobs de outro: `cancel` com id alheio devolve `false`.
@@ -117,7 +119,8 @@ await scheduler.stop();                           // gancho de parada
   futuro, não há timer (nada de polling). Um job mais distante que o teto do `setTimeout`
   (~24,8 dias) arma o teto; o loop acorda, recalcula e rearma.
 - **`start()`** dispara os jobs vencidos (inclusive os do downtime) e arma o próximo. Antes dele,
-  `at` só persiste.
+  `at` só persiste. Série que perdeu ocorrências no downtime dispara uma vez ao subir e segue a
+  regra dali em diante.
 - **`stop()`** desarma o timer e espera os handlers em andamento. Cada handler já é limitado por
   `jobTimeoutMs`, então o `stop` termina em no máximo esse prazo. Depois dele não sobra timer
   vivo. Os jobs ficam no storage para o próximo `start`. É idempotente, e `start` de novo retoma.
@@ -130,7 +133,8 @@ await scheduler.stop();                           // gancho de parada
   consulta do loop ou a remoção depois do handler) vai ao `onStorageError`, e o loop tenta de
   novo depois de `storageRetryMs`. Se a remoção falhar, o job continua no storage e o loop se
   rearma para entregá-lo de novo depois de `storageRetryMs` (pelo menos uma vez). Os callbacks
-  não devem lançar.
+  não devem lançar. Série cuja regra não dá mais para calcular (fuso que o ICU não conhece,
+  formato desconhecido) vai ao `onError` e é apagada, em vez de ser reentregue para sempre.
 - **Concorrência limitada.** No máximo `maxConcurrentJobs` handlers (padrão 10, somando todos os
   plugins) rodam ao mesmo tempo. Depois de um downtime longo, ou com muitos jobs no mesmo
   horário, os vencidos esperam vaga em ordem de `fireAt` (FIFO, sem cota por plugin), e o fim de

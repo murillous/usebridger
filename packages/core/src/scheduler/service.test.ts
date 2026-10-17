@@ -771,3 +771,221 @@ describe('stop', () => {
     expect(handler).toHaveBeenCalledOnce();
   });
 });
+
+describe('every (série recorrente)', () => {
+  const MIN = 60_000;
+
+  it('dispara a cada intervalo com seriesId e scheduledAt exatos, sem deriva com handler lento', async () => {
+    const service = create({ jobTimeoutMs: 60_000 });
+    const scheduler = service.forPlugin('p');
+    const seen: { id: string | undefined; at: number }[] = [];
+    scheduler.on('j', async (_payload, job) => {
+      seen.push({ id: job.seriesId, at: job.scheduledAt.getTime() });
+      await new Promise((r) => setTimeout(r, 10_000));
+    });
+    service.start();
+    const id = await scheduler.every({ everyMs: MIN }, 'j');
+
+    await vi.advanceTimersByTimeAsync(3 * MIN);
+    expect(seen).toEqual([
+      { id, at: T0 + MIN },
+      { id, at: T0 + 2 * MIN },
+      { id, at: T0 + 3 * MIN },
+    ]);
+    expect(await storedJobs()).toHaveLength(1);
+    // Deixa o handler da terceira ocorrência terminar: o stop do afterEach espera por ele.
+    await vi.advanceTimersByTimeAsync(10_000);
+  });
+
+  it('regra de calendário cruza a mudança de horário de verão às 08:00 locais', async () => {
+    vi.setSystemTime(Date.UTC(2026, 2, 7, 12, 0)); // 07:00 em Nova York (EST)
+    const service = create();
+    const scheduler = service.forPlugin('p');
+    const seen: number[] = [];
+    scheduler.on('j', (_p, job) => {
+      seen.push(job.scheduledAt.getTime());
+    });
+    service.start();
+    await scheduler.every({ time: '08:00', timeZone: 'America/New_York' }, 'j');
+    await vi.advanceTimersByTimeAsync(3 * DAY - 1);
+    expect(seen).toEqual([
+      Date.UTC(2026, 2, 7, 13, 0), // EST (UTC-5)
+      Date.UTC(2026, 2, 8, 12, 0), // EDT (UTC-4) a partir de 08/03
+      Date.UTC(2026, 2, 9, 12, 0),
+    ]);
+  });
+
+  it('cancel sem handler rodando devolve true e nada mais dispara', async () => {
+    const service = create();
+    const scheduler = service.forPlugin('p');
+    const handler = vi.fn();
+    scheduler.on('j', handler);
+    service.start();
+    const id = await scheduler.every({ everyMs: MIN }, 'j');
+    expect(await scheduler.cancel(id)).toBe(true);
+    await vi.advanceTimersByTimeAsync(5 * MIN);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('cancel durante o handler devolve true e a série não renasce', async () => {
+    const service = create({ jobTimeoutMs: 10 * MIN });
+    const scheduler = service.forPlugin('p');
+    let release: () => void = () => undefined;
+    const handler = vi.fn(() => new Promise<void>((r) => (release = r)));
+    scheduler.on('j', handler);
+    service.start();
+    const id = await scheduler.every({ everyMs: MIN }, 'j');
+    await vi.advanceTimersByTimeAsync(MIN);
+    expect(handler).toHaveBeenCalledOnce();
+
+    expect(await scheduler.cancel(id)).toBe(true);
+    release();
+    await vi.advanceTimersByTimeAsync(5 * MIN);
+    expect(handler).toHaveBeenCalledOnce();
+    expect(await storedJobs()).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('handler que lança não interrompe a série', async () => {
+    const service = create();
+    const scheduler = service.forPlugin('p');
+    const handler = vi.fn(() => {
+      throw new Error('falhou');
+    });
+    scheduler.on('j', handler);
+    service.start();
+    await scheduler.every({ everyMs: MIN }, 'j');
+    await vi.advanceTimersByTimeAsync(2 * MIN);
+    expect(handler).toHaveBeenCalledTimes(2);
+    expect(errors).toHaveLength(2);
+  });
+
+  it('downtime: dispara uma vez ao subir (scheduledAt antigo) e a seguinte segue a regra', async () => {
+    const first = create();
+    const id = await first.forPlugin('p').every({ everyMs: DAY }, 'j');
+    first.start();
+    await first.stop();
+
+    vi.setSystemTime(T0 + 3 * DAY + 1000);
+    const second = create();
+    const seen: { id: string | undefined; at: number }[] = [];
+    second.forPlugin('p').on('j', (_p, job) => {
+      seen.push({ id: job.seriesId, at: job.scheduledAt.getTime() });
+    });
+    second.start();
+    await settle();
+    expect(seen).toEqual([{ id, at: T0 + DAY }]);
+
+    // Âncora no disparo perdido: a próxima é a primeira ocorrência da regra depois de agora.
+    await vi.advanceTimersByTimeAsync(DAY);
+    expect(seen).toEqual([
+      { id, at: T0 + DAY },
+      { id, at: T0 + 4 * DAY },
+    ]);
+  });
+
+  it('next devolve a ocorrência pendente, a seguinte com handler rodando e undefined p/ desconhecidos', async () => {
+    const service = create({ jobTimeoutMs: 10 * MIN });
+    const scheduler = service.forPlugin('p');
+    const releases: (() => void)[] = [];
+    const hold = () => new Promise<void>((r) => releases.push(r));
+    scheduler.on('j', hold);
+    scheduler.on('a', hold);
+    service.start();
+    const id = await scheduler.every({ everyMs: 10 * MIN }, 'j');
+    const at = await scheduler.at(T0 + 5 * MIN, 'a');
+    expect(await scheduler.next(id)).toEqual(new Date(T0 + 10 * MIN));
+    expect(await scheduler.next(at)).toEqual(new Date(T0 + 5 * MIN));
+    expect(await scheduler.next('nao-existe')).toBeUndefined();
+    expect(await service.forPlugin('outro').next(id)).toBeUndefined();
+
+    await vi.advanceTimersByTimeAsync(10 * MIN);
+    expect(await scheduler.next(id)).toEqual(new Date(T0 + 20 * MIN));
+    expect(await scheduler.next(at)).toBeUndefined();
+    for (const release of releases) release();
+    await settle();
+  });
+
+  it('recusa regra, nome e payload inválidos com TypeError', async () => {
+    const scheduler = create().forPlugin('p');
+    await expect(scheduler.every({ everyMs: 1 }, 'j')).rejects.toThrow(TypeError);
+    await expect(scheduler.every({ everyMs: MIN }, '')).rejects.toThrow(TypeError);
+    await expect(
+      scheduler.every({ everyMs: MIN }, 'j', { x: undefined } as unknown as JsonValue),
+    ).rejects.toThrow(TypeError);
+    expect(await storedJobs()).toEqual([]);
+  });
+
+  it('regra que não dá para calcular vai ao onError, apaga a série e não reentrega', async () => {
+    const service = create();
+    const handler = vi.fn();
+    service.forPlugin('p').on('j', handler);
+    const jobs = kernelStorage(port, 'scheduler').collection('jobs');
+    await jobs.insert({
+      plugin: 'p',
+      job: 'j',
+      fireAt: T0 - 1000,
+      payload: null,
+      rule: { time: '08:00', timeZone: 'Marte/Olympus' },
+    });
+    service.start();
+    await settle();
+
+    expect(handler).toHaveBeenCalledOnce();
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({
+      plugin: 'p',
+      phase: 'scheduler',
+      event: 'j',
+      timedOut: false,
+    });
+    expect(await storedJobs()).toEqual([]);
+    await vi.advanceTimersByTimeAsync(DAY);
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it('handler que cancela a própria série devolve true e não sobra documento', async () => {
+    const service = create();
+    const scheduler = service.forPlugin('p');
+    let result: boolean | undefined;
+    scheduler.on('j', async (_p, job) => {
+      result = await scheduler.cancel(job.seriesId as string);
+    });
+    service.start();
+    await scheduler.every({ everyMs: MIN }, 'j');
+    await vi.advanceTimersByTimeAsync(MIN);
+
+    expect(result).toBe(true);
+    expect(await storedJobs()).toEqual([]);
+  });
+
+  it('outro plugin não cancela série em andamento', async () => {
+    const service = create({ jobTimeoutMs: 10 * MIN });
+    const scheduler = service.forPlugin('a');
+    let release: () => void = () => undefined;
+    scheduler.on('j', () => new Promise<void>((r) => (release = r)));
+    service.start();
+    const id = await scheduler.every({ everyMs: MIN }, 'j');
+    await vi.advanceTimersByTimeAsync(MIN);
+
+    expect(await service.forPlugin('b').cancel(id)).toBe(false);
+    expect(await storedJobs()).toHaveLength(1);
+    release();
+    await settle();
+  });
+
+  it('downtime com regra de calendário dispara uma vez ao subir', async () => {
+    const first = create();
+    await first.forPlugin('p').every({ time: '08:00', timeZone: 'UTC' }, 'j');
+    first.start();
+    await first.stop();
+
+    vi.setSystemTime(T0 + 3 * DAY + 12 * 60 * MIN);
+    const second = create();
+    const handler = vi.fn();
+    second.forPlugin('p').on('j', handler);
+    second.start();
+    await settle();
+    expect(handler).toHaveBeenCalledOnce();
+  });
+});

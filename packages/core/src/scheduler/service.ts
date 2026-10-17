@@ -4,6 +4,7 @@
 //
 // Entrega "pelo menos uma vez": o documento só sai do storage depois que o handler termina.
 // Se o processo cair no meio, o job continua lá e dispara de novo ao subir.
+// Série (`every`) não sai do storage: só avança o `fireAt` depois do handler.
 
 import { ContextExpiredError, Deadline, JobTimeoutError } from '#deadline.ts';
 import type { PluginErrorEvent } from '#events/types.ts';
@@ -11,6 +12,7 @@ import { kernelStorage } from '#storage/namespace.ts';
 import type { Collection, JsonValue, StoragePort, Where, WithId } from '#storage/types.ts';
 import { TenantScope } from '#tenant/scope.ts';
 import type { Unsubscribe } from '#transport/types.ts';
+import { nextOccurrence, normalizeRule, type RecurrenceRule } from './rule.ts';
 import type { JobContext, JobHandler, Scheduler } from './types.ts';
 
 export const DEFAULT_JOB_TIMEOUT_MS = 30_000;
@@ -35,6 +37,8 @@ type JobDocument = {
   payload: JsonValue;
   /** Tenant de quem agendou (ADR 0072); o handler roda no escopo dele. Ausente: sem tenant. */
   tenant?: string;
+  /** Presente só em série (`every`): o documento é a série e `fireAt` a ocorrência pendente. */
+  rule?: RecurrenceRule;
 };
 
 type StoredJob = WithId<JobDocument>;
@@ -200,6 +204,8 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
   // id → handler em andamento (resolve quando o job saiu do storage). Impede entrega dupla
   // enquanto o handler roda e responde ao `cancel` de job já disparado.
   const inFlight = new Map<string, Promise<void>>();
+  // ids de série com handler em andamento: o `cancel` deles apaga o documento (job `at` não).
+  const seriesInFlight = new Set<string>();
   // id → abandono do handler em andamento, usado pelo `stop` abortado.
   const abandons = new Map<string, (reason: unknown) => void>();
 
@@ -239,6 +245,13 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
       armedAt = undefined;
       wake();
     }, delay);
+  }
+
+  /** Garante que o loop acorde a tempo de `fireAt` (job novo ou próxima ocorrência de série). */
+  function scheduleWake(fireAt: number): void {
+    if (!started) return;
+    if (loop !== undefined) rerun = true;
+    else if (armedAt === undefined || fireAt < armedAt) arm(fireAt);
   }
 
   /** Pede uma volta do loop; se já há uma rodando, ela repete ao terminar. */
@@ -336,7 +349,24 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
     const done = run(doc, registered)
       // Abandonado no shutdown, o job não terminou: fica no storage para a próxima subida.
       .then(async (finished) => {
-        if (finished) await jobs.delete(doc.id);
+        if (!finished) return finished;
+        if (doc.rule === undefined) {
+          await jobs.delete(doc.id);
+          return finished;
+        }
+        // Série: avança a ocorrência a partir de agora. Se foi cancelada durante o handler, o
+        // update casa 0 e ela não renasce.
+        let fireAt: number;
+        try {
+          fireAt = nextOccurrence(doc.rule, doc.fireAt, Date.now());
+        } catch (error) {
+          // Regra que não dá mais para calcular (fuso que o ICU perdeu, formato desconhecido):
+          // reentregar a mesma ocorrência para sempre seria pior que encerrar a série.
+          fail(doc, error, false);
+          await jobs.delete(doc.id);
+          return finished;
+        }
+        if ((await jobs.update(doc.id, { fireAt })) > 0) scheduleWake(fireAt);
         return finished;
       })
       .then(
@@ -353,11 +383,13 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
       )
       .then((removed) => {
         inFlight.delete(doc.id);
+        seriesInFlight.delete(doc.id);
         // Vaga liberada com vencidos esperando, ou varredura em curso que pode ter pulado um
         // (o `offset` anda, e a remoção puxou a fila uma posição).
         if (removed && (backlog || loop !== undefined)) wake();
       });
     inFlight.set(doc.id, done);
+    if (doc.rule !== undefined) seriesInFlight.add(doc.id);
   }
 
   function fail(doc: StoredJob, error: unknown, timedOut: boolean): void {
@@ -372,6 +404,8 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
   function run(doc: StoredJob, { handler, lifetime }: RegisteredHandler): Promise<boolean> {
     const deadline = new Deadline(lifetime);
     const job: JobContext = {
+      scheduledAt: new Date(doc.fireAt),
+      ...(doc.rule !== undefined && { seriesId: doc.id }),
       get signal(): AbortSignal {
         return deadline.signal;
       },
@@ -442,17 +476,46 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
           payload,
           ...(tenant !== undefined && { tenant }),
         });
-        if (started) {
-          if (loop !== undefined) rerun = true;
-          else if (armedAt === undefined || fireAt < armedAt) arm(fireAt);
-        }
+        scheduleWake(fireAt);
         return id;
+      },
+
+      async every(rule, job, payload = null) {
+        const normalized = normalizeRule(rule);
+        assertJobName(job);
+        assertJsonValue(payload, 'payload', new Set());
+        const tenant = tenants.current;
+        const now = Date.now();
+        const fireAt = nextOccurrence(normalized, now, now);
+        const id = await jobs.insert({
+          plugin,
+          job,
+          fireAt,
+          payload,
+          rule: normalized,
+          ...(tenant !== undefined && { tenant }),
+        });
+        scheduleWake(fireAt);
+        return id;
+      },
+
+      async next(id) {
+        const [doc] = await jobs.find({ where: { id, plugin }, limit: 1 });
+        if (doc === undefined) return undefined;
+        if (doc.rule === undefined) return inFlight.has(id) ? undefined : new Date(doc.fireAt);
+        // Handler rodando e `fireAt` ainda na ocorrência que disparou: a próxima vem da regra.
+        // Se o `update` já avançou (janela até o `inFlight.delete`), o `fireAt` já é a próxima.
+        if (inFlight.has(id) && doc.fireAt <= Date.now()) {
+          return new Date(nextOccurrence(doc.rule, doc.fireAt, Date.now()));
+        }
+        return new Date(doc.fireAt);
       },
 
       cancel(id) {
         return exclusive(async () => {
-          // Já disparou: o handler está rodando e o job sai do storage quando ele terminar.
-          if (inFlight.has(id)) return false;
+          // Série em andamento: apaga o documento, e o fim do handler não a faz renascer. Job `at`
+          // já disparou: sai do storage quando o handler terminar.
+          if (inFlight.has(id) && !seriesInFlight.has(id)) return false;
           return (await jobs.delete({ id, plugin })) > 0;
         });
       },

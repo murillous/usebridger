@@ -46,8 +46,10 @@ export const lembrete = definePlugin({
 | Método | O que faz |
 | --- | --- |
 | `at(quando, job, payload?)` | Agenda e devolve o id. `quando` é `Date` ou milissegundos |
-| `on(job, handler)` | Registra o handler. Ele recebe `(payload, { signal })` |
-| `cancel(id)` | `true` se o job existia e ainda não tinha disparado |
+| `every(regra, job, payload?)` | Agenda uma série recorrente e devolve o id dela ([Jobs recorrentes](#jobs-recorrentes)) |
+| `on(job, handler)` | Registra o handler. Ele recebe `(payload, { signal, scheduledAt, seriesId? })` |
+| `next(id)` | `Date` da próxima ocorrência, ou `undefined` se o job não existe ou já disparou |
+| `cancel(id)` | `true` se o job existia e ainda não tinha disparado. Numa série, encerra as próximas |
 
 - **Registre o `on` no `setup`.** O job pertence ao plugin, não ao comando que o agendou: depois de
   um restart, ele espera o `on` para disparar.
@@ -81,24 +83,66 @@ ctx.scheduler.on('relatorio', async (payload, { signal }) => {
 
 Repasse o `signal` a `fetch` e SDKs: ele aborta no prazo do job ou quando o plugin desce.
 
-## Tarefa recorrente
+## Jobs recorrentes
 
-Não há cron. Para repetir, o handler agenda a próxima execução:
+`every` agenda uma série. O id que ele devolve não muda entre as ocorrências. Há dois tipos de
+regra:
 
 ```ts
-const UM_DIA = 24 * 60 * 60_000;
+// Remédio todo dia às 08:00 em São Paulo.
+await ctx.scheduler.every({ time: '08:00', timeZone: 'America/Sao_Paulo' }, 'remedio', { chatId });
 
-setup(ctx) {
-  ctx.scheduler.on('resumo-diario', async (payload) => {
-    const { chatId } = payload as { chatId: string };
-    await ctx.send.send(chatId, await montarResumo());
-    await ctx.scheduler.at(Date.now() + UM_DIA, 'resumo-diario', payload);
-  });
-}
+// Reunião toda segunda às 19:00 (days: 0 = domingo ... 6 = sábado).
+await ctx.scheduler.every(
+  { time: '19:00', days: [1], timeZone: 'America/Sao_Paulo' },
+  'reuniao',
+  { chatId },
+);
+
+// Água a cada 1h30. O mínimo é 60 s; o intervalo conta do primeiro disparo.
+const id = await ctx.scheduler.every({ everyMs: 90 * 60_000 }, 'agua', { chatId });
 ```
 
-Agende a primeira execução a partir de um comando (`!resumo ligar`) e guarde o id para o
-`!resumo desligar`. Agendar no `setup` criaria um job novo a cada boot e a cada reload.
+- **Regra inválida** (intervalo menor que 60 s, `time` fora de `HH:mm`, fuso desconhecido) rejeita
+  com `TypeError`. Não há cron: as duas regras cobrem o uso comum.
+- **Guarde o id** (por exemplo no [storage](storage.md)) e chame `ctx.scheduler.cancel(id)` para
+  encerrar a série, mesmo com o handler rodando: ela não renasce. Para mudar a regra, cancele e
+  chame `every` de novo. `ctx.scheduler.next(id)` diz quando é a próxima ocorrência.
+- **Agende a partir de um comando**, não no `setup`: o `setup` roda a cada boot e a cada reload e
+  criaria uma série nova toda vez.
+- **Sem deriva.** A próxima ocorrência sai da regra, não do fim do handler: um handler de 10 s num
+  intervalo de 1 min não atrasa a série.
+
+O handler recebe `scheduledAt` (o horário previsto desta ocorrência) e `seriesId`:
+
+```ts
+ctx.scheduler.on('remedio', async (payload, { scheduledAt, seriesId }) => {
+  const { chatId } = payload as { chatId: string };
+  // Chave estável da ocorrência: uma repetição depois de um crash cai na mesma chave.
+  const chave = `${seriesId}:${scheduledAt.getTime()}`;
+  if (await ctx.storage.kv.get(chave)) return;
+  await ctx.send.send(chatId, `Hora do remédio (${scheduledAt.toISOString()})`);
+  await ctx.storage.kv.set(chave, true);
+});
+```
+
+`scheduledAt` existe em todo job, inclusive o de `at`. `seriesId` só na série.
+
+### Disparo perdido
+
+Com o bot desligado na hora, a ocorrência vencida dispara **uma vez** ao subir, com o `scheduledAt`
+antigo, e a série segue a regra a partir de agora: três dias fora do ar não geram três lembretes.
+Compare `scheduledAt` com `Date.now()` no handler se uma mensagem velha não faz mais sentido.
+
+A entrega é pelo menos uma vez, como no `at`: a série só avança depois do handler. Handler que
+lança ou estoura o prazo não para a série (a falha vira `plugin.error` e a próxima ocorrência
+segue). Se o processo cair no meio do handler, a ocorrência roda de novo na subida.
+
+### Horário de verão
+
+As regras de `time` usam o fuso informado. Um horário que não existe no dia da mudança (02:30 no
+pulo da primavera) dispara deslocado pelo tamanho do pulo; um horário que ocorre duas vezes (a volta
+do outono) dispara só na primeira. `America/Sao_Paulo` não tem horário de verão desde 2019.
 
 ## Tenant
 
@@ -119,3 +163,22 @@ expect(bot.sent).toHaveReplied('Combinado, em 10 min.');
 Um job com data no passado dispara logo; para conferir o efeito dele, espere com `expect.poll`:
 `await expect.poll(() => bot.sent.length).toBe(2)`. Um handler longo fica mais fácil de testar
 como função à parte, chamada pelo `on` e pelo teste. Mais em [Testes](testes.md).
+
+Para uma série, ligue os fake timers do Vitest antes do `createTestBot` e avance o relógio; o
+`scheduledAt` de cada ocorrência é exato:
+
+```ts
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
+
+it('dispara a cada minuto', async () => {
+  const t0 = Date.now();
+  const bot = await createTestBot({ plugins: [lembrete] });
+  await bot.receive({ text: '!lembrar ligar' }); // chama ctx.scheduler.every({ everyMs: 60_000 }, ...)
+  await vi.advanceTimersByTimeAsync(3 * 60_000);
+  expect(vistos.map((v) => v.scheduledAt)).toEqual([t0 + 60_000, t0 + 120_000, t0 + 180_000]);
+  await bot.stop();
+});
+```
+
+Para testar uma regra de calendário, fixe o relógio com `vi.setSystemTime(Date.UTC(...))` antes.
