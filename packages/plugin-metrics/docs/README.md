@@ -1,9 +1,7 @@
 # @usebridger/plugin-metrics — documentação
 
-Plugin oficial que provê o serviço `metrics`
-([ADR 0107](../../../docs/adr/0107-plugins-oficiais-de-metricas-e-dashboard.md)). Este pacote
-traz o serviço; as métricas do kernel e o `GET /metrics` Prometheus entram em outra etapa
-(issue #149).
+Plugin oficial que provê o serviço `metrics`, mede o kernel sozinho e expõe o `GET /metrics`
+Prometheus ([ADR 0107](../../../docs/adr/0107-plugins-oficiais-de-metricas-e-dashboard.md)).
 
 ## Usar
 
@@ -88,7 +86,59 @@ Pela config do plugin (`pluginConfig.metrics`):
 | `retentionDays` | `90` | Dias mantidos; os mais antigos são apagados no primeiro flush de cada dia |
 | `maxSeriesPerMetric` | `1000` | Limite de séries por métrica |
 
+## Métricas do kernel
+
+O plugin assina `message.handled` e `outbound.sent` com `ctx.observe`
+([ADR 0106](../../../docs/adr/0106-observadores-do-core.md)) e grava no próprio agregado, com
+rótulos de baixa cardinalidade e nunca id de chat ou de usuário:
+
+| Métrica | Tipo | Rótulos |
+| --- | --- | --- |
+| `bridger.messages.handled` | contador | `chatType`, `route`, `status`, `command` (se houver) |
+| `bridger.messages.handle_duration_ms` | histograma | `route`, `status` |
+| `bridger.outbound.sent` | contador | `kind`, `status`, `chatType` (só em `ctx.reply`) |
+| `bridger.active.users` / `bridger.active.groups` | contador (por dia) | nenhum |
+
+### Ativos por dia
+
+Cada mensagem tratada põe o HMAC-SHA256 do id do remetente (e do chat, se grupo) num conjunto em
+memória. A chave é aleatória, gerada por dia (UTC), nunca gravada nem logada; na virada a chave
+e o conjunto são trocados. Só a contagem é gravada: a cada flush entra no agregado o que cresceu
+desde o flush anterior (delta), então a mesma contagem nunca soma duas vezes, e a contagem do
+dia que acabou vai para o dia dele. O `query` só enxerga os ativos até o último flush.
+
+**Restart no meio do dia superestima:** o conjunto recomeça vazio e quem já tinha sido contado
+conta de novo.
+
+## `GET /metrics`
+
+Registrado no HTTP do core ([ADR 0020](../../../docs/adr/0020-http-unico-hono.md),
+[HTTP](../../core/docs/http.md)), sob a base do plugin: `/plugins/metrics/metrics` na sessão
+`default` e `/sessions/<sessão>/plugins/metrics/metrics` nas outras. Responde no formato de
+exposição de texto do Prometheus (0.0.4). Sem `http` no bot a rota não existe (um `info` no log)
+e o resto do plugin segue.
+
+- Contadores e histogramas vêm do **acumulado desde o início do processo**, que não zera no
+  flush (o flush só grava o delta). Histograma sai como `_bucket{le=...}` cumulativo, `_sum` e
+  `_count` (unidade ms). Nomes saneados para `[a-zA-Z0-9_:]` (`bridger.messages.handled` vira
+  `bridger_messages_handled`). Métricas de outros plugins aparecem também.
+- Gauges lidos a cada scrape de `ctx.stats()`, para a saúde das filas: `bridger_inbound_pending`,
+  `bridger_inbound_active_chats`, `bridger_outbound_pending{priority}`,
+  `bridger_outbound_in_flight`, `bridger_outbound_paused`, e os ativos do dia
+  `bridger_active_users` e `bridger_active_groups`. Os totais acumulados das filas
+  (`processed`, `failed`, `dropped`...) não são expostos; `bridger_messages_handled` e
+  `bridger_outbound_sent` cobrem o volume e o resultado. Os gauges não são gravados no flush.
+- Nome saneado que colide com outra métrica do mesmo tipo (`a.b` e `a_b`) sai sob um único
+  `# TYPE`; se o tipo for diferente, a segunda é **descartada do `/metrics`** com `warn` no log.
+  Um rótulo `le` de histograma é renomeado para `exported_le` (o `le` é dos baldes).
+- `reload`/`restart` do plugin recomeçam o tracker de ativos e os totais: os ativos do dia
+  superestimam (quem já contou conta de novo) e os contadores voltam a zero, o que o Prometheus
+  trata como reset de contador. O que já foi gravado no storage não se perde.
+- **Sem autenticação** (autenticação é do plugin, `http.md`): os dados não têm id pessoal, mas
+  proteja a rota no proxy se a instância é pública.
+
 ## Limites conhecidos
+
 
 - O que está só em memória se perde se o processo morrer antes do flush (até `flushIntervalMs`).
   O flush final roda no `teardown`, que o core não executa se o bot parar com o prazo

@@ -35,6 +35,9 @@ interface Metric {
   readonly kind: Kind;
   readonly series: Set<string>;
   cells: Map<string, Cell>;
+  // Acumulado desde o início do processo, sem dia e sem zerar no flush: é o que o /metrics lê,
+  // porque contador Prometheus que volta a zero a cada flush quebraria o `rate()`.
+  readonly totals: Map<string, Cell>;
   overflowWarned: boolean;
 }
 
@@ -49,6 +52,10 @@ export interface MetricsRuntimeOptions {
 
 export interface MetricsRuntime {
   readonly service: MetricsService;
+  /** Soma ao contador de um dia específico (o dia anterior, na virada); fora dos totais. */
+  counterAt(name: string, labels: MetricLabels, value: number, day: string): void;
+  /** Acumulado desde o início do processo (campo `day` vazio), para o /metrics. */
+  totals(): MetricRow[];
   flush(): Promise<void>;
 }
 
@@ -134,11 +141,18 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
   let purgedDay = '';
   let generation = 0;
 
-  function cellFor(name: string, kind: Kind, labels: MetricLabels): Cell | undefined {
+  // Devolve a célula do dia e a do acumulado; vazio se a série estourou o limite.
+  function cellFor(name: string, kind: Kind, labels: MetricLabels, dayAt?: string): Cell[] {
     assertLabels(name, labels);
     let metric = metrics.get(name);
     if (!metric) {
-      metric = { kind, series: new Set(), cells: new Map(), overflowWarned: false };
+      metric = {
+        kind,
+        series: new Set(),
+        cells: new Map(),
+        totals: new Map(),
+        overflowWarned: false,
+      };
       metrics.set(name, metric);
     } else if (metric.kind !== kind) {
       throw new TypeError(`métrica "${name}" já existe como ${metric.kind}`);
@@ -154,34 +168,56 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
             maxSeriesPerMetric,
           });
         }
-        return undefined;
+        return [];
       }
       metric.series.add(key);
     }
-    const day = dayOf(now());
+    const day = dayAt ?? dayOf(now());
     const id = `${day}|${key}`;
     let cell = metric.cells.get(id);
     if (!cell) {
       cell = { day, key, labels: { ...labels }, fields: new Map() };
       metric.cells.set(id, cell);
     }
-    return cell;
+    if (dayAt !== undefined) return [cell];
+    let total = metric.totals.get(key);
+    if (!total) {
+      total = { day: '', key, labels: { ...labels }, fields: new Map() };
+      metric.totals.set(key, total);
+    }
+    return [cell, total];
   }
 
   function counter(name: string, labels: MetricLabels, value = 1): void {
     assertValue(name, value);
-    const cell = cellFor(name, 'counter', labels);
-    if (cell) addTo(cell, 'value', value);
+    for (const cell of cellFor(name, 'counter', labels)) addTo(cell, 'value', value);
+  }
+
+  function counterAt(name: string, labels: MetricLabels, value: number, day: string): void {
+    assertValue(name, value);
+    for (const cell of cellFor(name, 'counter', labels, day)) addTo(cell, 'value', value);
+  }
+
+  function totals(): MetricRow[] {
+    const rows: MetricRow[] = [];
+    for (const [name, metric] of metrics) {
+      for (const cell of metric.totals.values()) {
+        const row = toRow(name, metric.kind, cell);
+        if (row) rows.push(row);
+      }
+    }
+    return rows;
   }
 
   function observe(name: string, labels: MetricLabels, value: number): void {
     assertValue(name, value);
-    const cell = cellFor(name, 'histogram', labels);
-    if (!cell) return;
-    addTo(cell, 'count', 1);
-    addTo(cell, 'sum', value);
     const i = HISTOGRAM_BUCKETS.findIndex((b) => value <= b);
-    addTo(cell, BUCKET_FIELDS[i === -1 ? BUCKET_FIELDS.length - 1 : i] ?? 'leInf', 1);
+    const bucket = BUCKET_FIELDS[i === -1 ? BUCKET_FIELDS.length - 1 : i] ?? 'leInf';
+    for (const cell of cellFor(name, 'histogram', labels)) {
+      addTo(cell, 'count', 1);
+      addTo(cell, 'sum', value);
+      addTo(cell, bucket, 1);
+    }
   }
 
   async function purge(): Promise<void> {
@@ -310,5 +346,5 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
       .sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
   }
 
-  return { service: { counter, observe, query }, flush };
+  return { service: { counter, observe, query }, counterAt, totals, flush };
 }
