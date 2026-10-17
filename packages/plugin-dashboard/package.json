@@ -26,13 +26,24 @@
     "docs"
   ],
   "scripts": {
-    "build": "tsdown"
+    "build": "tsdown && vite build --config web/vite.config.ts"
   },
   "dependencies": {
     "@usebridger/core": "workspace:^"
   },
   "devDependencies": {
-    "@usebridger/testing": "workspace:*"
+    "@fontsource-variable/funnel-display": "^5.3.0",
+    "@fontsource-variable/martian-mono": "^5.3.0",
+    "@fontsource-variable/onest": "^5.3.1",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@usebridger/testing": "workspace:*",
+    "@vitejs/plugin-react": "^6.1.2",
+    "qrcode": "^1.5.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "vite": "^8.3.4"
   },
   "publishConfig": {
     "access": "public"
