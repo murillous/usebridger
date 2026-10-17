@@ -24,12 +24,14 @@ Todas sob `/plugins/dashboard` (ou `/sessions/<sessão>/plugins/dashboard` fora 
 | ------------------- | ------------------------------------------------------------------------- |
 | `POST /api/login`   | Corpo (até 1 KiB, senão 413) `{ "token": "..." }`. 204 + cookie; token errado 401; JSON inválido 400. |
 | `POST /api/logout`  | 204; invalida a sessão e expira o cookie.                                 |
-| `GET /api/status`   | `{ transport, status, reason?, message?, qr?, pairingCode?, updatedAt }`   |
+| `GET /api/status`   | `{ transport, session, status, reason?, message?, qr?, pairingCode?, updatedAt }` |
 | `GET /api/logs`     | Array de `{ level, time, message, fields }`, do mais antigo ao mais novo.  |
 | `GET /api/ws`       | WebSocket (abaixo).                                                       |
 
 `status` é `connecting`, `open` ou `closed`. `qr` e `pairingCode` somem quando a conexão abre.
 `closed` traz `reason` e `message` (texto do erro, truncado); o objeto de erro cru nunca sai.
+`session` é o nome da sessão do bot. Depois de um reload do plugin, o status parte do último
+`ConnectionStatus` guardado pelo core (`ctx.connectionStatus()`, ADR 0110).
 
 ## WebSocket
 
@@ -58,5 +60,4 @@ pedido (proteção contra CSWSH). Ao reconectar, o cliente recebe um novo snapsh
 
 ## Limites conhecidos
 
-- O `/api/status` não traz o id da sessão: o `ctx` do plugin não o expõe (o caminho base o contém
-  fora da `default`).
+- Depois de um reload, o QR e o código de pareamento não voltam: o snapshot do core só guarda o status de conexão, e eles valem até o próximo evento.
