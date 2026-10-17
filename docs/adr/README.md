@@ -44,12 +44,13 @@ sendo a referência; um ADR novo entra nos dois.
 - [0083](0083-nome-bridger.md) — Nome: Bridger, no escopo `@usebridger` (substitui D31)
 - [0084](0084-repositorios-separados.md) — Kernel e LumaBot em repositórios separados (substitui parte do D01)
 - [0085](0085-release-a-partir-da-main.md) — Release a partir da `main`, com `develop` como integração (substitui parte do D82)
-- [0086](0086-plugins-da-luma-no-lumabot.md) — Plugins da Luma no LumaBot; o kernel não publica plugins (substitui parte do D84)
+- [0086](0086-plugins-da-luma-no-lumabot.md) — Plugins da Luma no LumaBot; o kernel não publica plugins (substitui parte do D84; métricas e dashboard: D107)
 
 **Bot, sessão e escopo do core**
 
 - [0004](0004-uma-sessao-por-processo.md) — Uma sessão por processo, zero estado global
 - [0013](0013-escopo-do-core.md) — Escopo do core
+- [0106](0106-observadores-do-core.md) — Observadores do core por `Bot` (`ctx.observe`) e `ctx.stats()` para plugins (detalha D13)
 - [0036](0036-escopo-de-sessao.md) — Escopo de sessão no bot e no storage (detalha D04/D14)
 
 **Transport e conexão**
@@ -115,6 +116,7 @@ sendo a referência; um ADR novo entra nos dois.
 
 - [0020](0020-http-unico-hono.md) — Servidor HTTP único no core (Hono)
 - [0021](0021-dashboard-vira-plugin.md) — Dashboard vira plugin
+- [0107](0107-plugins-oficiais-de-metricas-e-dashboard.md) — Plugins oficiais `plugin-metrics` e `plugin-dashboard` (substitui parte do D86)
 
 **Testes e kit de autor**
 
@@ -220,7 +222,7 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0083](0083-nome-bridger.md) | D83 | Nome: Bridger, no escopo `@usebridger/*`, com `create-bridger-plugin`, `BRIDGER_*` e schema Postgres `bridger` (substitui D31) | Aceito |
 | [0084](0084-repositorios-separados.md) | D84 | Kernel em `murillous/usebridger` e LumaBot (`apps/lumabot`, `legacy/`, deploy) em `murillous/LumaBot`; o app usa os pacotes do npm (substitui parte do D01, detalha D23) | Aceito (plugins oficiais: ADR 0086) |
 | [0085](0085-release-a-partir-da-main.md) | D85 | Release a partir da `main`: PR `develop` → `main`, PR de versão contra a `main` e PR de volta aberta pelo `release.yml`, sempre com merge commit (substitui parte do D82) | Aceito |
-| [0086](0086-plugins-da-luma-no-lumabot.md) | D86 | Plugins da Luma no LumaBot: o kernel não publica plugins, e os do M4 e do M5 viram código do app sobre os pacotes do npm (substitui parte do D84 e o `plugins/*` do D01) | Aceito |
+| [0086](0086-plugins-da-luma-no-lumabot.md) | D86 | Plugins da Luma no LumaBot: o kernel não publica plugins, e os do M4 e do M5 viram código do app sobre os pacotes do npm (substitui parte do D84 e o `plugins/*` do D01) | Aceito (métricas e dashboard: ADR 0107) |
 | [0087](0087-comando-em-segundo-plano.md) | D87 | Comando em segundo plano: `background: true` tira o `run` da fila do chat e mantém o prazo, o `plugin.error`, o `command` e o `settled()` (detalha D42/D49) | Aceito |
 | [0088](0088-limite-de-concorrencia-por-comando.md) | D88 | Limite de concorrência por comando: `concurrency` põe um teto de `run` simultâneos no bot, a espera conta no prazo e a vaga só volta quando o `run` termina (detalha D05/D87) | Aceito |
 | [0089](0089-benchmark-intercalado.md) | D89 | Benchmark intercalado: base e commit testado se revezam no mesmo runner, a ordem inverte a cada rodada, e a comparação usa o quartil bom no sentido da meta (detalha D54) | Aceito |
@@ -240,3 +242,5 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0103](0103-site-de-documentacao.md) | D103 | Site de documentação com Starlight em `site/` e GitHub Pages a cada release: Markdown sincronizado no build, PT-BR na raiz com EN de fallback, versão única até o 1.0, TypeDoc e `llms.txt` no site, exemplos em `examples/` verificados no CI, `docs/` dentro do tarball (detalha D85) | Aceito |
 | [0104](0104-jobs-recorrentes.md) | D104 | Jobs recorrentes: `scheduler.every` com `{ everyMs }` ou calendário `{ time, days?, timeZone }`; série é um documento em `jobs` com `rule`, próxima ocorrência pela regra (sem deriva), pelo menos uma vez, disparo perdido uma vez ao subir, `cancel` de série com handler rodando (detalha D13) | Aceito |
 | [0105](0105-incremento-atomico-na-colecao.md) | D105 | Incremento atômico na coleção: `Collection.increment(where, campo, by?, { insert }?)` em vez de `upsert` genérico, método obrigatório na porta, atomicidade por adapter (memória sem `await`, SQLite `BEGIN IMMEDIATE`, Postgres `FOR UPDATE` + lock consultivo só com `insert`), `insert` que casa com o `where`, validação compartilhada em `@usebridger/core/adapter` (detalha D15) | Aceito |
+| [0106](0106-observadores-do-core.md) | D106 | Observadores do core: `ctx.observe` por `Bot`, síncrono e nunca aguardado, `try/catch` por observador para `plugin.error`, custo zero sem assinante; sinais `message.handled` e `outbound.sent` com duração crua e `replyTo` por chave `Symbol` interna; `ctx.stats()` no contexto; sem bus, ponto de extensão nem `diagnostics_channel` (detalha D13) | Aceito |
+| [0107](0107-plugins-oficiais-de-metricas-e-dashboard.md) | D107 | Plugins oficiais `@usebridger/plugin-metrics` (serviço `metrics`, agregação em memória com flush periódico por `increment`, `/metrics` Prometheus, 90 dias, sem dado pessoal persistido ou exportado) e `@usebridger/plugin-dashboard` (substitui parte do D86, detalha D21) | Aceito |
