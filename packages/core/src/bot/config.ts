@@ -107,6 +107,11 @@ export interface BotConfig {
   readonly cwd?: string;
   /** Nomes de plugin que não carregam. */
   readonly disabledPlugins?: readonly string[];
+  /**
+   * Nomes de plugin que recebem `ctx.admin` (ADR 0111). Lista no `createBot`, e não no manifesto:
+   * quem decide é o dono do app, não o plugin que ganharia o poder.
+   */
+  readonly adminPlugins?: readonly string[];
   /** Config por plugin (a camada "arquivo"; ver ADR 0032). */
   readonly pluginConfig?: PluginConfigFile;
   /** Ambiente da config de plugin (`BRIDGER_*`). Padrão: `process.env`. */
@@ -149,6 +154,16 @@ export interface BotConfig {
 
 /** Config de plugin em runtime, para o dashboard: overrides, visão mascarada e schema. */
 export type BotPluginConfigs = Pick<PluginConfigs, 'setOverrides' | 'describe' | 'jsonSchema'>;
+
+/**
+ * Controle dos plugins que `ctx.admin` dá aos listados em `adminPlugins` (ADR 0111): as mesmas
+ * instâncias de `bot.plugins` e `bot.config`. Sobre o próprio plugin, `plugins.reload`/`disable` e
+ * `config.setOverrides` rejeitam: o plugin desceria no meio da própria chamada.
+ */
+export interface PluginAdmin {
+  readonly plugins: BotPlugins;
+  readonly config: BotPluginConfigs;
+}
 
 export interface Bot {
   readonly state: BotState;

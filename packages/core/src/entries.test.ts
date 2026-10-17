@@ -179,6 +179,7 @@ const entries: Record<string, { file: string; load: () => Promise<object> } & En
       'OutgoingAction',
       'OutgoingContent',
       'Patch',
+      'PluginAdmin',
       'PluginConfigEntry',
       'PluginConfigFile',
       'PluginConfigIssue',

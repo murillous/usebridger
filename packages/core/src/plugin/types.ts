@@ -3,7 +3,7 @@
 // (M1-16). Os campos do contexto vêm dos contratos de cada módulo.
 
 import type { z } from 'zod';
-import type { BotStats } from '#bot/config.ts';
+import type { BotStats, PluginAdmin } from '#bot/config.ts';
 import type {
   AcceptSpec,
   CommandContextFor,
@@ -156,6 +156,12 @@ export interface PluginContext<
    * cópia.
    */
   stats(): BotStats;
+  /**
+   * Controle dos plugins (`bot.plugins` e `bot.config`), só para quem está em `adminPlugins` do
+   * `createBot`; os demais recebem `undefined` (ADR 0111). `disable`/`reload` do próprio plugin e
+   * `setOverrides` nele rejeitam.
+   */
+  readonly admin: PluginAdmin | undefined;
   /**
    * Observa um sinal do core (ADR 0106): `message.handled` quando o bot termina de tratar uma
    * mensagem, `outbound.sent` quando um envio sai da fila de saída. O observador é síncrono e

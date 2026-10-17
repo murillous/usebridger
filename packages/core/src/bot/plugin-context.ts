@@ -64,7 +64,7 @@ import { isFormatted } from '#text/format.ts';
 import { type Capability, missingCapabilities } from '#transport/capabilities.ts';
 import type { ConnectionStatus, Unsubscribe } from '#transport/types.ts';
 import type { UnsafeAccess } from '#unsafe/access.ts';
-import type { BotStats } from './config.ts';
+import type { BotStats, PluginAdmin } from './config.ts';
 import {
   type CommandViews,
   commandViewFactory,
@@ -114,6 +114,9 @@ export interface PluginContextDeps {
   /** Observadores do bot; os do plugin saem no `dispose` (ADR 0106). */
   readonly observers: Observers;
   readonly unsafe: UnsafeAccess;
+  /** Plugins que recebem `ctx.admin` (ADR 0111) e o controle que ele entrega. */
+  readonly adminPlugins: ReadonlySet<string>;
+  readonly admin: PluginAdmin;
   /** Prazo do `run` e do `onReject` de cada comando, em ms (ADR 0005). */
   readonly commandTimeoutMs: number;
   /** Destino da rejeição de um `run` que chegou depois do prazo (já reportado como timeout). */
@@ -354,6 +357,7 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         return deps.observers.add(name, signal, observer);
       },
       unsafe: deps.unsafe.forPlugin(plugin),
+      admin: deps.adminPlugins.has(name) ? selfSafeAdmin(name, deps.admin) : undefined,
     };
 
     return {
@@ -373,6 +377,36 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         deps.http?.removeOwner(name);
       },
     };
+  };
+}
+
+/**
+ * `ctx.admin` do plugin `self`: as mesmas instâncias do bot, mas recusando o que derrubaria o
+ * próprio plugin no meio da chamada (reload/disable dele, ou `setOverrides`, que recarrega).
+ */
+function selfSafeAdmin(self: string, admin: PluginAdmin): PluginAdmin {
+  const refuse = (action: string): Promise<never> =>
+    Promise.reject(
+      new PluginHostStateError(
+        `plugin "${self}": ${action} em si mesmo não é permitido (o plugin desceria no meio da própria chamada)`,
+      ),
+    );
+  const plugins = Object.assign(() => admin.plugins(), {
+    reload: (target: string) =>
+      target === self ? refuse('admin.plugins.reload') : admin.plugins.reload(target),
+    disable: (target: string) =>
+      target === self ? refuse('admin.plugins.disable') : admin.plugins.disable(target),
+    enable: (target: string) => admin.plugins.enable(target),
+  });
+  return {
+    plugins,
+    config: {
+      ...admin.config,
+      setOverrides: (target, overrides) =>
+        target === self
+          ? refuse('admin.config.setOverrides')
+          : admin.config.setOverrides(target, overrides),
+    },
   };
 }
 

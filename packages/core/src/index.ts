@@ -14,6 +14,7 @@ export type {
   BotState,
   BotStats,
   BotTimeouts,
+  PluginAdmin,
 } from '#bot/config.ts';
 export { BotStateError } from '#bot/config.ts';
 export { GroupAdminTimeoutError } from '#bot/group-admin.ts';

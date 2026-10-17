@@ -423,6 +423,20 @@ setup(ctx) {
 - `ctx.groups.metadata` não tem cache nem prazo próprio: o prazo da execução (comando, listener,
   job) limita quem espera.
 
+## Acesso admin
+
+`ctx.admin` é `{ plugins, config }`: as mesmas instâncias de `bot.plugins` (tabela de boot,
+`reload`/`disable`/`enable`) e `bot.config` (`describe`, `jsonSchema`, `setOverrides`). Só os
+plugins listados em `createBot({ adminPlugins: ['dashboard'] })` o recebem; os demais veem
+`undefined`. A lista fica no app, e não no manifesto, para o plugin não se autoconceder o poder
+([ADR 0111](../../../docs/adr/0111-acesso-admin-para-plugins.md)). Nome em `adminPlugins` que
+não existe gera `warn` no boot.
+
+Sobre o **próprio** plugin, `admin.plugins.reload`, `admin.plugins.disable` e
+`admin.config.setOverrides` (que recarrega) rejeitam com `PluginHostStateError`: o plugin
+desceria no meio da própria chamada. Para os outros plugins o comportamento é o de `bot.plugins`
+e `bot.config`.
+
 ## Versão do core
 
 `CORE_VERSION` é a versão conferida contra `engine`. Não se edita à mão: o PR de versão sai de
