@@ -250,15 +250,17 @@ describe('estado', () => {
     await bot.emit('connection.status', {
       status: 'closed',
       reason: 'connection-lost',
-      error: new Error('caiu'),
+      error: Object.assign(new Error('caiu'), { socket: { secret: 1 } }),
     });
     await bot.bot.plugins.reload('dashboard');
     const res = await fetch(`${base}/api/status`, { headers: { cookie: await cookie() } });
-    expect(await res.json()).toMatchObject({
+    const body = await res.json();
+    expect(body).toMatchObject({
       status: 'closed',
       reason: 'connection-lost',
       message: 'caiu',
     });
+    expect(JSON.stringify(body)).not.toContain('socket');
   });
 
   it('buffer de logs corta no tamanho', () => {
@@ -281,6 +283,15 @@ describe('estado', () => {
 });
 
 describe('WebSocket', () => {
+  it('o snapshot traz a sessão do bot', async () => {
+    const { host, cookie } = await start();
+    const ws = connect(`ws://${host}/plugins/dashboard/api/ws`, { cookie: await cookie() });
+    expect(await ws.opened).toBe(true);
+    await until(() => ws.messages.length > 0);
+    expect(ws.messages[0]).toMatchObject({ type: 'snapshot', status: { session: 'default' } });
+    ws.socket.close();
+  });
+
   it('recusa sem cookie e com Origin de outro host', async () => {
     const { host, cookie } = await start();
     const url = `ws://${host}/plugins/dashboard/api/ws`;
