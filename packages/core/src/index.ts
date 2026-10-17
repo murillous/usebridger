@@ -140,6 +140,7 @@ export {
   sanitize,
 } from '#middleware/sanitize.ts';
 export type {
+  LogSignal,
   MessageHandledSignal,
   Observer,
   ObserverSignalName,
