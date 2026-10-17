@@ -26,6 +26,7 @@ Só `transport` é obrigatório; `createBot({ transport })` sobe um bot sem plug
 | `plugins` | `[]` | Plugins da config (pacotes npm que o app importa) |
 | `pluginDirs` / `cwd` | — / `process.cwd()` | Pastas de plugins locais ([Plugins](plugins.md#fontes-config-e-plugindirs)) |
 | `disabledPlugins` | `[]` | Nomes que não carregam |
+| `adminPlugins` | `[]` | Plugins que recebem `ctx.admin` ([Plugins](plugins.md#acesso-admin)); nome inexistente gera `warn` |
 | `pluginConfig` | — | Config por plugin, a camada "arquivo" ([Config](config.md)) |
 | `env` | `process.env` | Ambiente lido pela config de plugin (`BRIDGER_*`) |
 | `owners` | `[]` | Donos: telefone, aceito com pontuação (`'+55 11 99999-9999'`), ou `{ id }` com o ID nativo do contato ([Config](config.md#owners)) — `BotConfigError` já no `createBot` se malformados |

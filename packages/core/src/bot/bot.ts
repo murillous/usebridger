@@ -448,6 +448,9 @@ export function createBot(config: BotConfig): Bot {
       connectionStatus: () => lastConnection,
       stats,
       observers,
+      adminPlugins: new Set(config.adminPlugins ?? []),
+      admin: control,
+      secrets,
       unsafe: createUnsafeAccess({
         transport,
         log,
@@ -472,6 +475,7 @@ export function createBot(config: BotConfig): Bot {
       createContext,
       log,
       disabledPlugins: config.disabledPlugins,
+      adminPlugins: config.adminPlugins,
       setupTimeoutMs: timeouts.setupMs,
       teardownTimeoutMs: timeouts.teardownMs,
     });

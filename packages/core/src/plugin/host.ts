@@ -46,6 +46,8 @@ export interface PluginHostOptions {
   readonly log: Logger;
   /** Nomes de plugin que não carregam. */
   readonly disabledPlugins?: readonly string[];
+  /** Nomes de `adminPlugins`; aqui só para avisar de nome que não existe (ADR 0111). */
+  readonly adminPlugins?: readonly string[];
   /** Prazo de criação do contexto e de `setup` em ms. Padrão: 10000. */
   readonly setupTimeoutMs?: number;
   /** Prazo de `teardown` e de `dispose` em ms. Padrão: 5000. */
@@ -414,6 +416,13 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
     for (const name of disabled) {
       if (!byName.has(name)) {
         log.warn(`disabledPlugins cita "${name}", que não existe entre os plugins`, {
+          plugin: name,
+        });
+      }
+    }
+    for (const name of options.adminPlugins ?? []) {
+      if (!byName.has(name)) {
+        log.warn(`adminPlugins cita "${name}", que não existe entre os plugins`, {
           plugin: name,
         });
       }

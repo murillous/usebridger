@@ -14,6 +14,7 @@ export type {
   BotState,
   BotStats,
   BotTimeouts,
+  PluginAdmin,
 } from '#bot/config.ts';
 export { BotStateError } from '#bot/config.ts';
 export { GroupAdminTimeoutError } from '#bot/group-admin.ts';
@@ -164,7 +165,11 @@ export type {
   SendPriority,
 } from '#outbound/types.ts';
 export { definePlugin, PluginManifestError } from '#plugin/define.ts';
-export { type PluginChangeResult, PluginConflictError } from '#plugin/host.ts';
+export {
+  type PluginChangeResult,
+  PluginConflictError,
+  PluginHostStateError,
+} from '#plugin/host.ts';
 export { PluginCycleError } from '#plugin/order.ts';
 export {
   PluginBootError,

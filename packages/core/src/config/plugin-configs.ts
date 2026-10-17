@@ -305,12 +305,22 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
   ): Layer | undefined {
     if (raw === undefined) return undefined;
     if (!isPlainObject(raw)) {
-      issues.push({ path: '', message: 'a config do plugin deve ser um objeto', source });
+      issues.push({
+        path: '',
+        kind: 'invalid',
+        message: 'a config do plugin deve ser um objeto',
+        source,
+      });
       return undefined;
     }
     const { [MESSAGES_KEY]: messages, ...fields } = raw;
     if (messages !== undefined && !isPlainObject(messages)) {
-      issues.push({ path: MESSAGES_KEY, message: 'deve ser um objeto chave → texto', source });
+      issues.push({
+        path: MESSAGES_KEY,
+        kind: 'invalid',
+        message: 'deve ser um objeto chave → texto',
+        source,
+      });
       return { source, fields, messages: {} };
     }
     return { source, fields, messages: messages ?? {} };
@@ -369,11 +379,12 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
     const sourceOf = (path: readonly PropertyKey[]): Omit<PluginConfigIssue, 'message'> => {
       const label = path.map(String).join('.');
       const fromEnv = envFields.find((entry) => startsWith(path, entry.path));
-      if (fromEnv) return { path: label, source: 'env', env: fromEnv.name };
+      if (fromEnv) return { path: label, kind: 'invalid', source: 'env', env: fromEnv.name };
       for (const layer of layers.toReversed()) {
-        if (provides(layer.fields, path)) return { path: label, source: layer.source };
+        if (provides(layer.fields, path))
+          return { path: label, kind: 'invalid', source: layer.source };
       }
-      return { path: label, source: 'default' };
+      return { path: label, kind: 'invalid', source: 'default' };
     };
 
     let config: unknown;
@@ -382,6 +393,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
         for (const key of Object.keys(layer.fields)) {
           issues.push({
             path: key,
+            kind: 'invalid',
             message: 'o plugin não declara config; o campo não tem para onde ir',
             source: layer.source,
           });
@@ -406,11 +418,13 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
     const messageLayers = [
       ...layers.map((layer) => ({
         entries: Object.entries(layer.messages),
-        sourceOf: (): Omit<PluginConfigIssue, 'message' | 'path'> => ({ source: layer.source }),
+        sourceOf: (): Omit<PluginConfigIssue, 'message' | 'path' | 'kind'> => ({
+          source: layer.source,
+        }),
       })),
       {
         entries: envMessages.map((entry) => [entry.path[0] as string, entry.value] as const),
-        sourceOf: (key: string): Omit<PluginConfigIssue, 'message' | 'path'> => ({
+        sourceOf: (key: string): Omit<PluginConfigIssue, 'message' | 'path' | 'kind'> => ({
           source: 'env',
           env: envName(name, [MESSAGES_KEY, key]),
         }),
@@ -418,7 +432,11 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
     ];
     for (const layer of messageLayers) {
       for (const [key, text] of layer.entries) {
-        const at = { path: `${MESSAGES_KEY}.${key}`, ...layer.sourceOf(key) };
+        const at = {
+          path: `${MESSAGES_KEY}.${key}`,
+          kind: 'invalid' as const,
+          ...layer.sourceOf(key),
+        };
         if (!Object.hasOwn(base, key)) {
           const known = Object.keys(base);
           issues.push({
@@ -560,6 +578,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
     const secretIssues: PluginConfigIssue[] = definition.config
       ? secretPaths(definition.config, overrides).map((path) => ({
           path: path.join('.'),
+          kind: 'secret',
           message:
             'campo secreto não pode ser definido por override (o storage guarda em texto ' +
             `puro); defina pela env ${envName(name, path)} ou pelo arquivo ` +
