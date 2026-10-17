@@ -115,7 +115,7 @@ export const dashboard: PluginDefinition = definePlugin({
       try {
         json = JSON.stringify(entry);
       } catch {
-        // Campo não serializável (bigint, ciclo): o buffer só guarda entrada segura, senão
+        // Campo com `toJSON` que lança (bigint e ciclo o core já resolve): o buffer só guarda entrada segura, senão
         // /api/logs e o snapshot do WS quebrariam até a linha sair do anel. Aqui não se loga.
         entry = { ...entry, fields: { unserializable: true } };
         json = JSON.stringify(entry);

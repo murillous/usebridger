@@ -177,6 +177,29 @@ describe('endurecimento', () => {
     ws.socket.close();
   });
 
+  it('toJSON que lança cai no fallback unserializable, sem quebrar /api/logs nem o WS', async () => {
+    const { host, base, cookie } = await start();
+    const c = await cookie();
+    botLog.info('toJSON quebrado', {
+      ruim: {
+        toJSON() {
+          throw new Error('x');
+        },
+      },
+    });
+    const res = await fetch(`${base}/api/logs`, { headers: { cookie: c } });
+    expect(res.status).toBe(200);
+    const logs = (await res.json()) as { message: string; fields: unknown }[];
+    expect(logs.find((l) => l.message === 'toJSON quebrado')?.fields).toEqual({
+      unserializable: true,
+    });
+    const ws = connect(`ws://${host}/plugins/dashboard/api/ws`, { cookie: c });
+    expect(await ws.opened).toBe(true);
+    await until(() => ws.messages.length >= 1);
+    expect(ws.messages[0]?.['type']).toBe('snapshot');
+    ws.socket.close();
+  });
+
   it('WS sem Origin e com cookie válido é aceito', async () => {
     const { host, cookie } = await start();
     const ws = connect(`ws://${host}/plugins/dashboard/api/ws`, { cookie: await cookie() });
