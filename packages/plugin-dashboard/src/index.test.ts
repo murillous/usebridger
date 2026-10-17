@@ -289,4 +289,22 @@ describe('WebSocket', () => {
     await until(() => ws.messages.some((m) => m['type'] === 'log'));
     ws.socket.close();
   });
+
+  it('GET /api/logs?level= devolve só linhas de nível igual ou acima; inválido dá 400', async () => {
+    const { base, cookie } = await start();
+    const c = await cookie();
+    botLog.info('nivel-info');
+    botLog.warn('nivel-warn');
+    botLog.error('nivel-error');
+    botLog.fatal('nivel-fatal');
+    const get = (q: string) => fetch(`${base}/api/logs${q}`, { headers: { cookie: c } });
+    const msgs = async (q: string) =>
+      ((await (await get(q)).json()) as { level: string; message: string }[])
+        .filter((l) => l.message.startsWith('nivel-'))
+        .map((l) => l.level);
+    expect(await msgs('?level=warn')).toEqual(['warn', 'error', 'fatal']);
+    expect(await msgs('')).toEqual(['info', 'warn', 'error', 'fatal']);
+    expect((await get('?level=barulho')).status).toBe(400);
+    expect((await get('?level=silent')).status).toBe(400);
+  });
 });
