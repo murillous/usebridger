@@ -3,6 +3,7 @@
 // (M1-16). Os campos do contexto vêm dos contratos de cada módulo.
 
 import type { z } from 'zod';
+import type { BotStats } from '#bot/config.ts';
 import type {
   AcceptSpec,
   CommandContextFor,
@@ -139,6 +140,12 @@ export interface PluginContext<
   readonly transportName: string;
   /** Contato da própria sessão; `null` até a primeira conexão aberta. */
   readonly self: Contact | null;
+  /**
+   * Contadores das filas de entrada e de saída deste bot, os mesmos de `bot.stats()` (ADR 0106).
+   * Leitura O(1) e instantânea, para amostrar sob demanda: guarde a série no plugin. Devolve uma
+   * cópia.
+   */
+  stats(): BotStats;
   readonly unsafe: Unsafe;
 }
 
