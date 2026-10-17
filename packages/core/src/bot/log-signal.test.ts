@@ -1,6 +1,6 @@
 // ADR 0109 (#152): sinal `log` dos observadores.
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PluginErrorEvent } from '#events/types.ts';
 import { createNoopLogger } from '#logger/logger.ts';
 import { createSecretSet } from '#logger/secrets.ts';
@@ -275,5 +275,59 @@ describe('ctx.observe("log") (ADR 0109)', () => {
     );
     expect(threw).toBe(false);
     expect(lines.find((l) => l.message === 'getter')?.fields).toEqual({ unserializable: true });
+  });
+
+  // #163: o silêncio do observador não pode vazar para os timers compartilhados do core.
+  it('send feito no observador não silencia o envio de outro chat', async () => {
+    const lines: LogSignal[] = [];
+    let plugin: PluginContext | undefined;
+    // O log do transport durante o envio roda no contexto do job: é onde o silêncio vazaria.
+    const transport = new (class extends RecordingTransport {
+      override send(...args: Parameters<RecordingTransport['send']>) {
+        plugin?.log.info(`enviando ${args[0]}`);
+        return super.send(...args);
+      }
+    })();
+    await startBot(
+      (ctx) => {
+        plugin = ctx;
+        ctx.observe('log', (signal) => {
+          lines.push(signal);
+          if (signal.message === 'gatilho') void ctx.send.send('c-obs', 'eco');
+        });
+      },
+      { transport, outbound: { globalIntervalMs: 20, chatIntervalMs: 20 } },
+    );
+    const ctx = plugin as PluginContext;
+    await ctx.send.send('c1', 'a');
+    // O envio do observador espera o intervalo global; o timer dele nasce no contexto calado.
+    ctx.log.info('gatilho');
+    await ctx.send.send('c2', 'b');
+    const messages = lines.map((l) => l.message);
+    expect(messages).toContain('enviando c2');
+    // O envio do próprio observador segue calado, como o resto do que ele faz.
+    expect(messages).not.toContain('enviando c-obs');
+  });
+
+  it('schedule feito no observador não silencia outro job', async () => {
+    const lines: LogSignal[] = [];
+    let plugin: PluginContext | undefined;
+    await startBot((ctx) => {
+      plugin = ctx;
+      ctx.scheduler.on('aviso', () => ctx.log.info('aviso disparou'));
+      ctx.scheduler.on('eco', () => undefined);
+
+      ctx.observe('log', (signal) => {
+        lines.push(signal);
+        if (signal.message === 'gatilho') void ctx.scheduler.at(Date.now() + 10, 'eco');
+      });
+    });
+    const ctx = plugin as PluginContext;
+    // O loop acordado pelos `on` do setup precisa assentar: rodando, ele é quem arma o timer.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await ctx.scheduler.at(Date.now() + 40, 'aviso');
+    // O `eco` vence antes: o loop que o dispara rearma o timer do `aviso`.
+    ctx.log.info('gatilho');
+    await vi.waitFor(() => expect(lines.map((l) => l.message)).toContain('aviso disparou'));
   });
 });

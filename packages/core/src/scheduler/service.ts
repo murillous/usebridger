@@ -6,6 +6,7 @@
 // Se o processo cair no meio, o job continua lá e dispara de novo ao subir.
 // Série (`every`) não sai do storage: só avança o `fireAt` depois do handler.
 
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { ContextExpiredError, Deadline, JobTimeoutError } from '#deadline.ts';
 import type { PluginErrorEvent } from '#events/types.ts';
 import { kernelStorage } from '#storage/namespace.ts';
@@ -209,6 +210,10 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
   // id → abandono do handler em andamento, usado pelo `stop` abortado.
   const abandons = new Map<string, (reason: unknown) => void>();
 
+  // Contexto assíncrono de quem criou o serviço. O loop roda nele, e não no de quem o acordou: um
+  // `schedule` feito dentro de um observador de `log` (ADR 0109) não pode emprestar o silêncio
+  // aos handlers de outros plugins (#163).
+  const detached = AsyncLocalStorage.snapshot();
   let started = false;
   let timer: NodeJS.Timeout | undefined;
   let armedAt: number | undefined;
@@ -262,12 +267,12 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
       return;
     }
     disarm();
-    loop = (async () => {
+    loop = detached(async () => {
       do {
         rerun = false;
         await tick();
       } while (rerun && started);
-    })().finally(() => {
+    }).finally(() => {
       loop = undefined;
       // Um `rerun` pedido depois do `while` e antes daqui não teria volta nem timer (#142).
       if (rerun) wake();

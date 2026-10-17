@@ -105,10 +105,8 @@ ctx.observe('log', (s) => {
   do app) que passa do nível dele, com os secrets já mascarados em `message` e `fields` (um
   `Error` vira objeto simples). Log feito dentro de um observador de `log`, e o `plugin.error` dele,
   não volta ao sinal, nem depois de um `await` ([ADR 0109](../adr/0109-sinal-de-log-nos-observadores.md)).
-  O silêncio é herdado por trabalho agendado dentro do observador (timer, `ctx.send`,
-  `ctx.schedule`): os timers da fila de saída e do scheduler criados ali deixam de gerar sinal,
-  até para linhas de outros chats e plugins, até a fila esvaziar. Não use `ctx.send` nem
-  `ctx.schedule` num observador de `log`; isolar os timers fica na [#163](https://github.com/murillous/usebridger/issues/163).
+  O silêncio vale para o que o observador agenda (um timer, o próprio `ctx.send`), mas não passa
+  aos envios de outros chats nem aos jobs do scheduler: eles rodam no contexto de quem os criou.
 - `chatId`, `senderId` e `messageId` existem só em memória. Não os persista nem exporte.
 
 ## Métricas de performance
