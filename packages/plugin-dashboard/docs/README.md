@@ -11,7 +11,7 @@ token (segredo: mascarado em logs e na config exibida; aceita `BRIDGER_DASHBOARD
 
 | Campo             | Padrão  | O que é                                          |
 | ----------------- | ------- | ------------------------------------------------ |
-| `token`           | -       | Obrigatório. Segredo de acesso ao dashboard.     |
+| `token`           | -       | Obrigatório, mínimo 16 caracteres. Segredo de acesso. |
 | `logBufferSize`   | `500`   | Linhas de log mantidas em memória.               |
 | `cookieMaxAgeSec` | `43200` | Validade da sessão (12 h), mínimo 60.            |
 
@@ -22,7 +22,7 @@ Todas sob `/plugins/dashboard` (ou `/sessions/<sessão>/plugins/dashboard` fora 
 
 | Rota                | Resposta                                                                  |
 | ------------------- | ------------------------------------------------------------------------- |
-| `POST /api/login`   | Corpo `{ "token": "..." }`. 204 + cookie; token errado 401; JSON inválido 400. |
+| `POST /api/login`   | Corpo (até 1 KiB, senão 413) `{ "token": "..." }`. 204 + cookie; token errado 401; JSON inválido 400. |
 | `POST /api/logout`  | 204; invalida a sessão e expira o cookie.                                 |
 | `GET /api/status`   | `{ transport, status, reason?, message?, qr?, pairingCode?, updatedAt }`   |
 | `GET /api/logs`     | Array de `{ level, time, message, fields }`, do mais antigo ao mais novo.  |
@@ -40,7 +40,7 @@ Mensagens do servidor, em JSON (o cliente não precisa enviar nada):
 - `{ "type": "qr", "qr": "..." }` e `{ "type": "pairing-code", "code": "..." }`;
 - `{ "type": "log", "entry": <log> }` a cada linha de log.
 
-O upgrade exige o cookie e, se o navegador mandar `Origin`, ele tem de ser do mesmo host do
+O upgrade exige o cookie e, se o pedido trouxer `Origin` (clientes que não são navegador podem omiti-lo), ele tem de ser do mesmo host do
 pedido (proteção contra CSWSH). Ao reconectar, o cliente recebe um novo snapshot.
 
 ## Segurança

@@ -21,6 +21,22 @@ export interface StatusView {
 
 export type { LogEntry } from '#logs.ts';
 
+const MAX_LOGIN_BODY = 1024;
+
+/** Lê o corpo até `max` bytes; `undefined` se passar (cobre pedido sem content-length). */
+async function readLimited(request: Request, max: number): Promise<string | undefined> {
+  if (Number(request.headers.get('content-length') ?? 0) > max) return undefined;
+  if (request.body === null) return '';
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for await (const chunk of request.body) {
+    size += chunk.byteLength;
+    if (size > max) return undefined;
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
 const unauthorized = (): Response => new Response('não autorizado', { status: 401 });
 
 /** Plugin oficial `dashboard` (ADR 0107, 0108): autenticação, status, QR, logs e WebSocket. */
@@ -30,7 +46,7 @@ export const dashboard: PluginDefinition = definePlugin({
   engine: '<1.0.0',
   config: z.object({
     // Segredo de acesso ao dashboard; o core o mascara em logs e na config exibida.
-    token: secret(z.string().min(1)),
+    token: secret(z.string().min(16)),
     // Quantas linhas de log ficam em memória para o painel.
     logBufferSize: z.number().int().min(1).default(500),
     // Validade do cookie de sessão, em segundos (padrão: 12 h).
@@ -47,16 +63,7 @@ export const dashboard: PluginDefinition = definePlugin({
       updatedAt: Date.now(),
     };
 
-    const broadcast = (message: unknown): void => {
-      if (sockets.size === 0) return;
-      let text: string;
-      try {
-        text = JSON.stringify(message);
-      } catch (error) {
-        // Campo não serializável (ex.: bigint) num log: o painel perde a linha, o bot segue.
-        ctx.log.warn('mensagem do dashboard não serializável', { error });
-        return;
-      }
+    const broadcast = (text: string): void => {
       for (const socket of sockets) {
         try {
           socket.send(text);
@@ -83,29 +90,38 @@ export const dashboard: PluginDefinition = definePlugin({
         // Só o texto do erro, truncado: o objeto cru pode carregar sockets e credenciais.
         if (payload.error instanceof Error) state.message = payload.error.message.slice(0, 300);
       }
-      broadcast({ type: 'status', ...status() });
+      broadcast(JSON.stringify({ type: 'status', ...status() }));
     });
     ctx.events.on('connection.qr', ({ payload }) => {
       state.qr = payload.qr;
       state.updatedAt = Date.now();
-      broadcast({ type: 'qr', qr: payload.qr });
+      broadcast(JSON.stringify({ type: 'qr', qr: payload.qr }));
     });
     ctx.events.on('connection.pairing-code', ({ payload }) => {
       state.pairingCode = payload.code;
       state.updatedAt = Date.now();
-      broadcast({ type: 'pairing-code', code: payload.code });
+      broadcast(JSON.stringify({ type: 'pairing-code', code: payload.code }));
     });
 
     // O observador não pode logar nem demorar: só empilha e empurra.
     ctx.observe('log', (signal) => {
-      const entry: LogEntry = {
+      let entry: LogEntry = {
         level: signal.level,
         time: signal.time,
         message: signal.message,
         fields: signal.fields,
       };
+      let json: string;
+      try {
+        json = JSON.stringify(entry);
+      } catch {
+        // Campo não serializável (bigint, ciclo): o buffer só guarda entrada segura, senão
+        // /api/logs e o snapshot do WS quebrariam até a linha sair do anel. Aqui não se loga.
+        entry = { ...entry, fields: { unserializable: true } };
+        json = JSON.stringify(entry);
+      }
       logs.push(entry);
-      broadcast({ type: 'log', entry });
+      if (sockets.size > 0) broadcast(`{"type":"log","entry":${json}}`);
     });
 
     const guarded =
@@ -122,9 +138,11 @@ export const dashboard: PluginDefinition = definePlugin({
     };
 
     ctx.http.route('POST', '/api/login', async (request) => {
+      const text = await readLimited(request, MAX_LOGIN_BODY);
+      if (text === undefined) return new Response('corpo grande demais', { status: 413 });
       let body: unknown;
       try {
-        body = await request.json();
+        body = JSON.parse(text);
       } catch {
         return new Response('JSON inválido', { status: 400 });
       }

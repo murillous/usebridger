@@ -120,6 +120,71 @@ describe('autenticação', () => {
   });
 });
 
+describe('endurecimento', () => {
+  it('login com corpo acima de 1 KiB dá 413, com e sem content-length', async () => {
+    const { base } = await start();
+    const big = JSON.stringify({ token: 'x'.repeat(2000) });
+    const res = await fetch(`${base}/api/login`, { method: 'POST', body: big });
+    expect(res.status).toBe(413);
+    // Corpo em stream não leva content-length.
+    const stream = new ReadableStream({
+      start(c) {
+        c.enqueue(new TextEncoder().encode(big));
+        c.close();
+      },
+    });
+    const chunked = await fetch(`${base}/api/login`, {
+      method: 'POST',
+      body: stream,
+      duplex: 'half',
+    } as RequestInit);
+    expect(chunked.status).toBe(413);
+  });
+
+  it('logout devolve o cookie expirado', async () => {
+    const { base, cookie } = await start();
+    const out = await fetch(`${base}/api/logout`, {
+      method: 'POST',
+      headers: { cookie: await cookie() },
+    });
+    expect(out.headers.get('set-cookie')).toContain('Max-Age=0');
+  });
+
+  it('token curto (< 16) é recusado na config', async () => {
+    await expect(start({ token: 'curto' })).rejects.toThrow();
+  });
+
+  it('reload do plugin limpa as sessões: cookie antigo dá 401', async () => {
+    const { bot, base, cookie } = await start();
+    const c = await cookie();
+    expect((await fetch(`${base}/api/status`, { headers: { cookie: c } })).status).toBe(200);
+    await bot.bot.plugins.reload('dashboard');
+    expect((await fetch(`${base}/api/status`, { headers: { cookie: c } })).status).toBe(401);
+  });
+
+  it('linha de log não serializável não envenena /api/logs nem o snapshot do WS', async () => {
+    const { host, base, cookie } = await start();
+    const c = await cookie();
+    botLog.info('com bigint', { n: 10n });
+    const res = await fetch(`${base}/api/logs`, { headers: { cookie: c } });
+    expect(res.status).toBe(200);
+    const logs = (await res.json()) as { message: string; fields: unknown }[];
+    expect(logs.find((l) => l.message === 'com bigint')?.fields).toEqual({ unserializable: true });
+    const ws = connect(`ws://${host}/plugins/dashboard/api/ws`, { cookie: c });
+    expect(await ws.opened).toBe(true);
+    await until(() => ws.messages.length >= 1);
+    expect(ws.messages[0]?.['type']).toBe('snapshot');
+    ws.socket.close();
+  });
+
+  it('WS sem Origin e com cookie válido é aceito', async () => {
+    const { host, cookie } = await start();
+    const ws = connect(`ws://${host}/plugins/dashboard/api/ws`, { cookie: await cookie() });
+    expect(await ws.opened).toBe(true);
+    ws.socket.close();
+  });
+});
+
 describe('estado', () => {
   it('status reflete a conexão; QR e código saem no open; closed expõe só reason e mensagem', async () => {
     const { bot, base, cookie } = await start();
