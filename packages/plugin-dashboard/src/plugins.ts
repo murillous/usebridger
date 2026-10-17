@@ -1,10 +1,11 @@
-import type {
-  HttpHandler,
-  Logger,
-  PluginAdmin,
-  PluginChangeResult,
-  PluginLifecycleError,
-  PluginReportEntry,
+import {
+  type HttpHandler,
+  type Logger,
+  type PluginAdmin,
+  type PluginChangeResult,
+  PluginHostStateError,
+  type PluginLifecycleError,
+  type PluginReportEntry,
 } from '@usebridger/core';
 import { sameOrigin } from '#auth.ts';
 
@@ -71,20 +72,16 @@ export function registerPluginRoutes(
         try {
           return Response.json(serializeResult(await plugins[action](name)));
         } catch (error) {
-          // O core não exporta a classe; o `name` identifica estado inválido (self, ignorado, host parado).
-          if (error instanceof Error && error.name === 'PluginHostStateError') {
+          // Estado inválido (self, ignorado, host parado): a mensagem é do core e segura.
+          if (error instanceof PluginHostStateError) {
             return new Response(error.message.slice(0, 300), { status: 409 });
           }
-          ctxError(log, action, name, error);
+          log.error(`dashboard: falha em ${action} do plugin "${name}"`, {
+            error: error instanceof Error ? error.message : String(error),
+          });
           return new Response('erro interno', { status: 500 });
         }
       }),
     );
   }
-}
-
-function ctxError(log: Logger, action: string, name: string, error: unknown): void {
-  log.error(`dashboard: falha em ${action} do plugin "${name}"`, {
-    error: error instanceof Error ? error.message : String(error),
-  });
 }

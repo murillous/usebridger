@@ -58,10 +58,6 @@ pedido (proteção contra CSWSH). Ao reconectar, o cliente recebe um novo snapsh
 - As linhas de log já saem com os segredos do bot mascarados, mas `fields` pode ter dado de
   negócio: trate o token como acesso ao log.
 
-## Limites conhecidos
-
-- Depois de um reload, o QR e o código de pareamento não voltam: o snapshot do core só guarda o status de conexão, e eles valem até o próximo evento.
-
 ## Plugins (enable, disable, reload)
 
 Exige o acesso admin do core (ADR 0111): ponha `dashboard` em `adminPlugins`, senão as rotas abaixo
@@ -79,3 +75,7 @@ createBot({ plugins: [dashboard], adminPlugins: ['dashboard'] });
 Os `POST` exigem o cookie de sessão e `Origin` do mesmo host (senão 403). Nome desconhecido 404;
 ação inválida no estado (o próprio dashboard em `disable`/`reload`, plugin ignorado em `reload`,
 host parado) 409 com a mensagem; outro erro é logado e responde 500.
+
+## Limites conhecidos
+
+- Depois de um reload, o QR e o código de pareamento não voltam: o snapshot do core só guarda o status de conexão, e eles valem até o próximo evento.
