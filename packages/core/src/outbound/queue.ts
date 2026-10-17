@@ -2,6 +2,7 @@
 // e por chat, prioridade (comando > broadcast), retry com backoff (ou na janela que a plataforma
 // informou, ADR 0067) e humanização opcional.
 
+import type { Observers, OutboundSentSignal } from '#observers/observers.ts';
 import type { MessageText } from '#text/format.ts';
 import { assertCanSend } from '#transport/capabilities.ts';
 import type {
@@ -94,7 +95,24 @@ export interface OutboundQueueOptions {
   readonly clock?: () => number;
   /** Fonte do jitter do backoff, em [0, 1). Padrão: `Math.random`. */
   readonly random?: () => number;
+  /** Destino do sinal `outbound.sent` de cada `send` (ADR 0106). */
+  readonly observers?: Pick<Observers, 'has' | 'emit'>;
 }
+
+/**
+ * Origem da resposta do `ctx.reply`, para o sinal `outbound.sent` (ADR 0106). Chave `Symbol` fora
+ * do `index.ts`: um plugin não a forja pelo `ctx.send`, e a fila a retira antes do transport.
+ */
+export const REPLY_ORIGIN: unique symbol = Symbol('replyOrigin');
+
+export interface ReplyOriginInfo {
+  readonly chatType: 'group' | 'private';
+  /** Ausente na resposta sem mensagem a citar (`onExpire`). */
+  readonly messageId?: string;
+}
+
+/** As opções do `send` com a origem que só o kernel preenche. */
+export type QueueSendOptions = OutboundSendOptions & { readonly [REPLY_ORIGIN]?: ReplyOriginInfo };
 
 export interface OutboundQueueStats {
   /** Mensagens aguardando, inclusive as em espera de re-tentativa. */
@@ -152,8 +170,17 @@ interface Job extends JobPart {
   readonly priority: PriorityIndex;
   /** Tentativas já feitas. */
   attempts: number;
+  /** Medida do `send` para o `outbound.sent`; ausente sem observador. As partes a dividem. */
+  readonly track: Track | undefined;
   readonly resolve: (value: unknown) => void;
   readonly reject: (error: unknown) => void;
+}
+
+interface Track {
+  readonly startedAt: number;
+  /** Último despacho ao transport; `NaN` enquanto não saiu da espera. */
+  dispatchedAt: number;
+  retries: number;
 }
 
 interface ChatState {
@@ -188,6 +215,7 @@ export class OutboundQueue implements Sender {
   readonly #text: TextLimiter;
   readonly #album: AlbumSplitter;
   readonly #config: OutboundConfig;
+  readonly #observers: Pick<Observers, 'has' | 'emit'> | undefined;
 
   // Só chats com mensagem aguardando ou em andamento: ao esvaziar, saem (o vazamento do
   // rateLimiter do legacy).
@@ -227,6 +255,7 @@ export class OutboundQueue implements Sender {
     this.#transport = options.transport;
     this.#text = new TextLimiter(options.transport);
     this.#album = new AlbumSplitter(options.transport);
+    this.#observers = options.observers;
   }
 
   /**
@@ -237,16 +266,20 @@ export class OutboundQueue implements Sender {
   send(
     chatId: string,
     input: OutgoingContent | MessageText,
-    options?: OutboundSendOptions,
+    options?: QueueSendOptions,
   ): Promise<MessageKey> {
     let sendOptions: SendOptions | undefined;
+    let origin: ReplyOriginInfo | undefined;
     if (options !== undefined) {
-      const { priority: _priority, ...rest } = options;
+      // A origem sai por nome, e não só por ser não enumerável: o `...rest` copia chave `Symbol`.
+      const { priority: _priority, [REPLY_ORIGIN]: replyOrigin, ...rest } = options;
       sendOptions = rest;
+      origin = replyOrigin;
     }
+    let content: OutgoingContent;
     let parts: SendPart[];
     try {
-      const content = toContent(input);
+      content = toContent(input);
       parts =
         content.type === 'album'
           ? this.#album
@@ -262,16 +295,45 @@ export class OutboundQueue implements Sender {
         content,
       }),
     );
-    return this.#push(chatId, options?.priority, {
+    const track: Track | undefined = this.#observers?.has('outbound.sent')
+      ? { startedAt: this.#config.clock(), dispatchedAt: Number.NaN, retries: 0 }
+      : undefined;
+    const sending = this.#push(chatId, options?.priority, {
       ...(head as JobPart),
       rest,
       what: `envio para ${chatId}`,
+      track,
       // Capability ausente nunca vira tentativa: falha já, sem ocupar a fila. Uma legenda
       // dividida também exige `send.text`.
       check: () => {
         for (const part of parts) assertCanSend(this.#transport, part.content, part.options);
       },
     }) as Promise<MessageKey>;
+    if (track === undefined) return sending;
+    const emit = (status: OutboundSentSignal['status']): void => {
+      const end = Number.isNaN(track.dispatchedAt) ? this.#config.clock() : track.dispatchedAt;
+      this.#observers?.emit('outbound.sent', {
+        chatId,
+        ...(origin !== undefined && { chatType: origin.chatType }),
+        kind: content.type,
+        status,
+        queuedMs: end - track.startedAt,
+        retries: track.retries,
+        ...(origin?.messageId !== undefined && { replyTo: origin.messageId }),
+      });
+    };
+    return sending.then(
+      (key) => {
+        emit('sent');
+        return key;
+      },
+      (error: unknown) => {
+        // Recusa da própria fila (cheia, fechada, desconectada) não chegou a falhar no transport.
+        const dropped = error instanceof OutboundQueueError && error.reason !== 'timeout';
+        emit(dropped ? 'dropped' : 'failed');
+        throw error;
+      },
+    );
   }
 
   /**
@@ -285,13 +347,16 @@ export class OutboundQueue implements Sender {
       content: null,
       rest: [],
       what: `ação em ${chatId}`,
+      track: undefined,
     }) as Promise<T>;
   }
 
   #push(
     chatId: string,
     requested: SendPriority | undefined,
-    spec: Pick<Job, 'run' | 'content' | 'rest' | 'what'> & { readonly check?: () => void },
+    spec: Pick<Job, 'run' | 'content' | 'rest' | 'what' | 'track'> & {
+      readonly check?: () => void;
+    },
   ): Promise<unknown> {
     if (this.#closed) {
       this.#dropped++;
@@ -336,6 +401,7 @@ export class OutboundQueue implements Sender {
         what: spec.what,
         priority,
         attempts: 0,
+        track: spec.track,
         resolve,
         reject,
       };
@@ -506,6 +572,7 @@ export class OutboundQueue implements Sender {
     chat.pending--;
     this.#pendingBy[job.priority]--;
     this.#inFlight++;
+    if (job.track !== undefined) job.track.dispatchedAt = now;
     this.#globalReadyAt = now + this.#config.globalIntervalMs;
     chat.readyAt = now + this.#config.chatIntervalMs;
     this.#rememberCooldown(chat.id, chat.readyAt, now);
@@ -590,6 +657,7 @@ export class OutboundQueue implements Sender {
       return;
     }
     this.#retries++;
+    if (job.track !== undefined) job.track.retries++;
     this.#requeueHead(chat, job);
     chat.readyAt = Math.max(chat.readyAt, now + delay);
   }

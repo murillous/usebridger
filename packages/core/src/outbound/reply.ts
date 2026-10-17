@@ -2,14 +2,9 @@ import type { MessageAction } from '#actions/actions.ts';
 import type { Message } from '#message/types.ts';
 import type { MessageText } from '#text/format.ts';
 import type { MessageKey, OutgoingAction, OutgoingContent } from '#transport/types.ts';
+import { type QueueSendOptions, REPLY_ORIGIN, type ReplyOriginInfo } from './queue.ts';
 import { captionFields, textContent } from './text.ts';
-import type {
-  OutboundSendOptions,
-  Reply,
-  ReplyOptions,
-  ReplyTextOptions,
-  Sender,
-} from './types.ts';
+import type { Reply, ReplyOptions, ReplyTextOptions, Sender } from './types.ts';
 
 /** Texto e botões que vão ao transport, depois de o kernel resolver as ações (ADR 0062). */
 export interface PreparedActions {
@@ -52,18 +47,25 @@ export function createReply(
 ): Reply {
   const chatId = message.chat.id;
   const quoted = options.quote === false || !('key' in message) ? undefined : message;
+  // Para o sinal `outbound.sent` (ADR 0106): o `ctx.send` direto não sabe o tipo do chat.
+  const origin: ReplyOriginInfo = {
+    chatType: message.chat.isGroup ? 'group' : 'private',
+    ...('key' in message && { messageId: message.id }),
+  };
 
   const send = (
     content: OutgoingContent,
     replyOptions: ReplyOptions = {},
     actions?: readonly OutgoingAction[],
   ): Promise<MessageKey> => {
-    const sendOptions: OutboundSendOptions = {
+    const sendOptions: QueueSendOptions = {
       priority: replyOptions.priority ?? 'high',
       ...(quoted && { quoted }),
       ...(replyOptions.mentions && { mentions: replyOptions.mentions }),
       ...(actions && actions.length > 0 && { actions }),
     };
+    // Não enumerável: um espalhamento das opções no caminho não a leva ao transport.
+    Object.defineProperty(sendOptions, REPLY_ORIGIN, { value: origin });
     return sender.send(chatId, content, sendOptions);
   };
 

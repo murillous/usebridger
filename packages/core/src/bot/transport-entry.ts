@@ -7,6 +7,7 @@ import type { EventBus } from '#events/bus.ts';
 import type { BotEvents } from '#events/types.ts';
 import type { Logger } from '#logger/types.ts';
 import type { Chat, Contact, Message } from '#message/types.ts';
+import type { Observers } from '#observers/observers.ts';
 import type { OutboundQueue } from '#outbound/queue.ts';
 import type { InboundQueue } from '#queue/inbound.ts';
 import type { TenantScope } from '#tenant/scope.ts';
@@ -25,6 +26,8 @@ export interface TransportEntryDeps {
   readonly tenants: TenantScope;
   readonly flow: InboundFlow;
   readonly bus: EventBus;
+  /** O `queuedMs` do `message.handled` só é medido com observador (ADR 0106). */
+  readonly observers?: Pick<Observers, 'has'>;
   readonly conversations: Pick<ConversationRegistry<KernelMessageContext, ExpireOrigin>, 'expire'>;
   readonly reconnector: Reconnector | undefined;
   readonly gate: ReadyGate;
@@ -48,14 +51,18 @@ export interface TransportEntry {
 export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
   /**
    * Põe a mensagem (nova ou editada) ou o clique na fila do chat dele: o mesmo chat anda em
-   * série. A tarefa roda no escopo do tenant do chat (ADR 0072).
+   * série. A tarefa roda no escopo do tenant do chat (ADR 0072). Com observador de
+   * `message.handled`, mede a espera na fila e a passa ao fluxo (ADR 0106).
    */
   function enqueue<T extends Message | Interaction>(
     item: T,
-    handle: (item: T) => Promise<void>,
+    handle: (item: T, queuedMs?: number) => Promise<void>,
   ): void {
+    const enqueuedAt = deps.observers?.has('message.handled') ? performance.now() : undefined;
     const result = deps.inbound.enqueue(item.chat.id, () =>
-      deps.tenants.run(item.chat.tenantId, () => handle(item)),
+      deps.tenants.run(item.chat.tenantId, () =>
+        handle(item, enqueuedAt === undefined ? undefined : performance.now() - enqueuedAt),
+      ),
     );
     if (result !== 'queued') {
       deps.log().warn('mensagem descartada pela fila de entrada', {

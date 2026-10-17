@@ -41,7 +41,8 @@ Alternativas consideradas:
     `message`), `command` (nome canônico), `status`, `queuedMs` (espera na fila de entrada) e
     `durationMs` (handler).
   - `outbound.sent`: `chatId`, `chatType`, `kind`, `status`, `queuedMs` (fila de saída, inclusive
-    taxa e re-tentativas), `retries` e `replyTo`.
+    taxa e re-tentativas), `retries` e `replyTo`. `chatType` é opcional: vem do `createReply`,
+    pela mesma chave do `replyTo`, porque o `ctx.send` direto só recebe o id do chat.
 - **`replyTo` por uma chave `Symbol` interna**, preenchida pelo `createReply` e retirada pela fila
   antes do transport. O campo não entra em `OutboundSendOptions`, que é público: um plugin poderia
   forjá-lo, e a fila repassa ao transport o que não for `priority`.
@@ -57,6 +58,7 @@ Alternativas consideradas:
 - O bench do ADR 0030 passa a rodar com zero observadores e com um observador vazio. A regressão
   tem de ficar abaixo do ruído do bench intercalado (ADR 0089).
 - A latência ponta a ponta cobre só as respostas por `ctx.reply`. `ctx.send` direto e
-  `ReplyOrigin` sem `key` saem sem `replyTo`.
+  `ReplyOrigin` sem `key` saem sem `replyTo`. O `ctx.send` direto também sai sem `chatType`: quem
+  agrega por tipo de chat conta esses envios à parte.
 - Um adaptador para APM sobre `diagnostics_channel` pode vir depois como plugin, assinando
   `ctx.observe`.

@@ -39,6 +39,7 @@ import type { SessionHttp } from '#http/server.ts';
 import type { HttpRoutes } from '#http/types.ts';
 import type { Logger } from '#logger/types.ts';
 import type { Contact, Message } from '#message/types.ts';
+import type { Observers } from '#observers/observers.ts';
 import type { Outbound } from '#outbound/types.ts';
 import { type PluginContextFactory, PluginHostStateError } from '#plugin/host.ts';
 import { formatMessage } from '#plugin/messages.ts';
@@ -106,6 +107,8 @@ export interface PluginContextDeps {
   };
   /** Contadores das filas deste bot, os mesmos de `bot.stats()` (ADR 0106). */
   readonly stats: () => BotStats;
+  /** Observadores do bot; os do plugin saem no `dispose` (ADR 0106). */
+  readonly observers: Observers;
   readonly unsafe: UnsafeAccess;
   /** Prazo do `run` e do `onReject` de cada comando, em ms (ADR 0005). */
   readonly commandTimeoutMs: number;
@@ -340,6 +343,10 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         return deps.transport.self;
       },
       stats: deps.stats,
+      observe(signal, observer) {
+        guard('observe');
+        return deps.observers.add(name, signal, observer);
+      },
       unsafe: deps.unsafe.forPlugin(plugin),
     };
 
@@ -356,6 +363,7 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         deps.bus.removePlugin(name);
         deps.services.removePlugin(name);
         deps.scheduler.removePlugin(name);
+        deps.observers.removePlugin(name);
         deps.http?.removeOwner(name);
       },
     };
