@@ -139,6 +139,13 @@ export {
   type SanitizeOptions,
   sanitize,
 } from '#middleware/sanitize.ts';
+export type {
+  MessageHandledSignal,
+  Observer,
+  ObserverSignalName,
+  ObserverSignals,
+  OutboundSentSignal,
+} from '#observers/observers.ts';
 export { OutboundQueueError, type OutboundQueueStats } from '#outbound/queue.ts';
 export type {
   ActionOptions,

@@ -57,6 +57,7 @@ coisa.
 | Cenário | Meta | O que mede |
 | --- | --- | --- |
 | `overhead` | p99 < 1 ms | Uma mensagem por vez, do `emit` do transport até o `bot.settled()`: middlewares, roteador, listeners e fila de saída. 20 mil mensagens depois de 5 mil de aquecimento |
+| `overhead-observed` | p99 < 1 ms | O `overhead` com um observador vazio em `message.handled` e em `outbound.sent` (ADR 0106) |
 | `throughput` | ≥ 5.000 msg/s | Rajadas de 5 mil mensagens (10 por chat), esperando o bot assentar entre elas. 200 mil mensagens depois de 20 mil de aquecimento |
 | `idle-memory` | < 80 MB | RSS do processo com o bot no ar e ocioso, depois de um `gc()` |
 | `memory-growth` | < 5 MB | Heap depois de 1M mensagens menos o heap depois de 100 mil de aquecimento, ambos após `gc()` |

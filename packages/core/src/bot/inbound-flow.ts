@@ -20,6 +20,7 @@ import type { ListenerExtras, PluginErrorEvent } from '#events/types.ts';
 import { createMessage } from '#message/create.ts';
 import type { Chat, Contact, Message } from '#message/types.ts';
 import type { MiddlewarePipeline } from '#middleware/pipeline.ts';
+import type { MessageHandledSignal, Observers } from '#observers/observers.ts';
 import type { PrepareActions, ReplyOrigin } from '#outbound/reply.ts';
 import type { CommandInteraction, Interaction } from '#transport/types.ts';
 import type { BackgroundTasks } from './background-tasks.ts';
@@ -56,12 +57,29 @@ export interface InboundFlowDeps {
   readonly reportPluginError: (event: PluginErrorEvent) => void;
   /** Comandos com `background: true` em andamento (ADR 0087). */
   readonly background: BackgroundTasks;
+  /** Destino do `message.handled` (ADR 0106). */
+  readonly observers: Pick<Observers, 'emit'>;
 }
 
+/**
+ * Medida da mensagem para o `message.handled`; só existe quando a entrada mediu a espera na fila,
+ * isto é, havia observador no enqueue (ADR 0106).
+ */
+interface Probe {
+  readonly queuedMs: number;
+  /** Início do handler, depois dos middlewares. */
+  readonly startedAt: number;
+}
+
+function startProbe(queuedMs: number | undefined): Probe | undefined {
+  return queuedMs === undefined ? undefined : { queuedMs, startedAt: performance.now() };
+}
+
+/** `queuedMs`: a espera na fila do chat, medida só com observador de `message.handled`. */
 export interface InboundFlow {
-  readonly handleMessage: (message: Message) => Promise<void>;
+  readonly handleMessage: (message: Message, queuedMs?: number) => Promise<void>;
   readonly handleEdited: (message: Message) => Promise<void>;
-  readonly handleInteraction: (interaction: Interaction) => Promise<void>;
+  readonly handleInteraction: (interaction: Interaction, queuedMs?: number) => Promise<void>;
   /**
    * Expira a espera do remetente no chat, se ela venceu, e roda o `onExpire` do passo (ADR 0097).
    * Quem chama a põe na fila do chat: é a tarefa da expiração.
@@ -96,46 +114,75 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     await pipeline.run(createMessageContext(message, contextDeps), handle);
   }
 
-  function handleMessage(message: Message): Promise<void> {
-    return admit(message, dispatchMessage);
+  function handleMessage(message: Message, queuedMs?: number): Promise<void> {
+    return admit(message, (ctx) => dispatchMessage(ctx, startProbe(queuedMs)));
   }
 
-  async function dispatchMessage(ctx: KernelMessageContext): Promise<void> {
+  async function dispatchMessage(
+    ctx: KernelMessageContext,
+    probe: Probe | undefined,
+  ): Promise<void> {
     const { message } = ctx;
     // A espera vem antes do roteador (ADR 0060). Retirada aqui de todo jeito: um comando digitado
     // no meio da conversa a cancela e segue para o roteador.
     const pending = conversations.take(message.chat.id, message.sender.id);
     if (pending !== undefined && router.match(message, ctx.text) === null) {
       if (pending.plugin !== MENU_OWNER) {
-        await runStep(ctx, pending);
+        await runStep(ctx, pending, probe);
         return;
       }
       // Um número do menu roda a ação, como o clique; outro texto segue o fluxo normal (ADR 0062).
       const target = menuChoice(ctx, pending.data);
       if (target !== undefined) {
-        await runAction(ctx, target);
+        await runAction(ctx, target, probe);
         return;
       }
     }
     const result = await router.dispatch(ctx);
     if (!result.consumed) {
-      await bus.emit('message', message, listenerExtras(ctx));
+      const emitted = await bus.emit('message', message, listenerExtras(ctx));
+      handled(ctx, probe, 'message', emitted.failed > 0 ? 'failed' : 'ok');
       return;
     }
-    await afterCommand(ctx, result);
+    await afterCommand(ctx, result, probe);
+  }
+
+  /** Emite o `message.handled`; sem `probe` (sem observador no enqueue), nada. */
+  function handled(
+    ctx: KernelMessageContext,
+    probe: Probe | undefined,
+    route: MessageHandledSignal['route'],
+    status: MessageHandledSignal['status'],
+    command?: string,
+  ): void {
+    if (probe === undefined) return;
+    const { message } = ctx;
+    deps.observers.emit('message.handled', {
+      messageId: message.id,
+      chatId: message.chat.id,
+      senderId: message.sender.id,
+      chatType: message.chat.isGroup ? 'group' : 'private',
+      route,
+      ...(command !== undefined && { command }),
+      status,
+      queuedMs: probe.queuedMs,
+      durationMs: performance.now() - probe.startedAt,
+    });
   }
 
   /** Recusa, falha e evento `command` do comando que consumiu a mensagem ou o clique. */
   async function afterCommand(
     ctx: KernelMessageContext,
     result: Extract<DispatchResult, { readonly consumed: true }>,
+    probe: Probe | undefined,
   ): Promise<void> {
     const { message } = ctx;
     if (result.status === 'background') {
-      // O chat já está livre; a falha e o `command` saem quando o `run` terminar (ADR 0087).
+      // O chat já está livre; a falha, o `command` e o `message.handled` saem quando o `run`
+      // terminar (ADR 0087).
       deps.background.track(
         result.done
-          .then((outcome) => afterCommand(ctx, outcome))
+          .then((outcome) => afterCommand(ctx, outcome, probe))
           .catch((error: unknown) =>
             ctx.log.error('falha ao concluir o comando em segundo plano', {
               plugin: result.command.plugin,
@@ -155,20 +202,25 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
           err: error,
         }),
       );
-    } else if (result.status === 'failed') {
+    }
+    const timedOut =
+      result.status === 'failed' &&
+      (result.error instanceof CommandTimeoutError ||
+        result.error instanceof GroupAdminTimeoutError);
+    if (result.status === 'failed') {
       const event: PluginErrorEvent = {
         plugin: result.command.plugin,
         phase: 'command',
         event: result.command.name,
         error: result.error,
-        timedOut:
-          result.error instanceof CommandTimeoutError ||
-          result.error instanceof GroupAdminTimeoutError,
+        timedOut,
       };
       reportPluginError(event);
     }
-    // Com await, como o `message`: o observador segura o chat e entra no `settled()` (ADR 0049).
     const { plugin, name, invokedAs } = result.command;
+    // Antes do `command`, cujo listener é aguardado: a duração é só a do comando.
+    handled(ctx, probe, 'command', commandStatus(result.status, timedOut), name);
+    // Com await, como o `message`: o observador segura o chat e entra no `settled()` (ADR 0049).
     await bus.emit('command', { plugin, name, invokedAs, status: result.status, message });
   }
 
@@ -179,19 +231,24 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
   async function runStep(
     ctx: KernelMessageContext,
     pending: PendingReply<KernelMessageContext>,
+    probe: Probe | undefined,
   ): Promise<void> {
     try {
       await pending.run(ctx, pending.data);
     } catch (error) {
+      const timedOut = error instanceof StepTimeoutError;
       const event: PluginErrorEvent = {
         plugin: pending.plugin,
         phase: 'step',
         event: pending.step,
         error,
-        timedOut: error instanceof StepTimeoutError,
+        timedOut,
       };
       reportPluginError(event);
+      handled(ctx, probe, 'step', timedOut ? 'timeout' : 'failed');
+      return;
     }
+    handled(ctx, probe, 'step', 'ok');
   }
 
   /**
@@ -286,8 +343,8 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
    * o `label`, e roda o comando ou o passo da ação. Vencido, desconhecido ou de outro chat, é
    * descartado.
    */
-  async function handleInteraction(interaction: Interaction): Promise<void> {
-    if (interaction.command !== undefined) return handleNativeCommand(interaction);
+  async function handleInteraction(interaction: Interaction, queuedMs?: number): Promise<void> {
+    if (interaction.command !== undefined) return handleNativeCommand(interaction, queuedMs);
     const { chat, sender, actionId } = interaction;
     const target = actions.resolve(actionId, chat.id);
     if (target === undefined) {
@@ -307,7 +364,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     await admit(message, async (ctx) => {
       // O clique é um comando: cancela a espera do remetente, como o comando digitado (ADR 0060).
       conversations.take(chat.id, sender.id);
-      await runAction(ctx, target);
+      await runAction(ctx, target, startProbe(queuedMs));
     });
   }
 
@@ -315,7 +372,10 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
    * Comando nativo da plataforma (ADR 0064): roda como o clique num botão de comando, com o texto
    * livre interpretado como o que vem depois do comando digitado.
    */
-  async function handleNativeCommand(interaction: CommandInteraction): Promise<void> {
+  async function handleNativeCommand(
+    interaction: CommandInteraction,
+    queuedMs: number | undefined,
+  ): Promise<void> {
     const { chat, sender, command, args } = interaction;
     const message = createMessage({
       type: 'text',
@@ -332,17 +392,22 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     await admit(message, async (ctx) => {
       // Comando cancela a espera do remetente, como o digitado (ADR 0060).
       conversations.take(chat.id, sender.id);
+      const started = startProbe(queuedMs);
       const result = await router.dispatch(ctx, { command, rawArgs: args });
       if (!result.consumed) {
         ctx.log.debug('comando nativo que não existe mais; descartado', { command });
         return;
       }
-      await afterCommand(ctx, result);
+      await afterCommand(ctx, result, started);
     });
   }
 
   /** Roda o alvo da ação. Comando ou passo que não existe mais (plugin desligado) é descartado. */
-  async function runAction(ctx: KernelMessageContext, target: ActionTarget): Promise<void> {
+  async function runAction(
+    ctx: KernelMessageContext,
+    target: ActionTarget,
+    probe: Probe | undefined,
+  ): Promise<void> {
     if (target.kind === 'command') {
       const result = await router.dispatch(ctx, { command: target.command, args: target.args });
       if (!result.consumed) {
@@ -351,7 +416,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
         });
         return;
       }
-      await afterCommand(ctx, result);
+      await afterCommand(ctx, result, probe);
       return;
     }
     const run = conversations.find(target.plugin, target.step);
@@ -362,7 +427,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
       });
       return;
     }
-    await runStep(ctx, { plugin: target.plugin, step: target.step, data: target.data, run });
+    await runStep(ctx, { plugin: target.plugin, step: target.step, data: target.data, run }, probe);
   }
 
   /** Extras dos eventos de mensagem: os campos chegam aos listeners pela visão de cada plugin. */
@@ -387,4 +452,13 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     expireReply,
     interactionOf: (message) => interactions.get(message),
   };
+}
+
+function commandStatus(
+  status: Extract<DispatchResult, { readonly consumed: true }>['status'],
+  timedOut: boolean,
+): MessageHandledSignal['status'] {
+  if (status === 'rejected') return 'refused';
+  if (status !== 'failed') return 'ok';
+  return timedOut ? 'timeout' : 'failed';
 }

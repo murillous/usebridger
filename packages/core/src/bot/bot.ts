@@ -15,6 +15,7 @@ import { createLogger, createNoopLogger } from '#logger/logger.ts';
 import { createSecretSet } from '#logger/secrets.ts';
 import type { Logger } from '#logger/types.ts';
 import { chatAllowed } from '#middleware/chat-filter.ts';
+import { Observers } from '#observers/observers.ts';
 import { createOutbound, enqueueAction } from '#outbound/actions.ts';
 import { OutboundQueue } from '#outbound/queue.ts';
 import { createPluginHost, type PluginHost } from '#plugin/host.ts';
@@ -173,6 +174,8 @@ export function createBot(config: BotConfig): Bot {
     onError: (event) => logPluginError(log, event),
   });
   const pluginErrors = createPluginErrorReporter({ log: getLog, bus });
+  // Sinais por unidade de trabalho, para métricas (ADR 0106).
+  const observers = new Observers(pluginErrors.report);
   // Ordem dos pontos de extensão: a tabela do host, já na ordem de carga (ADR 0096).
   const services = createServiceRegistry({
     loadOrder: () => host?.report().map((entry) => entry.name) ?? [],
@@ -228,6 +231,7 @@ export function createBot(config: BotConfig): Bot {
       log.debug('falha ao enviar "digitando"', { chatId, err: error }),
     ...config.outbound,
     transport,
+    observers,
   });
   const stats = (): BotStats => ({ inbound: inbound.stats(), outbound: outbound.stats() });
   // O plugin vê o envio e as ações (ADR 0040): a fila (close, stats) fica com o kernel.
@@ -263,6 +267,7 @@ export function createBot(config: BotConfig): Bot {
     ready: () => gate.ready || gate.promise,
     reportPluginError: pluginErrors.report,
     background,
+    observers,
   });
   const reconnector: Reconnector | undefined =
     config.reconnection === false
@@ -291,6 +296,7 @@ export function createBot(config: BotConfig): Bot {
     tenants,
     flow,
     bus,
+    observers,
     conversations,
     reconnector,
     gate,
@@ -427,6 +433,7 @@ export function createBot(config: BotConfig): Bot {
         },
       },
       stats,
+      observers,
       unsafe: createUnsafeAccess({
         transport,
         log,

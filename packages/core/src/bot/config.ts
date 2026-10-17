@@ -140,7 +140,7 @@ export interface BotConfig {
   /** Fila de entrada por chat. */
   readonly inbound?: Pick<InboundQueueOptions, 'maxPendingPerChat'>;
   /** Fila de saída (taxa, prioridade, retry, humanização). */
-  readonly outbound?: Omit<OutboundQueueOptions, 'transport'>;
+  readonly outbound?: Omit<OutboundQueueOptions, 'transport' | 'observers'>;
   /** Reconexão automática. Padrão: ligada com os padrões da `ReconnectionPolicy`. */
   readonly reconnection?: BotReconnectionOptions | false;
   readonly timeouts?: BotTimeouts;

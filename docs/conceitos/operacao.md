@@ -70,6 +70,35 @@ Um plugin lê os mesmos contadores com `ctx.stats()`, de entrada e de saída, se
 job do scheduler ou a cada scrape, e guarda os valores
 ([ADR 0106](../adr/0106-observadores-do-core.md)).
 
+Para medir latência e desfecho de cada unidade de trabalho, o plugin assina os sinais do core com
+`ctx.observe`:
+
+```ts
+ctx.observe('message.handled', (s) => {
+  // s.route: 'command' | 'step' | 'message'; s.status: 'ok' | 'failed' | 'refused' | 'timeout'
+  // s.queuedMs: espera na fila de entrada; s.durationMs: tempo do handler
+});
+ctx.observe('outbound.sent', (s) => {
+  // s.status: 'sent' | 'failed' | 'dropped'; s.queuedMs inclui taxa anti-ban e re-tentativas
+  // s.replyTo: id da mensagem respondida, só nas respostas por ctx.reply
+});
+```
+
+- **Síncrono e nunca aguardado.** O observador não segura o chat; uma promise devolvida é
+  ignorada. Faça só a conta (somar num balde, empurrar num buffer) e deixe I/O para depois.
+- **Erro isolado.** A exceção vira `plugin.error` com `phase: 'observer'`, e os demais
+  observadores seguem.
+- **Custo zero sem assinante.** Sem observador, o core não lê o relógio nem monta o sinal.
+- **Por bot e por plugin.** Dois bots no processo não se veem, e a assinatura sai no dispose do
+  plugin (ou pela função que `observe` devolve).
+- O `message.handled` sai para o comando (com o nome canônico), o passo de conversa e os
+  listeners de `message`; a edição e a mensagem barrada por middleware não geram sinal. Num
+  comando com `background: true`, sai quando o `run` termina. O sinal só sai se havia observador
+  quando a mensagem entrou na fila.
+- O `outbound.sent` sai uma vez por `send`, depois da última parte de um texto dividido ou de um
+  álbum. O `ctx.send` direto não traz `chatType` nem `replyTo`: o core só conhece o id do chat.
+- `chatId`, `senderId` e `messageId` existem só em memória. Não os persista nem exporte.
+
 ## Métricas de performance
 
 O projeto mede, no CI e sem rede, o custo do kernel em si

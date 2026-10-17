@@ -21,8 +21,13 @@ export interface Workload {
   readonly pluginErrors: () => number;
 }
 
+export interface WorkloadOptions {
+  /** Um observador vazio em cada sinal do core, para medir o custo deles (ADR 0106). */
+  readonly observed?: boolean;
+}
+
 /** Sobe o bot de referência sobre o `FakeTransport`, com a fila de saída sem intervalo (D47). */
-export async function createWorkload(): Promise<Workload> {
+export async function createWorkload(options: WorkloadOptions = {}): Promise<Workload> {
   let pluginErrors = 0;
   const plugins = Array.from({ length: PLUGIN_COUNT }, (_, i) => benchPlugin(i));
   const observer = definePlugin({
@@ -33,6 +38,10 @@ export async function createWorkload(): Promise<Workload> {
       ctx.events.on('plugin.error', () => {
         pluginErrors++;
       });
+      if (options.observed === true) {
+        ctx.observe('message.handled', () => undefined);
+        ctx.observe('outbound.sent', () => undefined);
+      }
     },
   });
   const bot = await createTestBot({

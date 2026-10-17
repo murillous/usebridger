@@ -14,7 +14,8 @@ export interface PluginErrorEvent {
   /**
    * Onde a falha aconteceu. `role`: a checagem de um papel custom que o plugin define. `step`: um
    * passo de conversa (ADR 0060). `step-expire`: o `onExpire` de um passo (ADR 0097). `http`:
-   * uma rota ou WebSocket do plugin (ADR 0076).
+   * uma rota ou WebSocket do plugin (ADR 0076). `observer`: um observador de `ctx.observe`
+   * (ADR 0106).
    */
   readonly phase:
     | 'listener'
@@ -25,7 +26,8 @@ export interface PluginErrorEvent {
     | 'setup'
     | 'teardown'
     | 'scheduler'
-    | 'http';
+    | 'http'
+    | 'observer';
   /** Evento, comando, passo, papel, job ou rota (`POST /webhook`) em processamento, quando houver. */
   readonly event: string | null;
   readonly error: unknown;
