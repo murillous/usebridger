@@ -58,6 +58,7 @@ export default defineConfig({
             '../packages/core/src/zod.ts',
             '../packages/storage-sqlite/src/index.ts',
             '../packages/storage-postgres/src/index.ts',
+            '../packages/plugin-metrics/src/index.ts',
             '../packages/transport-baileys/src/index.ts',
             '../packages/transport-web/src/index.ts',
             '../packages/transport-web/src/client.ts',
