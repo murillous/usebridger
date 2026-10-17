@@ -64,14 +64,32 @@ export function createRedactor(secrets: SecretSource): <T>(value: T) => T {
       for (const item of value) copy.add(walk(item, done));
       return copy;
     }
+    // Caixa (`new String('sk-…')`) não tem chaves úteis: vale o primitivo.
+    if (value instanceof String || value instanceof Number || value instanceof Boolean) {
+      return walk(value.valueOf(), done);
+    }
     const keepProto = value instanceof Error || isPlain(value);
     const copy = (keepProto ? Object.create(Object.getPrototypeOf(value)) : {}) as Record<
       string,
       unknown
     >;
     done.set(value, copy);
-    // `message` e `stack` do Error são próprios e não enumeráveis: só o Error os inclui todos.
-    const keys = value instanceof Error ? Object.getOwnPropertyNames(value) : Object.keys(value);
+    const put = (key: string, item: unknown, enumerable: boolean): void => {
+      Object.defineProperty(copy, key, {
+        value: walk(item, done),
+        enumerable,
+        writable: true,
+        configurable: true,
+      });
+    };
+    // Proxy que lança em `ownKeys` não pode trocar o erro original pelo do redactor.
+    let keys: string[];
+    try {
+      // `message` e `stack` do Error são próprios e não enumeráveis: só o Error os inclui todos.
+      keys = value instanceof Error ? Object.getOwnPropertyNames(value) : Object.keys(value);
+    } catch {
+      return '[unreadable]';
+    }
     for (const key of keys) {
       let item: unknown;
       try {
@@ -79,12 +97,39 @@ export function createRedactor(secrets: SecretSource): <T>(value: T) => T {
       } catch {
         item = undefined;
       }
-      Object.defineProperty(copy, key, {
-        value: walk(item, done),
-        enumerable: Object.getOwnPropertyDescriptor(value, key)?.enumerable ?? true,
-        writable: true,
-        configurable: true,
-      });
+      put(key, item, Object.getOwnPropertyDescriptor(value, key)?.enumerable ?? true);
+    }
+    // A cópia mantém o protótipo do Error: getters e `toJSON` dele rodariam sobre a cópia (e
+    // lançariam em `#privado`, ou devolveriam dado cru). Viram campos de dado já censurados.
+    if (value instanceof Error) {
+      for (
+        let proto = Object.getPrototypeOf(value) as object | null;
+        proto !== null && proto !== Error.prototype && proto !== Object.prototype;
+        proto = Object.getPrototypeOf(proto)
+      ) {
+        for (const key of Object.getOwnPropertyNames(proto)) {
+          if (key === 'constructor' || Object.hasOwn(copy, key)) continue;
+          const descriptor = Object.getOwnPropertyDescriptor(proto, key);
+          if (descriptor?.get !== undefined) {
+            let item: unknown;
+            try {
+              item = Reflect.get(proto, key, value);
+            } catch {
+              item = undefined;
+            }
+            put(key, item, false);
+          } else if (key === 'toJSON' && typeof descriptor?.value === 'function') {
+            let json: unknown;
+            let ok = true;
+            try {
+              json = walk(descriptor.value.call(value), done);
+            } catch {
+              ok = false; // toJSON que lança: omitido, a cópia serializa pelos campos.
+            }
+            if (ok) Object.defineProperty(copy, key, { value: () => json, configurable: true });
+          }
+        }
+      }
     }
     return copy;
   };

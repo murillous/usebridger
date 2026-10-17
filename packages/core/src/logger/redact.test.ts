@@ -47,6 +47,42 @@ describe('createRedactor', () => {
     expect(JSON.stringify(copy)).not.toContain(SECRET);
   });
 
+  it('subclasse de Error com getter, toJSON e #privado não lança nem vaza', () => {
+    class Leaky extends Error {
+      #token = SECRET;
+      get token(): string {
+        return this.#token;
+      }
+      get closure(): string {
+        return SECRET;
+      }
+      toJSON(): unknown {
+        return { t: this.#token };
+      }
+    }
+    const copy = redactor()(new Leaky('x'));
+    expect(copy.token).toBe('[REDACTED]');
+    expect(copy.closure).toBe('[REDACTED]');
+    expect(JSON.stringify(copy)).toBe('{"t":"[REDACTED]"}');
+  });
+
+  it('Proxy ilegível vira [unreadable]', () => {
+    const proxy = new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error('boom');
+        },
+      },
+    );
+    expect(redactor()({ p: proxy })).toEqual({ p: '[unreadable]' });
+  });
+
+  it('caixa String vira o primitivo censurado', () => {
+    const boxed = new String(SECRET);
+    expect(redactor()({ b: boxed })).toEqual({ b: '[REDACTED]' });
+  });
+
   it('instância de classe dentro de cause vira objeto simples censurado', () => {
     class Headers {
       Authorization = `Bearer ${SECRET}`;
