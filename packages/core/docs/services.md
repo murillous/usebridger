@@ -151,7 +151,7 @@ setup(ctx) {
 - **Atribuída a quem contribuiu.** A contribuição sai sozinha no teardown, reload e disable do
   plugin que a fez, como os serviços que ele provê. Sem `ctx.signal`, sem `Unsubscribe`: o reload
   do contribuidor não duplica a etapa, e o plugin desligado para de rodar.
-- **Visão viva.** `extensionPoint(name)` devolve `{ list() }`; guarde a visão no `setup` e chame
+- **Visão viva.** `extensionPoint(name)` devolve `{ list(), entries() }`; guarde a visão no `setup` e chame
   `list()` a cada uso. Cada chamada devolve uma cópia já com as entradas e saídas recentes.
 - **Quem contribuiu.** `extensionPoint(name).entries()` devolve `{ plugin, value }[]`, na mesma
   ordem e com a mesma semântica de cópia do `list()`; serve a quem precisa do dono de cada
