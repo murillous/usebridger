@@ -9,6 +9,7 @@ import {
 import { z } from '@usebridger/core/zod';
 import { COOKIE, createSessions, sameOrigin, tokenMatches } from '#auth.ts';
 import { createLogBuffer, filterByLevel, type LogEntry } from '#logs.ts';
+import { registerPluginRoutes } from '#plugins.ts';
 
 export interface StatusView {
   transport: string;
@@ -188,6 +189,8 @@ export const dashboard: PluginDefinition = definePlugin({
         return filtered ? Response.json(filtered) : new Response('nível inválido', { status: 400 });
       }),
     );
+
+    registerPluginRoutes(ctx.http, ctx.admin, ctx.log, guarded);
 
     ctx.http.ws('/api/ws', (request) => {
       if (!sessions.valid(request) || !sameOrigin(request)) return unauthorized();
