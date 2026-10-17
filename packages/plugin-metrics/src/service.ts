@@ -132,6 +132,7 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
   const metrics = new Map<string, Metric>();
   let flushing: Promise<void> = Promise.resolve();
   let purgedDay = '';
+  let generation = 0;
 
   function cellFor(name: string, kind: Kind, labels: MetricLabels): Cell | undefined {
     assertLabels(name, labels);
@@ -197,8 +198,8 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
       // Troca o mapa antes dos awaits: amostras novas durante a gravação vão para o próximo flush.
       metric.cells = new Map();
       for (const cell of cells.values()) {
-        const row = toRow(name, metric.kind, cell);
-        if (row) rows.push(row);
+        // Só entra no snapshot o que foi gravado: o que falhar volta ao agregado e sai no próximo flush.
+        const written: Cell = { ...cell, fields: new Map() };
         for (const [field, value] of cell.fields) {
           if (value <= 0) continue;
           const where = { metric: name, day: cell.day, key: cell.key, field };
@@ -206,6 +207,7 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
             await collection.increment(where, 'value', value, {
               insert: { ...where, labels: cell.labels, value: 0 }, // o core soma `by` ao insert
             });
+            written.fields.set(field, value);
           } catch (error) {
             // Não perde o dado: devolve ao agregado para o próximo flush tentar de novo.
             log.error('falha ao gravar métrica; mantida em memória', { metric: name, error });
@@ -218,6 +220,8 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
             addTo(target, field, value);
           }
         }
+        const row = toRow(name, metric.kind, written);
+        if (row) rows.push(row);
       }
     }
     try {
@@ -227,19 +231,35 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
     }
     if (rows.length === 0) return;
     const snapshot = { at: new Date(now()).toISOString(), rows };
-    for (const exporter of options.exporters()) {
-      try {
-        await exporter(snapshot);
-      } catch (error) {
-        log.error('exportador de métricas falhou', { error });
+    try {
+      for (const exporter of options.exporters()) {
+        try {
+          await exporter(snapshot);
+        } catch (error) {
+          log.error('exportador de métricas falhou', { error });
+        }
       }
+    } catch (error) {
+      log.error('falha ao listar exportadores de métricas', { error });
     }
   }
 
-  // Serializa: dois flushes em paralelo gravariam o mesmo agregado duas vezes.
+  // Marca início e fim de cada flush: o `query` detecta que um flush mexeu no agregado durante o `find`.
+  async function tracked(): Promise<void> {
+    generation++;
+    try {
+      await doFlush();
+    } finally {
+      generation++;
+    }
+  }
+
+  // Serializa: dois flushes em paralelo gravariam o mesmo agregado duas vezes. O erro de um flush
+  // vai a quem chamou; o `catch` impede que a fila inteira fique rejeitada para sempre.
   function flush(): Promise<void> {
-    flushing = flushing.then(doFlush);
-    return flushing;
+    const run = flushing.catch(() => undefined).then(tracked);
+    flushing = run;
+    return run;
   }
 
   async function query(name: string, range: MetricsRange): Promise<MetricRow[]> {
@@ -247,10 +267,17 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
       throw new TypeError('query: from e to precisam ser YYYY-MM-DD');
     }
     // Espera o flush em andamento: sem isso o que está sendo gravado sumiria da soma.
-    await flushing;
-    const docs = await collection.find({
-      where: { metric: name, day: { gte: range.from, lte: range.to } },
-    });
+    // Refaz se um flush começou ou terminou durante o `find`: ele esvaziaria a memória e a soma
+    // contaria o dado em dobro ou o perderia.
+    let docs: Awaited<ReturnType<typeof collection.find>>;
+    for (;;) {
+      await flushing.catch(() => undefined);
+      const before = generation;
+      docs = await collection.find({
+        where: { metric: name, day: { gte: range.from, lte: range.to } },
+      });
+      if (before === generation) break;
+    }
     const merged = new Map<string, Cell>();
     const take = (day: string, key: string, labels: MetricLabels): Cell => {
       const id = `${day}|${key}`;
