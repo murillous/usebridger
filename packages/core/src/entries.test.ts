@@ -158,6 +158,7 @@ const entries: Record<string, { file: string; load: () => Promise<object> } & En
       'MessageAction',
       'MessageContext',
       'MessageFilter',
+      'LogSignal',
       'MessageHandledSignal',
       'MessageKey',
       'MessageListenerFields',
