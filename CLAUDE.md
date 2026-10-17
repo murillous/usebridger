@@ -11,7 +11,8 @@ registradas; para mudar uma, proponha um ADR novo que a substitua.
   pacote.
 - O LumaBot (app de referência, plugins da Luma e `legacy/`) vive em `murillous/LumaBot` e usa
   os pacotes do npm ([ADR 0084](docs/adr/0084-repositorios-separados.md),
-  [ADR 0086](docs/adr/0086-plugins-da-luma-no-lumabot.md)). O kernel não publica plugins.
+  [ADR 0086](docs/adr/0086-plugins-da-luma-no-lumabot.md)). O kernel publica só os plugins
+  oficiais `plugin-metrics` e `plugin-dashboard` ([ADR 0107](docs/adr/0107-plugins-oficiais-de-metricas-e-dashboard.md)).
 
 ## Git
 

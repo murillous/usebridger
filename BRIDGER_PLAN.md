@@ -187,7 +187,7 @@ decisão anterior.
 | D83 | **Nome: Bridger** (substitui o D31): pacotes no escopo `@usebridger/*`, scaffold `create-bridger-plugin` sem escopo, prefixo de plugin `bridger-plugin-`, variáveis `BRIDGER_*`, anotação `x-bridger-override` e schema Postgres `bridger` | Escopo `@bridger` (org com outro dono); `@bridger-js`, `@bridgerhq`, `@getbridger`, `@bridgerjs` | Kernel multiplataforma com público global; troca antes do primeiro publish não quebra ninguém ([ADR 0083](docs/adr/0083-nome-bridger.md)) |
 | D84 | **Repositórios separados** (substitui parte do D01, detalha D23; plugins oficiais substituídos pelo D86): kernel, plugins oficiais, `bench/` e `tooling/` em `murillous/usebridger`, com histórico desde o M0-4.1; `apps/lumabot`, `legacy/`, deploy, stars e forks ficam em `murillous/LumaBot`, que usa os `@usebridger/*` do npm | Manter o monorepo; renomear o `LumaBot` para o kernel | Deploy da Luma e release dos pacotes deixam de dividir branches; as stars ficam com o bot ([ADR 0084](docs/adr/0084-repositorios-separados.md)) |
 | D85 | **Release a partir da `main`** (substitui a branch de release do D82, sobre o D84): `develop` integra as PRs; lançar é uma PR `develop` → `main`, cujo push abre o PR de versão contra a `main`; depois do publish, o `release.yml` abre a PR `main` → `develop`; merges entre as duas sempre com merge commit; `ci.yml` nas duas branches | Merge manual da `develop` na `main` a cada release; `release.yml` avançando a `main` sozinho | A `main` livre do legacy passa a apontar para o último código lançado ([ADR 0085](docs/adr/0085-release-a-partir-da-main.md)) |
-| D86 | **Plugins da Luma no LumaBot** (substitui os plugins oficiais do D84 e o `plugins/*` do D01): o kernel não publica plugins; os do M4 e do M5 viram código do app em `apps/lumabot/src/plugins/<nome>`, só com a API pública dos `@usebridger/*` do npm; lacuna de API vira issue no `usebridger` | Manter todos no kernel; levar só os do M5 | Prova que qualquer bot se monta com a biblioteca do npm, sem acesso ao código do core ([ADR 0086](docs/adr/0086-plugins-da-luma-no-lumabot.md)) |
+| D86 | **Plugins da Luma no LumaBot** (substitui os plugins oficiais do D84 e o `plugins/*` do D01; métricas e dashboard substituídos pelo D107): o kernel não publica plugins; os do M4 e do M5 viram código do app em `apps/lumabot/src/plugins/<nome>`, só com a API pública dos `@usebridger/*` do npm; lacuna de API vira issue no `usebridger` | Manter todos no kernel; levar só os do M5 | Prova que qualquer bot se monta com a biblioteca do npm, sem acesso ao código do core ([ADR 0086](docs/adr/0086-plugins-da-luma-no-lumabot.md)) |
 
 ---
 
@@ -206,6 +206,8 @@ bridger/
 │   ├── storage-sqlite/       # @usebridger/storage-sqlite (padrão)
 │   ├── storage-postgres/     # @usebridger/storage-postgres
 │   ├── testing/              # @usebridger/testing — FakeTransport, createTestBot, matchers
+│   ├── plugin-metrics/       # @usebridger/plugin-metrics (D107)
+│   ├── plugin-dashboard/     # @usebridger/plugin-dashboard (D107)
 │   └── create-plugin/        # create-bridger-plugin — scaffold
 ├── bench/                    # benchmarks do CI
 └── docs/
@@ -238,10 +240,12 @@ bridger/
 | HTTP | Hono sob demanda, `/health`, rotas namespaced |
 | Logger | pino estruturado com `plugin` no contexto |
 
-**Plugins da Luma** (no `LumaBot`, D86; o kernel não publica plugins): help (gerado a partir dos comandos registrados), everyone (`@todos`),
+**Plugins oficiais** (no `usebridger`, D107): metrics e dashboard.
+
+**Plugins da Luma** (no `LumaBot`, D86): help (gerado a partir dos comandos registrados), everyone (`@todos`),
 user-names (resolução JID → nome/nick, provê service), media (sticker/imagem/GIF/PDF), download
 (vídeo/áudio), reminders (usa o Scheduler), rank, ai (Luma: IA, personas, tools, histórico,
-resumo, spontaneous, transcrição) e dashboard.
+resumo, spontaneous, transcrição).
 
 ### 5.3 Fluxo de uma mensagem
 
@@ -731,7 +735,8 @@ testes com `@usebridger/testing`, docs, item marcado na checklist de paridade (s
 
 ### M5 — Luma e dashboard
 
-Vive no `murillous/LumaBot` (D86), como o M4.
+Vive no `murillous/LumaBot` (D86), como o M4, exceto o M5-4 e o M5-6, que são plugins oficiais no
+`murillous/usebridger` (D107).
 
 - **#M5-1 `plugin-ai` (Luma)**
   - Providers Gemini/OpenAI/DeepSeek com fallback; provê service `ai`
@@ -749,10 +754,13 @@ Vive no `murillous/LumaBot` (D86), como o M4.
   - Formulários de config gerados dos schemas Zod (secrets mascarados)
   - Enable/disable de plugins; tabela de boot
   - Porta do app React atual (`legacy/dashboard/web`)
+  - Painéis das métricas do kernel e seção genérica para as métricas registradas no `metrics`
 - **#M5-5 Migração de dados**
   - Script de migração dos bancos do legacy (`luma_private.sqlite`, `luma_metrics.sqlite`)
     para o storage novo (usuários, personas, lembretes, interações, métricas)
   - Migração da sessão do WhatsApp (auth) ou procedimento de re-pareamento documentado
+- **#M5-6 `plugin-metrics`** — serviço `metrics`, métricas do kernel pelos observadores do core
+  (D106), `/metrics` Prometheus, retenção de 90 dias, sem dado pessoal persistido (D107)
 
 ---
 
