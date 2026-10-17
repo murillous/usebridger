@@ -58,6 +58,24 @@ pedido (proteção contra CSWSH). Ao reconectar, o cliente recebe um novo snapsh
 - As linhas de log já saem com os segredos do bot mascarados, mas `fields` pode ter dado de
   negócio: trate o token como acesso ao log.
 
+## Plugins (enable, disable, reload)
+
+Exige o acesso admin do core (ADR 0111): ponha `dashboard` em `adminPlugins`, senão as rotas abaixo
+respondem 503 e o setup loga um `warn`. Status e logs seguem funcionando.
+
+```ts
+createBot({ plugins: [dashboard], adminPlugins: ['dashboard'] });
+```
+
+| Rota | Resposta |
+| ---- | -------- |
+| `GET /api/plugins` | Tabela de boot: array de `{ name, version, origin, status: 'loaded', unregistered? }` ou `{ name, version, origin, status: 'skipped', reason }`, na ordem de carga. `reason` é `{ kind, ... }` como no core; em `setup-failed`, `error` vira `{ plugin, phase, timedOut, message }` (mensagem truncada, nunca o erro cru). |
+| `POST /api/plugins/:name/enable`, `/disable`, `/reload` | Sem corpo. 200 `{ plugin, dependents, teardownErrors }` (linhas novas do plugin e dos dependentes; falhas de teardown como `{ plugin, phase, timedOut, message }`). |
+
+Os `POST` exigem o cookie de sessão e `Origin` do mesmo host (senão 403). Nome desconhecido 404;
+ação inválida no estado (o próprio dashboard em `disable`/`reload`, plugin ignorado em `reload`,
+host parado) 409 com a mensagem; outro erro é logado e responde 500.
+
 ## Limites conhecidos
 
 - Depois de um reload, o QR e o código de pareamento não voltam: o snapshot do core só guarda o status de conexão, e eles valem até o próximo evento.
