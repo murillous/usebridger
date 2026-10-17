@@ -11,8 +11,7 @@ interface ou criar uma aba nova segue este documento e o canvas. Decisões de ba
 
 **https://claude.ai/artifact/9mHnZZqd33jPZ1Mn7vERy7**
 
-O canvas é a fonte visual. Ele é privado: o dono do repositório precisa compartilhá-lo pelo menu
-Share antes de outra pessoa ou agente conseguir abrir. Quadros:
+O canvas é a fonte visual, aberto a quem tiver o link. Quadros:
 
 | Quadro | O que mostra |
 | --- | --- |
@@ -132,60 +131,26 @@ sem tocar no código do dashboard, pelo ponto de extensão `dashboard.tabs` (ADR
 próprio dashboard (Visão geral, Métricas, Plugins, Configuração) são as únicas que ele desenha à
 mão; as de plugins entram no grupo Extensões da sidebar.
 
+O contrato está no [ADR 0108](../../../docs/adr/0108-abas-do-dashboard-por-ponto-de-extensao.md).
+O resumo para quem desenha ou implementa:
+
 ```text
-plugin reminders ──contribute('dashboard.tabs', tab)──▶ registry (atribui ao plugin)
-                                                             │ extensionPoint().list()
-browser ──HTTP/WS (sessão do dashboard)──▶ plugin-dashboard ─┘
-          GET  /plugins/dashboard/api/tabs                       manifesto, sem funções
-          GET  /plugins/dashboard/api/tabs/:tab/:widget          roda o load do widget
-          POST /plugins/dashboard/api/tabs/:tab/:widget/:action  roda a ação ou o submit
-          WS   /plugins/dashboard/ws                             status, QR, logs, tabs.changed
+plugin reminders ──contribute('dashboard.tabs', tab)──▶ registry (guarda o dono)
+                                                             │ extensionPoint().entries()
+browser ──HTTP (autenticação do dashboard)──▶ plugin-dashboard ─┘
+          GET  /plugins/dashboard/api/tabs                                   manifesto, sem funções
+          GET  /plugins/dashboard/api/tabs/:plugin/:tab/:widget              roda o load
+          POST /plugins/dashboard/api/tabs/:plugin/:tab/:widget/actions/:id  roda a ação da tabela
+          POST /plugins/dashboard/api/tabs/:plugin/:tab/:widget/submit       valida e roda o submit
 ```
 
-O contrato, a ser fechado num ADR antes da implementação:
-
-```ts
-declare module '@usebridger/core' {
-  interface ExtensionPoints {
-    'dashboard.tabs': DashboardTab;
-  }
-}
-
-interface DashboardTab {
-  id: string; // único entre as abas; vira a URL da aba
-  title: string;
-  order?: number;
-  widgets: DashboardWidget[];
-}
-
-type DashboardWidget =
-  | { kind: 'stats'; id: string; load(): Promise<{ label: string; value: string | number }[]> }
-  | { kind: 'table'; id: string; columns: string[]; load(q: { cursor?: string }): Promise<TablePage>;
-      actions?: { id: string; label: string; confirm?: boolean; run(i: { row: Row }): Promise<void> }[] }
-  | { kind: 'series'; id: string; load(q: { days: number }): Promise<{ day: string; value: number }[]> }
-  | { kind: 'form'; id: string; schema: z.ZodType; submit(input: unknown): Promise<void> }
-  | { kind: 'log'; id: string; source: string } // filtra o mesmo fluxo de logs do WS
-  | { kind: 'text'; id: string; markdown: string };
-```
-
-- **Dados declarativos, desenho do dashboard.** O plugin só devolve dados; o dashboard renderiza
-  com os componentes deste guia. O `form` reaproveita o gerador de formulários do Zod da config
-  (M5-4.2), com o mesmo mascaramento de secret.
-- **Uma porta só.** `load`, `run` e `submit` rodam no servidor, chamados pelas rotas do
-  dashboard, atrás da autenticação dele. O plugin que contribui não abre rota pública para a aba.
-- **Ciclo de vida de graça.** Reload, disable ou falha do contribuidor tira a aba (ADR 0096). O
-  dashboard lê `list()` a cada pedido e avisa o browser com `tabs.changed` no WebSocket.
-- **Erro tem destino.** `load` que lança mostra o erro dentro do widget e segue para
-  `plugin.error` (fase `http`); as outras abas e widgets continuam.
+- **Widgets:** `stats`, `table` (com ações por linha), `series`, `form` (schema Zod) e `text`. O
+  plugin só devolve dados; o dashboard desenha com os componentes deste guia, inclusive no celular.
+  O `form` usa o mesmo gerador da config (M5-4.2), com o mesmo mascaramento de secret.
+- **Chave `<plugin>/<id>`:** o dono vem do registry, não da aba.
+- **Ciclo de vida de graça:** reload, disable ou falha de quem contribuiu tira a aba (ADR 0096). Aba
+  que sumiu responde 404 e mostra "aba não está mais disponível".
+- **Erro por widget:** `load`, `run` ou `submit` que falha mostra o erro só naquele widget; `submit`
+  inválido mostra as issues do Zod junto dos campos.
 - **Métricas não precisam de aba.** Métrica registrada no serviço `metrics` já aparece na seção
   genérica (ADR 0107). Aba é para o que não é métrica: listas, ações, formulários.
-
-Questões abertas, para o ADR:
-
-1. **Dono da contribuição.** `extensionPoint().list()` devolve só as contribuições, sem o plugin
-   que contribuiu. O dashboard precisa dele para o rótulo "contribuída por" e para o `plugin.error`.
-   É lacuna do core: uma leitura que devolva o dono junto, ou um campo `plugin` declarado na aba.
-2. **`id` repetido entre plugins:** prefixar com o dono (depende do item 1) ou a primeira vence,
-   com `warn`.
-3. **Escape hatch para UI própria** (web component servido pelo plugin): fora agora; entra se
-   algum caso não couber nos widgets.
