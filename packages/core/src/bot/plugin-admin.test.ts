@@ -1,7 +1,11 @@
 // ADR 0111: `ctx.admin` só para os plugins em `adminPlugins`.
 
 import { afterEach, describe, expect, it } from 'vitest';
+import { z } from 'zod';
+import { secret } from '#config/schema.ts';
+import { ContextExpiredError } from '#deadline.ts';
 import { definePlugin } from '#plugin/define.ts';
+import { PluginHostStateError } from '#plugin/host.ts';
 import type { PluginContext } from '#plugin/types.ts';
 import { type Bot, type BotConfig, createBot } from './bot.ts';
 import { RecordingTransport, recordingLogger } from './harness.test-support.ts';
@@ -27,8 +31,8 @@ function setup(config: Partial<BotConfig> = {}) {
     logger: log,
     env: {},
     transport: new RecordingTransport(),
-    plugins: [plugin('dash'), plugin('other')],
     ...config,
+    plugins: [plugin('dash'), plugin('other'), ...(config.plugins ?? [])],
   });
   bots.push(bot);
   const admin = (): NonNullable<PluginContext['admin']> => {
@@ -76,9 +80,11 @@ describe('ctx.admin', () => {
   it('rejeita disable, reload e setOverrides sobre o próprio plugin', async () => {
     const { bot, admin } = setup({ adminPlugins: ['dash'] });
     await bot.start();
-    await expect(admin().plugins.disable('dash')).rejects.toThrow(/em si mesmo/);
-    await expect(admin().plugins.reload('dash')).rejects.toThrow(/em si mesmo/);
-    await expect(admin().config.setOverrides('dash', {})).rejects.toThrow(/em si mesmo/);
+    await expect(admin().plugins.disable('dash')).rejects.toBeInstanceOf(PluginHostStateError);
+    await expect(admin().plugins.reload('dash')).rejects.toBeInstanceOf(PluginHostStateError);
+    await expect(admin().config.setOverrides('dash', {})).rejects.toBeInstanceOf(
+      PluginHostStateError,
+    );
     expect(bot.plugins().find((e) => e.name === 'dash')?.status).toBe('loaded');
   });
 
@@ -87,5 +93,64 @@ describe('ctx.admin', () => {
     await bot.start();
     const warns = log.lines.filter((l) => l.level === 'warn').map((l) => l.message);
     expect(warns).toContain('adminPlugins cita "fantasma", que não existe entre os plugins');
+  });
+
+  it('sem adminPlugins, todos veem undefined', async () => {
+    const { bot, ctxs } = setup();
+    await bot.start();
+    expect(ctxs['dash']?.admin).toBeUndefined();
+    expect(ctxs['other']?.admin).toBeUndefined();
+  });
+
+  it('depois do reload o contexto novo segue com admin e recusa o próprio plugin', async () => {
+    const { bot, admin } = setup({ adminPlugins: ['dash'] });
+    await bot.start();
+    await bot.plugins.reload('dash');
+    await expect(admin().plugins.disable('dash')).rejects.toBeInstanceOf(PluginHostStateError);
+  });
+
+  it('depois do dispose as ações rejeitam com ContextExpiredError e as leituras seguem', async () => {
+    const { bot, admin } = setup({ adminPlugins: ['dash'] });
+    await bot.start();
+    const old = admin();
+    await bot.plugins.disable('dash');
+    await expect(old.plugins.disable('other')).rejects.toBeInstanceOf(ContextExpiredError);
+    await expect(old.plugins.reload('other')).rejects.toBeInstanceOf(ContextExpiredError);
+    await expect(old.config.setOverrides('other', {})).rejects.toBeInstanceOf(ContextExpiredError);
+    expect(bot.plugins().find((e) => e.name === 'other')?.status).toBe('loaded');
+    expect(old.plugins().length).toBe(2);
+  });
+
+  it('mascara segredos do bot nos erros que saem pelo admin', async () => {
+    const apiKey = 'sk-supersecret-123456';
+    let fail = false;
+    const leaky = definePlugin({
+      name: 'leaky',
+      version: '1.0.0',
+      engine: '>=0.0.0',
+      config: z.object({ apiKey: secret(z.string()) }),
+      setup(ctx) {
+        if (fail) throw new Error(`invalid key ${ctx.config['apiKey']}`);
+      },
+    });
+    const { bot, admin } = setup({
+      adminPlugins: ['dash'],
+      plugins: [leaky],
+      pluginConfig: { leaky: { apiKey } },
+    });
+    await bot.start();
+    fail = true;
+    const result = await admin().plugins.reload('leaky');
+    // `Error` não serializa message/stack: junta os campos à mão.
+    const text = (value: unknown): string =>
+      JSON.stringify(value, (_, v) =>
+        v instanceof Error ? { message: v.message, stack: v.stack, cause: v.cause } : v,
+      );
+    expect(result.plugin.status).toBe('skipped');
+    expect(text(result)).toContain('[REDACTED]');
+    expect(text(result)).not.toContain(apiKey);
+    expect(text(admin().plugins())).not.toContain(apiKey);
+    // O mesmo erro, cru, em `bot.plugins`: a máscara é só do admin.
+    expect(text(bot.plugins())).toContain(apiKey);
   });
 });

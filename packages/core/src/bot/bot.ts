@@ -450,6 +450,7 @@ export function createBot(config: BotConfig): Bot {
       observers,
       adminPlugins: new Set(config.adminPlugins ?? []),
       admin: control,
+      secrets,
       unsafe: createUnsafeAccess({
         transport,
         log,

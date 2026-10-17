@@ -33,6 +33,7 @@ const entries: Record<string, { file: string; load: () => Promise<object> } & En
       'PluginConflictError',
       'PluginCycleError',
       'PluginDiscoveryError',
+      'PluginHostStateError',
       'PluginLifecycleError',
       'PluginManifestError',
       'RoleConflictError',

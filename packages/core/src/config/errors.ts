@@ -4,6 +4,11 @@ export type ConfigSource = 'default' | 'override' | 'file' | 'env';
 export interface PluginConfigIssue {
   /** Caminho do campo (`quality`, `openai.apiKey`, `messages.needMedia`); vazio = o objeto todo. */
   readonly path: string;
+  /**
+   * `secret`: o override tentou definir um campo secreto (recusado antes de validar); `invalid`:
+   * qualquer outro problema. Serve a quem precisa distinguir sem ler a mensagem.
+   */
+  readonly kind: 'secret' | 'invalid';
   /** O que está errado. Nunca contém o valor recebido (pode ser secreto). */
   readonly message: string;
   /** Camada que forneceu o valor rejeitado; `default` = nenhuma (valor ausente). */

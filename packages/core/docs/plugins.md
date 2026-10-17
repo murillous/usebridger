@@ -425,7 +425,7 @@ setup(ctx) {
 
 ## Acesso admin
 
-`ctx.admin` é `{ plugins, config }`: as mesmas instâncias de `bot.plugins` (tabela de boot,
+`ctx.admin` é `{ plugins, config }`: delega às instâncias de `bot.plugins` (tabela de boot,
 `reload`/`disable`/`enable`) e `bot.config` (`describe`, `jsonSchema`, `setOverrides`). Só os
 plugins listados em `createBot({ adminPlugins: ['dashboard'] })` o recebem; os demais veem
 `undefined`. A lista fica no app, e não no manifesto, para o plugin não se autoconceder o poder
@@ -434,8 +434,19 @@ não existe gera `warn` no boot.
 
 Sobre o **próprio** plugin, `admin.plugins.reload`, `admin.plugins.disable` e
 `admin.config.setOverrides` (que recarrega) rejeitam com `PluginHostStateError`: o plugin
-desceria no meio da própria chamada. Para os outros plugins o comportamento é o de `bot.plugins`
-e `bot.config`.
+desceria no meio da própria chamada. A outra diferença: `reload`/`disable`/`enable` e
+`setOverrides` rejeitam com `ContextExpiredError` depois do `dispose` do plugin (ADR 0033); as
+leituras ficam livres. No mais, o comportamento é o de `bot.plugins` e `bot.config`.
+
+Tudo o que sai pelo `ctx.admin` passa pela máscara de segredos do bot (os mesmos valores que o
+logger censura, trocados por `[REDACTED]`): a tabela de `plugins()`, o `PluginChangeResult`
+(`reason.error`, `dependents`, `teardownErrors`), o `describe`/`jsonSchema` e o erro rejeitado
+(`message`, `stack`, `cause`, `issues`). Recebe-se uma cópia, com as mesmas classes de erro;
+`bot.plugins` e `bot.config` seguem crus.
+
+Não dê `await` em ação de admin dentro do `setup`/`teardown` do próprio plugin: a fila do host
+roda uma operação por vez, então o plugin trava até o prazo e cai como `setup-failed`. Use as
+ações a partir de comandos, rotas e jobs.
 
 ## Versão do core
 
