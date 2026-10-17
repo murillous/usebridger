@@ -1,5 +1,13 @@
 # @usebridger/core
 
+## 0.7.0
+
+### Minor Changes
+
+- 8649550: `Collection.increment(where, field, by?, { insert }?)`: contador atômico, sem a corrida ler-alterar-gravar. Soma ao campo numérico dos documentos que casam; com `insert`, cria o documento quando nenhum casa, sem duplicar sob concorrência. O core exporta `normalizeIncrement` e `incrementedValue` em `@usebridger/core/adapter` para os adapters. Adapter de storage de terceiros precisa implementar `Collection.increment`.
+- 51a6342: `ctx.commands.list({ for: message })` devolve só os comandos que o remetente pode rodar, com a mesma regra de papel do roteador (owner passa em todos, papel custom com prazo e fail-closed). O menu de ajuda deixa de esconder os comandos de `owner` e de papéis custom de quem pode usá-los. Fora do bot, o roteador ganha `allowed(ctx)`.
+- 2f4d6d6: `ctx.scheduler.every(rule, job, payload?)` agenda jobs recorrentes, por intervalo (`{ everyMs }`, mínimo 60 s) ou por horário no fuso (`{ time: 'HH:mm', days?, timeZone }`, com horário de verão). `cancel(seriesId)` encerra a série, `next(id)` devolve a próxima ocorrência, e o handler recebe `scheduledAt` e `seriesId` no `JobContext`.
+
 ## 0.6.1
 
 ### Patch Changes
