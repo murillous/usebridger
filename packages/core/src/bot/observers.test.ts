@@ -265,4 +265,124 @@ describe('ctx.observe (ADR 0106)', () => {
     });
     expect(errors).toEqual([expect.any(TypeError), expect.any(TypeError)]);
   });
+
+  it('comando `background`: `message.handled` sai uma vez, só quando o `run` termina', async () => {
+    const transport = new RecordingTransport();
+    const gate = deferred();
+    const { bot, seen } = await startBot(transport, (ctx) => {
+      ctx.commands.add(
+        command({ name: 'baixar', aliases: ['b'], background: true, run: () => gate.promise }),
+      );
+    });
+
+    transport.emit('message', message('!b'));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(seen.handled).toEqual([]);
+
+    gate.resolve();
+    await bot.settled();
+
+    expect(seen.handled).toEqual([
+      expect.objectContaining({
+        route: 'command',
+        command: 'baixar',
+        status: 'ok',
+        queuedMs: expect.any(Number),
+        durationMs: expect.any(Number),
+      }),
+    ]);
+  });
+
+  it('comando `background` que lança sai com `status: failed`', async () => {
+    const transport = new RecordingTransport();
+    const { bot, seen } = await startBot(transport, (ctx) => {
+      ctx.commands.add(
+        command({
+          name: 'baixar',
+          background: true,
+          run: async () => {
+            throw new Error('boom');
+          },
+        }),
+      );
+    });
+
+    transport.emit('message', message('!baixar'));
+    await bot.settled();
+
+    expect(seen.handled).toEqual([
+      expect.objectContaining({ route: 'command', command: 'baixar', status: 'failed' }),
+    ]);
+  });
+
+  it('clique em ação de comando e de passo: `message.handled` com a rota certa', async () => {
+    const transport = new RecordingTransport(['send.text', 'quoted', 'actions']);
+    const { bot, seen } = await startBot(transport, (ctx) => {
+      ctx.commands.add(command({ name: 'notas', run: () => undefined }));
+      ctx.conversations.define('periodo', () => undefined);
+      ctx.commands.add(
+        command({
+          name: 'menu',
+          run: (c) =>
+            c.reply('Escolha:', {
+              actions: [
+                { label: 'Notas', command: 'notas' },
+                { label: 'Período', step: 'periodo' },
+              ],
+            }),
+        }),
+      );
+    });
+    transport.emit('message', message('!menu'));
+    await bot.settled();
+    seen.handled.length = 0;
+
+    const buttons = transport.sent.at(-1)?.options?.actions ?? [];
+    for (const [i, button] of buttons.entries()) {
+      transport.emit('interaction', {
+        id: `click-${i}`,
+        chat: { id: 'chat@test', isGroup: false },
+        sender: { id: 'user@test', name: 'Usuária', phone: null },
+        actionId: button.id,
+        timestamp: Date.now(),
+      });
+      await bot.settled();
+    }
+
+    expect(seen.handled.map(({ route, command: name, status }) => [route, name, status])).toEqual([
+      ['command', 'notas', 'ok'],
+      ['step', undefined, 'ok'],
+    ]);
+    expect(seen.handled[0]).toMatchObject({
+      queuedMs: expect.any(Number),
+      durationMs: expect.any(Number),
+    });
+  });
+
+  it('comando nativo (interaction): `message.handled` com o nome canônico', async () => {
+    const transport = new RecordingTransport();
+    const { bot, seen } = await startBot(transport, (ctx) => {
+      ctx.commands.add(command({ name: 'notas', aliases: ['n'], run: () => undefined }));
+    });
+
+    transport.emit('interaction', {
+      id: 'slash-1',
+      chat: { id: 'chat@test', isGroup: false },
+      sender: { id: 'user@test', name: 'Usuária', phone: null },
+      command: 'n',
+      args: '',
+      timestamp: Date.now(),
+    });
+    await bot.settled();
+
+    expect(seen.handled).toEqual([
+      expect.objectContaining({
+        route: 'command',
+        command: 'notas',
+        status: 'ok',
+        queuedMs: expect.any(Number),
+        durationMs: expect.any(Number),
+      }),
+    ]);
+  });
 });
