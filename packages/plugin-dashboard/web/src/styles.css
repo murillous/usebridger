@@ -653,6 +653,10 @@ td {
   .pair {
     display: block;
   }
+  /* Substituir/Remover do secret ocupam a largura toda no celular. */
+  .secret-actions .btn {
+    flex: 1 1 100%;
+  }
   /* Fixa acima da TabBar, dentro do card: só o botão primário cresce. */
   .savebar {
     position: sticky;

@@ -23,6 +23,8 @@ export interface Field {
   required: boolean;
   /** Campo `secret`: só máscara, nunca entra no PUT. */
   secret: boolean;
+  /** `x-bridger-set-secret` (ADR 0121): o core aceita `setSecret` neste campo (há chave mestra). */
+  settable: boolean;
   options?: string[];
   /** Exemplo do schema (`examples[0]`), usado como placeholder. */
   placeholder?: string;
@@ -156,6 +158,7 @@ export function buildFields(schema: Json | null, prefix = ''): Node[] {
       description,
       required: required.includes(key),
       secret: prop['secret'] === true,
+      settable: prop['x-bridger-set-secret'] === true,
       placeholder,
       default: prop['default'],
       hint: hintOf(prop),

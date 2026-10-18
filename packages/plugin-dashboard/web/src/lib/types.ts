@@ -106,6 +106,8 @@ export interface ConfigResponse {
   view: { config: unknown; messages: unknown; sources: Record<string, string> } | null;
   schema: Record<string, unknown> | null;
   issues?: ConfigIssue[];
+  /** Há chave mestra: o core aceita `setSecret` (ADR 0121). */
+  secretsWritable?: boolean;
 }
 
 // Manifesto de `GET /api/tabs` (ADR 0108): o servidor tira as funções; o `form` leva o JSON Schema.
