@@ -560,7 +560,7 @@ td {
 }
 .panels {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 16px;
 }
@@ -575,11 +575,14 @@ td {
 .bar {
   fill: var(--agent);
 }
+.bar.ink {
+  fill: var(--ink);
+}
 .axis {
   display: flex;
   justify-content: space-between;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   margin-bottom: 12px;
 }
 @media (max-width: 767px) {
@@ -587,8 +590,163 @@ td {
     grid-template-columns: repeat(2, 1fr);
   }
   .panels {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* Métricas e abas de plugins: paridade com o canvas (M5-4.8). */
+.eyebrow {
+  font-size: 12.5px;
+  margin: 0 0 4px;
+}
+.sect {
+  font-size: 14.5px;
+  margin: 24px 0 12px;
+}
+.seg {
+  border: 0;
+  margin: 0;
+  min-width: 0;
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 12px;
+  background: var(--sunken);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.seg button {
+  min-height: calc(var(--target) - 4px);
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.seg button[aria-pressed="true"] {
+  background: var(--raised);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: var(--e1), var(--top);
+}
+.panel {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 12px;
+  align-content: start;
+}
+.panel .metric {
+  font-size: 11px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-top: 2px;
+}
+.panel > :not(h3, .metric) {
+  grid-column: 1 / -1;
+}
+.panel-value {
+  font: 700 28px / 1.2 var(--display);
+}
+.panel-value .muted {
+  font: 400 12px / 1 var(--sans);
+}
+.more {
+  margin-bottom: 8px;
+}
+.more summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  min-height: var(--target);
+  display: flex;
+  align-items: center;
+}
+.num {
+  text-align: right;
+  white-space: nowrap;
+}
+th.num {
+  text-align: right;
+}
+.list-head .mono {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.list-head .chip {
+  flex-shrink: 0;
+}
+.list-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  margin: 12px 0 0;
+  font-size: 12px;
+}
+.link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--agent);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+}
+@media (max-width: 767px) {
+  .eyebrow-via {
+    display: none;
+  }
+  .panel .metric {
+    display: none;
+  }
+  .panel .panel-value {
+    grid-column: 2;
+    grid-row: 1;
+    font-size: 22px;
+  }
+  .seg {
+    display: flex;
+  }
+  .seg button {
+    flex: 1;
+  }
+  .row.spread > .seg {
+    width: 100%;
+  }
+}
+.stats .card {
+  margin-bottom: 0;
+}
+.stats {
+  margin-bottom: 16px;
+}
+.tab-table.has-actions th:last-child {
+  text-align: right;
+}
+.tab-table td:last-child .row {
+  justify-content: flex-end;
+}
+.tab-table .list > div:first-child {
+  border-top: 0;
+}
+.list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.list-row > :first-child {
+  min-width: 0;
 }
 /* Sem transição nem animação no app: prefers-reduced-motion já é respeitado. */
 
@@ -618,8 +776,10 @@ h3 {
 .back {
   display: none;
   align-items: center;
+  gap: 2px;
   min-height: 44px;
   color: var(--ink);
+  text-decoration: none;
 }
 @media (max-width: 767px) {
   .back {
@@ -630,6 +790,9 @@ h3 {
   }
   .btn {
     min-height: 44px;
+  }
+  form.card > .btn.primary {
+    width: 100%;
   }
 }
 

@@ -51,8 +51,8 @@ o reload do `metrics` reiniciaria o dashboard em cascata.
 A tela tem painéis fixos das métricas do kernel (`bridger.messages.*`, `bridger.outbound.sent`,
 `bridger.active.*`) e a seção "Todas as métricas registradas", que lista tudo o que o serviço
 conhece: métrica nova de qualquer plugin aparece ali sem mudar o dashboard. Os gráficos são SVG
-com `role="img"`, `aria-label` com os valores por dia e `<title>` por barra; o eixo mostra primeiro
-dia, último dia e pico em texto. Percentil no balde `+Inf` aparece como "> 30.000 ms". A Visão geral
+com `role="img"`, `aria-label` com os valores por dia e `<title>` por barra; o eixo mostra o primeiro
+dia ("12 out") e o último ("hoje") em texto; o valor de cada dia fica no `aria-label` e no `<title>`. Percentil no balde `+Inf` aparece como "> 30.000 ms". A Visão geral
 mostra os KPIs de hoje (dia UTC; mensagens, p95, usuários e grupos ativos) quando o serviço existe.
 
 ## Config dos plugins

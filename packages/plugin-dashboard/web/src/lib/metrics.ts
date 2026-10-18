@@ -97,6 +97,70 @@ export function summarize(data: MetricsResponse): Summary[] {
   });
 }
 
+/** Rótulo curto do eixo: "hoje" para o último dia, "12 out" para os outros. */
+export function shortDay(day: string, today: string): string {
+  if (day === today) return 'hoje';
+  const parts = new Intl.DateTimeFormat('pt-BR', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  }).formatToParts(new Date(`${day}T00:00:00Z`));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${get('day')} ${get('month').replace('.', '')}`;
+}
+
+/**
+ * Percentil por dia (limite do balde), para o gráfico de latência. `value` desenha a barra (dia sem
+ * observação em zero, balde `+Inf` no maior teto); `text` é o valor para ler: "sem dado" ou "> 30.000 ms".
+ */
+export function percentilePerDay(
+  rows: MetricRowView[],
+  days: string[],
+  p: number,
+): { day: string; value: number; text: string }[] {
+  return days.map((day) => {
+    const v = percentile(
+      rows.filter((r) => r.day === day),
+      p,
+    );
+    return {
+      day,
+      value: v === undefined ? 0 : Number.isFinite(v) ? v : (BOUNDS.at(-1) ?? 0),
+      text: v === undefined ? 'sem dado' : fmtMs(v),
+    };
+  });
+}
+
+/** Nomes dos rótulos usados pelas linhas, em ordem alfabética (`"status, route"` vira `"route, status"`). */
+export const labelNames = (rows: MetricRowView[]): string[] =>
+  [...new Set(rows.flatMap((r) => Object.keys(r.labels)))].sort();
+
+export interface CatalogEntry extends Summary {
+  labels: string[];
+  /** Total do último dia do intervalo (contador) ou número de observações (histograma). */
+  today: number;
+  todayP95?: number;
+}
+
+/** `summarize` mais o que a tabela da tela mostra: rótulos e o valor de hoje. */
+export function catalog(data: MetricsResponse): CatalogEntry[] {
+  if (!data.available) return [];
+  return summarize(data).map((s) => {
+    const rows = data.metrics.find((m) => m.name === s.name)?.rows ?? [];
+    const todayRows = rows.filter((r) => r.day === data.to);
+    const todayP95 = percentile(todayRows, 0.95);
+    return {
+      ...s,
+      labels: labelNames(rows),
+      today: total(todayRows),
+      ...(todayP95 === undefined ? {} : { todayP95 }),
+    };
+  });
+}
+
+/** URL do scrape do plugin-metrics, irmã do dashboard sob `/plugins/` (e sob `/sessions/<s>/plugins/`). */
+export const scrapeUrl = (baseURI: string): string => new URL('../metrics/metrics', baseURI).href;
+
 export const fmtInt = (n: number): string => n.toLocaleString('pt-BR');
 export const fmtMs = (n: number | undefined): string =>
   n === undefined

@@ -63,9 +63,9 @@ function Stats({ url, onGone }: { url: string; onGone: () => void }) {
     <div className="stats">
       {data.map((s) => (
         <div key={s.label} className="card stat">
-          <div className="muted">{s.label}</div>
+          <div className="stat-label">{s.label}</div>
           <div className="stat-value">{s.value}</div>
-          {s.hint && <div className="muted mono">{s.hint}</div>}
+          {s.hint && <div className="stat-label mono">{s.hint}</div>}
         </div>
       ))}
     </div>
@@ -156,7 +156,9 @@ function Table({
       {data.rows.length === 0 ? (
         <p className="muted">Nada por aqui.</p>
       ) : (
-        <div className="scroll tbl">
+        <div
+          className={`scroll tbl card tab-table${widget.actions.length > 0 ? ' has-actions' : ''}`}
+        >
           <table>
             <thead>
               <tr>
@@ -179,10 +181,18 @@ function Table({
           </table>
           <div className="list">
             {data.rows.map((row) => (
-              <div key={row.id}>
-                <div>{first ? String(row[first.key] ?? '') : row.id}</div>
-                <div className="mono muted">
-                  {rest.map((c) => `${c.label}: ${String(row[c.key] ?? '')}`).join(' · ')}
+              <div key={row.id} className="list-row">
+                <div>
+                  <div>{first ? String(row[first.key] ?? '') : row.id}</div>
+                  <div className="mono muted">
+                    {rest.map((c, i) => (
+                      <span key={c.key}>
+                        {i > 0 && ' · '}
+                        <span className="sr">{c.label}: </span>
+                        {String(row[c.key] ?? '')}
+                      </span>
+                    ))}
+                  </div>
                 </div>
                 {buttons(row)}
               </div>
@@ -381,7 +391,18 @@ export function Tab({
   return (
     <>
       <a className="back" href="#/mais">
-        ← Mais
+        <svg
+          viewBox="0 0 24 24"
+          width="18"
+          height="18"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          aria-hidden="true"
+        >
+          <path d="m15 18-6-6 6-6" />
+        </svg>
+        Mais
       </a>
       {!tabs ? (
         <p className="muted">Carregando…</p>
@@ -391,8 +412,14 @@ export function Tab({
         </p>
       ) : (
         <>
+          <p className="eyebrow muted">
+            Contribuída por <span className="mono">{tab.plugin}</span>
+            <span className="eyebrow-via">
+              {' '}
+              via <span className="mono">dashboard.tabs</span>
+            </span>
+          </p>
           <h1>{tab.title}</h1>
-          <p className="muted mono">{tab.plugin}</p>
           {tab.widgets.map((w) => (
             <section key={w.id} aria-label={w.id}>
               <Widget tab={tab} widget={w} onGone={refresh} />

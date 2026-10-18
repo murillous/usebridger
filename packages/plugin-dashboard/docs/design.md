@@ -154,3 +154,14 @@ browser ──HTTP (autenticação do dashboard)──▶ plugin-dashboard ─�
   inválido mostra as issues do Zod junto dos campos.
 - **Métricas não precisam de aba.** Métrica registrada no serviço `metrics` já aparece na seção
   genérica (ADR 0107). Aba é para o que não é métrica: listas, ações, formulários.
+
+## Métricas e abas de plugin: diferenças aceitas do canvas
+
+Conferidas na M5-4.8 (#180). O canvas é ilustrativo; o que o contrato ou o core não sustenta fica de fora:
+
+- **Painel "Fila de saída"**: não existe métrica de fila no kernel. O quarto painel é "Envios por dia" (`bridger.outbound.sent`).
+- **Coluna "Plugin" da tabela de métricas**: o serviço `metrics` não guarda quem registrou cada métrica; adivinhar pelo prefixo do nome mostraria informação errada.
+- **Latência em ms**: a métrica real é `bridger.messages.handle_duration_ms`, o canvas mostra `_seconds`.
+- **Título e etiqueta de widget** ("Próximos", "widget: table + action"): o contrato `dashboard.tabs` (ADR 0108) só tem título em `series`; as etiquetas são anotação do canvas.
+- **Cor de tom em `stats`** ("Atrasados" em âmbar) e **rótulo do botão do form** ("Agendar"): o contrato não tem os campos; o botão é "Enviar".
+- **Painel "Como o plugin declara esta aba"**: documentação do canvas, não faz parte do app.
