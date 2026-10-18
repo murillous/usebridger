@@ -1,5 +1,22 @@
 # @usebridger/core
 
+## 0.8.0
+
+### Minor Changes
+
+- d79e8af: Contexto do plugin ganha `ctx.session` (nome da sessão do bot) e `ctx.connectionStatus()` (último `ConnectionStatus` visto, `undefined` antes do primeiro evento), ADR 0110.
+- bf58cef: `maskedJsonSchema(schema)`: JSON Schema de entrada de um `ZodType` com os campos `secret()` marcados e o `default` deles trocado pela máscara (o mesmo caminho da config de plugin).
+- 59f6646: `ctx.admin` (`{ plugins, config }`) no contexto dos plugins listados em `createBot({ adminPlugins })`; os demais recebem `undefined`. Reload, disable e `setOverrides` sobre o próprio plugin rejeitam (ADR 0111). `PluginConfigIssue` ganha `kind: 'secret' | 'invalid'`. O que sai pelo `ctx.admin` (retornos e erros) tem os segredos do bot mascarados. Exporta `PluginHostStateError`, o erro de estado do host (ex.: plugin desconhecido, ação sobre si mesmo), para quem precisa distingui-lo.
+- 9ad8550: `ctx.observe` no contexto do plugin: observadores síncronos, por bot, dos sinais `message.handled` (rota, desfecho, espera na fila de entrada e duração do handler) e `outbound.sent` (desfecho, espera na fila de saída, re-tentativas e `replyTo`). A exceção de um observador vira `plugin.error` com `phase: 'observer'` (ADR 0106).
+- 740fed1: `ctx.stats()` no contexto do plugin: os contadores das filas de entrada e de saída do bot, os mesmos de `bot.stats()` (ADR 0106).
+- f65c4fa: `PluginReportEntry` (tabela de `bot.plugins()` e `ctx.admin.plugins()`) ganha `dependsOn`, `services` e `contributions`, opcionais e só presentes quando há algo (ADR 0112).
+- 97642b6: `ExtensionPoint<T>.entries()` devolve as contribuições com o plugin dono (`{ plugin, value }`), na mesma ordem do `list()`; tipo `ExtensionPointEntry<T>` exportado (#160, ADR 0108).
+- 8232a57: `ctx.observe('log', fn)`: sinal com cada linha do logger do bot (`level`, `time`, `message`, `fields` com os bindings dos filhos), dentro do nível do logger e com os secrets mascarados. Log feito dentro de um observador de `log` não reentra no sinal (ADR 0109).
+
+### Patch Changes
+
+- 36a9796: A fila de saída roda cada envio no contexto assíncrono de quem o enfileirou, e o scheduler roda o loop no contexto de quem criou o serviço. Um `ctx.send` ou `ctx.schedule` feito num observador de `log` não silencia mais o sinal dos envios de outros chats nem dos jobs de outros plugins (#163).
+
 ## 0.7.1
 
 ### Patch Changes

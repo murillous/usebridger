@@ -1,6 +1,6 @@
 {
   "name": "@usebridger/plugin-dashboard",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Plugin oficial do Bridger: dashboard web com autenticação, status da conexão, QR, logs ao vivo e WebSocket.",
   "license": "Apache-2.0",
   "repository": {
