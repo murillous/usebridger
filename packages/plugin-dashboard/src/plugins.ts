@@ -14,6 +14,13 @@ const ACTIONS = ['enable', 'disable', 'reload'] as const;
 const NO_ADMIN =
   'controle de plugins indisponível: ponha "dashboard" em adminPlugins no createBot ({ adminPlugins: ["dashboard"] })';
 
+/**
+ * Texto da causa (`Nome: mensagem`), nunca o objeto: pode carregar dados sensíveis. O `admin` do
+ * core já passa o erro pelo redator de secrets, então a mensagem chega censurada; sem stack.
+ */
+const causeText = (cause: unknown): string | undefined =>
+  cause instanceof Error ? `${cause.name}: ${cause.message}`.slice(0, 300) : undefined;
+
 /** Só o necessário do erro de lifecycle: o objeto cru pode carregar `cause` com dados sensíveis. */
 const lifecycle = (error: PluginLifecycleError) => ({
   plugin: error.plugin,
@@ -22,13 +29,15 @@ const lifecycle = (error: PluginLifecycleError) => ({
   message: error.message.slice(0, 300),
 });
 
-/** Linha da tabela em JSON seguro: o `PluginLifecycleError` de `setup-failed` vira `{ plugin, phase, timedOut, message }`. */
+/** Linha da tabela em JSON seguro: o `PluginLifecycleError` de `setup-failed` vira `{ plugin, phase, timedOut, message }` e a `reason` ganha `causa` (texto; o campo não se chama `cause` para não confundir com o objeto cru). */
 function serializeEntry(entry: PluginReportEntry) {
   if (entry.status === 'loaded') return entry;
   const { reason } = entry;
+  if (reason.kind !== 'setup-failed') return entry;
+  const causa = causeText(reason.error.cause);
   return {
     ...entry,
-    reason: reason.kind === 'setup-failed' ? { ...reason, error: lifecycle(reason.error) } : reason,
+    reason: { ...reason, error: lifecycle(reason.error), ...(causa !== undefined && { causa }) },
   };
 }
 
@@ -50,6 +59,14 @@ export function registerPluginRoutes(
   if (admin === undefined) log.warn(`dashboard: ${NO_ADMIN}`);
   const unavailable = () => new Response(NO_ADMIN, { status: 503 });
   const plugins = admin?.plugins;
+  // O core não expõe o horário do boot; o setup do dashboard roda nele, então serve de aproximação.
+  const bootedAt = Date.now();
+
+  http.route(
+    'GET',
+    '/api/plugins/boot',
+    guarded(() => Response.json({ bootedAt })),
+  );
 
   http.route(
     'GET',
