@@ -236,3 +236,50 @@ describe('campos do core na tabela (M5-4.7)', () => {
     expect((await find())?.dependsOn).toEqual({ base: '*' });
   });
 });
+
+describe('causa do erro de setup (M5-4.8)', () => {
+  it('leva a mensagem da causa, censura o secret e não vaza o objeto', async () => {
+    let quebra = false;
+    const quebrado = definePlugin({
+      name: 'quebrado',
+      version: '1.0.0',
+      engine: '<1.0.0',
+      setup() {
+        // O boot aborta se o plugin falha de cara: só quebra no reload.
+        if (!quebra) return;
+        throw Object.assign(new Error(`apiKey ${TOKEN} inválida`), { segredo: 'abc' });
+      },
+    });
+    const http = createHttp({ port: 0, hostname: '127.0.0.1' });
+    const bot = await createTestBot({
+      plugins: [dashboard, quebrado],
+      http,
+      logLevel: 'info',
+      adminPlugins: ['dashboard'],
+      pluginConfig: { dashboard: { token: TOKEN } },
+    });
+    bots.push(bot);
+    const url = `http://127.0.0.1:${http.port}/plugins/dashboard`;
+    const login = await fetch(`${url}/api/login`, {
+      method: 'POST',
+      body: JSON.stringify({ token: TOKEN }),
+    });
+    const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    quebra = true;
+    await fetch(`${url}/api/plugins/quebrado/reload`, { method: 'POST', headers: { cookie } });
+    const text = await (await fetch(`${url}/api/plugins`, { headers: { cookie } })).text();
+    const row = (JSON.parse(text) as { name: string; reason?: { causeMessage?: string } }[]).find(
+      (e) => e.name === 'quebrado',
+    );
+    expect(row?.reason?.causeMessage).toBe('Error: apiKey [REDACTED] inválida');
+    expect(text).not.toContain(TOKEN);
+    expect(text).not.toContain('abc');
+  });
+
+  it('GET /api/plugins/boot devolve o horário do boot', async () => {
+    const { url, get } = await start(true);
+    expect((await fetch(`${url}/api/plugins/boot`)).status).toBe(401);
+    const { bootedAt } = (await (await get('/api/plugins/boot')).json()) as { bootedAt: number };
+    expect(Math.abs(Date.now() - bootedAt)).toBeLessThan(60_000);
+  });
+});

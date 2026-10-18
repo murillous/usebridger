@@ -35,6 +35,8 @@ export interface LifecycleError {
 export interface SkipReason {
   kind: string;
   error?: LifecycleError;
+  /** `Nome: mensagem` do erro lançado no setup (`setup-failed`), já censurado pelo core. */
+  causeMessage?: string;
   [key: string]: unknown;
 }
 

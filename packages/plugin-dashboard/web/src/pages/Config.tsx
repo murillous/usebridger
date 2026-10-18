@@ -1,8 +1,10 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiError, api } from '#web/lib/api.ts';
+import { badgeOf, secretOrigin, validateLocal } from '#web/lib/config-view.ts';
 import {
   buildFields,
   buildOverrides,
+  dependentsOf,
   type Field,
   type FlatValues,
   flatten,
@@ -196,17 +198,40 @@ export function FieldView(props: {
   errors: string[];
   /** Form de aba: secret é entrada (senha, sem pré-preencher) em vez da máscara só leitura da Config. */
   secretEditable?: boolean;
+  /** Nome do plugin: só para montar o nome real da variável de ambiente do secret. */
+  plugin?: string;
+  /** Falso com `view: null` (config inválida): a origem do secret é desconhecida. */
+  configKnown?: boolean;
+  /** Dica do tipo do schema: só na Config, não no form das abas. */
+  showHint?: boolean;
   onChange: (value: unknown) => void;
 }) {
   const { field, errors } = props;
   const id = `f-${field.path}`;
   const helpId = `${id}-help`;
+  const hintId = `${id}-hint`;
+  const showHint = props.showHint && errors.length === 0;
   const errId = `${id}-err`;
-  const help = [field.description, props.source ? SOURCE_LABEL[props.source] : undefined]
-    .filter(Boolean)
-    .join(' · ');
+  // Secret só leitura: a origem real (env ou arquivo) no lugar do texto genérico de override.
+  const secretView = field.secret && !props.secretEditable;
+  const origin = secretOrigin({
+    known: props.configKnown ?? true,
+    source: props.source,
+    plugin: props.plugin,
+    path: field.path,
+    hasValue: props.masked !== undefined,
+  });
+  const help = secretView
+    ? [field.description, `${origin} O valor nunca sai do servidor; só a máscara.`]
+        .filter(Boolean)
+        .join(' · ')
+    : [field.description, props.source ? SOURCE_LABEL[props.source] : undefined]
+        .filter(Boolean)
+        .join(' · ');
   const describedBy =
-    [help ? helpId : '', errors.length ? errId : ''].filter(Boolean).join(' ') || undefined;
+    [help ? helpId : '', showHint ? hintId : '', errors.length ? errId : '']
+      .filter(Boolean)
+      .join(' ') || undefined;
 
   const editor = !field.secret && (field.control === 'list' || field.control === 'record');
   let control: ReactNode;
@@ -295,8 +320,15 @@ export function FieldView(props: {
       ) : (
         <label htmlFor={id}>
           {field.label}
-          {field.secret && !props.secretEditable && (
-            <span className="muted"> (secret, só leitura)</span>
+          {secretView && (
+            <>
+              <span className="chip">secret</span>
+              {props.source && (
+                <span className={props.source === 'env' ? 'chip info' : 'chip'}>
+                  {props.source}
+                </span>
+              )}
+            </>
           )}
         </label>
       )}
@@ -304,6 +336,11 @@ export function FieldView(props: {
       {help && (
         <span id={helpId} className="help">
           {help}
+        </span>
+      )}
+      {showHint && (
+        <span id={hintId} className="help mono">
+          {field.hint} · vem do schema
         </span>
       )}
       {errors.length > 0 && (
@@ -316,7 +353,10 @@ export function FieldView(props: {
 }
 
 export function Config() {
-  const [names, setNames] = useState<string[]>([]);
+  const [rows, setRows] = useState<PluginRow[]>([]);
+  // Erros da config atual por plugin (GET de cada um): alimenta os badges antes de abrir o plugin.
+  const [issueCounts, setIssueCounts] = useState<Record<string, number>>({});
+  const names = useMemo(() => rows.map((r) => r.name), [rows]);
   const [plugin, setPlugin] = useState<string>();
   const [loaded, setLoaded] = useState<Loaded>();
   const [values, setValues] = useState<FlatValues>({});
@@ -329,10 +369,16 @@ export function Config() {
 
   useEffect(() => {
     api<PluginRow[]>('plugins').then(
-      (rows) => {
-        const list = rows.map((r) => r.name);
-        setNames(list);
-        setPlugin((p) => p ?? list[0]);
+      (list) => {
+        setRows(list);
+        setPlugin((p) => p ?? list[0]?.name);
+        // Plugin sem config legível (ex.: não carregou) fica sem badge de erro: o GET falho é o fallback.
+        for (const r of list) {
+          api<ConfigResponse>(`config/${encodeURIComponent(r.name)}`).then(
+            (d) => setIssueCounts((c) => ({ [r.name]: d.issues?.length ?? 0, ...c })),
+            () => undefined,
+          );
+        }
       },
       (e) => setError(e instanceof ApiError ? `${e.status}: ${e.message}` : 'Falha de rede.'),
     );
@@ -356,6 +402,7 @@ export function Config() {
         known: data.view !== null,
         loadIssues: data.issues ?? [],
       });
+      setIssueCounts((c) => ({ ...c, [name]: data.issues?.length ?? 0 }));
       setValues(initial);
       setEpoch((n) => n + 1);
     } catch (e) {
@@ -373,6 +420,15 @@ export function Config() {
   const fields = useMemo(() => (loaded ? leaves(loaded.nodes) : []), [loaded]);
   const dirty = loaded ? isDirty(loaded.initial, values) : false;
   const grouped = groupIssues([...(loaded?.loadIssues ?? []), ...issues], fields);
+  // Erro local (limites do schema) antes do 400; o do servidor, quando existe, tem prioridade.
+  const errorsByPath = useMemo(() => {
+    const merged: Record<string, string[]> = { ...grouped.byPath };
+    for (const [path, msgs] of Object.entries(validateLocal(fields, values))) {
+      // Só sem erro do servidor: não mistura o inglês do Zod com o texto local.
+      merged[path] = merged[path] ?? msgs;
+    }
+    return merged;
+  }, [grouped.byPath, fields, values]);
 
   const save = async () => {
     if (!plugin || !loaded) return;
@@ -400,7 +456,12 @@ export function Config() {
         body: overrides,
       });
       await load(plugin);
-      if (data) setResult(data);
+      if (data) {
+        // Badge "falhou" velho: a linha nova do plugin e dos dependentes vem no resultado.
+        const fresh = new Map([data.plugin, ...data.dependents].map((r) => [r.name, r]));
+        setRows((old) => old.map((r) => fresh.get(r.name) ?? r));
+        setResult(data);
+      }
     } catch (e) {
       if (e instanceof ApiError && e.status === 400 && typeof e.body === 'object' && e.body) {
         setIssues((e.body as { issues?: ConfigIssue[] }).issues ?? []);
@@ -413,29 +474,60 @@ export function Config() {
     }
   };
 
-  const render = (nodes: Node[]) =>
-    nodes.map((node) =>
-      node.node === 'group' ? (
-        <fieldset key={node.path}>
-          <legend>{node.label}</legend>
-          {render(node.fields)}
-        </fieldset>
-      ) : (
-        <FieldView
-          key={`${epoch}-${node.path}`}
-          field={node}
-          value={values[node.path]}
-          masked={
-            typeof loaded?.initial[node.path] === 'string'
-              ? String(loaded.initial[node.path])
-              : undefined
-          }
-          source={loaded?.sources[node.path]}
-          errors={grouped.byPath[node.path] ?? []}
-          onChange={(value) => setValues((v) => ({ ...v, [node.path]: value }))}
-        />
-      ),
-    );
+  const fieldView = (node: Field) => (
+    <FieldView
+      key={`${epoch}-${node.path}`}
+      plugin={plugin}
+      configKnown={loaded?.known}
+      showHint
+      field={node}
+      value={values[node.path]}
+      masked={
+        typeof loaded?.initial[node.path] === 'string'
+          ? String(loaded.initial[node.path])
+          : undefined
+      }
+      source={loaded?.sources[node.path]}
+      errors={errorsByPath[node.path] ?? []}
+      onChange={(value) => setValues((v) => ({ ...v, [node.path]: value }))}
+    />
+  );
+
+  // Regra do lado a lado: campos numéricos consecutivos (2 ou mais) entram numa grade de 2
+  // colunas; no mobile a grade vira 1 coluna.
+  const isNum = (n: Node): n is { node: 'field' } & Field =>
+    n.node === 'field' && !n.secret && (n.control === 'number' || n.control === 'integer');
+  const render = (nodes: Node[]): ReactNode[] => {
+    const out: ReactNode[] = [];
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i] as Node;
+      if (node.node === 'group') {
+        out.push(
+          <fieldset key={node.path}>
+            <legend>{node.label}</legend>
+            {render(node.fields)}
+          </fieldset>,
+        );
+      } else if (isNum(node) && nodes[i + 1] && isNum(nodes[i + 1] as Node)) {
+        const run: Field[] = [];
+        for (let n = nodes[i]; n && isNum(n); n = nodes[i + run.length]) run.push(n);
+        out.push(
+          <div className="pair" key={`pair-${node.path}`}>
+            {run.map(fieldView)}
+          </div>,
+        );
+        i += run.length - 1;
+      } else out.push(fieldView(node));
+    }
+    return out;
+  };
+
+  const dependents = plugin ? dependentsOf(rows, plugin) : [];
+  const rowOf = (n: string) => rows.find((r) => r.name === n);
+  const label = (n: string) => {
+    const badge = badgeOf(rowOf(n), issueCounts[n]);
+    return badge ? `${n} · ${badge}` : n;
+  };
 
   return (
     <>
@@ -452,6 +544,13 @@ export function Config() {
               onClick={() => setPlugin(n)}
             >
               {n}
+              {badgeOf(rowOf(n), issueCounts[n]) && (
+                <span
+                  className={`chip ${rowOf(n)?.reason?.kind === 'setup-failed' ? 'danger' : 'warn'}`}
+                >
+                  {badgeOf(rowOf(n), issueCounts[n])}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -464,7 +563,9 @@ export function Config() {
             onChange={(e) => setPlugin(e.target.value)}
           >
             {names.map((n) => (
-              <option key={n}>{n}</option>
+              <option key={n} value={n}>
+                {label(n)}
+              </option>
             ))}
           </select>
         </div>
@@ -484,6 +585,10 @@ export function Config() {
           )}
           {loaded && (
             <div className="card">
+              <header className="cfg-head">
+                <h2 className="mono">{plugin}</h2>
+                <span className="muted mono">bridger.config.json · plugins.{plugin}</span>
+              </header>
               {loaded.loadIssues.length > 0 && (
                 <div className="notice warn" role="alert">
                   A config atual é inválida. Salvar substitui todos os overrides deste plugin.
@@ -511,30 +616,36 @@ export function Config() {
               ) : (
                 render(loaded.nodes)
               )}
-            </div>
-          )}
-          {loaded && loaded.nodes.length > 0 && (
-            <div className="savebar">
-              <button
-                type="button"
-                className="btn primary"
-                disabled={!dirty || saving}
-                onClick={save}
-              >
-                Salvar
-              </button>
-              <button
-                type="button"
-                className="btn"
-                disabled={!dirty || saving}
-                onClick={() => {
-                  setValues(loaded.initial);
-                  setIssues([]);
-                  setEpoch((n) => n + 1);
-                }}
-              >
-                Descartar
-              </button>
+              {loaded.nodes.length > 0 && (
+                <div className="savebar">
+                  <span className="help">
+                    Salvar recarrega {plugin}
+                    {dependents.length > 0 &&
+                      ` e ${dependents.length} ${dependents.length === 1 ? 'dependente' : 'dependentes'}`}{' '}
+                    (reload em cascata).
+                  </span>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={!dirty || saving}
+                    onClick={() => {
+                      setValues(loaded.initial);
+                      setIssues([]);
+                      setEpoch((n) => n + 1);
+                    }}
+                  >
+                    Descartar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    disabled={!dirty || saving}
+                    onClick={save}
+                  >
+                    Salvar e recarregar
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
