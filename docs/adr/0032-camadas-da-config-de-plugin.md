@@ -2,6 +2,7 @@
 
 **Status:** Aceito (2026-10-07) · Detalha a decisão **D17** ([ADR 0017](0017-config-por-plugin-zod.md))
 · Config inválida no boot: substituído pelo [ADR 0102](0102-plugin-falho-derruba-o-boot.md), que derruba o boot
+· Segredo só de env ou arquivo: substituído pelo [ADR 0121](0121-segredos-cifrados-editaveis-pelo-dashboard.md), que cifra segredos no storage
 
 ## Contexto
 
