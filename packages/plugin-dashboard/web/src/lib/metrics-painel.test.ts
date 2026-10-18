@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { catalog, labelNames, percentilePerDay, shortDay } from './metrics.ts';
+import { catalog, labelNames, percentilePerDay, scrapeUrl, shortDay } from './metrics.ts';
 import type { MetricRowView, MetricsResponse } from './types.ts';
 
 const counter = (day: string, value: number, labels = {}): MetricRowView => ({
@@ -17,6 +17,15 @@ const hist = (day: string, bucket: number): MetricRowView => ({
   buckets: Array.from({ length: 13 }, (_, i) => (i === bucket ? 2 : 0)),
 });
 
+describe('url do scrape', () => {
+  it('fica ao lado do dashboard, na sessão default e nas outras', () => {
+    expect(scrapeUrl('https://h.x/plugins/dashboard/')).toBe('https://h.x/plugins/metrics/metrics');
+    expect(scrapeUrl('https://h.x/sessions/s1/plugins/dashboard/')).toBe(
+      'https://h.x/sessions/s1/plugins/metrics/metrics',
+    );
+  });
+});
+
 describe('painéis de métricas (paridade com o canvas)', () => {
   it('rotula o eixo com "hoje" no último dia e "12 out" nos demais', () => {
     expect(shortDay('2026-10-18', '2026-10-18')).toBe('hoje');
@@ -26,9 +35,9 @@ describe('painéis de métricas (paridade com o canvas)', () => {
   it('percentil por dia: dia sem observação em zero e balde +Inf limitado ao maior teto', () => {
     const rows = [hist('2026-10-17', 4), hist('2026-10-18', 12)];
     expect(percentilePerDay(rows, ['2026-10-16', '2026-10-17', '2026-10-18'], 0.95)).toEqual([
-      { day: '2026-10-16', value: 0 },
-      { day: '2026-10-17', value: 100 },
-      { day: '2026-10-18', value: 30_000 },
+      { day: '2026-10-16', value: 0, text: 'sem dado' },
+      { day: '2026-10-17', value: 100, text: '100 ms' },
+      { day: '2026-10-18', value: 30_000, text: '> 30.000 ms' },
     ]);
   });
 

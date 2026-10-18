@@ -109,19 +109,25 @@ export function shortDay(day: string, today: string): string {
   return `${get('day')} ${get('month').replace('.', '')}`;
 }
 
-/** Percentil por dia (limite do balde), para o gráfico de latência; dia sem observação fica em zero. */
+/**
+ * Percentil por dia (limite do balde), para o gráfico de latência. `value` desenha a barra (dia sem
+ * observação em zero, balde `+Inf` no maior teto); `text` é o valor para ler: "sem dado" ou "> 30.000 ms".
+ */
 export function percentilePerDay(
   rows: MetricRowView[],
   days: string[],
   p: number,
-): { day: string; value: number }[] {
+): { day: string; value: number; text: string }[] {
   return days.map((day) => {
     const v = percentile(
       rows.filter((r) => r.day === day),
       p,
     );
-    // Balde `+Inf` não tem teto para desenhar: a barra enche, e o valor em texto diz "> 30.000 ms".
-    return { day, value: v === undefined ? 0 : Number.isFinite(v) ? v : (BOUNDS.at(-1) ?? 0) };
+    return {
+      day,
+      value: v === undefined ? 0 : Number.isFinite(v) ? v : (BOUNDS.at(-1) ?? 0),
+      text: v === undefined ? 'sem dado' : fmtMs(v),
+    };
   });
 }
 
@@ -151,6 +157,9 @@ export function catalog(data: MetricsResponse): CatalogEntry[] {
     };
   });
 }
+
+/** URL do scrape do plugin-metrics, irmã do dashboard sob `/plugins/` (e sob `/sessions/<s>/plugins/`). */
+export const scrapeUrl = (baseURI: string): string => new URL('../metrics/metrics', baseURI).href;
 
 export const fmtInt = (n: number): string => n.toLocaleString('pt-BR');
 export const fmtMs = (n: number | undefined): string =>

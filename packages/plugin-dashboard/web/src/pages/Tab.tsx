@@ -185,7 +185,13 @@ function Table({
                 <div>
                   <div>{first ? String(row[first.key] ?? '') : row.id}</div>
                   <div className="mono muted">
-                    {rest.map((c) => String(row[c.key] ?? '')).join(' · ')}
+                    {rest.map((c, i) => (
+                      <span key={c.key}>
+                        {i > 0 && ' · '}
+                        <span className="sr">{c.label}: </span>
+                        {String(row[c.key] ?? '')}
+                      </span>
+                    ))}
                   </div>
                 </div>
                 {buttons(row)}

@@ -10,6 +10,7 @@ import {
   percentilePerDay,
   perDay,
   rowsOf,
+  scrapeUrl,
   shortDay,
   total,
 } from '#web/lib/metrics.ts';
@@ -29,14 +30,14 @@ function BarChart({
   tone = 'ink',
 }: {
   title: string;
-  points: { day: string; value: number }[];
+  points: { day: string; value: number; text?: string }[];
   today: string;
   tone?: 'ink' | 'agent';
 }) {
   const max = Math.max(1, ...points.map((p) => p.value));
   const W = 100;
   const step = W / points.length;
-  const label = `${title}: ${points.map((p) => `${p.day} ${fmtInt(p.value)}`).join('; ')}`;
+  const label = `${title}: ${points.map((p) => `${p.day} ${p.text ?? fmtInt(p.value)}`).join('; ')}`;
   return (
     <div className="panel-chart">
       <svg
@@ -58,7 +59,7 @@ function BarChart({
               height={Math.max(h, 0.6)}
               rx="0.6"
             >
-              <title>{`${p.day}: ${fmtInt(p.value)}`}</title>
+              <title>{`${p.day}: ${p.text ?? fmtInt(p.value)}`}</title>
             </rect>
           );
         })}
@@ -171,7 +172,7 @@ function Missing({ outdated }: { outdated: boolean }) {
 
 /** `GET /metrics` (Prometheus) do plugin-metrics; se a área de transferência falhar, mostra a URL. */
 function CopyScrape() {
-  const url = `${location.origin}/metrics`;
+  const url = scrapeUrl(document.baseURI);
   const [state, setState] = useState<'idle' | 'copied' | 'manual'>('idle');
   const copy = async () => {
     try {
@@ -183,9 +184,14 @@ function CopyScrape() {
     }
   };
   return (
-    <button type="button" className="link" onClick={copy}>
-      {state === 'copied' ? 'URL copiada' : state === 'manual' ? url : 'Copiar URL do scrape'}
-    </button>
+    <>
+      <button type="button" className="link" onClick={copy}>
+        {state === 'manual' ? url : 'Copiar URL do scrape'}
+      </button>
+      <span className="sr" aria-live="polite">
+        {state === 'copied' ? 'URL copiada' : ''}
+      </span>
+    </>
   );
 }
 
@@ -293,7 +299,9 @@ function Panels({ data }: { data: Extract<MetricsResponse, { available: true }> 
               <tbody>
                 {all.map((m) => (
                   <tr key={m.name}>
-                    <td className="mono">{m.name}</td>
+                    <td className="mono" title={`${fmtInt(m.series)} séries`}>
+                      {m.name}
+                    </td>
                     <td>
                       <span className="chip mono">{m.type}</span>
                     </td>
@@ -312,7 +320,9 @@ function Panels({ data }: { data: Extract<MetricsResponse, { available: true }> 
               {all.map((m) => (
                 <div key={m.name}>
                   <div className="list-head">
-                    <span className="mono">{m.name}</span>
+                    <span className="mono" title={`${fmtInt(m.series)} séries`}>
+                      {m.name}
+                    </span>
                     <span className="chip mono">{m.type}</span>
                   </div>
                   <div className="mono muted">
