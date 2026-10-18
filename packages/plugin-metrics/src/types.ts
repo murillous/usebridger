@@ -57,6 +57,8 @@ export interface MetricsService {
   observe(name: string, labels: MetricLabels, value: number): void;
   /** Linhas por dia e rótulos: o persistido mais o que ainda está em memória. */
   query(name: string, range: MetricsRange): Promise<MetricRow[]>;
+  /** Nomes das métricas com dados no intervalo (persistidos ou em memória), em ordem alfabética. */
+  names(range: MetricsRange): Promise<string[]>;
 }
 
 declare module '@usebridger/core' {

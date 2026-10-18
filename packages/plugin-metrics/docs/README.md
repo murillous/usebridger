@@ -21,6 +21,9 @@ ainda está em memória (`from`/`to` inclusivos, `YYYY-MM-DD` em UTC):
 - contador: `{ metric, type: 'counter', day, labels, value }`;
 - histograma: `{ metric, type: 'histogram', day, labels, count, sum, p50, p95, p99, buckets }`.
 
+`names({ from, to })` lista os nomes das métricas com dados no intervalo (persistidos ou em memória),
+em ordem alfabética; é como o dashboard descobre métricas de outros plugins.
+
 Uma métrica é contador ou histograma; usar o mesmo nome nos dois lança `TypeError`.
 
 ## Histograma

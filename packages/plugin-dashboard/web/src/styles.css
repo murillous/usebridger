@@ -507,6 +507,9 @@ td {
   .list {
     display: block;
   }
+  .list .muted {
+    font-size: 11px;
+  }
   .list > div {
     padding: 8px 0;
     border-top: 1px solid var(--line);
@@ -524,6 +527,65 @@ td {
     bottom: calc(56px + env(safe-area-inset-bottom));
     padding: 12px 16px;
     margin: 0 -16px;
+  }
+}
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.kpis.small {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.stat {
+  background: var(--raised);
+  border-radius: 14px;
+  box-shadow: var(--e1), var(--top);
+  padding: 16px;
+}
+.kpis.small .stat {
+  box-shadow: none;
+  background: var(--sunken);
+}
+.stat-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.stat-value {
+  font: 600 28px / 1.2 var(--display);
+}
+.panels {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.panels .card {
+  margin-bottom: 0;
+}
+.chart {
+  width: 100%;
+  height: 120px;
+  display: block;
+}
+.bar {
+  fill: var(--agent);
+}
+.axis {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 11px;
+  margin-bottom: 12px;
+}
+@media (max-width: 767px) {
+  .kpis {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .panels {
+    grid-template-columns: 1fr;
   }
 }
 /* Sem transição nem animação no app: prefers-reduced-motion já é respeitado. */
