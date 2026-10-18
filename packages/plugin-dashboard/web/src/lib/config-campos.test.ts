@@ -1,5 +1,6 @@
+import { envName as coreEnvName, toEnvSegment } from '@usebridger/core';
 import { describe, expect, it } from 'vitest';
-import { buildFields, envName, isoToLocal, leaves, localToIso } from './schema.ts';
+import { buildFields, configPluginOf, envName, isoToLocal, leaves, localToIso } from './schema.ts';
 
 const one = (prop: Record<string, unknown>) =>
   leaves(buildFields({ type: 'object', properties: { apiKey: prop } }))[0];
@@ -31,21 +32,15 @@ describe('placeholder e data/hora', () => {
   it('converte entre datetime-local e ISO', () => {
     const iso = '2026-03-04T05:06:00.000Z';
     expect(localToIso(isoToLocal(iso))).toBe(iso);
+    // Segundos diferentes de zero sobrevivem à ida e volta.
+    const withSeconds = '2026-03-04T05:06:07.000Z';
+    expect(isoToLocal(withSeconds)).toMatch(/:07$/);
+    expect(localToIso(isoToLocal(withSeconds))).toBe(withSeconds);
     expect(isoToLocal(undefined)).toBe('');
     expect(isoToLocal('lixo')).toBe('');
     expect(localToIso('')).toBeUndefined();
   });
 });
-
-// O core não exporta `envName` no pacote público e o Biome barra `../`: o módulo entra por URL.
-// Se o core mover o arquivo, este import falha e o teste avisa em vez de passar calado.
-const core = (await import(
-  /* @vite-ignore */ new URL('../../../../core/src/config/env.ts', import.meta.url).href
-)) as {
-  envName: (plugin: string, path: string[]) => string;
-  toEnvSegment: (name: string) => string;
-};
-const { envName: coreEnvName, toEnvSegment } = core;
 
 describe('envName do web = envName do core', () => {
   const cases: [string, string][] = [
@@ -61,5 +56,17 @@ describe('envName do web = envName do core', () => {
   });
   it('segmento do core bate com o nome', () => {
     expect(toEnvSegment('apiKey')).toBe('API_KEY');
+  });
+});
+
+describe('configPluginOf', () => {
+  it('lê o plugin do hash', () => {
+    expect(configPluginOf('config/foo')).toBe('foo');
+    expect(configPluginOf('config/a%20b')).toBe('a b');
+    expect(configPluginOf('plugins')).toBeUndefined();
+  });
+  it('vazio ou malformado vira ausente', () => {
+    expect(configPluginOf('config/')).toBeUndefined();
+    expect(configPluginOf('config/%E0%A4%A')).toBeUndefined();
   });
 });

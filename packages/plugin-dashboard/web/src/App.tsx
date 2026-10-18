@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { configPluginOf } from '#web/lib/schema.ts';
 import { api, liveUrl, setUnauthorizedHandler } from './lib/api.ts';
 import {
   createLiveClient,
@@ -89,14 +90,6 @@ const TABS = [
 const KNOWN = ['inicio', 'metricas', 'logs', 'plugins', 'config', 'mais'];
 
 const EXT = 'ext/';
-/** Plugin do hash `config/<plugin>`; `%` malformado no hash não derruba o app. */
-function pluginOf(route: string): string | undefined {
-  try {
-    return decodeURIComponent(route.slice('config/'.length)) || undefined;
-  } catch {
-    return undefined;
-  }
-}
 const current = (): string => location.hash.replace(/^#\/?/, '') || 'inicio';
 
 /** Preferência de cor do sistema, atualizada quando muda (o botão de tema depende dela no `auto`). */
@@ -158,7 +151,7 @@ export function App() {
   const [route, setRoute] = useState(current);
   // `#/config/<plugin>` abre a Config já no plugin; para o resto do app é a página `config`.
   const page = route.startsWith('config/') ? 'config' : route;
-  const configPlugin = page === 'config' ? pluginOf(route) : undefined;
+  const configPlugin = configPluginOf(route);
   const [theme, setTheme] = useState<Theme>(loadTheme);
   useEffect(() => applyTheme(theme), [theme]);
   const chooseTheme = (next: Theme) => {
@@ -299,7 +292,7 @@ export function App() {
         ) : page === 'plugins' ? (
           <Plugins />
         ) : page === 'config' ? (
-          <Config initial={configPlugin} />
+          <Config selected={configPlugin} />
         ) : page.startsWith(EXT) ? (
           <Tab tabs={tabs} tabKey={page.slice(EXT.length)} refresh={refresh} />
         ) : page === 'mais' ? (

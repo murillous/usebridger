@@ -261,7 +261,7 @@ export function isoToLocal(value: unknown): string {
   const date = typeof value === 'string' ? new Date(value) : undefined;
   if (!date || Number.isNaN(date.getTime())) return '';
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
 /** Valor do `datetime-local` (fuso local) -> ISO em UTC; vazio ou inválido vira ausente. */
@@ -346,4 +346,14 @@ export function dependentsOf(
     }
   }
   return [...out];
+}
+
+/** Plugin do hash `config/<plugin>`; vazio ou `%` malformado não derruba o app (volta a `undefined`). */
+export function configPluginOf(route: string): string | undefined {
+  if (!route.startsWith('config/')) return undefined;
+  try {
+    return decodeURIComponent(route.slice('config/'.length)) || undefined;
+  } catch {
+    return undefined;
+  }
 }
