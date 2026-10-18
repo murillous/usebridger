@@ -137,6 +137,7 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
   const { collection, log, maxSeriesPerMetric, retentionDays } = options;
   const now = options.now ?? Date.now;
   const metrics = new Map<string, Metric>();
+  const owners = new Map<string, string>();
   let flushing: Promise<void> = Promise.resolve();
   let purgedDay = '';
   let generation = 0;
@@ -363,5 +364,16 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
     return [...found].sort();
   }
 
-  return { service: { counter, observe, query, names }, counterAt, totals, flush };
+  function declareOwner(name: string, plugin: string): void {
+    if (!owners.has(name)) owners.set(name, plugin);
+  }
+
+  const ownerOf = (name: string): string | undefined => owners.get(name);
+
+  return {
+    service: { counter, observe, query, names, declareOwner, ownerOf },
+    counterAt,
+    totals,
+    flush,
+  };
 }

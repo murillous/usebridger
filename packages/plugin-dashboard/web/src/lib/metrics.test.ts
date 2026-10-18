@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { byLabel, daysBetween, fmtMs, percentile, perDay, summarize, total } from './metrics.ts';
+import {
+  byLabel,
+  daysBetween,
+  fmtCount,
+  fmtMs,
+  percentile,
+  perDay,
+  summarize,
+  total,
+} from './metrics.ts';
 import type { MetricRowView, MetricsResponse } from './types.ts';
 
 const counter = (day: string, value: number, labels = {}): MetricRowView => ({
@@ -73,5 +82,26 @@ describe('métricas do dashboard', () => {
     expect(p).toBe(Number.POSITIVE_INFINITY);
     expect(fmtMs(p)).toMatch(/^> 30\.000 ms$/);
     expect(fmtMs(100)).toBe('100 ms');
+  });
+});
+
+describe('dono e fila de saída', () => {
+  it('summarize leva o plugin dono quando declarado', () => {
+    const data: MetricsResponse = {
+      available: true,
+      from: '2026-10-17',
+      to: '2026-10-17',
+      metrics: [
+        { name: 'a', plugin: 'core', rows: [counter('2026-10-17', 1)] },
+        { name: 'b', rows: [counter('2026-10-17', 1)] },
+      ],
+    };
+    expect(summarize(data).map((s) => s.plugin)).toEqual(['core', undefined]);
+  });
+
+  it('fmtCount formata contagem sem unidade e o balde +Inf', () => {
+    expect(fmtCount(undefined)).toBe('-');
+    expect(fmtCount(25)).toBe('25');
+    expect(fmtCount(Number.POSITIVE_INFINITY)).toBe('> 30.000');
   });
 });

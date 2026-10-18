@@ -43,6 +43,17 @@ export const metrics: PluginDefinition = definePlugin({
     });
     ctx.services.provide('metrics', runtime.service);
     const m = runtime.service;
+    // Métricas do kernel: o dono é o rótulo "core" (ver ADR 0107).
+    for (const name of [
+      'bridger.messages.handled',
+      'bridger.messages.handle_duration_ms',
+      'bridger.outbound.sent',
+      'bridger.outbound.pending',
+      'bridger.active.users',
+      'bridger.active.groups',
+    ]) {
+      m.declareOwner(name, 'core');
+    }
 
     const active = createActiveTracker({
       now: Date.now,
@@ -80,6 +91,10 @@ export const metrics: PluginDefinition = definePlugin({
         status: s.status,
         ...(s.chatType === undefined ? {} : { chatType: s.chatType }),
       });
+      // Itens pendentes na fila de saída (todas as prioridades) no instante do envio. Amostrado aqui,
+      // porque o serviço não tem gauge; fila ociosa não gera amostra, e o pico é o que importa.
+      const { high, normal, low } = ctx.stats().outbound.pending;
+      m.observe('bridger.outbound.pending', {}, high + normal + low);
     });
 
     // Gauges lidos no scrape: filas de entrada e de saída (saúde da fila) e ativos do dia.

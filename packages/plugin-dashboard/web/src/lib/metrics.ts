@@ -8,6 +8,7 @@ export const KERNEL = {
   sent: 'bridger.outbound.sent',
   users: 'bridger.active.users',
   groups: 'bridger.active.groups',
+  pending: 'bridger.outbound.pending',
 } as const;
 
 // Espelha HISTOGRAM_BUCKETS do plugin-metrics (o app web não importa o pacote); o último é o `+Inf`.
@@ -72,6 +73,8 @@ export interface Summary {
   name: string;
   type: 'counter' | 'histogram';
   series: number;
+  /** Plugin que declarou a métrica; `core` para as do kernel. */
+  plugin?: string;
   /** Contador: soma. Histograma: número de observações. */
   total: number;
   p95?: number;
@@ -80,7 +83,7 @@ export interface Summary {
 /** Uma linha por métrica registrada, para a seção genérica. Métrica sem dado no período fica de fora. */
 export function summarize(data: MetricsResponse): Summary[] {
   if (!data.available) return [];
-  return data.metrics.flatMap(({ name, rows }) => {
+  return data.metrics.flatMap(({ name, rows, plugin }) => {
     const first = rows[0];
     if (!first) return [];
     const series = new Set(rows.map((r) => JSON.stringify(Object.entries(r.labels).sort()))).size;
@@ -90,6 +93,7 @@ export function summarize(data: MetricsResponse): Summary[] {
         name,
         type: first.type,
         series,
+        ...(plugin === undefined ? {} : { plugin }),
         total: total(rows),
         ...(p95 === undefined ? {} : { p95 }),
       },
@@ -162,6 +166,13 @@ export function catalog(data: MetricsResponse): CatalogEntry[] {
 export const scrapeUrl = (baseURI: string): string => new URL('../metrics/metrics', baseURI).href;
 
 export const fmtInt = (n: number): string => n.toLocaleString('pt-BR');
+/** Valor de um histograma de contagem (não de ms), como o p95 da fila de saída. */
+export const fmtCount = (n: number | undefined): string =>
+  n === undefined
+    ? '-'
+    : n === Number.POSITIVE_INFINITY
+      ? `> ${fmtInt(BOUNDS[BOUNDS.length - 1] ?? 0)}`
+      : fmtInt(n);
 export const fmtMs = (n: number | undefined): string =>
   n === undefined
     ? '-'

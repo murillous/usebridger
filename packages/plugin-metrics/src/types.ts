@@ -59,6 +59,14 @@ export interface MetricsService {
   query(name: string, range: MetricsRange): Promise<MetricRow[]>;
   /** Nomes das métricas com dados no intervalo (persistidos ou em memória), em ordem alfabética. */
   names(range: MetricsRange): Promise<string[]>;
+  /**
+   * Registra o plugin criador da métrica (aparece em Métricas). O serviço é um objeto só para
+   * todos os plugins, então ele não sabe quem chama: quem cria a métrica se declara. A primeira
+   * declaração vale; as seguintes são ignoradas.
+   */
+  declareOwner(name: string, plugin: string): void;
+  /** Plugin declarado dono da métrica; `undefined` se ninguém declarou. */
+  ownerOf(name: string): string | undefined;
 }
 
 declare module '@usebridger/core' {

@@ -21,6 +21,10 @@ ainda está em memória (`from`/`to` inclusivos, `YYYY-MM-DD` em UTC):
 - contador: `{ metric, type: 'counter', day, labels, value }`;
 - histograma: `{ metric, type: 'histogram', day, labels, count, sum, p50, p95, p99, buckets }`.
 
+`declareOwner(nome, plugin)` registra o plugin criador da métrica e `ownerOf(nome)` o devolve (o
+dashboard mostra na coluna "Plugin"); o serviço é compartilhado e não sabe quem chama, então quem
+cria a métrica se declara. As do kernel são `core`.
+
 `names({ from, to })` lista os nomes das métricas com dados no intervalo (persistidos ou em memória),
 em ordem alfabética; é como o dashboard descobre métricas de outros plugins.
 
@@ -99,6 +103,7 @@ rótulos de baixa cardinalidade e nunca id de chat ou de usuário:
 | --- | --- | --- |
 | `bridger.messages.handled` | contador | `chatType`, `route`, `status`, `command` (se houver) |
 | `bridger.messages.handle_duration_ms` | histograma | `route`, `status` |
+| `bridger.outbound.pending` | histograma | nenhum; itens pendentes na fila de saída (todas as prioridades) a cada envio, lidos de `ctx.stats()`. Os baldes são os de ms, aqui lidos como contagem |
 | `bridger.outbound.sent` | contador | `kind`, `status`, `chatType` (só em `ctx.reply`) |
 | `bridger.active.users` / `bridger.active.groups` | contador (por dia) | nenhum |
 

@@ -1,7 +1,7 @@
 import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
 import type { LiveState } from '#web/lib/live.ts';
-import { fmtInt, fmtMs, KERNEL, percentile, rowsOf, total } from '#web/lib/metrics.ts';
+import { fmtCount, fmtInt, fmtMs, KERNEL, percentile, rowsOf, total } from '#web/lib/metrics.ts';
 import { botChip, isFatal, logOrigin, recentLogs, stateLabel } from '#web/lib/overview.ts';
 import type { StatusView } from '#web/lib/types.ts';
 import { Stat } from './Stat.tsx';
@@ -37,6 +37,15 @@ function Kpis() {
         <Stat label="Usuários ativos" value={fmtInt(total(rowsOf(data, KERNEL.users)))} />
         <Stat label="Grupos ativos" value={fmtInt(total(rowsOf(data, KERNEL.groups)))} />
         <Stat label="Latência p95" value={fmtMs(percentile(rowsOf(data, KERNEL.duration), 0.95))} />
+        <Stat
+          label="Fila de saída (p95)"
+          value={fmtCount(
+            percentile(
+              rowsOf(data, KERNEL.pending).filter((r) => r.day === data.to),
+              0.95,
+            ),
+          )}
+        />
       </div>
     </section>
   );

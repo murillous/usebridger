@@ -80,7 +80,7 @@ export type MetricsResponse =
       available: true;
       from: string;
       to: string;
-      metrics: { name: string; rows: MetricRowView[] }[];
+      metrics: { name: string; rows: MetricRowView[]; plugin?: string }[];
     };
 
 export interface ConfigIssue {

@@ -166,8 +166,8 @@ browser ──HTTP (autenticação do dashboard)──▶ plugin-dashboard ─�
 
 Conferidas na M5-4.8 (#180). O canvas é ilustrativo; o que o contrato ou o core não sustenta fica de fora:
 
-- **Painel "Fila de saída"**: não existe métrica de fila no kernel. O quarto painel é "Envios por dia" (`bridger.outbound.sent`).
-- **Coluna "Plugin" da tabela de métricas**: o serviço `metrics` não guarda quem registrou cada métrica; adivinhar pelo prefixo do nome mostraria informação errada.
+- **Painel "Fila de saída"**: lê `bridger.outbound.pending`, histograma de itens pendentes amostrado a cada envio (p95 do dia). "Envios por dia" deixou de ter painel; a métrica `bridger.outbound.sent` segue na tabela.
+- **Coluna "Plugin" da tabela de métricas**: vem de `metrics.ownerOf(nome)`. O serviço é um objeto só e não sabe quem chama, então o plugin dono se declara com `declareOwner`; as métricas do kernel saem como `core` e as não declaradas, como `-`. A contagem de séries fica no texto, ao lado do nome.
 - **Latência em ms**: a métrica real é `bridger.messages.handle_duration_ms`, o canvas mostra `_seconds`.
 - **Título e etiqueta de widget** ("Próximos", "widget: table + action"): o contrato `dashboard.tabs` (ADR 0108) só tem título em `series`; as etiquetas são anotação do canvas.
 - **Cor de tom em `stats`** ("Atrasados" em âmbar) e **rótulo do botão do form** ("Agendar"): o contrato não tem os campos; o botão é "Enviar".
@@ -176,5 +176,5 @@ Conferidas na M5-4.8 (#180). O canvas é ilustrativo; o que o contrato ou o core
 ## Visão geral: o que o core ainda não expõe
 
 O card do bot mostra só o que o status de conexão traz (transport, sessão, estado, QR, código de
-pareamento, motivo do erro). "No ar desde", reconexões, validade do QR ("Expira em") e fila de saída
-não saem do core hoje. O canvas tem 5 KPIs em "Hoje"; o app mostra 4, sem "Fila de saída", até o core expor a fila.
+pareamento, motivo do erro). "No ar desde", reconexões, validade do QR ("Expira em") não saem do core hoje.
+Os 5 KPIs de "Hoje" incluem "Fila de saída (p95)", de `bridger.outbound.pending`.

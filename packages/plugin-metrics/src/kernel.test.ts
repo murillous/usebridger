@@ -248,3 +248,30 @@ describe('formato', () => {
     expect(text).toContain('h_count{exported_le="x"} 1');
   });
 });
+
+describe('fila de saída e dono das métricas', () => {
+  it('amostra os itens pendentes a cada envio e declara o kernel como dono', async () => {
+    const { plugin, get } = consumer();
+    const bot = await createTestBot({ plugins: [metrics, ping, plugin] });
+    await bot.receive({ text: '!ping' });
+    const [row] = (await get().query('bridger.outbound.pending', {
+      from: DAY,
+      to: DAY,
+    })) as HistogramRow[];
+    expect(row).toMatchObject({ type: 'histogram', count: 1, labels: {} });
+    for (const name of ['bridger.outbound.pending', 'bridger.outbound.sent']) {
+      expect(get().ownerOf(name)).toBe('core');
+    }
+    await bot.stop();
+  });
+
+  it('declareOwner vale só na primeira vez e ownerOf devolve undefined sem declaração', async () => {
+    const { plugin, get } = consumer();
+    const bot = await createTestBot({ plugins: [metrics, plugin] });
+    get().declareOwner('lembretes.enviados', 'lembretes');
+    get().declareOwner('lembretes.enviados', 'outro');
+    expect(get().ownerOf('lembretes.enviados')).toBe('lembretes');
+    expect(get().ownerOf('nao.existe')).toBeUndefined();
+    await bot.stop();
+  });
+});
