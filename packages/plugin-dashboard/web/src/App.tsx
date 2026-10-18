@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { botName } from '#web/lib/overview.ts';
+import { configPluginOf } from '#web/lib/schema.ts';
 import { api, liveUrl, setUnauthorizedHandler } from './lib/api.ts';
 import {
   createLiveClient,
@@ -149,6 +150,9 @@ function useTabs(enabled: boolean, route: string, connected: boolean) {
 export function App() {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [route, setRoute] = useState(current);
+  // `#/config/<plugin>` abre a Config já no plugin; para o resto do app é a página `config`.
+  const page = route.startsWith('config/') ? 'config' : route;
+  const configPlugin = configPluginOf(route);
   const [theme, setTheme] = useState<Theme>(loadTheme);
   useEffect(() => applyTheme(theme), [theme]);
   const chooseTheme = (next: Theme) => {
@@ -232,7 +236,7 @@ export function App() {
                 key={r.id}
                 className="nav"
                 href={`#/${r.id}`}
-                aria-current={route === r.id ? 'page' : undefined}
+                aria-current={page === r.id ? 'page' : undefined}
               >
                 {r.label}
               </a>
@@ -282,17 +286,17 @@ export function App() {
             {actions}
           </div>
         </header>
-        {route === 'logs' ? (
+        {page === 'logs' ? (
           <Logs live={live} />
-        ) : route === 'metricas' ? (
+        ) : page === 'metricas' ? (
           <Metrics />
-        ) : route === 'plugins' ? (
+        ) : page === 'plugins' ? (
           <Plugins />
-        ) : route === 'config' ? (
-          <Config />
-        ) : route.startsWith(EXT) ? (
-          <Tab tabs={tabs} tabKey={route.slice(EXT.length)} refresh={refresh} />
-        ) : route === 'mais' ? (
+        ) : page === 'config' ? (
+          <Config selected={configPlugin} />
+        ) : page.startsWith(EXT) ? (
+          <Tab tabs={tabs} tabKey={page.slice(EXT.length)} refresh={refresh} />
+        ) : page === 'mais' ? (
           <section aria-labelledby="mais-t" className="mais">
             <h1 id="mais-t">Mais</h1>
             <div className="group">Bot</div>
@@ -362,9 +366,9 @@ export function App() {
             key={t.id}
             href={`#/${t.id}`}
             aria-current={
-              t.match.includes(route) ||
-              (t.id === 'mais' && route.startsWith(EXT)) ||
-              (t.id === 'inicio' && !KNOWN.includes(route) && !route.startsWith(EXT))
+              t.match.includes(page) ||
+              (t.id === 'mais' && page.startsWith(EXT)) ||
+              (t.id === 'inicio' && !KNOWN.includes(page) && !page.startsWith(EXT))
                 ? 'page'
                 : undefined
             }

@@ -219,6 +219,8 @@ export interface Bot {
  */
 export interface BotPlugins {
   (): PluginReportEntry[];
+  /** Epoch ms em que o boot dos plugins terminou; `undefined` antes do `start()`. Reload não o muda. */
+  readonly bootedAt: number | undefined;
   /** Derruba e sobe de novo o plugin e os dependentes (ADR 0041). */
   reload(name: string): Promise<PluginChangeResult>;
   /** Desliga o plugin e os dependentes, que viram `dependency-skipped`; até `enable`. */

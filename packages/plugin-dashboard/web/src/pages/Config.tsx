@@ -10,8 +10,10 @@ import {
   flatten,
   groupIssues,
   isDirty,
+  isoToLocal,
   leaves,
   listToRows,
+  localToIso,
   type Node,
   parseNumber,
   recordToRows,
@@ -71,7 +73,19 @@ function TextControl(props: {
     value: text,
     'aria-invalid': props.invalid || undefined,
     'aria-describedby': props.describedBy,
+    placeholder: field.placeholder,
   };
+  if (field.control === 'datetime') {
+    return (
+      <input
+        {...common}
+        type="datetime-local"
+        step={1}
+        value={isoToLocal(props.value)}
+        onChange={(e) => props.onChange(localToIso(e.target.value))}
+      />
+    );
+  }
   if (field.control === 'json') {
     return <textarea {...common} onChange={(e) => change(e.target.value)} />;
   }
@@ -352,12 +366,16 @@ export function FieldView(props: {
   );
 }
 
-export function Config() {
+export function Config({ selected }: { selected?: string }) {
   const [rows, setRows] = useState<PluginRow[]>([]);
   // Erros da config atual por plugin (GET de cada um): alimenta os badges antes de abrir o plugin.
   const [issueCounts, setIssueCounts] = useState<Record<string, number>>({});
   const names = useMemo(() => rows.map((r) => r.name), [rows]);
-  const [plugin, setPlugin] = useState<string>();
+  // O hash (`#/config/<plugin>`) é a única fonte da seleção; ausente ou desconhecido cai no primeiro.
+  const plugin = selected && names.includes(selected) ? selected : names[0];
+  const select = (name: string) => {
+    location.hash = `#/config/${encodeURIComponent(name)}`;
+  };
   const [loaded, setLoaded] = useState<Loaded>();
   const [values, setValues] = useState<FlatValues>({});
   // Muda a cada (re)carga: remonta os campos e descarta o texto cru digitado.
@@ -371,7 +389,6 @@ export function Config() {
     api<PluginRow[]>('plugins').then(
       (list) => {
         setRows(list);
-        setPlugin((p) => p ?? list[0]?.name);
         // Plugin sem config legível (ex.: não carregou) fica sem badge de erro: o GET falho é o fallback.
         for (const r of list) {
           api<ConfigResponse>(`config/${encodeURIComponent(r.name)}`).then(
@@ -541,7 +558,7 @@ export function Config() {
               type="button"
               className="mono"
               aria-current={n === plugin ? 'true' : undefined}
-              onClick={() => setPlugin(n)}
+              onClick={() => select(n)}
             >
               {n}
               {badgeOf(rowOf(n), issueCounts[n]) && (
@@ -560,7 +577,7 @@ export function Config() {
             id="plugin"
             className="input"
             value={plugin ?? ''}
-            onChange={(e) => setPlugin(e.target.value)}
+            onChange={(e) => select(e.target.value)}
           >
             {names.map((n) => (
               <option key={n} value={n}>

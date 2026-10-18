@@ -15,6 +15,8 @@ export interface StatusView {
   qrExpiresAt?: number;
   /** Opcional: um backend anterior não envia. */
   versions?: { core: string; dashboard: string };
+  /** Opcional: um backend anterior não envia. */
+  outboundPending?: number;
 }
 
 export interface LogEntry {
@@ -56,10 +58,16 @@ export interface PluginRow {
   unregistered?: { command: string }[];
   /** `dependsOn` do manifesto: nome → faixa semver. */
   dependsOn?: Record<string, string>;
+  /** `optionalDependsOn` do manifesto: o reload em cascata do core também o segue (ADR 0099). */
+  optionalDependsOn?: Record<string, string>;
+  /** Duração do contexto + `setup` em ms (só em plugin carregado). */
+  setupMs?: number;
   /** Serviços providos no `setup`. */
   services?: string[];
   /** Pontos de extensão a que o plugin contribuiu. */
   contributions?: string[];
+  /** Contribuições por ponto de extensão. */
+  contributionCounts?: Record<string, number>;
 }
 
 export interface ChangeResult {
@@ -77,7 +85,8 @@ export type MetricRowView =
       count: number;
       sum: number;
       buckets: number[];
-    };
+    }
+  | { type: 'gauge'; day: string; labels: Record<string, string>; last: number; max: number };
 
 export type MetricsResponse =
   | { available: false; reason?: 'version' }
@@ -85,7 +94,7 @@ export type MetricsResponse =
       available: true;
       from: string;
       to: string;
-      metrics: { name: string; rows: MetricRowView[] }[];
+      metrics: { name: string; rows: MetricRowView[]; plugin?: string }[];
     };
 
 export interface ConfigIssue {

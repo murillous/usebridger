@@ -41,6 +41,8 @@ export interface StatusView {
   qrExpiresAt?: number;
   /** Versões exibidas no rodapé da sidebar. */
   versions: { core: string; dashboard: string };
+  /** Itens na fila de saída agora. */
+  outboundPending?: number;
 }
 
 export type { LogEntry } from '#logs.ts';
@@ -105,10 +107,15 @@ export const dashboard: PluginDefinition = definePlugin({
       }
     };
 
+    // Fila de saída ao vivo (soma das prioridades), lida do core a cada status.
+    const pending = (): number => {
+      const { high, normal, low } = ctx.stats().outbound.pending;
+      return high + normal + low;
+    };
     // Os horários vêm do core a cada leitura: sobrevivem a reload do plugin e não divergem do evento.
     const status = (): StatusView => {
       const { connectedSince, reconnections, qrExpiresAt } = ctx.connectionInfo();
-      const view: StatusView = { ...state, reconnections };
+      const view: StatusView = { ...state, reconnections, outboundPending: pending() };
       if (connectedSince !== undefined) view.connectedSince = connectedSince;
       if (qrExpiresAt !== undefined && view.qr !== undefined) view.qrExpiresAt = qrExpiresAt;
       return view;
@@ -138,6 +145,16 @@ export const dashboard: PluginDefinition = definePlugin({
       applyStatus(payload);
       broadcast(JSON.stringify({ type: 'status', ...status() }));
     });
+    // A fila muda sem evento de conexão: empurra o status só quando o número muda.
+    let lastPending = pending();
+    const queueTimer = setInterval(() => {
+      const now = pending();
+      if (now === lastPending) return;
+      lastPending = now;
+      broadcast(JSON.stringify({ type: 'status', ...status() }));
+    }, 2000);
+    queueTimer.unref();
+    ctx.signal.addEventListener('abort', () => clearInterval(queueTimer), { once: true });
     ctx.events.on('connection.qr', ({ payload }) => {
       state.qr = payload.qr;
       state.updatedAt = Date.now();

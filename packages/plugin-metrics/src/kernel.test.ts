@@ -248,3 +248,26 @@ describe('formato', () => {
     expect(text).toContain('h_count{exported_le="x"} 1');
   });
 });
+
+describe('fila de saída e dono das métricas', () => {
+  it('amostra a fila de saída no flush e dá o dono core às métricas do kernel', async () => {
+    const { plugin, get } = consumer();
+    const bot = await createTestBot({ plugins: [metrics, ping, plugin] });
+    await bot.receive({ text: '!ping' });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(await get().query('bridger.outbound.pending', { from: DAY, to: DAY })).toMatchObject([
+      { type: 'gauge', labels: {}, last: 0, max: 0 },
+    ]);
+    expect(get().ownerOf('bridger.outbound.pending')).toBe('core');
+    expect(get().ownerOf('bridger.outbound.sent')).toBe('core');
+    await bot.stop();
+  });
+
+  it('o consumidor é dono da métrica que cria', async () => {
+    const { plugin, get } = consumer();
+    const bot = await createTestBot({ plugins: [metrics, plugin] });
+    get().counter('consumidor.x', {});
+    expect(get().ownerOf('consumidor.x')).toBe('consumidor');
+    await bot.stop();
+  });
+});

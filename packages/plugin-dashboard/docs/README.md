@@ -76,6 +76,14 @@ plugin desconhecido 404; ação no próprio dashboard 409 (sem chamar o core: a 
 
 **O override é gravado antes do reload.** Se o reload falhar (409 ou 500), a config válida já ficou salva (a mensagem avisa); corrija e recarregue pelo `reload` de plugins.
 
+**Rótulos, placeholders e datas dos campos.** O rótulo vem do `title` do JSON Schema; sem ele, da
+`description` (que então não repete como ajuda); sem ela, do nome da propriedade com inicial
+maiúscula. Declare o `title` no schema Zod, junto da descrição: `z.string().meta({ title: 'Chave da API', description: '...' })`
+(o core gera o JSON Schema com `toJSONSchema`, que lê o `meta`). `examples[0]` (string ou número,
+`.meta({ examples: ['gpt-4o'] })`) vira o placeholder. `z.iso.datetime()` (`format: 'date-time'`)
+vira um seletor de data e hora, enviado como ISO em UTC. `#/config/<plugin>` abre a Config já
+no plugin (é o destino de "Abrir config" na lista de Plugins).
+
 **Secrets são só leitura no dashboard.** O `GET` os devolve mascarados (o valor real nunca sai) e o
 `PUT` recusa qualquer campo `secret`: o valor vem do arquivo (`pluginConfig`) ou do env. A
 `view.sources` diz de onde vem cada campo.
@@ -116,8 +124,8 @@ createBot({ plugins: [dashboard], adminPlugins: ['dashboard'] });
 
 | Rota | Resposta |
 | ---- | -------- |
-| `GET /api/plugins` | Tabela de boot: array de `{ name, version, origin, dependsOn?, status: 'loaded', unregistered?, services?, contributions? }` ou `{ name, version, origin, dependsOn?, status: 'skipped', reason }`, na ordem de carga. `reason` é `{ kind, ... }` como no core; em `setup-failed`, `error` vira `{ plugin, phase, timedOut, message }` (mensagem truncada, nunca o erro cru) e a `reason` ganha `causeMessage`: `Nome: mensagem` do erro lançado no `setup` (até 300 caracteres, sem stack, secrets já censurados pelo core). |
-| `GET /api/plugins/boot` | `{ bootedAt }` (ms): horário aproximado do boot (o do `setup` do dashboard), até o core expor o horário real. Exige sessão (401 sem ela). |
+| `GET /api/plugins` | Tabela de boot: array de `{ name, version, origin, dependsOn?, optionalDependsOn?, status: 'loaded', setupMs?, unregistered?, services?, contributions?, contributionCounts? }` ou `{ name, version, origin, dependsOn?, optionalDependsOn?, status: 'skipped', reason }`, na ordem de carga. `reason` é `{ kind, ... }` como no core; em `setup-failed`, `error` vira `{ plugin, phase, timedOut, message }` (mensagem truncada, nunca o erro cru) e a `reason` ganha `causeMessage`: `Nome: mensagem` do erro lançado no `setup` (até 300 caracteres, sem stack, secrets já censurados pelo core). |
+| `GET /api/plugins/boot` | `{ bootedAt }` (ms): horário real do boot, lido do core (`bot.plugins.bootedAt`; não reinicia com o reload do dashboard). Fica numa rota própria porque `GET /api/plugins` é um array. Exige sessão (401 sem ela). |
 | `POST /api/plugins/:name/enable`, `/disable`, `/reload` | Sem corpo. 200 `{ plugin, dependents, teardownErrors }` (linhas novas do plugin e dos dependentes; falhas de teardown como `{ plugin, phase, timedOut, message }`). |
 
 Os `POST` exigem o cookie de sessão e `Origin` do mesmo host (senão 403). Nome desconhecido 404;

@@ -293,6 +293,10 @@ textarea {
   background: var(--agent-soft);
   color: var(--agent);
 }
+/* Antes de `.cfg-nav .chip` e `.field label .chip`: especificidade crescente (Biome). */
+.list-head .chip {
+  flex-shrink: 0;
+}
 
 .field {
   display: flex;
@@ -808,9 +812,6 @@ th.num {
 .list-head .mono {
   min-width: 0;
   overflow-wrap: anywhere;
-}
-.list-head .chip {
-  flex-shrink: 0;
 }
 .list-head {
   display: flex;

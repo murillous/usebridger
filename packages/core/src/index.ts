@@ -40,6 +40,7 @@ export { CommandConflictError } from '#commands/registry.ts';
 export type { RoleCheck, RoleContext, RoleName, Roles } from '#commands/roles.ts';
 export { RoleConflictError, RoleTimeoutError } from '#commands/roles.ts';
 export type { ConfigEnv } from '#config/env.ts';
+export { envName, toEnvSegment } from '#config/env.ts';
 export {
   type ConfigSource,
   PluginConfigError,
