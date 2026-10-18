@@ -32,6 +32,10 @@ Todas sob `/plugins/dashboard` (ou `/sessions/<sessão>/plugins/dashboard` fora 
 `closed` traz `reason` e `message` (texto do erro, truncado); o objeto de erro cru nunca sai.
 `session` é o nome da sessão do bot. Depois de um reload do plugin, o status parte do último
 `ConnectionStatus` guardado pelo core (`ctx.connectionStatus()`, ADR 0110).
+`name` é o nome do bot (`createBot({ name })`, senão o nome do transport) e aparece no cabeçalho
+como `name · sessão X`. `connectedSince`, `reconnections` e `qrExpiresAt` (ms epoch) vêm de
+`ctx.connectionInfo()` (ADR 0115) e alimentam o card do bot; `qrExpiresAt` só existe se o
+transport informar `expiresAt` no `connection.qr` (o Baileys informa).
 
 ## Métricas
 

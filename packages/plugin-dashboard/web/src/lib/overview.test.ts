@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { botChip, isFatal, logOrigin, recentLogs, stateLabel } from './overview.ts';
+import {
+  botChip,
+  botName,
+  fmtRemaining,
+  fmtSince,
+  isFatal,
+  logOrigin,
+  recentLogs,
+  stateLabel,
+} from './overview.ts';
 import type { LogEntry, StatusView } from './types.ts';
 
 const st = (over: Partial<StatusView>): StatusView => ({
@@ -50,5 +59,29 @@ describe('logs recentes', () => {
   it('recentLogs devolve as n mais novas, da mais nova para a mais velha', () => {
     const logs = ['1', '2', '3'].map((m) => log(m));
     expect(recentLogs(logs, 2).map((l) => l.message)).toEqual(['3', '2']);
+  });
+});
+
+describe('botName', () => {
+  it('usa o nome do bot e cai no transport sem ele', () => {
+    expect(botName(st({ name: 'luma' }))).toBe('luma');
+    expect(botName(st({}))).toBe('whatsapp');
+  });
+});
+
+describe('fmtRemaining', () => {
+  it('formata segundos e minutos; vencido vira undefined', () => {
+    expect(fmtRemaining(12_000)).toBe('12s');
+    expect(fmtRemaining(65_000)).toBe('1m 05s');
+    expect(fmtRemaining(0)).toBeUndefined();
+    expect(fmtRemaining(-5)).toBeUndefined();
+  });
+});
+
+describe('fmtSince', () => {
+  it('só a hora no mesmo dia; com data em outro dia', () => {
+    const at = new Date(2026, 0, 5, 10, 30).getTime();
+    expect(fmtSince(at, at + 60_000)).toBe(new Date(at).toLocaleTimeString());
+    expect(fmtSince(at, at + 2 * 86_400_000)).toBe(new Date(at).toLocaleString());
   });
 });

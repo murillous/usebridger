@@ -41,7 +41,9 @@ export function reduceLive(state: LiveState, message: LiveMessage, now: number):
       return { ...base, status };
     }
     case 'qr':
-      return state.status ? { ...base, status: { ...state.status, qr: message.qr } } : base;
+      return state.status
+        ? { ...base, status: { ...state.status, qr: message.qr, qrExpiresAt: message.qrExpiresAt } }
+        : base;
     case 'pairing-code':
       return state.status
         ? { ...base, status: { ...state.status, pairingCode: message.code } }

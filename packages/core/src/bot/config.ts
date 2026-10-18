@@ -89,6 +89,11 @@ export interface BotConfig {
    */
   readonly session?: string;
   /**
+   * Nome de exibição do bot (ex.: `luma`), mostrado pelo dashboard. Só rótulo: não entra em
+   * storage nem em chave. Padrão: o `Transport.name` (ADR 0115).
+   */
+  readonly name?: string;
+  /**
    * Storage do bot (plugins, scheduler, overrides de config). O bot o fecha no `stop()` — o
    * último a parar, se vários bots o dividem. Padrão: em memória (`createMemoryStorage`), com
    * aviso no log — os dados somem ao reiniciar.

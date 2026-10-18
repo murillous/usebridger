@@ -117,6 +117,7 @@ sendo a referência; um ADR novo entra nos dois.
 - [0020](0020-http-unico-hono.md) — Servidor HTTP único no core (Hono)
 - [0021](0021-dashboard-vira-plugin.md) — Dashboard vira plugin
 - [0107](0107-plugins-oficiais-de-metricas-e-dashboard.md) — Plugins oficiais `plugin-metrics` e `plugin-dashboard` (substitui parte do D86)
+- [0115](0115-status-do-bot-no-contexto.md) — Status do bot no contexto: `ctx.connectionInfo()`, `ctx.botName` e `expiresAt` do QR, mostrados pelo dashboard (complementa D110)
 
 **Testes e kit de autor**
 
@@ -251,5 +252,6 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0112](0112-tabela-de-plugins-com-dependencias-servicos-e-contribuicoes.md) | D112 | `PluginReportEntry` ganha `dependsOn`, `services` e `contributions` (opcionais, só quando há algo) para a tela Plugins do dashboard (estende D111) | Aceito |
 | [0113](0113-contrato-das-abas-do-dashboard-complemento.md) | D113 | Complementos às abas do dashboard: `series.title?`, manifesto do `form` mascarado por `maskedJsonSchema` (core), secret de form de aba como entrada (password), widget que não vira manifesto sai sozinho, itens do `load` fora do contrato descartados com `warn`, `order` inválido vale 0, `text` como texto puro (detalha D108) | Aceito |
 | [0114](0114-duracao-do-setup-contagem-e-boot-no-report-de-plugins.md) | D114 | Report de plugins completo para o dashboard: `optionalDependsOn` e `contributionCounts` na linha, `setupMs` na linha e `bootedAt` em `bot.plugins`/`ctx.admin.plugins` (complementa D112) | Aceito |
+| [0115](0115-status-do-bot-no-contexto.md) | D115 | `ctx.connectionInfo()` (no ar desde, reconexões, expiração do QR), `connection.qr.expiresAt?` (preenchido pelo Baileys), `BotConfig.name` e `ctx.botName` (fallback: `Transport.name`); o dashboard mostra no card do bot e no cabeçalho (complementa D110) | Aceito |
 | [0116](0116-servico-com-escopo-por-chamador.md) | D116 | `ServiceAccess.provideScoped(name, factory, release?)`: serviço com instância por plugin que chama, descartada no `removePlugin`; o `metrics` usa para gravar o dono de cada métrica (detalha D18 e ADR 0096) | Aceito |
 | [0117](0117-gauge-e-fila-de-saida-nas-metricas.md) | D117 | `metrics.gauge` (último valor e máximo do dia), que vai aos exportadores e ao `/metrics`, exceto a fila de saída, já exposta ao vivo; fila de saída como gauge amostrado no flush e KPI ao vivo pelo status do dashboard (detalha D107) | Aceito |

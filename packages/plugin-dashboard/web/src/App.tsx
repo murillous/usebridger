@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { botName } from '#web/lib/overview.ts';
 import { configPluginOf } from '#web/lib/schema.ts';
 import { api, liveUrl, setUnauthorizedHandler } from './lib/api.ts';
 import {
@@ -278,7 +279,7 @@ export function App() {
         </div>
         <header className="head">
           <span className="muted">
-            {live.status ? `${live.status.transport} · sessão ${live.status.session}` : '—'}
+            {live.status ? `${botName(live.status)} · sessão ${live.status.session}` : '—'}
           </span>
           <div className="row">
             <LiveBadge live={live} />

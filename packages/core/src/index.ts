@@ -17,6 +17,7 @@ export type {
   PluginAdmin,
 } from '#bot/config.ts';
 export { BotStateError } from '#bot/config.ts';
+export type { ConnectionInfo } from '#bot/connection-info.ts';
 export { GroupAdminTimeoutError } from '#bot/group-admin.ts';
 export { CommandTimeoutError } from '#bot/plugin-context.ts';
 export type { BotReconnectionOptions } from '#bot/reconnect.ts';

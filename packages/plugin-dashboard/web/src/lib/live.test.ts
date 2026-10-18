@@ -32,6 +32,11 @@ describe('reduceLive', () => {
     expect(s.logs.map((l) => l.message)).toEqual(['m1', 'm2']);
   });
 
+  it('o evento qr leva a expiração para o status', () => {
+    const s = reduceLive({ ...initialLive, status }, { type: 'qr', qr: 'QR', qrExpiresAt: 99 }, 11);
+    expect(s.status).toMatchObject({ qr: 'QR', qrExpiresAt: 99 });
+  });
+
   it('limita o buffer de logs', () => {
     let s = initialLive;
     for (let i = 0; i < MAX_LOGS + 5; i++) s = reduceLive(s, { type: 'log', entry: entry(i) }, i);

@@ -46,6 +46,7 @@ import {
 } from './bot-setup.ts';
 import type { Bot, BotConfig, BotState, BotStats } from './config.ts';
 import { BotStateError } from './config.ts';
+import { createConnectionTracker } from './connection-info.ts';
 import { groupAdminPort } from './group-admin.ts';
 import { createInboundFlow } from './inbound-flow.ts';
 import type { ExpireOrigin, KernelMessageContext } from './message-context.ts';
@@ -298,10 +299,13 @@ export function createBot(config: BotConfig): Bot {
         });
   // Snapshot do último status para plugin que sobe depois do evento (ADR 0110).
   let lastConnection: ConnectionStatus | undefined;
+  const connectionTracker = createConnectionTracker();
   const entry = createTransportEntry({
     recordStatus: (status) => {
       lastConnection = status;
+      connectionTracker.onStatus(status);
     },
+    recordQr: connectionTracker.onQr,
     transport,
     inbound,
     outbound,
@@ -446,6 +450,8 @@ export function createBot(config: BotConfig): Bot {
       },
       session,
       connectionStatus: () => lastConnection,
+      connectionInfo: connectionTracker.info,
+      botName: config.name ?? transport.name,
       stats,
       observers,
       adminPlugins: new Set(config.adminPlugins ?? []),

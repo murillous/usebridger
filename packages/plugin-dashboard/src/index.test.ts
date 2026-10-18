@@ -282,6 +282,51 @@ describe('estado', () => {
     expect(JSON.stringify(closed)).not.toContain('socket');
   });
 
+  it('status traz horário no ar, reconexões, nome do bot e expiração do QR', async () => {
+    const { bot, base, cookie } = await start();
+    const headers = { cookie: await cookie() };
+    const get = async (): Promise<StatusView> =>
+      (await (await fetch(`${base}/api/status`, { headers })).json()) as StatusView;
+
+    await bot.emit('connection.status', { status: 'open' });
+    const open = await get();
+    expect(open.connectedSince).toEqual(expect.any(Number));
+    expect(open.reconnections).toBe(0);
+    expect(open.name).toBe(open.transport);
+
+    await bot.emit('connection.status', {
+      status: 'closed',
+      reason: 'connection-lost',
+      error: null,
+    });
+    expect((await get()).connectedSince).toBeUndefined();
+    await bot.emit('connection.qr', { qr: 'QR1', expiresAt: 4242 });
+    expect((await get()).qrExpiresAt).toBe(4242);
+    await bot.emit('connection.status', { status: 'open' });
+    const back = await get();
+    expect(back.reconnections).toBe(1);
+    expect(back.qrExpiresAt).toBeUndefined();
+  });
+
+  it('o nome do bot vem de createBot({ name })', async () => {
+    const http = createHttp({ port: 0, hostname: '127.0.0.1' });
+    const bot = await createTestBot({
+      plugins: [dashboard],
+      http,
+      name: 'luma',
+      pluginConfig: { dashboard: { token: TOKEN } },
+    });
+    bots.push(bot);
+    const base = `http://127.0.0.1:${http.port}/plugins/dashboard`;
+    const login = await fetch(`${base}/api/login`, {
+      method: 'POST',
+      body: JSON.stringify({ token: TOKEN }),
+    });
+    const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    const res = await fetch(`${base}/api/status`, { headers: { cookie } });
+    expect(((await res.json()) as StatusView).name).toBe('luma');
+  });
+
   it('status traz a sessão do bot', async () => {
     const { base, cookie } = await start();
     const res = await fetch(`${base}/api/status`, { headers: { cookie: await cookie() } });

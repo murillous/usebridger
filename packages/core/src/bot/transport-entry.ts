@@ -39,6 +39,8 @@ export interface TransportEntryDeps {
   readonly stopping: () => boolean;
   /** Guarda o último `connection.status`, antes de reemitir no barramento (ADR 0110). */
   readonly recordStatus?: (status: ConnectionStatus) => void;
+  /** Guarda a expiração do QR, antes de reemitir no barramento (ADR 0115). */
+  readonly recordQr?: (expiresAt: number | undefined) => void;
   /** Getter: o logger nasce no `start()`. */
   readonly log: () => Logger;
 }
@@ -144,6 +146,7 @@ export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
       }),
       deps.transport.on('connection.qr', (payload) => {
         deps.reconnector?.onQr();
+        deps.recordQr?.(payload.expiresAt);
         // Quem lê o log em info (agregador, arquivo) pareia o número com o QR enquanto ele vale:
         // o valor fica em debug e no barramento (`connection.qr`), para quem exibe a tela.
         deps.log().info('QR de pareamento recebido; exiba-o pelo evento connection.qr');

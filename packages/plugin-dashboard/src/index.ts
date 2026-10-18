@@ -22,6 +22,8 @@ import { DASHBOARD_VERSION } from '#version.ts';
 
 export interface StatusView {
   transport: string;
+  /** Nome do bot (`createBot({ name })`, senão o transport; ADR 0115). */
+  name: string;
   /** Sessão do bot (ADR 0110): `/plugins/dashboard` é a `default`; as outras ficam sob `/sessions/<sessão>`. */
   session: string;
   status: 'connecting' | 'open' | 'closed';
@@ -32,6 +34,11 @@ export interface StatusView {
   /** O transport pareia por QR/código: um `auth-failed` limpa a sessão e reconecta, não é terminal. */
   pairing: boolean;
   updatedAt: number;
+  /** Desde quando a conexão está no ar (ms epoch); ausente fora do ar (ADR 0115). */
+  connectedSince?: number;
+  reconnections: number;
+  /** Quando o QR atual expira (ms epoch); ausente sem QR ou sem expiração. */
+  qrExpiresAt?: number;
   /** Versões exibidas no rodapé da sidebar. */
   versions: { core: string; dashboard: string };
   /** Itens na fila de saída agora. */
@@ -79,8 +86,9 @@ export const dashboard: PluginDefinition = definePlugin({
     const sessions = createSessions(cookieMaxAgeSec);
     const logs = createLogBuffer(logBufferSize);
     const sockets = new Set<HttpSocket>();
-    const state: StatusView = {
+    const state: Omit<StatusView, 'reconnections'> = {
       transport: ctx.transportName,
+      name: ctx.botName,
       session: ctx.session,
       pairing: ctx.capabilities.has('pairing'),
       status: 'connecting',
@@ -104,7 +112,14 @@ export const dashboard: PluginDefinition = definePlugin({
       const { high, normal, low } = ctx.stats().outbound.pending;
       return high + normal + low;
     };
-    const status = (): StatusView => ({ ...state, outboundPending: pending() });
+    // Os horários vêm do core a cada leitura: sobrevivem a reload do plugin e não divergem do evento.
+    const status = (): StatusView => {
+      const { connectedSince, reconnections, qrExpiresAt } = ctx.connectionInfo();
+      const view: StatusView = { ...state, reconnections, outboundPending: pending() };
+      if (connectedSince !== undefined) view.connectedSince = connectedSince;
+      if (qrExpiresAt !== undefined && view.qr !== undefined) view.qrExpiresAt = qrExpiresAt;
+      return view;
+    };
 
     // Mesma regra para o evento e para o snapshot do core no setup.
     const applyStatus = (payload: ConnectionStatus): void => {
@@ -143,7 +158,7 @@ export const dashboard: PluginDefinition = definePlugin({
     ctx.events.on('connection.qr', ({ payload }) => {
       state.qr = payload.qr;
       state.updatedAt = Date.now();
-      broadcast(JSON.stringify({ type: 'qr', qr: payload.qr }));
+      broadcast(JSON.stringify({ type: 'qr', qr: payload.qr, qrExpiresAt: payload.expiresAt }));
     });
     ctx.events.on('connection.pairing-code', ({ payload }) => {
       state.pairingCode = payload.code;

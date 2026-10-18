@@ -4,6 +4,7 @@
 
 import type { z } from 'zod';
 import type { BotStats, PluginAdmin } from '#bot/config.ts';
+import type { ConnectionInfo } from '#bot/connection-info.ts';
 import type {
   AcceptSpec,
   CommandContextFor,
@@ -148,6 +149,13 @@ export interface PluginContext<
    * boot (ou num reload) e não pode esperar o próximo evento.
    */
   connectionStatus(): ConnectionStatus | undefined;
+  /**
+   * Desde quando a conexão está no ar, quantas vezes reconectou e quando o QR atual expira
+   * (ADR 0115). Leitura O(1); devolve uma cópia.
+   */
+  connectionInfo(): ConnectionInfo;
+  /** Nome do bot: `createBot({ name })`, senão o `Transport.name` (ADR 0115). */
+  readonly botName: string;
   /** Contato da própria sessão; `null` até a primeira conexão aberta. */
   readonly self: Contact | null;
   /**

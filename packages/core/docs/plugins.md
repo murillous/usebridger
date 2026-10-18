@@ -413,6 +413,8 @@ setup(ctx) {
 | `ctx.self` | contato da sessão; `null` até a primeira conexão | — | — |
 | `ctx.session` | nome da sessão do bot (`default` se a config não define) | — | — |
 | `ctx.connectionStatus()` | último `ConnectionStatus` do transport, `undefined` antes do primeiro evento ([ADR 0110](../../../docs/adr/0110-sessao-e-status-de-conexao-no-contexto.md)) | — | — |
+| `ctx.connectionInfo()` | `{ connectedSince, reconnections, qrExpiresAt }`: desde quando a conexão está no ar, reaberturas depois da primeira e expiração do QR atual (ms epoch; `undefined` quando não se aplica; [ADR 0115](../../../docs/adr/0115-status-do-bot-no-contexto.md)) | — | — |
+| `ctx.botName` | `createBot({ name })`, ou o `name` do transport sem config (ADR 0115) | — | — |
 | `ctx.transportName` | `name` do transport (`baileys`, `web`...), para compor chaves de ID no [`ctx.storage.shared`](storage.md#dados-comuns-a-vários-bots) | — | — |
 | `ctx.capabilities` | `ReadonlySet` do que o transport suporta | — | — |
 | `ctx.http.route(method, path, handler)` / `ctx.http.ws(path, accept)` | rota HTTP ou WebSocket sob `/plugins/<nome>` ([HTTP](http.md)) | — | — |
