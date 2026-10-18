@@ -1140,3 +1140,61 @@ h3 {
   font-size: 11px;
   margin-top: 24px;
 }
+
+/* Visão geral: card do bot e logs recentes */
+.bot h3 {
+  margin: 0;
+  font-size: 17px;
+}
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 12px 0 0;
+}
+.facts dt {
+  color: var(--muted);
+}
+.facts dd {
+  margin: 0;
+}
+.bot .notice {
+  margin: 12px 0 0;
+}
+.bot .notice p {
+  margin: 4px 0;
+}
+.pair {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+.pair-code {
+  font-size: 28px;
+  letter-spacing: 0.08em;
+}
+.recent-logs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.recent-logs li {
+  display: grid;
+  grid-template-columns: 5.5rem 3.5rem 5rem 1fr;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+.recent-logs .msg {
+  word-break: break-word;
+}
+@media (max-width: 767px) {
+  .recent-logs li {
+    grid-template-columns: 5rem 1fr;
+  }
+  .recent-logs .msg {
+    grid-column: 1 / -1;
+  }
+}
