@@ -167,6 +167,9 @@ export function Plugins() {
     [
       row.version,
       row.status === 'loaded' ? setupText(row) : undefined,
+      row.status === 'loaded' && dependsText(row) !== '—'
+        ? `depende de ${dependsText(row)}`
+        : undefined,
       row.status === 'loaded'
         ? row.services?.length
           ? `provê ${row.services.join(', ')}`
