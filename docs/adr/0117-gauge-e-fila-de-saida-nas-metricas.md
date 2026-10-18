@@ -14,8 +14,9 @@ contador e histograma. Um histograma com baldes em ms lê a fila vazia como "p95
   máximo. Linha: `{ type: 'gauge', day, labels, last, max }`. Valor finito >= 0.
 - **Persistência:** um documento por (métrica, dia, série) com `field: 'gauge'`, `value` = máximo e
   `last`. O flush lê e atualiza; o `query` mescla com a memória.
-- **Fora dos exportadores e do `/metrics`:** o gauge não entra no snapshot dos exportadores (o
-  contrato deles segue contador e histograma) nem no acumulado do scrape, que já tem gauges ao vivo.
+- **Exportadores e `/metrics`:** o gauge entra no snapshot dos exportadores e no scrape (valor
+  `last`, `# TYPE gauge`), como as demais métricas (ADR 0107). A exceção é `bridger.outbound.pending`,
+  que já sai ao vivo como `bridger_outbound_pending` e fica fora dos dois.
 - **Fila de saída:** `bridger.outbound.pending`, gauge sem rótulos, amostrado de `ctx.stats()`
   (soma das prioridades) no timer de flush, não no envio. O painel de Métricas mostra o máximo por dia.
 - **KPI ao vivo:** o dashboard lê `ctx.stats()` ele mesmo e entrega `outboundPending` no status

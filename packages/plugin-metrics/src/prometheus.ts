@@ -38,7 +38,6 @@ export function renderPrometheus(
   // Agrupa pelo nome saneado: nomes que colidem ficam contíguos, com um único `# TYPE`.
   const families = new Map<string, MetricRow[]>();
   for (const row of rows) {
-    if (row.type === 'gauge') continue; // gauges saem ao vivo, em `gauges`
     const name = sanitizeName(row.metric);
     const family = families.get(name);
     if (!family) families.set(name, [row]);
@@ -48,7 +47,10 @@ export function renderPrometheus(
   for (const [name, family] of [...families].sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))) {
     out.push(`# TYPE ${name} ${family[0]?.type}`);
     for (const row of family) {
-      if (row.type === 'gauge') continue;
+      if (row.type === 'gauge') {
+        out.push(`${name}${labelText(row.labels)} ${row.last}`);
+        continue;
+      }
       if (row.type === 'counter') {
         out.push(`${name}${labelText(row.labels)} ${row.value}`);
         continue;

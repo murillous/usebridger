@@ -23,8 +23,8 @@ ainda está em memória (`from`/`to` inclusivos, `YYYY-MM-DD` em UTC):
 - gauge: `{ metric, type: 'gauge', day, labels, last, max }`.
 
 `gauge(nome, rótulos, valor)` amostra um valor (>= 0) e guarda o último e o máximo do dia por
-série. O gauge fica no storage e no `query`; não vai ao snapshot dos exportadores nem ao
-`GET /metrics` (os gauges ao vivo do scrape são outros, lidos no momento).
+série. O gauge vai ao snapshot dos exportadores e ao `GET /metrics` (valor `last`). A exceção é
+`bridger.outbound.pending`, que já sai ao vivo como `bridger_outbound_pending` e fica fora dos dois.
 
 `ownerOf(nome)` devolve o plugin que gravou a métrica primeiro. O serviço `metrics` tem escopo por
 quem chama (ADR 0116): cada plugin recebe uma instância que grava o nome dele como dono na primeira

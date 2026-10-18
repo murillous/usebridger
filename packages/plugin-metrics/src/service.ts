@@ -53,6 +53,9 @@ export interface MetricsRuntimeOptions {
 /** Dono das métricas que o próprio plugin-metrics grava (kernel). */
 export const CORE_OWNER = 'core';
 
+/** Gauge amostrado do `ctx.stats()` que o scrape já expõe ao vivo (`bridger_outbound_pending`). */
+export const LIVE_GAUGE = 'bridger.outbound.pending';
+
 export interface MetricsRuntime {
   /** Serviço do próprio plugin-metrics: as métricas que ele grava têm o dono `core`. */
   readonly service: MetricsService;
@@ -235,8 +238,7 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
   function totals(): MetricRow[] {
     const rows: MetricRow[] = [];
     for (const [name, metric] of metrics) {
-      // Gauge não entra no acumulado do /metrics: o plugin já expõe os gauges ao vivo no scrape.
-      if (metric.kind === 'gauge') continue;
+      if (name === LIVE_GAUGE) continue;
       for (const cell of metric.totals.values()) {
         const row = toRow(name, metric.kind, cell);
         if (row) rows.push(row);
@@ -299,7 +301,9 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
             // O que chegou durante a gravação (`last` do `target`) é mais novo que o devolvido.
             sample(target, target.fields.get('last') ?? last, max);
           }
-          // O gauge fica no storage e no `query`; exportador recebe só contador e histograma.
+          const row = toRow(name, metric.kind, written);
+          // A fila de saída já sai ao vivo no scrape e em exportador seria só ruído de amostra.
+          if (row && name !== LIVE_GAUGE) rows.push(row);
           continue;
         }
         for (const [field, value] of cell.fields) {

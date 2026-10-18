@@ -120,7 +120,7 @@ describe('gauge', () => {
     expect(await g.query('fila', range)).toMatchObject([{ type: 'gauge', last: 4, max: 9 }]);
     await runtime.flush();
     expect(await g.query('fila', range)).toMatchObject([{ type: 'gauge', last: 4, max: 9 }]);
-    expect(runtime.totals()).toEqual([]); // gauge fica fora do acumulado do /metrics
+    expect(runtime.totals()).toMatchObject([{ type: 'gauge', last: 4 }]);
   });
 
   it('rejeita valor negativo e mistura de tipos', () => {
@@ -148,5 +148,22 @@ describe('dono da métrica', () => {
     const { runtime } = make(() => []);
     expect(() => runtime.scoped('p').counter('m', {}, -1)).toThrow(TypeError);
     expect(runtime.service.ownerOf('m')).toBeUndefined();
+  });
+});
+
+describe('gauge nos exportadores e no acumulado', () => {
+  it('gauge de outro plugin chega ao exportador e ao totals; a fila de saída fica de fora', async () => {
+    const snaps: MetricsSnapshot[] = [];
+    const { runtime } = make(() => [(s) => void snaps.push(s)]);
+    runtime.scoped('lembretes').gauge('lembretes.fila', {}, 4);
+    runtime.service.gauge('bridger.outbound.pending', {}, 7);
+    expect(runtime.totals()).toMatchObject([{ metric: 'lembretes.fila', type: 'gauge', last: 4 }]);
+    await runtime.flush();
+    expect(snaps).toHaveLength(1);
+    expect(snaps[0]?.rows).toMatchObject([{ metric: 'lembretes.fila', type: 'gauge', max: 4 }]);
+    // Segue consultável pelo serviço, só não vai a exportador nem ao scrape.
+    expect(await runtime.service.query('bridger.outbound.pending', range)).toMatchObject([
+      { type: 'gauge', max: 7 },
+    ]);
   });
 });

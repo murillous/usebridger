@@ -170,22 +170,41 @@ export function createServiceRegistry(options: ServiceRegistryOptions = {}): Ser
     },
 
     removePlugin(plugin) {
+      // Cada `release` é chamado só depois de a limpeza terminar, e um que lança não impede os
+      // outros: senão sobrariam serviços e contribuições no registry (conflito no reload).
+      const releases: (() => void)[] = [];
       for (const [name, entry] of byName) {
         if (entry.plugin !== plugin) continue;
         byName.delete(name);
         // Provedor saiu: as instâncias de todos os callers vão junto (o `get` seguinte falha).
         const scope = scoped.get(name);
         scoped.delete(name);
-        for (const caller of scope?.instances.keys() ?? []) scope?.release?.(caller);
+        for (const caller of scope?.instances.keys() ?? []) {
+          releases.push(() => scope?.release?.(caller));
+        }
       }
       // Caller saiu: descarta a instância dele em cada serviço com escopo.
       for (const scope of scoped.values()) {
-        if (scope.instances.delete(plugin)) scope.release?.(plugin);
+        if (scope.instances.delete(plugin)) releases.push(() => scope.release?.(plugin));
       }
       for (const [point, entries] of contributions) {
         const kept = entries.filter((entry) => entry.plugin !== plugin);
         if (kept.length > 0) contributions.set(point, kept);
         else contributions.delete(point);
+      }
+      const errors: unknown[] = [];
+      for (const run of releases) {
+        try {
+          run();
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+      if (errors.length > 0) {
+        throw new AggregateError(
+          errors,
+          `plugin "${plugin}": release de serviço com escopo falhou`,
+        );
       }
     },
 

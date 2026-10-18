@@ -175,3 +175,34 @@ describe('serviço com escopo (provideScoped)', () => {
     expect(() => registry.forPlugin('a').get('test.other')).toThrow(ServiceNotFoundError);
   });
 });
+
+describe('release que lança', () => {
+  it('termina a limpeza (serviços e contribuições) e relança AggregateError', () => {
+    const registry = createServiceRegistry();
+    const released: string[] = [];
+    const prov = registry.forPlugin('p');
+    prov.provideScoped(
+      'test.other',
+      (caller) => caller,
+      (caller) => {
+        released.push(caller);
+        throw new Error(`falha ${caller}`);
+      },
+    );
+    prov.provide('test.counter', counter());
+    registry.forPlugin('a').get('test.other');
+    registry.forPlugin('b').get('test.other');
+
+    let error: unknown;
+    try {
+      registry.removePlugin('p');
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(AggregateError);
+    expect((error as AggregateError).errors).toHaveLength(2); // um release não impede o outro
+    expect(released.sort()).toEqual(['a', 'b']);
+    expect(registry.list()).toEqual([]);
+    expect(registry.describe('p')).toEqual({ services: [], contributions: [] });
+  });
+});

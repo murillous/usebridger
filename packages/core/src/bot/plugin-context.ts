@@ -378,14 +378,28 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         lifetime.expire(
           reason ?? new PluginHostStateError(`plugin "${name}": contexto descartado`),
         );
-        deps.router.registry.removePlugin(name);
-        deps.router.roles.removePlugin(name);
-        deps.conversations.removePlugin(name);
-        deps.bus.removePlugin(name);
-        deps.services.removePlugin(name);
-        deps.scheduler.removePlugin(name);
-        deps.observers.removePlugin(name);
-        deps.http?.removeOwner(name);
+        // Um passo que lança não pode pular os seguintes (scheduler, observers e http ficariam
+        // com o plugin morto): termina todos e relança junto no fim.
+        const errors: unknown[] = [];
+        for (const step of [
+          () => deps.router.registry.removePlugin(name),
+          () => deps.router.roles.removePlugin(name),
+          () => deps.conversations.removePlugin(name),
+          () => deps.bus.removePlugin(name),
+          () => deps.services.removePlugin(name),
+          () => deps.scheduler.removePlugin(name),
+          () => deps.observers.removePlugin(name),
+          () => deps.http?.removeOwner(name),
+        ]) {
+          try {
+            step();
+          } catch (error) {
+            errors.push(error);
+          }
+        }
+        if (errors.length > 0) {
+          throw new AggregateError(errors, `plugin "${name}": falha ao limpar o contexto`);
+        }
       },
     };
   };
