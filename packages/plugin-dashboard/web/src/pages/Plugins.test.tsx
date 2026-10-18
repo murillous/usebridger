@@ -354,3 +354,13 @@ describe('Plugins: erros', () => {
     expect((await screen.findByRole('alert')).textContent).toBe('409: em andamento');
   });
 });
+
+describe('Plugins: dependências opcionais (#195)', () => {
+  it('"Depende de" mostra obrigatórias e opcionais com "?" na tabela e na lista mobile', async () => {
+    show([loaded('x', { dependsOn: { a: '*' }, optionalDependsOn: { metrics: '*' } })]);
+    await screen.findByRole('table');
+    expect(within(rowOf('x')).getByText('a, metrics?')).toBeTruthy();
+    const item = document.querySelector('.plist li');
+    expect(item?.textContent).toContain('depende de a, metrics?');
+  });
+});
