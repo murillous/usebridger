@@ -1146,10 +1146,10 @@ h3 {
 }
 /* Dono da aba à direita; o texto alternativo vazio ("/ ''") o tira do nome acessível, e o
    aria-description do link o expõe como descrição. A 1ª declaração é fallback p/ navegador sem suporte. */
-.nav[data-plugin]::after {
-  content: attr(data-plugin);
+.nav[aria-description]::after {
+  content: attr(aria-description);
   /* biome-ignore lint/suspicious/noDuplicateProperties: fallback intencional */
-  content: attr(data-plugin) / "";
+  content: attr(aria-description) / "";
   margin-left: auto;
   padding-left: 8px;
   flex: none;
