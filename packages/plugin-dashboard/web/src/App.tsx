@@ -7,7 +7,7 @@ import {
   reduceLive,
   type SocketLike,
 } from './lib/live.ts';
-import { applyTheme, loadTheme, resolveTheme, saveTheme, type Theme } from './lib/theme.ts';
+import { applyTheme, loadTheme, resolveTheme, saveTheme, THEMES, type Theme } from './lib/theme.ts';
 import type { TabView } from './lib/types.ts';
 import { Config } from './pages/Config.tsx';
 import { LiveBadge } from './pages/LiveBadge.tsx';
@@ -17,6 +17,26 @@ import { Metrics } from './pages/Metrics.tsx';
 import { Overview } from './pages/Overview.tsx';
 import { Plugins } from './pages/Plugins.tsx';
 import { Tab } from './pages/Tab.tsx';
+
+const THEME_LABEL: Record<Theme, string> = { auto: 'Sistema', light: 'Claro', dark: 'Escuro' };
+
+function Chevron() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  );
+}
 
 // Ícones simples (traço de 2 px); o texto da aba continua ao lado, o ícone é decorativo.
 const ICONS: Record<string, string> = {
@@ -71,6 +91,18 @@ const KNOWN = ['inicio', 'metricas', 'logs', 'plugins', 'config', 'mais'];
 const EXT = 'ext/';
 const current = (): string => location.hash.replace(/^#\/?/, '') || 'inicio';
 
+/** Preferência de cor do sistema, atualizada quando muda (o botão de tema depende dela no `auto`). */
+function useSystemDark(): boolean {
+  const [dark, setDark] = useState(() => matchMedia('(prefers-color-scheme: dark)').matches);
+  useEffect(() => {
+    const query = matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => setDark(query.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+  return dark;
+}
+
 function useLive(enabled: boolean, paused: boolean): LiveState {
   const [state, setState] = useState<LiveState>(initialLive);
   useEffect(() => {
@@ -94,7 +126,7 @@ function useLive(enabled: boolean, paused: boolean): LiveState {
     });
     return () => client.close();
   }, [enabled, paused]);
-  return state;
+  return { ...state, paused };
 }
 
 /** Abas de plugins (ADR 0108): o manifesto é lido de novo a cada navegação e a cada reconexão do WS. */
@@ -124,7 +156,8 @@ export function App() {
   };
   const [paused, setPaused] = useState(false);
   const live = useLive(authed === true, paused);
-  const dark = resolveTheme(theme, matchMedia('(prefers-color-scheme: dark)').matches) === 'dark';
+  const systemDark = useSystemDark();
+  const dark = resolveTheme(theme, systemDark) === 'dark';
   const actions = (
     <>
       <button
@@ -150,7 +183,7 @@ export function App() {
   const session = live.status?.session ?? 'default';
   const sessionSelect = (
     // A API expõe só a sessão deste plugin (ADR 0110); trocar de sessão é abrir o dashboard dela.
-    <select className="input" aria-label="Sessão" value={session}>
+    <select className="input" aria-label="Sessão" defaultValue={session} key={session}>
       <option value={session}>{session}</option>
     </select>
   );
@@ -244,7 +277,7 @@ export function App() {
             {live.status ? `${live.status.transport} · sessão ${live.status.session}` : '—'}
           </span>
           <div className="row">
-            <LiveBadge live={live} paused={paused} />
+            <LiveBadge live={live} />
             {actions}
           </div>
         </header>
@@ -259,30 +292,64 @@ export function App() {
         ) : route.startsWith(EXT) ? (
           <Tab tabs={tabs} tabKey={route.slice(EXT.length)} refresh={refresh} />
         ) : route === 'mais' ? (
-          <section aria-labelledby="mais-t">
+          <section aria-labelledby="mais-t" className="mais">
             <h1 id="mais-t">Mais</h1>
-            <div className="card">
-              <p>
-                <a className="nav" href="#/logs">
-                  Logs
-                </a>
-              </p>
-              {tabs && tabs.length > 0 && (
-                <>
-                  <h2>Extensões</h2>
+            <div className="group">Bot</div>
+            <div className="card list-card">
+              <a className="item" href="#/logs">
+                Logs
+                <Chevron />
+              </a>
+            </div>
+            {tabs && tabs.length > 0 && (
+              <>
+                <div className="group spread-group">
+                  <span>Extensões</span>
+                  <span>de plugins</span>
+                </div>
+                <div className="card list-card">
                   {tabs.map((t) => (
-                    <p key={t.key}>
-                      <a className="nav" href={`#/${EXT}${t.key}`}>
+                    <a key={t.key} className="item" href={`#/${EXT}${t.key}`}>
+                      <span>
                         {t.title}
-                      </a>
-                    </p>
+                        <span className="mono muted sub">{t.plugin}</span>
+                      </span>
+                      <Chevron />
+                    </a>
                   ))}
-                </>
-              )}
-              <button type="button" className="btn" onClick={logout}>
+                </div>
+                <p className="muted note">
+                  Cada plugin que contribui em dashboard.tabs ganha uma linha aqui. Sem limite de
+                  quantidade, ao contrário da barra inferior.
+                </p>
+              </>
+            )}
+            <div className="group">Conta</div>
+            <div className="card list-card">
+              <label className="item" htmlFor="theme">
+                Tema
+                <select
+                  id="theme"
+                  className="plain"
+                  value={theme}
+                  onChange={(e) => chooseTheme(e.target.value as Theme)}
+                >
+                  {THEMES.map((t) => (
+                    <option key={t} value={t}>
+                      {THEME_LABEL[t]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button type="button" className="item" onClick={logout}>
                 Sair
               </button>
             </div>
+            {live.status?.versions && (
+              <p className="mono muted versions-line">
+                core {live.status.versions.core} · dashboard {live.status.versions.dashboard}
+              </p>
+            )}
           </section>
         ) : (
           <Overview live={live} />

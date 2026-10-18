@@ -10,7 +10,9 @@ export function LiveBadge({ live, paused }: { live: LiveState; paused?: boolean 
     return () => clearInterval(id);
   }, []);
   const ago = live.lastUpdate ? relativeAgo(live.lastUpdate, now) : '—';
-  if (paused) return <span className="chip warn">Pausado · última atualização {ago}</span>;
+  // `live.paused` é o pausar global (fecha o WS); `paused` é o local do Logs (congela a lista).
+  if (paused || live.paused)
+    return <span className="chip warn">Pausado · última atualização {ago}</span>;
   if (!live.connected) {
     return (
       <span className="chip danger" role="status">

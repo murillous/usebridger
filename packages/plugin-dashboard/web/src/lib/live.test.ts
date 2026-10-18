@@ -103,6 +103,16 @@ describe('createLiveClient', () => {
     t.sockets[0]?.onclose?.();
     expect(t.delays).toHaveLength(1);
   });
+
+  it('depois de close(), um onclose atrasado não chama onConnection', () => {
+    const t = setup();
+    const socket = t.sockets[0];
+    t.client.close();
+    expect(t.states).toEqual([false]);
+    // O navegador dispara o `onclose` depois; sem handler, nada chega ao estado do socket novo.
+    socket?.onclose?.();
+    expect(t.states).toEqual([false]);
+  });
 });
 
 describe('relativeAgo', () => {

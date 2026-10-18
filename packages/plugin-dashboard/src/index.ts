@@ -18,6 +18,7 @@ import { registerMetricsRoutes } from '#metrics.ts';
 import { registerPluginRoutes } from '#plugins.ts';
 import { createStaticHandler } from '#static.ts';
 import { registerTabRoutes } from '#tabs.ts';
+import { DASHBOARD_VERSION } from '#version.ts';
 
 export interface StatusView {
   transport: string;
@@ -55,8 +56,6 @@ const WEB_DIR = fileURLToPath(
 );
 
 const unauthorized = (): Response => new Response('não autorizado', { status: 401 });
-
-const DASHBOARD_VERSION = '0.1.0';
 
 /** Plugin oficial `dashboard` (ADR 0107, 0108): autenticação, status, QR, logs e WebSocket. */
 export const dashboard: PluginDefinition = definePlugin({
