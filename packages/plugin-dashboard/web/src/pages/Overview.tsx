@@ -2,7 +2,15 @@ import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
 import type { LiveState } from '#web/lib/live.ts';
 import { fmtInt, fmtMs, KERNEL, percentile, rowsOf, total } from '#web/lib/metrics.ts';
-import { botChip, isFatal, logOrigin, recentLogs, stateLabel } from '#web/lib/overview.ts';
+import {
+  botChip,
+  botName,
+  fmtRemaining,
+  isFatal,
+  logOrigin,
+  recentLogs,
+  stateLabel,
+} from '#web/lib/overview.ts';
 import type { StatusView } from '#web/lib/types.ts';
 import { Stat } from './Stat.tsx';
 import { useMetrics } from './useMetrics.ts';
@@ -66,36 +74,63 @@ function RecentLogs({ live }: { live: LiveState }) {
   );
 }
 
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [active]);
+  return now;
+}
+
 function BotCard({ status }: { status: StatusView }) {
   const [copied, setCopied] = useState<boolean | 'erro'>(false);
   const chip = botChip(status);
+  const now = useNow(status.qrExpiresAt !== undefined);
+  const qrLeft =
+    status.qrExpiresAt === undefined ? undefined : fmtRemaining(status.qrExpiresAt - now);
 
   const copy = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     } catch {
       // Sem permissão de área de transferência: o código segue visível para copiar à mão.
       setCopied('erro');
     }
+    // Sucesso e erro voltam sozinhos ao botão normal.
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <article className="card ov-bot" aria-label={`Bot ${status.transport}`}>
+    <article className="card ov-bot" aria-label={`Bot ${botName(status)}`}>
       <div className="row spread">
         <div>
-          <h3>{status.transport}</h3>
+          <h3>{botName(status)}</h3>
           <span className="muted">
             sessão <span className="mono">{status.session}</span>
           </span>
         </div>
         <span className={`chip ${chip.tone}`}>{chip.label}</span>
       </div>
-      {/* O core só expõe o estado da conexão; "No ar desde", reconexões e fila de saída não saem dele. */}
       <dl className="ov-facts">
         <dt>Estado</dt>
         <dd>{stateLabel(status)}</dd>
+        {status.connectedSince !== undefined && (
+          <>
+            <dt>No ar desde</dt>
+            <dd>{new Date(status.connectedSince).toLocaleTimeString()}</dd>
+          </>
+        )}
+        <dt>Reconexões</dt>
+        <dd>{status.reconnections ?? 0}</dd>
+        {status.status === 'connecting' && status.qr && qrLeft !== undefined && (
+          <>
+            <dt>Expira em</dt>
+            <dd>{qrLeft}</dd>
+          </>
+        )}
         <dt>Atualizado</dt>
         <dd>{new Date(status.updatedAt).toLocaleTimeString()}</dd>
       </dl>

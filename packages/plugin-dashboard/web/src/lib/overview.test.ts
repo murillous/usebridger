@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { botChip, isFatal, logOrigin, recentLogs, stateLabel } from './overview.ts';
+import {
+  botChip,
+  botName,
+  fmtRemaining,
+  isFatal,
+  logOrigin,
+  recentLogs,
+  stateLabel,
+} from './overview.ts';
 import type { LogEntry, StatusView } from './types.ts';
 
 const st = (over: Partial<StatusView>): StatusView => ({
@@ -50,5 +58,21 @@ describe('logs recentes', () => {
   it('recentLogs devolve as n mais novas, da mais nova para a mais velha', () => {
     const logs = ['1', '2', '3'].map((m) => log(m));
     expect(recentLogs(logs, 2).map((l) => l.message)).toEqual(['3', '2']);
+  });
+});
+
+describe('botName', () => {
+  it('usa o nome do bot e cai no transport sem ele', () => {
+    expect(botName(st({ name: 'luma' }))).toBe('luma');
+    expect(botName(st({}))).toBe('whatsapp');
+  });
+});
+
+describe('fmtRemaining', () => {
+  it('formata segundos e minutos; vencido vira undefined', () => {
+    expect(fmtRemaining(12_000)).toBe('12s');
+    expect(fmtRemaining(65_000)).toBe('1m 05s');
+    expect(fmtRemaining(0)).toBeUndefined();
+    expect(fmtRemaining(-5)).toBeUndefined();
   });
 });

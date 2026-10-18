@@ -100,6 +100,7 @@ const entries: Record<string, { file: string; load: () => Promise<object> } & En
       'CommandRole',
       'ConfigEnv',
       'ConfigSource',
+      'ConnectionInfo',
       'ConnectionStatus',
       'Contact',
       'ContactMessage',

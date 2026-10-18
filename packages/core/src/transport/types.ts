@@ -161,7 +161,11 @@ export interface TransportEvents {
   };
   'connection.status': ConnectionStatus;
   /** QR a apresentar para parear; o kernel decide como mostrar. */
-  'connection.qr': { readonly qr: string };
+  'connection.qr': {
+    readonly qr: string;
+    /** Quando este QR deixa de valer, em ms epoch; ausente se o transport não sabe (ADR 0114). */
+    readonly expiresAt?: number;
+  };
   /**
    * Código de pareamento a digitar no aparelho, a alternativa ao QR (no WhatsApp, "conectar com
    * número de telefone"). Conta como um QR para o limite de QRs da reconexão (ADR 0050).

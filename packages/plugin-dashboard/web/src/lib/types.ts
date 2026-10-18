@@ -1,5 +1,7 @@
 export interface StatusView {
   transport: string;
+  /** Opcional: um backend anterior não envia. */
+  name?: string;
   session: string;
   status: 'connecting' | 'open' | 'closed';
   reason?: string;
@@ -8,6 +10,9 @@ export interface StatusView {
   pairingCode?: string;
   pairing?: boolean;
   updatedAt: number;
+  connectedSince?: number;
+  reconnections?: number;
+  qrExpiresAt?: number;
   /** Opcional: um backend anterior não envia. */
   versions?: { core: string; dashboard: string };
 }
@@ -22,7 +27,7 @@ export interface LogEntry {
 export type LiveMessage =
   | { type: 'snapshot'; status: StatusView; logs: LogEntry[] }
   | ({ type: 'status' } & StatusView)
-  | { type: 'qr'; qr: string }
+  | { type: 'qr'; qr: string; qrExpiresAt?: number }
   | { type: 'pairing-code'; code: string }
   | { type: 'log'; entry: LogEntry };
 

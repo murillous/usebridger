@@ -67,6 +67,7 @@ import { type Capability, missingCapabilities } from '#transport/capabilities.ts
 import type { ConnectionStatus, Unsubscribe } from '#transport/types.ts';
 import type { UnsafeAccess } from '#unsafe/access.ts';
 import type { BotStats, PluginAdmin } from './config.ts';
+import type { ConnectionInfo } from './connection-info.ts';
 import {
   type CommandViews,
   commandViewFactory,
@@ -111,6 +112,10 @@ export interface PluginContextDeps {
   readonly session: string;
   /** Último status de conexão visto pelo core (ADR 0110). */
   readonly connectionStatus: () => ConnectionStatus | undefined;
+  /** Horário de conexão, reconexões e expiração do QR (ADR 0114). */
+  readonly connectionInfo: () => ConnectionInfo;
+  /** Nome do bot (`BotConfig.name`, senão o nome do transport). */
+  readonly botName: string;
   /** Contadores das filas deste bot, os mesmos de `bot.stats()` (ADR 0106). */
   readonly stats: () => BotStats;
   /** Observadores do bot; os do plugin saem no `dispose` (ADR 0106). */
@@ -353,6 +358,8 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
       transportName: deps.transport.name,
       session: deps.session,
       connectionStatus: deps.connectionStatus,
+      connectionInfo: deps.connectionInfo,
+      botName: deps.botName,
       capabilities: deps.transport.capabilities,
       get self(): Contact | null {
         return deps.transport.self;

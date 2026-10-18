@@ -49,3 +49,13 @@ export function logOrigin(entry: LogEntry): string {
 
 /** As `n` linhas mais novas primeiro (o card mostra o que acabou de acontecer). */
 export const recentLogs = (logs: LogEntry[], n: number): LogEntry[] => logs.slice(-n).reverse();
+
+/** Nome do bot; um backend anterior não o envia, então cai no transport. */
+export const botName = (status: StatusView): string => status.name ?? status.transport;
+
+/** Tempo restante ("1m 05s", "12s"); `undefined` quando já passou. */
+export function fmtRemaining(ms: number): string | undefined {
+  if (ms <= 0) return undefined;
+  const s = Math.ceil(ms / 1000);
+  return s >= 60 ? `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s` : `${s}s`;
+}

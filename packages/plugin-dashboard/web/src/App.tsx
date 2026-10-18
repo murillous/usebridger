@@ -274,7 +274,9 @@ export function App() {
         </div>
         <header className="head">
           <span className="muted">
-            {live.status ? `${live.status.transport} · sessão ${live.status.session}` : '—'}
+            {live.status
+              ? `${live.status.name ?? live.status.transport} · sessão ${live.status.session}`
+              : '—'}
           </span>
           <div className="row">
             <LiveBadge live={live} />
