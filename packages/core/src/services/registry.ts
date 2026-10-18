@@ -61,7 +61,12 @@ export interface ServiceRegistry {
   removePlugin(plugin: string): void;
   list(): ProvidedService[];
   /** Nomes dos serviços providos e dos pontos de extensão com contribuição do plugin (tabela de plugins). */
-  describe(plugin: string): { services: string[]; contributions: string[] };
+  describe(plugin: string): {
+    services: string[];
+    contributions: string[];
+    /** Quantas contribuições o plugin fez em cada ponto (`contributions` são só os nomes). */
+    contributionCounts: Record<string, number>;
+  };
 }
 
 export interface ServiceRegistryOptions {
@@ -161,7 +166,13 @@ export function createServiceRegistry(options: ServiceRegistryOptions = {}): Ser
     },
 
     describe(plugin) {
+      const contributionCounts: Record<string, number> = {};
+      for (const [point, entries] of contributions) {
+        const count = entries.filter((entry) => entry.plugin === plugin).length;
+        if (count > 0) contributionCounts[point] = count;
+      }
       return {
+        contributionCounts,
         services: [...byName.values()].filter((e) => e.plugin === plugin).map((e) => e.name),
         contributions: [...contributions]
           .filter(([, entries]) => entries.some((entry) => entry.plugin === plugin))

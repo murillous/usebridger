@@ -276,7 +276,14 @@ o plugin subiu, mas eles não respondem ([Capability por comando](commands.md#ca
 Ainda na entrada, quando há algo a dizer: `dependsOn` (o do manifesto, nome → faixa; também nas
 linhas ignoradas), e nas carregadas `services` (nomes providos no `setup`) e `contributions`
 (pontos de extensão a que o plugin contribuiu), lidos do registry na hora em que a tabela é
-montada, então um `provide` posterior ao `setup` também aparece (ADR 0112).
+montada, então um `provide` posterior ao `setup` também aparece (ADR 0112). Também `optionalDependsOn`
+(como o `dependsOn`) e, junto de `contributions`, `contributionCounts` (ponto → quantas contribuições
+o plugin fez nele; ADR 0114).
+
+Fora da linha, em `bot.plugins` (e em `ctx.admin.plugins`, ADR 0111): `setupDurations()` devolve
+nome → ms do contexto + `setup` de cada plugin carregado (o do boot, ou o do último reload), e
+`bootedAt` o epoch ms em que o boot dos plugins terminou (`undefined` antes do `start()`; reload não
+o muda). A duração não fica na linha para a tabela de quem não usa isso não mudar (ADR 0114).
 
 `host.report()` devolve a tabela atual (reflete reloads).
 

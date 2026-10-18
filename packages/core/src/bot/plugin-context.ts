@@ -417,6 +417,7 @@ function liveAdmin(
       }
     };
   const plugins = Object.assign(() => redact(admin.plugins()), {
+    setupDurations: () => admin.plugins.setupDurations(),
     reload: masked(
       live('admin.plugins.reload', (target: string) =>
         target === self ? refuse('admin.plugins.reload') : admin.plugins.reload(target),
@@ -429,8 +430,13 @@ function liveAdmin(
     ),
     enable: masked(live('admin.plugins.enable', (target: string) => admin.plugins.enable(target))),
   });
+  // Getter: `Object.assign` copiaria o valor de agora, e o boot pode ainda não ter terminado.
+  Object.defineProperty(plugins, 'bootedAt', {
+    get: () => admin.plugins.bootedAt,
+    enumerable: true,
+  });
   return {
-    plugins,
+    plugins: plugins as PluginAdmin['plugins'],
     config: {
       setOverrides: masked(
         live('admin.config.setOverrides', (target: string, overrides) =>

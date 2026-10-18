@@ -51,6 +51,8 @@ interface ReportBase {
   readonly origin: string;
   /** `dependsOn` do manifesto (nome → faixa semver). Só aparece quando há alguma. */
   readonly dependsOn?: Readonly<Record<string, string>>;
+  /** `optionalDependsOn` do manifesto (nome → faixa semver). Só aparece quando há alguma. */
+  readonly optionalDependsOn?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -78,6 +80,8 @@ export type PluginReportEntry =
       readonly services?: readonly string[];
       /** Pontos de extensão a que o plugin contribuiu no `setup`. Só aparece quando há algum. */
       readonly contributions?: readonly string[];
+      /** Contribuições por ponto de extensão (ex.: `dashboard.tabs: 5`). Junto de `contributions`. */
+      readonly contributionCounts?: Readonly<Record<string, number>>;
     })
   | (ReportBase & { readonly status: 'skipped'; readonly reason: PluginSkipReason });
 
