@@ -1,33 +1,44 @@
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import {
   byLabel,
+  catalog,
   daysBetween,
   fmtInt,
   fmtMs,
   KERNEL,
   percentile,
+  percentilePerDay,
   perDay,
   rowsOf,
-  summarize,
+  shortDay,
   total,
 } from '#web/lib/metrics.ts';
 import type { MetricRowView, MetricsResponse } from '#web/lib/types.ts';
-import { Stat } from './Stat.tsx';
 import { useMetrics } from './useMetrics.ts';
 
-const PERIODS = [7, 30] as const;
+const PERIODS = [7, 30, 90] as const;
 
 /**
  * Barras por dia. Dia e valor saem no `aria-label`, no `<title>` de cada barra (dica ao passar o
  * mouse) e no eixo em texto: a cor não carrega o dado.
  */
-function BarChart({ title, points }: { title: string; points: { day: string; value: number }[] }) {
+function BarChart({
+  title,
+  points,
+  today,
+  tone = 'ink',
+}: {
+  title: string;
+  points: { day: string; value: number }[];
+  today: string;
+  tone?: 'ink' | 'agent';
+}) {
   const max = Math.max(1, ...points.map((p) => p.value));
   const W = 100;
   const step = W / points.length;
   const label = `${title}: ${points.map((p) => `${p.day} ${fmtInt(p.value)}`).join('; ')}`;
   return (
-    <>
+    <div className="panel-chart">
       <svg
         className="chart"
         viewBox={`0 0 ${W} 50`}
@@ -40,7 +51,7 @@ function BarChart({ title, points }: { title: string; points: { day: string; val
           return (
             <rect
               key={p.day}
-              className="bar"
+              className={`bar ${tone}`}
               x={i * step + step * 0.15}
               y={46 - h}
               width={step * 0.7}
@@ -53,11 +64,36 @@ function BarChart({ title, points }: { title: string; points: { day: string; val
         })}
       </svg>
       <div className="axis mono">
-        <span>{points[0]?.day}</span>
-        <span>pico {fmtInt(max === 1 && points.every((p) => p.value === 0) ? 0 : max)}/dia</span>
-        <span>{points.at(-1)?.day}</span>
+        <span>{points[0] && shortDay(points[0].day, today)}</span>
+        <span>{points.at(-1) && shortDay(points.at(-1)?.day ?? today, today)}</span>
       </div>
-    </>
+    </div>
+  );
+}
+
+/** Cartão do painel fixo: título, nome da métrica, valor de hoje e o gráfico por dia (design.md). */
+function Panel({
+  id,
+  title,
+  metric,
+  value,
+  children,
+}: {
+  id: string;
+  title: string;
+  metric: string;
+  value: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="card panel" aria-labelledby={id}>
+      <h3 id={id}>{title}</h3>
+      <span className="metric mono muted">{metric}</span>
+      <div className="panel-value">
+        {value} <span className="muted">hoje</span>
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -133,6 +169,33 @@ function Missing({ outdated }: { outdated: boolean }) {
   );
 }
 
+/** `GET /metrics` (Prometheus) do plugin-metrics; se a área de transferência falhar, mostra a URL. */
+function CopyScrape() {
+  const url = `${location.origin}/metrics`;
+  const [state, setState] = useState<'idle' | 'copied' | 'manual'>('idle');
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setState('copied');
+    } catch {
+      // Sem permissão ou sem contexto seguro: a URL aparece no texto para copiar à mão.
+      setState('manual');
+    }
+  };
+  return (
+    <button type="button" className="link" onClick={copy}>
+      {state === 'copied' ? 'URL copiada' : state === 'manual' ? url : 'Copiar URL do scrape'}
+    </button>
+  );
+}
+
+const Details = ({ summary, children }: { summary: string; children: ReactNode }) => (
+  <details className="more">
+    <summary>{summary}</summary>
+    {children}
+  </details>
+);
+
 function Panels({ data }: { data: Extract<MetricsResponse, { available: true }> }) {
   const days = daysBetween(data.from, data.to);
   const handled = rowsOf(data, KERNEL.handled);
@@ -140,51 +203,79 @@ function Panels({ data }: { data: Extract<MetricsResponse, { available: true }> 
   const sent = rowsOf(data, KERNEL.sent);
   const users = rowsOf(data, KERNEL.users);
   const groups = rowsOf(data, KERNEL.groups);
-  const all = summarize(data);
+  const all = catalog(data);
+  const onToday = (rows: MetricRowView[]) => rows.filter((r) => r.day === data.to);
+  const handledDays = perDay(handled, days);
+  const sentDays = perDay(sent, days);
+  const usersDays = perDay(users, days);
   return (
     <>
-      <div className="kpis">
-        <Stat label="Mensagens tratadas" value={fmtInt(total(handled))} />
-        <Stat label="Latência p95" value={fmtMs(percentile(duration, 0.95))} />
-        <Stat label="Mensagens enviadas" value={fmtInt(total(sent))} />
-        <Stat label="Usuários ativos (soma dos dias)" value={fmtInt(total(users))} />
-      </div>
-
+      <h2 className="sect">Kernel</h2>
       <div className="panels">
-        <section className="card" aria-labelledby="p-handled">
-          <h2 id="p-handled">Mensagens por dia</h2>
-          <BarChart title="Mensagens tratadas por dia" points={perDay(handled, days)} />
-          <Breakdown rows={handled} label="status" />
-        </section>
+        <Panel
+          id="p-handled"
+          title="Mensagens por dia"
+          metric={KERNEL.handled}
+          value={fmtInt(total(onToday(handled)))}
+        >
+          <BarChart title="Mensagens tratadas por dia" points={handledDays} today={data.to} />
+          <Details summary="Por status (período)">
+            <Breakdown rows={handled} label="status" />
+          </Details>
+        </Panel>
 
-        <section className="card" aria-labelledby="p-lat">
-          <h2 id="p-lat">Latência do handler</h2>
-          <div className="kpis small">
-            <Stat label="p50" value={fmtMs(percentile(duration, 0.5))} />
-            <Stat label="p95" value={fmtMs(percentile(duration, 0.95))} />
-            <Stat label="p99" value={fmtMs(percentile(duration, 0.99))} />
-          </div>
-          <p className="muted">Limite superior do balde do histograma, em milissegundos.</p>
-          <Breakdown rows={duration} label="route" />
-        </section>
-
-        <section className="card" aria-labelledby="p-sent">
-          <h2 id="p-sent">Envios</h2>
-          <BarChart title="Mensagens enviadas por dia" points={perDay(sent, days)} />
-          <Breakdown rows={sent} label="status" />
-        </section>
-
-        <section className="card" aria-labelledby="p-active">
-          <h2 id="p-active">Ativos</h2>
-          <BarChart title="Usuários ativos por dia" points={perDay(users, days)} />
-          <p>
-            Grupos ativos no período (soma dos dias): <strong>{fmtInt(total(groups))}</strong>
+        <Panel
+          id="p-active"
+          title="Usuários ativos por dia"
+          metric={KERNEL.users}
+          value={fmtInt(total(onToday(users)))}
+        >
+          <BarChart title="Usuários ativos por dia" points={usersDays} today={data.to} />
+          <p className="muted">
+            Grupos ativos hoje: <strong>{fmtInt(total(onToday(groups)))}</strong>
           </p>
-        </section>
+        </Panel>
+
+        <Panel
+          id="p-lat"
+          title="Latência p95"
+          metric={KERNEL.duration}
+          value={fmtMs(percentile(onToday(duration), 0.95))}
+        >
+          <BarChart
+            title="Latência p95 por dia, em milissegundos"
+            points={percentilePerDay(duration, days, 0.95)}
+            today={data.to}
+            tone="agent"
+          />
+          <Details summary="Percentis e rotas (período)">
+            <p className="muted">
+              p50 {fmtMs(percentile(duration, 0.5))} · p95 {fmtMs(percentile(duration, 0.95))} · p99{' '}
+              {fmtMs(percentile(duration, 0.99))}. Limite superior do balde do histograma.
+            </p>
+            <Breakdown rows={duration} label="route" />
+          </Details>
+        </Panel>
+
+        <Panel
+          id="p-sent"
+          title="Envios por dia"
+          metric={KERNEL.sent}
+          value={fmtInt(total(onToday(sent)))}
+        >
+          <BarChart title="Mensagens enviadas por dia" points={sentDays} today={data.to} />
+          <Details summary="Por status (período)">
+            <Breakdown rows={sent} label="status" />
+          </Details>
+        </Panel>
       </div>
 
       <section className="card" aria-labelledby="p-all">
         <h2 id="p-all">Todas as métricas registradas</h2>
+        <p className="muted">
+          Qualquer counter ou histograma publicado no serviço <span className="mono">metrics</span>{' '}
+          aparece aqui, sem integração própria.
+        </p>
         {all.length === 0 ? (
           <p className="muted">Nenhuma métrica com dados no período.</p>
         ) : (
@@ -194,9 +285,9 @@ function Panels({ data }: { data: Extract<MetricsResponse, { available: true }> 
                 <tr>
                   <th>Métrica</th>
                   <th>Tipo</th>
-                  <th>Séries</th>
-                  <th>Total</th>
-                  <th>p95</th>
+                  <th>Rótulos</th>
+                  <th className="num">Hoje</th>
+                  <th className="num">{days.length} dias</th>
                 </tr>
               </thead>
               <tbody>
@@ -204,13 +295,15 @@ function Panels({ data }: { data: Extract<MetricsResponse, { available: true }> 
                   <tr key={m.name}>
                     <td className="mono">{m.name}</td>
                     <td>
-                      <span className="chip info">
-                        {m.type === 'counter' ? 'Contador' : 'Histograma'}
-                      </span>
+                      <span className="chip mono">{m.type}</span>
                     </td>
-                    <td>{fmtInt(m.series)}</td>
-                    <td>{fmtInt(m.total)}</td>
-                    <td>{m.type === 'histogram' ? fmtMs(m.p95) : '-'}</td>
+                    <td className="muted">{m.labels.join(', ') || '-'}</td>
+                    <td className="num">
+                      {m.type === 'histogram' ? `p95 ${fmtMs(m.todayP95)}` : fmtInt(m.today)}
+                    </td>
+                    <td className="num">
+                      {m.type === 'histogram' ? `p95 ${fmtMs(m.p95)}` : fmtInt(m.total)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -218,17 +311,26 @@ function Panels({ data }: { data: Extract<MetricsResponse, { available: true }> 
             <div className="list">
               {all.map((m) => (
                 <div key={m.name}>
-                  <div className="mono">{m.name}</div>
+                  <div className="list-head">
+                    <span className="mono">{m.name}</span>
+                    <span className="chip mono">{m.type}</span>
+                  </div>
                   <div className="mono muted">
-                    {m.type === 'counter' ? 'Contador' : 'Histograma'} · {fmtInt(m.series)} séries ·{' '}
-                    {fmtInt(m.total)}
-                    {m.type === 'histogram' ? ` · p95 ${fmtMs(m.p95)}` : ''}
+                    hoje {m.type === 'histogram' ? `p95 ${fmtMs(m.todayP95)}` : fmtInt(m.today)} ·{' '}
+                    {days.length}d{' '}
+                    {m.type === 'histogram' ? `p95 ${fmtMs(m.p95)}` : fmtInt(m.total)}
                   </div>
                 </div>
               ))}
             </div>
           </div>
         )}
+        <p className="foot muted">
+          <span>
+            Exportado também em <span className="mono">GET /metrics</span> (Prometheus)
+          </span>
+          <CopyScrape />
+        </p>
       </section>
     </>
   );
@@ -239,23 +341,17 @@ export function Metrics() {
   const { data, error } = useMetrics(days);
   return (
     <>
+      <p className="eyebrow muted">plugin-metrics · baldes diários, até 90 dias</p>
       <div className="row spread">
         <h1>Métricas</h1>
-        <div className="field">
-          <label htmlFor="period">Período</label>
-          <select
-            id="period"
-            className="input"
-            value={days}
-            onChange={(e) => setDays(Number(e.target.value))}
-          >
-            {PERIODS.map((d) => (
-              <option key={d} value={d}>
-                Últimos {d} dias
-              </option>
-            ))}
-          </select>
-        </div>
+        <fieldset className="seg">
+          <legend className="sr">Período</legend>
+          {PERIODS.map((d) => (
+            <button key={d} type="button" aria-pressed={d === days} onClick={() => setDays(d)}>
+              {d} dias
+            </button>
+          ))}
+        </fieldset>
       </div>
       {error ? (
         <p className="notice danger" role="alert">
