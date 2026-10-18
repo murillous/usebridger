@@ -216,6 +216,12 @@ describe('endurecimento', () => {
 });
 
 describe('estado', () => {
+  it('status informa se o transport pareia (capability pairing)', async () => {
+    const { base, cookie } = await start();
+    const res = await fetch(`${base}/api/status`, { headers: { cookie: await cookie() } });
+    expect(typeof ((await res.json()) as StatusView).pairing).toBe('boolean');
+  });
+
   it('status reflete a conexão; QR e código saem no open; closed expõe só reason e mensagem', async () => {
     const { bot, base, cookie } = await start();
     const headers = { cookie: await cookie() };

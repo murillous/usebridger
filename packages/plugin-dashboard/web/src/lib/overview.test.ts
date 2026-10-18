@@ -29,6 +29,10 @@ describe('botChip', () => {
       tone: 'warn',
     });
     expect(isFatal(st({ status: 'closed', reason: 'connection-lost' }))).toBe(false);
+    expect(isFatal(st({ status: 'closed', reason: 'auth-failed', pairing: false }))).toBe(true);
+    expect(botChip(st({ status: 'closed', reason: 'auth-failed', pairing: true })).label).toBe(
+      'Reconectando',
+    );
     expect(stateLabel(st({ status: 'open' }))).toBe('Em execução');
     expect(stateLabel(st({ status: 'closed', reason: 'fatal' }))).toBe('Parado');
     expect(botChip(st({ qr: 'x' })).label).toBe('Aguardando pareamento');

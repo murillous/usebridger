@@ -7,11 +7,13 @@ export interface BotChip {
 }
 
 // Só estes `reason` fazem o core parar de reconectar (reconnection.ts, ADR 0068); nos outros o
-// kernel reconecta sozinho. `auth-failed` conta como fatal: sem pareamento o core para.
-const FATAL = new Set(['fatal', 'replaced', 'auth-failed']);
-
+// kernel reconecta sozinho. `auth-failed` só é terminal sem pareamento: com ele o core limpa a
+// sessão e reconecta (reconnection.ts).
 export const isFatal = (status: StatusView): boolean =>
-  status.status === 'closed' && FATAL.has(status.reason ?? '');
+  status.status === 'closed' &&
+  (status.reason === 'fatal' ||
+    status.reason === 'replaced' ||
+    (status.reason === 'auth-failed' && !status.pairing));
 
 /** Chip do card do bot: QR ou código de pareamento pendente vira "Aguardando pareamento". */
 export function botChip(status: StatusView): BotChip {
