@@ -428,6 +428,8 @@ export function createBot(config: BotConfig): Bot {
       log,
       reload: (name) => control.plugins.reload(name),
     });
+    // Rotação da chave mestra (ADR 0121): antes do setup, para os plugins já lerem com a atual.
+    await configs.rotateSecrets();
     const createContext = createPluginContextFactory({
       configs,
       log,

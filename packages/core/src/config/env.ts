@@ -3,7 +3,9 @@
 // ambiente — testes sempre injetam.
 
 import type { z } from 'zod';
+import { BotConfigError } from './owners.ts';
 import { baseType, literalValues, objectShape } from './schema.ts';
+import { parseSecretKey, type SecretKey } from './secret-cipher.ts';
 
 /** Ambiente consultado: nome → valor. `process.env` tem esse formato. */
 export type ConfigEnv = Readonly<Record<string, string | undefined>>;
@@ -92,6 +94,30 @@ export function envCollisions(
   for (const key of messageKeys) add(['messages', key]);
   for (const [name, paths] of byName) if (paths.length < 2) byName.delete(name);
   return byName;
+}
+
+/** Chaves mestras dos segredos salvos no storage (ADR 0121). */
+export interface SecretKeys {
+  readonly current?: SecretKey;
+  /** Chave anterior, só para migrar envelopes no boot (rotação). */
+  readonly previous?: SecretKey;
+}
+
+/**
+ * Lê `BRIDGER_SECRET_KEY` e `BRIDGER_SECRET_KEY_PREVIOUS`. Formato inválido lança
+ * `BotConfigError` (o boot falha); `PREVIOUS` sem a atual também, pois não há para onde migrar.
+ */
+export function readSecretKeys(env: ConfigEnv): SecretKeys {
+  const raw = env['BRIDGER_SECRET_KEY'];
+  const rawPrevious = env['BRIDGER_SECRET_KEY_PREVIOUS'];
+  const current = raw ? parseSecretKey(raw, 'BRIDGER_SECRET_KEY') : undefined;
+  const previous = rawPrevious
+    ? parseSecretKey(rawPrevious, 'BRIDGER_SECRET_KEY_PREVIOUS')
+    : undefined;
+  if (previous && !current) {
+    throw new BotConfigError('BRIDGER_SECRET_KEY_PREVIOUS exige BRIDGER_SECRET_KEY (a nova chave)');
+  }
+  return { current, previous };
 }
 
 /** Um valor lido do ambiente: caminho no objeto de config e a variável de onde veio. */
