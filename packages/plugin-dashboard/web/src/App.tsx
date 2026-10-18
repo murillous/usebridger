@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api, liveUrl, setUnauthorizedHandler } from './lib/api.ts';
 import {
   createLiveClient,
@@ -8,12 +8,14 @@ import {
   type SocketLike,
 } from './lib/live.ts';
 import { applyTheme, loadTheme, saveTheme, THEMES, type Theme } from './lib/theme.ts';
+import type { TabView } from './lib/types.ts';
 import { Config } from './pages/Config.tsx';
 import { Login } from './pages/Login.tsx';
 import { Logs } from './pages/Logs.tsx';
 import { Metrics } from './pages/Metrics.tsx';
 import { Overview } from './pages/Overview.tsx';
 import { Plugins } from './pages/Plugins.tsx';
+import { Tab } from './pages/Tab.tsx';
 
 const THEME_LABEL: Record<Theme, string> = { auto: 'Automático', light: 'Claro', dark: 'Escuro' };
 
@@ -83,6 +85,7 @@ const TABS = [
 ];
 const KNOWN = ['inicio', 'metricas', 'logs', 'plugins', 'config', 'mais'];
 
+const EXT = 'ext/';
 const current = (): string => location.hash.replace(/^#\/?/, '') || 'inicio';
 
 function useLive(enabled: boolean): LiveState {
@@ -109,6 +112,22 @@ function useLive(enabled: boolean): LiveState {
   return state;
 }
 
+/** Abas de plugins (ADR 0108): o manifesto é lido de novo a cada navegação e a cada reconexão do WS. */
+function useTabs(enabled: boolean, route: string, connected: boolean) {
+  const [tabs, setTabs] = useState<TabView[]>();
+  const [tick, setTick] = useState(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: route, connected e tick só disparam a releitura.
+  useEffect(() => {
+    if (!enabled) {
+      setTabs(undefined);
+      return;
+    }
+    // Falha de rede ou de uma aba não derruba o app: sem manifesto, o grupo Extensões some.
+    api<TabView[]>('tabs').then(setTabs, () => setTabs([]));
+  }, [enabled, route, connected, tick]);
+  return { tabs, refresh: useCallback(() => setTick((n) => n + 1), []) };
+}
+
 export function App() {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [route, setRoute] = useState(current);
@@ -119,6 +138,7 @@ export function App() {
     setTheme(next);
   };
   const live = useLive(authed === true);
+  const { tabs, refresh } = useTabs(authed === true, route, live.connected);
 
   useEffect(() => {
     setUnauthorizedHandler(() => setAuthed(false));
@@ -159,6 +179,21 @@ export function App() {
             ))}
           </div>
         ))}
+        {tabs && tabs.length > 0 && (
+          <>
+            <div className="group">Extensões</div>
+            {tabs.map((t) => (
+              <a
+                key={t.key}
+                className="nav"
+                href={`#/${EXT}${t.key}`}
+                aria-current={route === `${EXT}${t.key}` ? 'page' : undefined}
+              >
+                {t.title}
+              </a>
+            ))}
+          </>
+        )}
         <div style={{ marginTop: 'auto' }}>
           <ThemeSwitch theme={theme} onChange={chooseTheme} />
           <button type="button" className="btn" onClick={logout}>
@@ -175,6 +210,8 @@ export function App() {
           <Plugins />
         ) : route === 'config' ? (
           <Config />
+        ) : route.startsWith(EXT) ? (
+          <Tab tabs={tabs} tabKey={route.slice(EXT.length)} refresh={refresh} />
         ) : route === 'mais' ? (
           <section aria-labelledby="mais-t">
             <h1 id="mais-t">Mais</h1>
@@ -184,6 +221,18 @@ export function App() {
                   Logs
                 </a>
               </p>
+              {tabs && tabs.length > 0 && (
+                <>
+                  <h2>Extensões</h2>
+                  {tabs.map((t) => (
+                    <p key={t.key}>
+                      <a className="nav" href={`#/${EXT}${t.key}`}>
+                        {t.title}
+                      </a>
+                    </p>
+                  ))}
+                </>
+              )}
               <ThemeSwitch theme={theme} onChange={chooseTheme} />
               <button type="button" className="btn" onClick={logout}>
                 Sair
@@ -200,7 +249,9 @@ export function App() {
             key={t.id}
             href={`#/${t.id}`}
             aria-current={
-              t.match.includes(route) || (t.id === 'inicio' && !KNOWN.includes(route))
+              t.match.includes(route) ||
+              (t.id === 'mais' && route.startsWith(EXT)) ||
+              (t.id === 'inicio' && !KNOWN.includes(route) && !route.startsWith(EXT))
                 ? 'page'
                 : undefined
             }

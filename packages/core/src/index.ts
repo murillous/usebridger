@@ -51,6 +51,7 @@ export type {
   PluginConfigJsonSchema,
   PluginConfigView,
 } from '#config/plugin-configs.ts';
+export { maskedJsonSchema } from '#config/plugin-configs.ts';
 export { secret } from '#config/schema.ts';
 export type { BotMessageContext, MessageContext } from '#context.ts';
 export type {

@@ -88,3 +88,37 @@ export interface ConfigResponse {
   schema: Record<string, unknown> | null;
   issues?: ConfigIssue[];
 }
+
+// Manifesto de `GET /api/tabs` (ADR 0108): o servidor tira as funções; o `form` leva o JSON Schema.
+export interface TabAction {
+  id: string;
+  label: string;
+  confirm: boolean;
+}
+
+export type TabWidget =
+  | { kind: 'stats'; id: string }
+  | { kind: 'table'; id: string; columns: { key: string; label: string }[]; actions: TabAction[] }
+  | { kind: 'series'; id: string; title?: string }
+  | { kind: 'form'; id: string; schema: Record<string, unknown> }
+  | { kind: 'text'; id: string; markdown: string };
+
+export interface TabView {
+  key: string;
+  plugin: string;
+  id: string;
+  title: string;
+  order: number;
+  widgets: TabWidget[];
+}
+
+export type TabRow = { id: string } & Record<string, string | number | boolean | null>;
+export interface StatItem {
+  label: string;
+  value: string | number;
+  hint?: string;
+}
+export interface SeriesPoint {
+  label: string;
+  value: number;
+}

@@ -188,12 +188,14 @@ function RecordControl(props: {
   );
 }
 
-function FieldView(props: {
+export function FieldView(props: {
   field: Field;
   value: unknown;
   masked: string | undefined;
   source: string | undefined;
   errors: string[];
+  /** Form de aba: secret é entrada (senha, sem pré-preencher) em vez da máscara só leitura da Config. */
+  secretEditable?: boolean;
   onChange: (value: unknown) => void;
 }) {
   const { field, errors } = props;
@@ -208,7 +210,20 @@ function FieldView(props: {
 
   const editor = !field.secret && (field.control === 'list' || field.control === 'record');
   let control: ReactNode;
-  if (field.secret) {
+  if (field.secret && props.secretEditable) {
+    control = (
+      <input
+        id={id}
+        className="input mono"
+        type="password"
+        autoComplete="off"
+        value={typeof props.value === 'string' ? props.value : ''}
+        aria-invalid={errors.length > 0 || undefined}
+        aria-describedby={describedBy}
+        onChange={(e) => props.onChange(e.target.value === '' ? undefined : e.target.value)}
+      />
+    );
+  } else if (field.secret) {
     control = (
       <input
         id={id}
@@ -280,7 +295,9 @@ function FieldView(props: {
       ) : (
         <label htmlFor={id}>
           {field.label}
-          {field.secret && <span className="muted"> (secret, só leitura)</span>}
+          {field.secret && !props.secretEditable && (
+            <span className="muted"> (secret, só leitura)</span>
+          )}
         </label>
       )}
       {control}
