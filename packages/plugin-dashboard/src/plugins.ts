@@ -63,19 +63,27 @@ export function registerPluginRoutes(
   if (admin === undefined) log.warn(`dashboard: ${NO_ADMIN}`);
   const unavailable = () => new Response(NO_ADMIN, { status: 503 });
   const plugins = admin?.plugins;
-  // Aproximado: o core não expõe o horário do boot; o setup do dashboard roda nele. Trocar quando o core expuser.
-  const bootedAt = Date.now();
 
+  // Separada da lista, que é um array puro; o horário vem do core e não muda com o reload.
   http.route(
     'GET',
     '/api/plugins/boot',
-    guarded(() => Response.json({ bootedAt })),
+    guarded(() => (plugins ? Response.json({ bootedAt: plugins.bootedAt }) : unavailable())),
   );
 
   http.route(
     'GET',
     '/api/plugins',
-    guarded(() => (plugins ? Response.json(plugins().map(serializeEntry)) : unavailable())),
+    guarded(() => {
+      if (!plugins) return unavailable();
+      const durations = plugins.setupDurations();
+      return Response.json(
+        plugins().map((entry) => {
+          const setupMs = durations[entry.name];
+          return { ...serializeEntry(entry), ...(setupMs !== undefined && { setupMs }) };
+        }),
+      );
+    }),
   );
 
   for (const action of ACTIONS) {

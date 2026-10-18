@@ -47,3 +47,32 @@ export function summary(rows: PluginRow[]): string {
     .map(([count, one, many]) => `${count} ${count === 1 ? one : many}`)
     .join(', ');
 }
+
+export const list = (items: string[] | undefined): string =>
+  items?.length ? items.join(', ') : '—';
+
+/** Resultado do `setup`: falhou, carregou com comando de fora, carregou inteiro; `—` se nem rodou. */
+export function setupText(row: PluginRow): string {
+  if (row.status === 'loaded') {
+    const state = row.unregistered?.length
+      ? `Parcial (${row.unregistered.length} comandos fora)`
+      : 'OK';
+    return row.setupMs === undefined ? state : `${state} · ${row.setupMs} ms`;
+  }
+  return row.reason?.kind === 'setup-failed' ? 'Falhou' : '—';
+}
+
+/** `dashboard.tabs ×5`; sem contagem (core antigo), só o nome do ponto. */
+export const contributes = (row: PluginRow): string =>
+  list(
+    row.contributions?.map((point) => {
+      const count = row.contributionCounts?.[point];
+      return count === undefined ? point : `${point} ×${count}`;
+    }),
+  );
+
+/** `Boot de hh:mm:ss · 6 carregados`; cada parte some quando vazia (sem sufixo solto). */
+export const subtitle = (rows: PluginRow[], bootedAt: number | undefined): string =>
+  [bootedAt !== undefined && `Boot de ${clock(bootedAt)}`, summary(rows)]
+    .filter(Boolean)
+    .join(' · ');

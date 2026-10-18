@@ -305,17 +305,20 @@ export const envName = (plugin: string, path: string): string =>
   [`BRIDGER_${envSegment(plugin)}`, ...path.split('.').map(envSegment)].join('__');
 
 /** Plugins que recarregam junto com `name` no reload em cascata: dependentes diretos e indiretos. */
-// shortcut: só `dependsOn`; o core também recarrega por `optionalDependsOn` (ADR 0099), que a
-// PluginRow não expõe. Melhorar quando o core serializar `optionalDependsOn` na linha.
 export function dependentsOf(
-  rows: { name: string; dependsOn?: Record<string, string> }[],
+  rows: {
+    name: string;
+    dependsOn?: Record<string, string>;
+    optionalDependsOn?: Record<string, string>;
+  }[],
   name: string,
 ): string[] {
   const out = new Set<string>();
   const queue = [name];
   for (let cur = queue.shift(); cur !== undefined; cur = queue.shift()) {
     for (const row of rows) {
-      if (row.dependsOn && cur in row.dependsOn && !out.has(row.name) && row.name !== name) {
+      const depends = cur in (row.dependsOn ?? {}) || cur in (row.optionalDependsOn ?? {});
+      if (depends && !out.has(row.name) && row.name !== name) {
         out.add(row.name);
         queue.push(row.name);
       }
