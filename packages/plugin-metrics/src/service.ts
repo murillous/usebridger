@@ -346,5 +346,22 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
       .sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
   }
 
-  return { service: { counter, observe, query }, counterAt, totals, flush };
+  // Mesma espera e mesmo intervalo do `query`; só o nome interessa, então não agrega nada.
+  async function names(range: MetricsRange): Promise<string[]> {
+    if (!DAY_RE.test(range.from) || !DAY_RE.test(range.to)) {
+      throw new TypeError('names: from e to precisam ser YYYY-MM-DD');
+    }
+    await flushing.catch(() => undefined);
+    const found = new Set<string>();
+    const docs = await collection.find({ where: { day: { gte: range.from, lte: range.to } } });
+    for (const d of docs) found.add(d.metric);
+    for (const [name, metric] of metrics) {
+      for (const c of metric.cells.values()) {
+        if (c.day >= range.from && c.day <= range.to) found.add(name);
+      }
+    }
+    return [...found].sort();
+  }
+
+  return { service: { counter, observe, query, names }, counterAt, totals, flush };
 }

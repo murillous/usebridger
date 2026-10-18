@@ -90,3 +90,19 @@ describe('falhas do flush', () => {
     expect(await runtime.service.query('x', range)).toMatchObject([{ value: 4 }]);
   });
 });
+
+describe('names', () => {
+  it('lista métricas do intervalo, do disco e da memória, em ordem', async () => {
+    const { runtime } = make(() => []);
+    runtime.service.counter('b.disco', {});
+    await runtime.flush();
+    runtime.service.observe('a.memoria', {}, 10);
+    expect(await runtime.service.names(range)).toEqual(['a.memoria', 'b.disco']);
+    expect(await runtime.service.names({ from: '2026-01-01', to: '2026-01-02' })).toEqual([]);
+  });
+
+  it('recusa intervalo mal formado', async () => {
+    const { runtime } = make(() => []);
+    await expect(runtime.service.names({ from: 'x', to: range.to })).rejects.toThrow(TypeError);
+  });
+});

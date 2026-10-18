@@ -38,6 +38,7 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@usebridger/plugin-metrics": "workspace:*",
     "@usebridger/testing": "workspace:*",
     "@vitejs/plugin-react": "^6.1.2",
     "qrcode": "^1.5.4",

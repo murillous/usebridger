@@ -11,6 +11,7 @@ import { applyTheme, loadTheme, saveTheme, THEMES, type Theme } from './lib/them
 import { Config } from './pages/Config.tsx';
 import { Login } from './pages/Login.tsx';
 import { Logs } from './pages/Logs.tsx';
+import { Metrics } from './pages/Metrics.tsx';
 import { Overview } from './pages/Overview.tsx';
 import { Plugins } from './pages/Plugins.tsx';
 
@@ -41,6 +42,7 @@ const ICONS: Record<string, string> = {
   inicio: 'M3 11l9-8 9 8M5 10v10h14V10',
   plugins: 'M9 3v4M15 3v4M6 7h12v5a6 6 0 0 1-12 0zM12 18v3',
   config: 'M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6',
+  metricas: 'M4 20V10M10 20V4M16 20v-8M22 20H2',
   mais: 'M5 12h.01M12 12h.01M19 12h.01',
 };
 
@@ -65,6 +67,7 @@ function Icon({ id }: { id: string }) {
 // Roteamento por hash: o servidor só conhece `/` e os estáticos, e o app funciona em qualquer basePath.
 const ROUTES = [
   { id: 'inicio', label: 'Início', group: 'Bot' },
+  { id: 'metricas', label: 'Métricas', group: 'Bot' },
   { id: 'logs', label: 'Logs', group: 'Bot' },
   { id: 'plugins', label: 'Plugins', group: 'Administração' },
   { id: 'config', label: 'Config', group: 'Administração' },
@@ -73,11 +76,12 @@ const ROUTES = [
 // TabBar do celular (design.md): Logs e a conta ficam em "Mais".
 const TABS = [
   { id: 'inicio', label: 'Início', match: ['inicio'] },
+  { id: 'metricas', label: 'Métricas', match: ['metricas'] },
   { id: 'plugins', label: 'Plugins', match: ['plugins'] },
   { id: 'config', label: 'Config', match: ['config'] },
   { id: 'mais', label: 'Mais', match: ['mais', 'logs'] },
 ];
-const KNOWN = ['inicio', 'logs', 'plugins', 'config', 'mais'];
+const KNOWN = ['inicio', 'metricas', 'logs', 'plugins', 'config', 'mais'];
 
 const current = (): string => location.hash.replace(/^#\/?/, '') || 'inicio';
 
@@ -165,6 +169,8 @@ export function App() {
       <main className="main">
         {route === 'logs' ? (
           <Logs live={live} />
+        ) : route === 'metricas' ? (
+          <Metrics />
         ) : route === 'plugins' ? (
           <Plugins />
         ) : route === 'config' ? (
