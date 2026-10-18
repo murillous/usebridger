@@ -33,6 +33,17 @@ describe('Logs', () => {
     expect(within(log()).getByText('Nenhuma linha neste nível.')).toBeTruthy();
   });
 
+  it('não repete o selo "Ao vivo" do cabeçalho do app', async () => {
+    const user = userEvent.setup();
+    render(<Logs live={live(LOGS)} />);
+    expect(screen.queryByText(/Ao vivo/)).toBeNull();
+    expect(screen.queryByText('Pausado')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Pausar' }));
+    expect(screen.getByText('Pausado')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Retomar' }));
+    expect(screen.queryByText('Pausado')).toBeNull();
+  });
+
   it('Pausar congela a lista; Retomar mostra as linhas novas', async () => {
     const user = userEvent.setup();
     const { rerender } = render(<Logs live={live(LOGS)} />);

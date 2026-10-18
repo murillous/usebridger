@@ -71,8 +71,8 @@ describe('botName', () => {
 
 describe('fmtRemaining', () => {
   it('formata segundos e minutos; vencido vira undefined', () => {
-    expect(fmtRemaining(12_000)).toBe('12s');
-    expect(fmtRemaining(65_000)).toBe('1m 05s');
+    expect(fmtRemaining(12_000)).toBe('0:12');
+    expect(fmtRemaining(65_000)).toBe('1:05');
     expect(fmtRemaining(0)).toBeUndefined();
     expect(fmtRemaining(-5)).toBeUndefined();
   });

@@ -672,7 +672,7 @@ td {
 }
 .kpis {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 16px;
 }
@@ -723,6 +723,11 @@ td {
   color: var(--muted);
   font-size: 12px;
   margin-bottom: 12px;
+}
+@media (max-width: 1023px) {
+  .kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 @media (max-width: 767px) {
   .kpis {
@@ -962,8 +967,16 @@ h3 {
 .plist .pl-name {
   font-weight: 600;
 }
+.card:has(> .ptable) {
+  overflow-x: auto;
+}
 .ptable .mono {
   overflow-wrap: anywhere;
+}
+/* Células de dados não quebram no meio da palavra; só a origem (1ª coluna) pode. */
+.ptable td.mono {
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 .btn.sm {
   min-height: 32px;
@@ -1105,7 +1118,8 @@ h3 {
   color: var(--muted);
   padding: 12px 4px 4px;
 }
-.mais .spread-group {
+.mais .spread-group,
+.side .spread-group {
   display: flex;
   justify-content: space-between;
 }
@@ -1129,6 +1143,18 @@ h3 {
 }
 .list-card .item + .item {
   border-top: 1px solid var(--line);
+}
+/* Dono da aba à direita; o texto alternativo vazio ("/ ''") o tira do nome acessível, e o
+   aria-description do link o expõe como descrição. A 1ª declaração é fallback p/ navegador sem suporte. */
+.nav[aria-description]::after {
+  content: attr(aria-description);
+  /* biome-ignore lint/suspicious/noDuplicateProperties: fallback intencional */
+  content: attr(aria-description) / "";
+  margin-left: auto;
+  padding-left: 8px;
+  flex: none;
+  font: 11px var(--mono);
+  color: var(--muted);
 }
 .item .sub {
   display: block;

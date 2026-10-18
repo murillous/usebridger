@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { LiveState } from '#web/lib/live.ts';
 import type { LogEntry } from '#web/lib/types.ts';
-import { LiveBadge } from './LiveBadge.tsx';
 
 const LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'];
 
@@ -18,7 +17,7 @@ export function Logs({ live }: { live: LiveState }) {
     <>
       <div className="row spread">
         <h1>Logs</h1>
-        <LiveBadge live={live} paused={frozen !== null} />
+        {frozen !== null && <span className="chip warn">Pausado</span>}
       </div>
       <div className="row" style={{ marginBottom: 16 }}>
         <div className="field" style={{ margin: 0 }}>

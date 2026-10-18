@@ -245,12 +245,16 @@ export function App() {
         ))}
         {tabs && tabs.length > 0 && (
           <>
-            <div className="group">Extensões</div>
+            <div className="group spread-group">
+              <span>Extensões</span>
+              <span>de plugins</span>
+            </div>
             {tabs.map((t) => (
               <a
                 key={t.key}
                 className="nav"
                 href={`#/${EXT}${t.key}`}
+                aria-description={t.plugin}
                 aria-current={route === `${EXT}${t.key}` ? 'page' : undefined}
               >
                 {t.title}

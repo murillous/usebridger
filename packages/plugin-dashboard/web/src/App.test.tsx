@@ -168,6 +168,13 @@ describe('App: abas de plugins', () => {
     expect(current(tabbar())).toBe('Mais');
   });
 
+  it("sidebar mostra 'de plugins' e o dono da aba", async () => {
+    await boot();
+    const link = await within(side()).findByRole('link', { name: 'Lembretes' });
+    expect(link.getAttribute('aria-description')).toBe('reminders');
+    expect(within(side()).getByText('de plugins')).toBeTruthy();
+  });
+
   it('com falha em api/tabs o grupo Extensões some', async () => {
     await boot();
     // Só afirma a ausência depois de ver o grupo com dados e de a releitura falhar.
