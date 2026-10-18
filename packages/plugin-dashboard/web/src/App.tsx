@@ -80,10 +80,10 @@ const ROUTES = [
 
 // TabBar do celular (design.md): Logs e a conta ficam em "Mais".
 const TABS = [
-  { id: 'inicio', label: 'Visão geral', match: ['inicio'] },
+  { id: 'inicio', label: 'Início', match: ['inicio'] },
   { id: 'metricas', label: 'Métricas', match: ['metricas'] },
   { id: 'plugins', label: 'Plugins', match: ['plugins'] },
-  { id: 'config', label: 'Configuração', match: ['config'] },
+  { id: 'config', label: 'Config', match: ['config'] },
   { id: 'mais', label: 'Mais', match: ['mais', 'logs'] },
 ];
 const KNOWN = ['inicio', 'metricas', 'logs', 'plugins', 'config', 'mais'];
