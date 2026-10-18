@@ -41,7 +41,6 @@ export function summary(rows: PluginRow[]): string {
     [n('carregado'), 'carregado', 'carregados'],
     [n('falhou'), 'falhou', 'falharam'],
     [n('pulado'), 'pulado', 'pulados'],
-    [n('desligado'), 'desligado', 'desligados'],
   ];
   return parts
     .filter(([count]) => count > 0)

@@ -120,10 +120,10 @@ export function Plugins() {
     }
   };
 
-  // Ligado = não desligado: plugin que falhou ou foi pulado segue "ativo" na config, só não carregou.
+  // Ligado = não desligado: plugin que falhou ou foi pulado segue "ativo" na config, só não carregou; o core aceita desligá-lo.
   const toggle = (row: PluginRow) => {
     const on = row.reason?.kind !== 'disabled';
-    const locked = row.name === SELF || (row.status !== 'loaded' && on);
+    const locked = row.name === SELF;
     return (
       <button
         type="button"
@@ -150,12 +150,12 @@ export function Plugins() {
       </button>
     ) : null;
 
-  const chip = (row: PluginRow) => {
+  const chip = (row: PluginRow, short = false) => {
     const state = stateOf(row);
     const kind = { carregado: 'ok', falhou: 'danger', pulado: 'warn', desligado: '' }[state];
     return (
       <span className={`chip ${kind}`} title={reasonText(row.reason) || undefined}>
-        {state}
+        {short && state === 'carregado' ? 'ok' : state}
       </span>
     );
   };
@@ -188,14 +188,14 @@ export function Plugins() {
   return (
     <>
       {rows && (
-        <p className="muted sub">
+        <p className="muted pl-sub">
           {bootedAt !== undefined && `Boot de ${clock(bootedAt)} · `}
           {summary(rows)}
         </p>
       )}
-      <div className="row spread head">
+      <div className="row spread pl-head">
         <h1>Plugins</h1>
-        <label className="search">
+        <label className="pl-search">
           <span className="sr">Buscar plugin</span>
           <input
             type="search"
@@ -235,12 +235,12 @@ export function Plugins() {
         !error && <p className="muted">Carregando…</p>
       ) : (
         <>
-          <div className="filters row">
+          <div className="pl-filters row">
             {filters.map(([id, label]) => (
               <button
                 key={id}
                 type="button"
-                className="pill"
+                className="pl-pill"
                 aria-pressed={filter === id}
                 onClick={() => setFilter(id)}
               >
@@ -254,15 +254,15 @@ export function Plugins() {
               <section key={row.name} className="card problem" aria-label={`${row.name} falhou`}>
                 <div className="row spread">
                   <h2>
-                    <span className="desk">{row.name} · falhou no setup</span>
-                    <span className="mob">
+                    <span className="pl-desk">{row.name} · falhou no setup</span>
+                    <span className="pl-mob">
                       {row.name} <span className="muted mono">{row.version}</span>
                     </span>
                   </h2>
-                  <span className="chip danger mob">falhou</span>
+                  <span className="chip danger pl-mob">falhou</span>
                   <button
                     type="button"
-                    className="btn desk"
+                    className="btn pl-desk"
                     disabled={busy !== undefined}
                     onClick={() => run(row.name, 'reload')}
                   >
@@ -270,17 +270,17 @@ export function Plugins() {
                   </button>
                 </div>
                 <pre className="mono errbox">
-                  {row.reason?.causa ?? row.reason?.error?.message ?? 'Falha no setup.'}
+                  {row.reason?.causeMessage ?? row.reason?.error?.message ?? 'Falha no setup.'}
                 </pre>
                 {dependents.length > 0 && (
-                  <p className="muted small">
+                  <p className="muted pl-small">
                     {dependents.length === 1 ? 'O dependente ' : 'Os dependentes '}
                     <span className="mono">{dependents.join(', ')}</span>{' '}
                     {dependents.length === 1 ? 'foi pulado' : 'foram pulados'} (dependency-skipped).
                     Recarregar o {row.name} reavalia o subgrafo.
                   </p>
                 )}
-                <div className="row mob actions2">
+                <div className="row pl-mob actions2">
                   <a className="btn" href="#/config">
                     Abrir config
                   </a>
@@ -313,7 +313,7 @@ export function Plugins() {
                 {shown.map((row) => (
                   <tr key={row.name}>
                     <td>
-                      <div className="name">{row.name}</div>
+                      <div className="pl-name">{row.name}</div>
                       <div className="mono muted" title={row.origin}>
                         {row.version}
                       </div>
@@ -334,21 +334,23 @@ export function Plugins() {
               </tbody>
             </table>
             <ul className="plist">
-              {shown.map((row) => (
-                <li key={row.name}>
-                  <div>
-                    <div className="row">
-                      <span className="name">{row.name}</span>
-                      {chip(row)}
+              {shown
+                .filter((row) => stateOf(row) !== 'falhou')
+                .map((row) => (
+                  <li key={row.name}>
+                    <div>
+                      <div className="row">
+                        <span className="pl-name">{row.name}</span>
+                        {chip(row, true)}
+                      </div>
+                      <div className="mono muted">{meta(row)}</div>
                     </div>
-                    <div className="mono muted">{meta(row)}</div>
-                  </div>
-                  <span className="row">
-                    {reload(row)}
-                    {toggle(row)}
-                  </span>
-                </li>
-              ))}
+                    <span className="row">
+                      {reload(row)}
+                      {toggle(row)}
+                    </span>
+                  </li>
+                ))}
             </ul>
             {shown.length === 0 && <p className="muted">Nenhum plugin encontrado.</p>}
           </div>

@@ -268,16 +268,17 @@ describe('causa do erro de setup (M5-4.8)', () => {
     quebra = true;
     await fetch(`${url}/api/plugins/quebrado/reload`, { method: 'POST', headers: { cookie } });
     const text = await (await fetch(`${url}/api/plugins`, { headers: { cookie } })).text();
-    const row = (JSON.parse(text) as { name: string; reason?: { causa?: string } }[]).find(
+    const row = (JSON.parse(text) as { name: string; reason?: { causeMessage?: string } }[]).find(
       (e) => e.name === 'quebrado',
     );
-    expect(row?.reason?.causa).toBe('Error: apiKey [REDACTED] inválida');
+    expect(row?.reason?.causeMessage).toBe('Error: apiKey [REDACTED] inválida');
     expect(text).not.toContain(TOKEN);
     expect(text).not.toContain('abc');
   });
 
   it('GET /api/plugins/boot devolve o horário do boot', async () => {
-    const { get } = await start(true);
+    const { url, get } = await start(true);
+    expect((await fetch(`${url}/api/plugins/boot`)).status).toBe(401);
     const { bootedAt } = (await (await get('/api/plugins/boot')).json()) as { bootedAt: number };
     expect(Math.abs(Date.now() - bootedAt)).toBeLessThan(60_000);
   });

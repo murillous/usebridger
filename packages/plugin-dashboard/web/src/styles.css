@@ -634,24 +634,24 @@ h3 {
 }
 
 /* Plugins (M5-4.8) */
-.sub {
+.pl-sub {
   font-size: 12px;
   margin: 0 0 4px;
 }
-.head {
+.pl-head {
   margin-bottom: 16px;
 }
-.head h1 {
+.pl-head h1 {
   margin: 0;
 }
-.search {
+.pl-search {
   flex: 0 1 260px;
 }
 .ptable td {
   vertical-align: middle;
 }
-.ptable .name,
-.plist .name {
+.ptable .pl-name,
+.plist .pl-name {
   font-weight: 600;
 }
 .ptable .mono {
@@ -710,11 +710,11 @@ h3 {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.small {
+.pl-small {
   font-size: 12.5px;
   margin: 0;
 }
-.pill {
+.pl-pill {
   min-height: var(--target);
   padding: 0 14px;
   border: 0;
@@ -722,7 +722,7 @@ h3 {
   background: var(--plate);
   cursor: pointer;
 }
-.pill[aria-pressed="true"] {
+.pl-pill[aria-pressed="true"] {
   background: var(--ink);
   color: var(--ink-fg);
 }
@@ -747,8 +747,8 @@ h3 {
   font-size: 11.5px;
   overflow-wrap: anywhere;
 }
-.filters,
-.mob {
+.pl-filters,
+.pl-mob {
   display: none;
 }
 .actions2 > * {
@@ -762,7 +762,7 @@ h3 {
 }
 @media (max-width: 767px) {
   .ptable,
-  .desk {
+  .pl-desk {
     display: none;
   }
   .plist {
@@ -772,21 +772,21 @@ h3 {
   .plist .btn {
     display: none;
   }
-  .filters {
+  .pl-filters {
     display: flex;
     margin-bottom: 16px;
   }
-  .mob {
+  .pl-mob {
     display: revert;
   }
-  .row.mob {
+  .row.pl-mob {
     display: flex;
   }
-  .head {
+  .pl-head {
     flex-direction: column;
     align-items: stretch;
   }
-  .search {
+  .pl-search {
     flex-basis: auto;
   }
 }

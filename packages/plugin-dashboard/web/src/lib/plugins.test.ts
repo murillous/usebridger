@@ -34,6 +34,6 @@ describe('tela de plugins', () => {
 
   it('acha os dependentes pulados e resume o boot', () => {
     expect(skippedDependents(rows, 'social')).toEqual(['digest']);
-    expect(summary(rows)).toBe('1 carregado, 1 falhou, 1 pulado, 1 desligado');
+    expect(summary(rows)).toBe('1 carregado, 1 falhou, 1 pulado');
   });
 });
