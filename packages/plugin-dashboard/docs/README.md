@@ -72,6 +72,14 @@ plugin desconhecido 404; ação no próprio dashboard 409 (sem chamar o core: a 
 
 **O override é gravado antes do reload.** Se o reload falhar (409 ou 500), a config válida já ficou salva (a mensagem avisa); corrija e recarregue pelo `reload` de plugins.
 
+**Rótulos, placeholders e datas dos campos.** O rótulo vem do `title` do JSON Schema; sem ele, da
+`description` (que então não repete como ajuda); sem ela, do nome da propriedade com inicial
+maiúscula. Declare o `title` no schema Zod, junto da descrição: `z.string().meta({ title: 'Chave da API', description: '...' })`
+(o core gera o JSON Schema com `toJSONSchema`, que lê o `meta`). `examples[0]` (string ou número,
+`.meta({ examples: ['gpt-4o'] })`) vira o placeholder. `z.iso.datetime()` (`format: 'date-time'`)
+vira um seletor de data e hora, enviado como ISO em UTC. `#/config/<plugin>` abre a Config já
+no plugin (é o destino de "Abrir config" na lista de Plugins).
+
 **Secrets são só leitura no dashboard.** O `GET` os devolve mascarados (o valor real nunca sai) e o
 `PUT` recusa qualquer campo `secret`: o valor vem do arquivo (`pluginConfig`) ou do env. A
 `view.sources` diz de onde vem cada campo.

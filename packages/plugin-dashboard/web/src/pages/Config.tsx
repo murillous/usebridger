@@ -10,8 +10,10 @@ import {
   flatten,
   groupIssues,
   isDirty,
+  isoToLocal,
   leaves,
   listToRows,
+  localToIso,
   type Node,
   parseNumber,
   recordToRows,
@@ -71,7 +73,18 @@ function TextControl(props: {
     value: text,
     'aria-invalid': props.invalid || undefined,
     'aria-describedby': props.describedBy,
+    placeholder: field.placeholder,
   };
+  if (field.control === 'datetime') {
+    return (
+      <input
+        {...common}
+        type="datetime-local"
+        value={isoToLocal(props.value)}
+        onChange={(e) => props.onChange(localToIso(e.target.value))}
+      />
+    );
+  }
   if (field.control === 'json') {
     return <textarea {...common} onChange={(e) => change(e.target.value)} />;
   }
@@ -352,12 +365,16 @@ export function FieldView(props: {
   );
 }
 
-export function Config() {
+export function Config({ initial }: { initial?: string }) {
   const [rows, setRows] = useState<PluginRow[]>([]);
   // Erros da config atual por plugin (GET de cada um): alimenta os badges antes de abrir o plugin.
   const [issueCounts, setIssueCounts] = useState<Record<string, number>>({});
   const names = useMemo(() => rows.map((r) => r.name), [rows]);
-  const [plugin, setPlugin] = useState<string>();
+  const [plugin, setPlugin] = useState<string | undefined>(initial);
+  // `#/config/<plugin>` com a Config já aberta troca o plugin selecionado.
+  useEffect(() => {
+    if (initial) setPlugin(initial);
+  }, [initial]);
   const [loaded, setLoaded] = useState<Loaded>();
   const [values, setValues] = useState<FlatValues>({});
   // Muda a cada (re)carga: remonta os campos e descarta o texto cru digitado.
