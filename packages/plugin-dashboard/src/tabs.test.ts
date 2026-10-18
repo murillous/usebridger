@@ -389,7 +389,14 @@ const rotulos = definePlugin({
           schema: z.object({ texto: z.string() }),
           submit: async () => undefined,
         },
-        { kind: 'text', id: 'ruim', title: 7, submitLabel: 1, markdown: 'x' } as never,
+        {
+          kind: 'form',
+          id: 'ruim',
+          title: 7,
+          submitLabel: 1,
+          schema: z.object({ texto: z.string() }),
+          submit: async () => undefined,
+        } as never,
       ],
     });
   },
@@ -417,6 +424,8 @@ describe('abas de plugins: título, tom e rótulo do envio', () => {
     const get = await startRotulos();
     const [tab] = (await (await get('/api/tabs')).json()) as Record<string, unknown>[];
     const widgets = tab?.['widgets'] as Record<string, unknown>[];
+    // O form `ruim` fica no manifesto: só o title e o submitLabel que não são texto saem.
+    expect(widgets.map((w) => w['kind'])).toEqual(['stats', 'table', 'form', 'form']);
     expect(widgets.map((w) => w['title'])).toEqual([
       undefined,
       'Próximos',

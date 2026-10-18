@@ -51,6 +51,7 @@ export type {
   DashboardWidget,
   SeriesPoint,
   StatItem,
+  StatTone,
   TableAction,
   TableColumn,
   TableRow,

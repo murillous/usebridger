@@ -241,7 +241,7 @@ function Series({
   return (
     <div className="card">
       <div className="row spread">
-        <h3>{name}</h3>
+        <h2>{name}</h2>
         <select
           className="input"
           aria-label={`Período de ${name}`}
@@ -421,9 +421,9 @@ export function Tab({
           </p>
           <h1>{tab.title}</h1>
           {tab.widgets.map((w) => (
-            <section key={w.id} aria-label={w.title ?? w.id}>
+            <section key={w.id} aria-label={w.title || w.id}>
               {/* A série desenha o próprio título dentro do cartão, junto do seletor de período. */}
-              {w.title && w.kind !== 'series' && <h3>{w.title}</h3>}
+              {w.title && w.kind !== 'series' && <h2>{w.title}</h2>}
               <Widget tab={tab} widget={w} onGone={refresh} />
             </section>
           ))}

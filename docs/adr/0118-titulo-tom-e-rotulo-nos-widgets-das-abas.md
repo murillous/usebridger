@@ -24,8 +24,8 @@ Alternativas consideradas:
 ## Decisão
 
 - **`title?` em todo widget.** O campo sai de `series` e passa à base comum (`id`, `title?`). O
-  dashboard desenha um `<h3>` sobre o widget e usa o título como `aria-label` da seção (sem ele, o
-  `id`). A `series` segue com o título dentro do cartão, junto do seletor, e com o fallback "Série".
+  dashboard desenha um `<h2>` sobre o widget (logo abaixo do `<h1>` da aba) e usa o título como
+  `aria-label` da seção (sem ele, ou vazio, o `id`). A `series` segue com o título dentro do cartão, junto do seletor, e com o fallback "Série".
 - **`tone?` em `StatItem`:** `'ok' | 'warn' | 'danger'`, mapeado para os tokens `--ok`, `--warn` e
   `--danger` no valor do cartão. Sem ele, cor neutra.
 - **`submitLabel?` no `form`:** texto do botão de envio. Sem ele, "Enviar".
