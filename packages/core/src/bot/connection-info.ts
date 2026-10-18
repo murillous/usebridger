@@ -31,7 +31,8 @@ export function createConnectionTracker(now: () => number = Date.now): Connectio
           opens += 1;
         }
         qrExpiresAt = undefined;
-      } else if (status.status === 'closed') {
+      } else {
+        // `connecting` também é fora do ar: o próximo `open` é uma reconexão.
         connectedSince = undefined;
         qrExpiresAt = undefined;
       }

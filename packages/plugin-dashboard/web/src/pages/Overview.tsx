@@ -1,11 +1,12 @@
 import QRCode from 'qrcode';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { LiveState } from '#web/lib/live.ts';
 import { fmtInt, fmtMs, KERNEL, percentile, rowsOf, total } from '#web/lib/metrics.ts';
 import {
   botChip,
   botName,
   fmtRemaining,
+  fmtSince,
   isFatal,
   logOrigin,
   recentLogs,
@@ -78,6 +79,8 @@ function useNow(active: boolean): number {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     if (!active) return;
+    // O `now` do render anterior pode estar velho (QR novo depois de um tempo parado).
+    setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, [active]);
@@ -87,6 +90,8 @@ function useNow(active: boolean): number {
 function BotCard({ status }: { status: StatusView }) {
   const [copied, setCopied] = useState<boolean | 'erro'>(false);
   const chip = botChip(status);
+  const copyTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(copyTimer.current), []);
   const now = useNow(status.qrExpiresAt !== undefined);
   const qrLeft =
     status.qrExpiresAt === undefined ? undefined : fmtRemaining(status.qrExpiresAt - now);
@@ -99,8 +104,9 @@ function BotCard({ status }: { status: StatusView }) {
       // Sem permissão de área de transferência: o código segue visível para copiar à mão.
       setCopied('erro');
     }
-    // Sucesso e erro voltam sozinhos ao botão normal.
-    setTimeout(() => setCopied(false), 2000);
+    // Sucesso e erro voltam sozinhos ao botão normal; um clique novo reinicia o prazo.
+    clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -120,7 +126,7 @@ function BotCard({ status }: { status: StatusView }) {
         {status.connectedSince !== undefined && (
           <>
             <dt>No ar desde</dt>
-            <dd>{new Date(status.connectedSince).toLocaleTimeString()}</dd>
+            <dd>{fmtSince(status.connectedSince)}</dd>
           </>
         )}
         <dt>Reconexões</dt>

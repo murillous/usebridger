@@ -28,6 +28,18 @@ describe('createConnectionTracker', () => {
     expect(tracker.info()).toMatchObject({ connectedSince: 300, reconnections: 1 });
   });
 
+  it('open, connecting, open conta reconexão e renova o horário', () => {
+    let t = 100;
+    const tracker = createConnectionTracker(() => t);
+    tracker.onStatus({ status: 'open' });
+    t = 200;
+    tracker.onStatus({ status: 'connecting' });
+    expect(tracker.info().connectedSince).toBeUndefined();
+    t = 300;
+    tracker.onStatus({ status: 'open' });
+    expect(tracker.info()).toMatchObject({ connectedSince: 300, reconnections: 1 });
+  });
+
   it('QR guarda a expiração até abrir ou cair', () => {
     const tracker = createConnectionTracker();
     tracker.onQr(5000);

@@ -24,14 +24,17 @@ describe('reduceLive', () => {
     expect(s.status?.status).toBe('connecting');
     expect(s.lastUpdate).toBe(10);
     s = reduceLive(s, { type: 'qr', qr: 'QR' }, 11);
-    s = reduceLive(s, { type: 'qr', qr: 'QR', qrExpiresAt: 99 }, 11);
-    expect(s.status?.qrExpiresAt).toBe(99);
     s = reduceLive(s, { type: 'pairing-code', code: 'ABCD' }, 12);
     expect(s.status).toMatchObject({ qr: 'QR', pairingCode: 'ABCD' });
     s = reduceLive(s, { type: 'status', ...status, status: 'open' }, 13);
     expect(s.status).toEqual({ ...status, status: 'open' });
     s = reduceLive(s, { type: 'log', entry: entry(2) }, 14);
     expect(s.logs.map((l) => l.message)).toEqual(['m1', 'm2']);
+  });
+
+  it('o evento qr leva a expiração para o status', () => {
+    const s = reduceLive({ ...initialLive, status }, { type: 'qr', qr: 'QR', qrExpiresAt: 99 }, 11);
+    expect(s.status).toMatchObject({ qr: 'QR', qrExpiresAt: 99 });
   });
 
   it('limita o buffer de logs', () => {

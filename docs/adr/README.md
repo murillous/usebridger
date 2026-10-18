@@ -117,6 +117,7 @@ sendo a referência; um ADR novo entra nos dois.
 - [0020](0020-http-unico-hono.md) — Servidor HTTP único no core (Hono)
 - [0021](0021-dashboard-vira-plugin.md) — Dashboard vira plugin
 - [0107](0107-plugins-oficiais-de-metricas-e-dashboard.md) — Plugins oficiais `plugin-metrics` e `plugin-dashboard` (substitui parte do D86)
+- [0115](0115-status-do-bot-no-contexto.md) — Status do bot no contexto: `ctx.connectionInfo()`, `ctx.botName` e `expiresAt` do QR, mostrados pelo dashboard (complementa D110)
 
 **Testes e kit de autor**
 

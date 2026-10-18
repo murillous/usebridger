@@ -84,10 +84,9 @@ export const dashboard: PluginDefinition = definePlugin({
     const sessions = createSessions(cookieMaxAgeSec);
     const logs = createLogBuffer(logBufferSize);
     const sockets = new Set<HttpSocket>();
-    const state: StatusView = {
+    const state: Omit<StatusView, 'reconnections'> = {
       transport: ctx.transportName,
       name: ctx.botName,
-      reconnections: 0,
       session: ctx.session,
       pairing: ctx.capabilities.has('pairing'),
       status: 'connecting',

@@ -53,6 +53,14 @@ export const recentLogs = (logs: LogEntry[], n: number): LogEntry[] => logs.slic
 /** Nome do bot; um backend anterior não o envia, então cai no transport. */
 export const botName = (status: StatusView): string => status.name ?? status.transport;
 
+/** Hora do evento; com data quando não é de hoje (`now` injetável para teste). */
+export function fmtSince(at: number, now = Date.now()): string {
+  const d = new Date(at);
+  return d.toDateString() === new Date(now).toDateString()
+    ? d.toLocaleTimeString()
+    : d.toLocaleString();
+}
+
 /** Tempo restante ("1m 05s", "12s"); `undefined` quando já passou. */
 export function fmtRemaining(ms: number): string | undefined {
   if (ms <= 0) return undefined;

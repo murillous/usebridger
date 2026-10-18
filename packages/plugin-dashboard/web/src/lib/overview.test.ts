@@ -3,6 +3,7 @@ import {
   botChip,
   botName,
   fmtRemaining,
+  fmtSince,
   isFatal,
   logOrigin,
   recentLogs,
@@ -74,5 +75,13 @@ describe('fmtRemaining', () => {
     expect(fmtRemaining(65_000)).toBe('1m 05s');
     expect(fmtRemaining(0)).toBeUndefined();
     expect(fmtRemaining(-5)).toBeUndefined();
+  });
+});
+
+describe('fmtSince', () => {
+  it('só a hora no mesmo dia; com data em outro dia', () => {
+    const at = new Date(2026, 0, 5, 10, 30).getTime();
+    expect(fmtSince(at, at + 60_000)).toBe(new Date(at).toLocaleTimeString());
+    expect(fmtSince(at, at + 2 * 86_400_000)).toBe(new Date(at).toLocaleString());
   });
 });
