@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, api } from '#web/lib/api.ts';
 import { badgeOf, secretOrigin, validateLocal } from '#web/lib/config-view.ts';
 import {
@@ -213,6 +213,8 @@ function SecretActions(props: {
   secretsWritable: boolean;
   /** Há edição pendente no form: salvar o secret recarrega e a descartaria. */
   locked: boolean;
+  /** Envelope salvo que não decifra: sem `sources` (view nula), só remover resolve. */
+  unreadable: boolean;
   reloadNote: string;
   /** Devolve a mensagem de erro, ou `undefined` se salvou. `null` remove. */
   onSecret: (path: string, value: string | null) => Promise<string | undefined>;
@@ -221,6 +223,15 @@ function SecretActions(props: {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const replaceRef = useRef<HTMLButtonElement>(null);
+  const refocus = useRef(false);
+  // Ao cancelar o input some: devolve o foco ao botão que o abriu.
+  useEffect(() => {
+    if (!editing && refocus.current) {
+      refocus.current = false;
+      replaceRef.current?.focus();
+    }
+  }, [editing]);
   const { field, source } = props;
   if (source === 'env' || source === 'file') {
     return (
@@ -230,6 +241,7 @@ function SecretActions(props: {
     );
   }
   const run = async (value: string | null) => {
+    if (value === null && !window.confirm(`Remover ${field.label}? ${props.reloadNote}`)) return;
     setBusy(true);
     setError(undefined);
     const failure = await props.onSecret(field.path, value);
@@ -241,6 +253,13 @@ function SecretActions(props: {
     }
   };
   const canSet = field.settable && props.secretsWritable;
+  const removable = source === 'secret' || props.unreadable;
+  const errId = `${props.id}-secret-err`;
+  const cancel = () => {
+    refocus.current = true;
+    setDraft('');
+    setEditing(false);
+  };
   return (
     <div className="secret-actions">
       {!canSet && (
@@ -254,8 +273,11 @@ function SecretActions(props: {
             id={`${props.id}-new`}
             className="input mono"
             type="password"
-            autoComplete="off"
+            autoComplete="new-password"
+            // biome-ignore lint/a11y/noAutofocus: o foco vai para o campo que a pessoa acabou de abrir
+            autoFocus
             aria-label={`Novo valor de ${field.label}`}
+            aria-describedby={error ? errId : undefined}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
           />
@@ -267,7 +289,7 @@ function SecretActions(props: {
           >
             Salvar secret
           </button>
-          <button type="button" className="btn" disabled={busy} onClick={() => setEditing(false)}>
+          <button type="button" className="btn" disabled={busy} onClick={cancel}>
             Cancelar
           </button>
         </div>
@@ -276,6 +298,7 @@ function SecretActions(props: {
           {canSet && (
             <button
               type="button"
+              ref={replaceRef}
               className="btn"
               aria-label={`Substituir ${field.label}`}
               disabled={props.locked || busy}
@@ -284,7 +307,7 @@ function SecretActions(props: {
               Substituir
             </button>
           )}
-          {source === 'secret' && (
+          {removable && (
             <button
               type="button"
               className="btn danger"
@@ -297,14 +320,14 @@ function SecretActions(props: {
           )}
         </div>
       )}
-      {props.locked && (
+      {props.locked && (canSet || removable) && (
         <span className="help">
           Salve ou descarte as outras alterações antes de mexer no secret.
         </span>
       )}
-      {(canSet || source === 'secret') && <span className="help">{props.reloadNote}</span>}
+      {(canSet || removable) && <span className="help">{props.reloadNote}</span>}
       {error && (
-        <span className="err" role="alert">
+        <span id={errId} className="err" role="alert">
           {error}
         </span>
       )}
@@ -626,6 +649,8 @@ export function Config({ selected }: { selected?: string }) {
         const issues = (e.body as { issues?: ConfigIssue[] }).issues;
         if (issues?.length) return issues.map((i) => i.message).join(' · ');
       }
+      // 409 sem issues: o segredo já foi gravado e só o reload falhou; a tela não pode ficar velha.
+      if (e instanceof ApiError && e.status === 409) void load(plugin);
       return e instanceof ApiError ? `${e.status}: ${e.message}` : 'Falha de rede.';
     }
   };
@@ -646,6 +671,9 @@ export function Config({ selected }: { selected?: string }) {
       secretActions={{
         secretsWritable: loaded?.secretsWritable ?? false,
         locked: dirty,
+        unreadable: (loaded?.loadIssues ?? []).some(
+          (i) => i.kind === 'undecryptable' && i.path === node.path,
+        ),
         reloadNote,
         onSecret: saveSecret,
       }}

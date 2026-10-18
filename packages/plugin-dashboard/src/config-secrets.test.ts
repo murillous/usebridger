@@ -1,4 +1,10 @@
-import { createHttp, definePlugin, secret } from '@usebridger/core';
+import {
+  createHttp,
+  createMemoryStorage,
+  definePlugin,
+  type StoragePort,
+  secret,
+} from '@usebridger/core';
 import { z } from '@usebridger/core/zod';
 import { createTestBot } from '@usebridger/testing';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -22,12 +28,16 @@ const target = definePlugin({
   },
 });
 
-async function start(env: Record<string, string> = { BRIDGER_SECRET_KEY: KEY }) {
+async function start(
+  env: Record<string, string> = { BRIDGER_SECRET_KEY: KEY },
+  storage?: StoragePort,
+) {
   const http = createHttp({ port: 0, hostname: '127.0.0.1' });
   const bot = await createTestBot({
     plugins: [dashboard, target],
     http,
     env,
+    ...(storage && { storage }),
     adminPlugins: ['dashboard'],
     pluginConfig: { dashboard: { token: TOKEN }, target: { apiKey: 'do-arquivo' } },
   });
@@ -49,7 +59,7 @@ async function start(env: Record<string, string> = { BRIDGER_SECRET_KEY: KEY }) 
         view: { sources: Record<string, string> };
       }
     ).view.sources;
-  return { base, cookie, put, del, sources };
+  return { base, cookie, put, del, sources, bot };
 }
 
 describe('segredos: PUT e DELETE /api/config/:plugin/secrets/:path', () => {
@@ -121,5 +131,25 @@ describe('segredos: PUT e DELETE /api/config/:plugin/secrets/:path', () => {
       headers: { cookie, origin: 'http://evil.example' },
     });
     expect(cross.status).toBe(403);
+  });
+
+  it('envelope ilegível: o GET traz a issue com kind e o DELETE limpa', async () => {
+    const storage = createMemoryStorage();
+    const { put, base, cookie } = await start({ BRIDGER_SECRET_KEY: KEY }, storage);
+    expect((await put('other', NEW_VALUE)).status).toBe(200);
+    // Adultera o envelope salvo (namespace do kernel: `$secrets`): deixa de decifrar.
+    const kv = storage.forNamespace('$secrets').kv;
+    const saved = (await kv.get('target')) as Record<string, Record<string, unknown>>;
+    await kv.set('target', { other: { ...saved['other'], data: 'AAAA' } });
+    const body = (await (
+      await fetch(`${base}/api/config/target`, { headers: { cookie } })
+    ).json()) as { view: unknown; issues: { path: string; kind: string }[] };
+    expect(body.view).toBeNull();
+    expect(body.issues[0]).toMatchObject({ path: 'other', kind: 'undecryptable' });
+    const gone = await fetch(`${base}/api/config/target/secrets/other`, {
+      method: 'DELETE',
+      headers: { cookie },
+    });
+    expect(gone.status).toBe(200);
   });
 });

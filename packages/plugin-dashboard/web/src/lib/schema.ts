@@ -157,7 +157,8 @@ export function buildFields(schema: Json | null, prefix = ''): Node[] {
       label,
       description,
       required: required.includes(key),
-      secret: prop['secret'] === true,
+      // `x-bridger-override: false` também marca secreto: o core o põe sempre, sem depender de `secret`.
+      secret: prop['secret'] === true || prop['x-bridger-override'] === false,
       settable: prop['x-bridger-set-secret'] === true,
       placeholder,
       default: prop['default'],

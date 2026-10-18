@@ -100,6 +100,7 @@ export type MetricsResponse =
 export interface ConfigIssue {
   path: string;
   message: string;
+  kind?: 'secret' | 'shadowed' | 'undecryptable' | 'invalid';
 }
 
 export interface ConfigResponse {

@@ -131,7 +131,9 @@ Abaixo de 768 px a sidebar sai e entra a barra inferior (TabBar).
   `shadowed`, 409). Sem `BRIDGER_SECRET_KEY` a tela mostra o motivo. As rotas têm a mesma autenticação e
   checagem de origem das outras, nunca ecoam o valor, e o aviso "Salvar recarrega X e N dependentes"
   vale também para o secret. Os botões ficam travados enquanto há edição pendente no form, porque o
-  reload descartaria essa edição.
+  reload descartaria essa edição. "Remover" pede confirmação e também aparece para envelope
+  `undecryptable` (a view vem nula, só há a issue com `kind`), mesmo sem chave mestra.
+  `shortcut:` o dashboard só envia segredo string; secret não-string cai em 400, até algum plugin precisar de outro tipo.
 - **Alvos de 44 px** (40 px no desktop), campos com fonte de 16 px (evita o zoom do iOS),
   `inputmode` nos campos numéricos, `env(safe-area-inset-bottom)` na barra inferior.
 - **QR** cresce para 200 px, e o código de pareamento ganha botão Copiar.

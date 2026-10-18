@@ -18,7 +18,7 @@ const MAX_CONFIG_BODY = 64 * 1024;
 const text = (body: string, status: number): Response => new Response(body, { status });
 
 const toIssues = (error: PluginConfigError) =>
-  error.issues.map(({ path, message }) => ({ path, message }));
+  error.issues.map(({ path, message, kind }) => ({ path, message, kind }));
 
 /**
  * Rotas `/api/config/:plugin` (M5-4.2): view com secrets mascarados + JSON Schema para o

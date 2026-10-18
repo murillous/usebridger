@@ -66,8 +66,10 @@ Base dos formulários gerados dos schemas Zod. Exige `createBot({ adminPlugins: 
 
 | Rota                       | Resposta                                                                 |
 | -------------------------- | ------------------------------------------------------------------------ |
-| `GET /api/config/:plugin`  | `{ view: { config, messages, sources }, schema }`. `schema` é o JSON Schema da config (`null` se o plugin não declara `config`). Se a config atual está inválida, 200 com `{ view: null, schema, issues: [{ path, message }] }` para o admin corrigir pelo formulário. Plugin desconhecido 404. |
+| `GET /api/config/:plugin`  | `{ view: { config, messages, sources }, schema, secretsWritable }` (`secretsWritable`: há `BRIDGER_SECRET_KEY`, o core aceita gravar segredo). `schema` é o JSON Schema da config (`null` se o plugin não declara `config`). Se a config atual está inválida, 200 com `{ view: null, schema, secretsWritable, issues: [{ path, message, kind }] }` para o admin corrigir pelo formulário. Plugin desconhecido 404. |
 | `PUT /api/config/:plugin`  | Corpo (objeto JSON de overrides, até 64 KiB, senão 413); recusa (403) `Origin` de outro host; sem `Origin`, passa. 200 com o resultado do reload (`{ plugin, dependents, teardownErrors }`); erros de lifecycle saem só como `{ plugin, phase, timedOut, message }` (mensagem truncada em 300), sem stack nem cause. |
+| `PUT /api/config/:plugin/secrets/:path` | Grava o segredo cifrado (ADR 0121). `:path` é o caminho pontilhado do campo. Corpo `{ "value": ... }` (até 64 KiB, senão 413). 200 com o resultado do reload; o valor nunca volta. 400: JSON inválido, sem `value`, valor inválido ou sem chave mestra (`{ error, issues }`); 403: `Origin` de outro host; 404: plugin desconhecido; 409: `{ error: "shadowed" }` (env ou arquivo definem o campo), ação no próprio dashboard, ou reload que falhou depois de gravar. |
+| `DELETE /api/config/:plugin/secrets/:path` | Remove o segredo (funciona sem chave mestra, também para envelope ilegível). Mesmas respostas, sem corpo. |
 
 Erros do `PUT`: config inválida ou campo `secret` 400 com
 `{ "error": "invalid" | "secret", "issues": [{ "path": "campo.aninhado", "message": "..." }] }`
