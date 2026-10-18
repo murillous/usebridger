@@ -114,8 +114,15 @@ Abaixo de 768 px a sidebar sai e entra a barra inferior (TabBar).
 - **Tabela vira lista:** uma linha por item, com o campo principal em cima e os secundários em
   mono 11 embaixo. Vale para o widget `table` de plugin, que o dashboard converte sozinho.
 - **Grades:** KPIs em 2 colunas, `stats` de plugin em até 3; o resto em 1 coluna.
-- **Config:** a lista de plugins vira um `select` acima do formulário. Salvar e Descartar ficam
-  numa barra fixa acima da TabBar.
+- **Config:** a lista de plugins vira um `select` ("ai · 1 erro") acima do formulário. A barra
+  de salvar fica dentro do card e, no mobile, fixa acima da TabBar (rola com o card, sem
+  tapar o formulário). Campos numéricos consecutivos ficam lado a lado no desktop (grade de 2
+  colunas) e empilham no mobile.
+- **Config, regras da tela:** cabeçalho `bridger.config.json · plugins.<id>`; badge "N erros"
+  (config atual inválida, lida do GET de cada plugin) ou "falhou" (setup falhou) na lista;
+  secret só leitura com chips `secret`/origem e o nome real da variável (`BRIDGER_<PLUGIN>__<CAMPO>`);
+  dica de tipo do schema sob cada campo; "Salvar recarrega X e N dependente(s)" calculado do
+  `dependsOn` dos plugins (limite: dependentes por `optionalDependsOn`, que o core também recarrega, não entram na contagem, porque a linha do plugin não os expõe). Não há botão "Substituir" no secret: o PUT recusa secret (ADR 0111).
 - **Alvos de 44 px** (40 px no desktop), campos com fonte de 16 px (evita o zoom do iOS),
   `inputmode` nos campos numéricos, `env(safe-area-inset-bottom)` na barra inferior.
 - **QR** cresce para 200 px, e o código de pareamento ganha botão Copiar.
