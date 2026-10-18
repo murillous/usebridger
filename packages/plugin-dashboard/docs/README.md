@@ -2,7 +2,7 @@
 
 Base do dashboard ([ADR 0107](../../../docs/adr/0107-plugins-oficiais-de-metricas-e-dashboard.md)):
 autenticação, status, QR, logs e WebSocket sobre o HTTP do core. O app web (telas Login, Visão geral, Métricas, Logs, Plugins e Config)
-vem junto; o desenho está em [design.md](./design.md). Abas de extensão ainda não estão aqui.
+vem junto; o desenho está em [design.md](./design.md). Abas de plugins: veja abaixo.
 
 ## Instalar
 
@@ -118,6 +118,90 @@ createBot({ plugins: [dashboard], adminPlugins: ['dashboard'] });
 Os `POST` exigem o cookie de sessão e `Origin` do mesmo host (senão 403). Nome desconhecido 404;
 ação inválida no estado (o próprio dashboard em `disable`/`reload`, plugin ignorado em `reload`,
 host parado) 409 com a mensagem; outro erro é logado e responde 500.
+
+## Abas de plugins (`dashboard.tabs`)
+
+Outro plugin ganha uma tela no painel sem mexer no dashboard ([ADR 0108](../../../docs/adr/0108-abas-do-dashboard-por-ponto-de-extensao.md)):
+contribui uma `DashboardTab` ao ponto `dashboard.tabs` e o dashboard desenha os widgets. O plugin só
+devolve dados; nunca manda HTML, CSS ou script. Os tipos saem de `@usebridger/plugin-dashboard`.
+
+Exemplo, a aba `Lembretes` do plugin `reminders`:
+
+```ts
+import { definePlugin } from '@usebridger/core';
+import { z } from '@usebridger/core/zod';
+import type { DashboardTab } from '@usebridger/plugin-dashboard';
+
+const lembretes: DashboardTab = {
+  id: 'lembretes', // [a-z0-9-]{1,40}; a chave pública é "reminders/lembretes"
+  title: 'Lembretes',
+  widgets: [
+    { kind: 'stats', id: 'resumo', load: async () => [{ label: 'Pendentes', value: 3 }] },
+    {
+      kind: 'table',
+      id: 'lista',
+      columns: [
+        { key: 'texto', label: 'Texto' }, // a primeira coluna vira a linha principal no celular
+        { key: 'quando', label: 'Quando' },
+      ],
+      load: async ({ cursor }) => ({ rows: await listar(cursor), cursor: proximo }),
+      actions: [
+        { id: 'cancelar', label: 'Cancelar', confirm: true, run: async ({ row }) => cancelar(row.id) },
+      ],
+    },
+    { kind: 'series', id: 'envios', title: 'Envios', load: async ({ days }) => porDia(days) },
+    {
+      kind: 'form',
+      id: 'novo',
+      schema: z.object({ texto: z.string().min(3), minutos: z.number().int().min(1) }),
+      submit: async (input) => criar(input),
+    },
+    { kind: 'text', id: 'ajuda', markdown: 'Use !lembrar 10m texto.' },
+  ],
+};
+
+export const reminders = definePlugin({
+  name: 'reminders',
+  version: '1.0.0',
+  engine: '<1.0.0',
+  after: ['dashboard'], // ou dependsOn, se não roda sem ele
+  setup(ctx) {
+    ctx.services.contribute('dashboard.tabs', lembretes);
+  },
+});
+```
+
+| Widget   | O plugin entrega                                        | O dashboard desenha                                              |
+| -------- | ------------------------------------------------------- | ---------------------------------------------------------------- |
+| `stats`  | `load(): StatItem[]` (`label`, `value`, `hint?`)        | Cartões; até 3 por linha no celular                              |
+| `table`  | `columns`, `load({ cursor })`, `actions?`               | Tabela; no celular vira lista (1ª coluna em cima, o resto em mono) |
+| `series` | `load({ days })`: `SeriesPoint[]` (`label`, `value`)    | Gráfico de linha com `role="img"` e rótulo; seletor 7/30/90 dias |
+| `form`   | `schema` Zod e `submit(input)`                          | Formulário do mesmo gerador da Config; secret só como máscara    |
+| `text`   | `markdown`                                              | Texto (por ora sem formatação Markdown)                          |
+
+Rotas (sessão e `Origin` do mesmo host nos `POST`, como no resto):
+
+| Rota                                                    | Faz                                                                                   |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `GET /api/tabs`                                         | Manifesto ordenado por `order` (empate: ordem de carga): `{ key, plugin, id, title, order, widgets }`, sem funções; `form` leva o JSON Schema |
+| `GET /api/tabs/:plugin/:tab/:widget`                    | Roda o `load`. `?cursor=` na tabela, `?days=` (1 a 365, padrão 30) na série           |
+| `POST /api/tabs/:plugin/:tab/:widget/actions/:action`   | Corpo `{ "row": { "id": "..." } }`; roda o `run`. 204. `row` vem do browser: confie só no `id` |
+| `POST /api/tabs/:plugin/:tab/:widget/submit`            | Valida o corpo com o `schema` e roda o `submit`. 204; inválido 400 `{ error: "invalid", issues: [{ path, message }] }` |
+
+- **Chave `<plugin>/<id>`:** o dono vem do registry (`entries()`), não da aba; dois plugins podem
+  usar o mesmo `id`. Repetido no mesmo plugin, a primeira vence e sai um `warn` (uma vez).
+- **Leitura viva:** cada pedido lê o registry de novo. Reload, disable ou falha de quem contribuiu
+  tira a aba na hora: 404, e o app mostra "Esta aba não está mais disponível". O app relê o
+  manifesto a cada navegação e a cada reconexão do WebSocket.
+- **Validação:** `id` inválido, `kind` desconhecido ou campo faltando ignora a aba (ou só o widget)
+  com `warn`; um `kind` novo num dashboard antigo some sem quebrar o resto.
+- **Erro por widget:** `load`, `run` ou `submit` que lança responde 500 `erro no widget` (o erro vai
+  para o log com o plugin e a chave) e só aquele widget mostra a falha. O `submit` inválido mostra as
+  issues do Zod junto dos campos.
+- **Limites:** corpo até 64 KiB (413); resposta cortada em 500 linhas, 1000 pontos e 50 `stats`, com
+  `warn`. Não há prazo próprio: trabalho longo é de quem contribui.
+- **Navegação:** grupo **Extensões** na sidebar. No celular as abas ficam em **Mais**, e a aba
+  aberta traz "← Mais" no topo.
 
 ## App web
 

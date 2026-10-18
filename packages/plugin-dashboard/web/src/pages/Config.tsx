@@ -188,7 +188,7 @@ function RecordControl(props: {
   );
 }
 
-function FieldView(props: {
+export function FieldView(props: {
   field: Field;
   value: unknown;
   masked: string | undefined;

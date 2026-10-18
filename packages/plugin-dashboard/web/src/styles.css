@@ -589,3 +589,44 @@ td {
   }
 }
 /* Sem transição nem animação no app: prefers-reduced-motion já é respeitado. */
+
+/* Abas de plugins (ADR 0108) */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+.stat-value {
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 700;
+}
+.chart {
+  width: 100%;
+  height: 80px;
+  display: block;
+}
+.prewrap {
+  white-space: pre-wrap;
+}
+h3 {
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+.back {
+  display: none;
+  align-items: center;
+  min-height: 44px;
+  color: var(--ink);
+}
+@media (max-width: 767px) {
+  .back {
+    display: inline-flex;
+  }
+  .stats {
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  }
+  .btn {
+    min-height: 44px;
+  }
+}
