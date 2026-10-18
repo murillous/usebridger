@@ -99,7 +99,7 @@ describe('Bot: reconexão', () => {
     await b.start();
 
     transport.emit('connection.status', { status: 'closed', reason: 'logged-out', error: null });
-    await vi.waitFor(() => expect(b.state).toBe('stopped'));
+    await vi.waitFor(() => expect(b.state).toBe('failed'));
 
     expect(transport.calls).toEqual(['connect', 'disconnect']);
     expect(logger.lines.find((line) => line.level === 'error')?.message).toMatch(/pareada de novo/);
@@ -113,7 +113,7 @@ describe('Bot: reconexão', () => {
     await b.start();
 
     transport.emit('connection.status', { status: 'closed', reason: 'replaced', error: null });
-    await vi.waitFor(() => expect(b.state).toBe('stopped'));
+    await vi.waitFor(() => expect(b.state).toBe('failed'));
     await vi.advanceTimersByTimeAsync(60_000);
 
     expect(transport.calls).toEqual(['connect', 'disconnect']);

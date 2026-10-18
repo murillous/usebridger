@@ -160,6 +160,8 @@ export function createBot(config: BotConfig): Bot {
   const bootAbort = new AbortController();
   // `connect()` já foi chamado: só então o shutdown desconecta.
   let connectCalled = false;
+  // O giveUp já desconectou o transport: o shutdown não repete.
+  let transportDisconnected = false;
   // Desfaz a assinatura dos eventos do transport; existe depois que o start() a fez.
   let unsubscribe: (() => void) | undefined;
   const timeouts = config.timeouts ?? {};
@@ -292,10 +294,8 @@ export function createBot(config: BotConfig): Bot {
               (typeof config.transport === 'function' ? () => auth.clear() : undefined),
           },
           pairing: hasCapability(transport, 'pairing'),
-          giveUp: () => {
-            // Chamado de dentro de um handler do transport: o stop corre em paralelo.
-            bot.stop().catch((error: unknown) => log.error('falha ao parar o bot', { err: error }));
-          },
+          // Chamado de dentro de um handler do transport (ADR 0120).
+          giveUp: () => enterFailed(),
         });
   // Snapshot do último status para plugin que sobe depois do evento (ADR 0110).
   let lastConnection: ConnectionStatus | undefined;
@@ -319,7 +319,8 @@ export function createBot(config: BotConfig): Bot {
     chatIsAllowed,
     dropsSelf,
     dropsBots,
-    stopping: () => state === 'stopping' || state === 'stopped',
+    stopping: () => state === 'stopping' || state === 'stopped' || state === 'failed',
+    failed: () => state === 'failed',
     log: getLog,
   });
 
@@ -595,6 +596,22 @@ export function createBot(config: BotConfig): Bot {
     state = 'running';
   }
 
+  /**
+   * Desistência da reconexão (ADR 0120): para o transport e as filas, mas mantém plugins, HTTP e
+   * scheduler no ar, para o painel mostrar o erro. O `stop()` encerra o resto.
+   */
+  function enterFailed(): void {
+    if (state !== 'running') return;
+    state = 'failed';
+    void reconnector?.stop();
+    void inbound.close({ drain: false });
+    void outbound.close({ drain: false });
+    transportDisconnected = true;
+    transport.disconnect().catch((error: unknown) => {
+      log.error('falha ao desconectar o transport no estado failed', { err: error });
+    });
+  }
+
   /** Encerra o que o boot já subiu e relança `failure` (ou o `AggregateError` com a limpeza). */
   async function failBoot(failure: unknown): Promise<never> {
     try {
@@ -621,7 +638,8 @@ export function createBot(config: BotConfig): Bot {
     const errors: unknown[] = await runStopHooks(hooks.toReversed(), config.shutdown);
     hooks.length = 0;
     await abandonInternals();
-    if (connectCalled) {
+    // Em `failed` o transport já foi desconectado.
+    if (connectCalled && !transportDisconnected) {
       try {
         await transport.disconnect();
       } catch (error) {
@@ -727,6 +745,7 @@ export function createBot(config: BotConfig): Bot {
           return stopAfterStart;
         }
         case 'running':
+        case 'failed':
           return shutdown();
         case 'stopping':
           return stopAfterStart ?? shutdownPromise ?? Promise.resolve();

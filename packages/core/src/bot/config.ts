@@ -24,8 +24,12 @@ import type { ShutdownOptions, StopHook, StopHookOptions } from './stop-hooks.ts
 /**
  * Ciclo de vida: `idle → starting → running → stopping → stopped`. `stopped` é terminal —
  * uma instância não reinicia; para subir de novo, crie outro `Bot`.
+ *
+ * `failed` (ADR 0120): a reconexão desistiu (erro `fatal`, credencial rejeitada, `replaced`,
+ * sessão a parear sem `clearSession`). Transport e filas estão parados; plugins e HTTP seguem no
+ * ar para o painel mostrar o erro. `start()` rejeita (não reinicia) e `stop()` chega a `stopped`.
  */
-export type BotState = 'idle' | 'starting' | 'running' | 'stopping' | 'stopped';
+export type BotState = 'idle' | 'starting' | 'running' | 'stopping' | 'stopped' | 'failed';
 
 /** Middleware do app com prioridade (maior roda antes). */
 export interface BotMiddlewareEntry {

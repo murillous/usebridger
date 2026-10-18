@@ -48,7 +48,7 @@ describe('Bot: auth-failed em transport sem pareamento', () => {
 
     const error = new Error('401 Unauthorized');
     transport.emit('connection.status', { status: 'closed', reason: 'auth-failed', error });
-    await vi.waitFor(() => expect(b.state).toBe('stopped'));
+    await vi.waitFor(() => expect(b.state).toBe('failed'));
     await vi.advanceTimersByTimeAsync(10 * 60_000);
 
     expect(connects(transport)).toBe(1);
@@ -71,7 +71,7 @@ describe('Bot: auth-failed em transport sem pareamento', () => {
     await b.start();
 
     transport.emit('connection.status', { status: 'closed', reason: 'auth-failed', error: null });
-    await vi.waitFor(() => expect(b.state).toBe('stopped'));
+    await vi.waitFor(() => expect(b.state).toBe('failed'));
 
     expect(clearSession).not.toHaveBeenCalled();
     expect(transport.calls).toEqual(['connect', 'disconnect']);
@@ -103,7 +103,7 @@ describe("Bot: desconexão 'fatal'", () => {
 
     const error = new Error('close code 4014: intents não permitidas');
     transport.emit('connection.status', { status: 'closed', reason: 'fatal', error });
-    await vi.waitFor(() => expect(b.state).toBe('stopped'));
+    await vi.waitFor(() => expect(b.state).toBe('failed'));
     await vi.advanceTimersByTimeAsync(10 * 60_000);
 
     expect(transport.calls).toEqual(['connect', 'disconnect']);
@@ -138,9 +138,54 @@ describe("Bot: desconexão 'fatal'", () => {
     await b.start();
 
     transport.emit('connection.status', { status: 'closed', reason: 'fatal', error: null });
-    await vi.waitFor(() => expect(b.state).toBe('stopped'));
+    await vi.waitFor(() => expect(b.state).toBe('failed'));
 
     expect(seen).toContainEqual({ status: 'closed', reason: 'fatal', error: null });
     expect(states).not.toContain('stopped');
+  });
+});
+
+describe('Bot: estado failed (ADR 0120)', () => {
+  it('mantém plugins no ar, para transport e filas, rejeita start() e o stop() chega a stopped', async () => {
+    const transport = new RecordingTransport(['send.text']);
+    const disposed = vi.fn();
+    const handled = vi.fn();
+    const b = bot({
+      transport,
+      plugins: [
+        definePlugin({
+          name: 'vivo',
+          version: '1.0.0',
+          engine: '>=0.0.0',
+          setup: (ctx) => {
+            ctx.events.on('message', handled);
+          },
+          teardown: disposed,
+        }),
+      ],
+    });
+    await b.start();
+
+    transport.emit('connection.status', { status: 'closed', reason: 'fatal', error: null });
+    await vi.waitFor(() => expect(b.state).toBe('failed'));
+
+    expect(disposed).not.toHaveBeenCalled();
+    expect(transport.calls).toEqual(['connect', 'disconnect']);
+    await expect(b.start()).rejects.toMatchObject({ state: 'failed' });
+    // Nenhum handler roda em failed: a fila de entrada está fechada.
+    transport.emit('message', {
+      id: 'm1',
+      chat: { id: 'c', isGroup: false },
+      sender: { id: 's' },
+      text: 'oi',
+      timestamp: Date.now(),
+    } as never);
+    await b.settled();
+    expect(handled).not.toHaveBeenCalled();
+
+    await b.stop();
+    expect(b.state).toBe('stopped');
+    expect(disposed).toHaveBeenCalledTimes(1);
+    expect(transport.calls).toEqual(['connect', 'disconnect']);
   });
 });
