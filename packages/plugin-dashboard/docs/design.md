@@ -122,7 +122,7 @@ Abaixo de 768 px a sidebar sai e entra a barra inferior (TabBar).
   (config atual inválida, lida do GET de cada plugin) ou "falhou" (setup falhou) na lista;
   secret só leitura com chips `secret`/origem e o nome real da variável (`BRIDGER_<PLUGIN>__<CAMPO>`);
   dica de tipo do schema sob cada campo; "Salvar recarrega X e N dependente(s)" calculado do
-  `dependsOn` dos plugins. Não há botão "Substituir" no secret: o PUT recusa secret (ADR 0111).
+  `dependsOn` dos plugins (limite: dependentes por `optionalDependsOn`, que o core também recarrega, não entram na contagem, porque a linha do plugin não os expõe). Não há botão "Substituir" no secret: o PUT recusa secret (ADR 0111).
 - **Alvos de 44 px** (40 px no desktop), campos com fonte de 16 px (evita o zoom do iOS),
   `inputmode` nos campos numéricos, `env(safe-area-inset-bottom)` na barra inferior.
 - **QR** cresce para 200 px, e o código de pareamento ganha botão Copiar.

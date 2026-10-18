@@ -28,6 +28,9 @@ export interface Field {
   default?: unknown;
   /** Tipo Zod aproximado a partir do JSON Schema (`z.number().min(0)`), para a dica do campo. */
   hint: string;
+  /** Limites do schema (`minimum`/`minLength`, `maximum`/`maxLength`), para a validação local. */
+  min?: number;
+  max?: number;
 }
 
 export interface Group {
@@ -100,22 +103,24 @@ const ZOD: Record<string, string> = {
   object: 'z.record()',
 };
 
+/** `z.int()` vira `±MAX_SAFE_INTEGER` no JSON Schema: limite que ninguém escreveu não conta. */
+export function boundsOf(schema: Json): { min?: number; max?: number } {
+  const [lo, hi] =
+    typeOf(schema) === 'string' ? ['minLength', 'maxLength'] : ['minimum', 'maximum'];
+  const pick = (key: string | undefined): number | undefined => {
+    const v = key === undefined ? undefined : schema[key];
+    return typeof v === 'number' && Math.abs(v) < Number.MAX_SAFE_INTEGER ? v : undefined;
+  };
+  return { min: pick(lo), max: pick(hi) };
+}
+
 /** Só o que o JSON Schema deixa ver: tipo e limites. Não tenta reconstruir refinamentos. */
 export function hintOf(schema: Json): string {
   if (Array.isArray(schema['enum']) || schema['const'] !== undefined) return 'z.enum';
   let hint = ZOD[typeOf(schema) ?? ''] ?? 'z.json()';
-  const [min, max] =
-    typeOf(schema) === 'string' ? ['minLength', 'maxLength'] : ['minimum', 'maximum'];
-  // `z.int()` vira `±MAX_SAFE_INTEGER` no JSON Schema: limite que ninguém escreveu não é dica.
-  for (const [key, call] of [
-    [min, 'min'],
-    [max, 'max'],
-  ] as const) {
-    const bound = schema[key as string];
-    if (typeof bound === 'number' && Math.abs(bound) < Number.MAX_SAFE_INTEGER) {
-      hint += `.${call}(${bound})`;
-    }
-  }
+  const { min, max } = boundsOf(schema);
+  if (min !== undefined) hint += `.min(${min})`;
+  if (max !== undefined) hint += `.max(${max})`;
   return hint;
 }
 
@@ -144,6 +149,7 @@ export function buildFields(schema: Json | null, prefix = ''): Node[] {
       secret: prop['secret'] === true,
       default: prop['default'],
       hint: hintOf(prop),
+      ...boundsOf(prop),
       ...control(prop),
     });
   }
@@ -299,6 +305,8 @@ export const envName = (plugin: string, path: string): string =>
   [`BRIDGER_${envSegment(plugin)}`, ...path.split('.').map(envSegment)].join('__');
 
 /** Plugins que recarregam junto com `name` no reload em cascata: dependentes diretos e indiretos. */
+// shortcut: só `dependsOn`; o core também recarrega por `optionalDependsOn` (ADR 0099), que a
+// PluginRow não expõe. Melhorar quando o core serializar `optionalDependsOn` na linha.
 export function dependentsOf(
   rows: { name: string; dependsOn?: Record<string, string> }[],
   name: string,

@@ -1,10 +1,10 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiError, api } from '#web/lib/api.ts';
+import { badgeOf, secretOrigin, validateLocal } from '#web/lib/config-view.ts';
 import {
   buildFields,
   buildOverrides,
   dependentsOf,
-  envName,
   type Field,
   type FlatValues,
   flatten,
@@ -30,12 +30,6 @@ interface Loaded {
   extra: FlatValues;
   /** Falso com `view: null`: sem `sources` não se sabe quais overrides existem. */
   known: boolean;
-}
-
-/** Badge da lista de plugins: "falhou" (setup) vence a contagem de erros da config. */
-function badgeOf(row: PluginRow | undefined, issues: number | undefined): string | undefined {
-  if (row?.reason?.kind === 'setup-failed') return 'falhou';
-  return issues ? `${issues} ${issues === 1 ? 'erro' : 'erros'}` : undefined;
 }
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -206,31 +200,38 @@ export function FieldView(props: {
   secretEditable?: boolean;
   /** Nome do plugin: só para montar o nome real da variável de ambiente do secret. */
   plugin?: string;
+  /** Falso com `view: null` (config inválida): a origem do secret é desconhecida. */
+  configKnown?: boolean;
+  /** Dica do tipo do schema: só na Config, não no form das abas. */
+  showHint?: boolean;
   onChange: (value: unknown) => void;
 }) {
   const { field, errors } = props;
   const id = `f-${field.path}`;
   const helpId = `${id}-help`;
+  const hintId = `${id}-hint`;
+  const showHint = props.showHint && errors.length === 0;
   const errId = `${id}-err`;
   // Secret só leitura: a origem real (env ou arquivo) no lugar do texto genérico de override.
   const secretView = field.secret && !props.secretEditable;
-  const secretOrigin =
-    props.source === 'env' && props.plugin
-      ? `Definida por ${envName(props.plugin, field.path)}.`
-      : props.source === 'file'
-        ? 'Definida no arquivo de config.'
-        : props.source
-          ? 'Sem valor definido.'
-          : 'Origem desconhecida: a config atual é inválida.';
+  const origin = secretOrigin({
+    known: props.configKnown ?? true,
+    source: props.source,
+    plugin: props.plugin,
+    path: field.path,
+    hasValue: props.masked !== undefined,
+  });
   const help = secretView
-    ? [field.description, `${secretOrigin} O valor nunca sai do servidor; só a máscara.`]
+    ? [field.description, `${origin} O valor nunca sai do servidor; só a máscara.`]
         .filter(Boolean)
         .join(' · ')
     : [field.description, props.source ? SOURCE_LABEL[props.source] : undefined]
         .filter(Boolean)
         .join(' · ');
   const describedBy =
-    [help ? helpId : '', errors.length ? errId : ''].filter(Boolean).join(' ') || undefined;
+    [help ? helpId : '', showHint ? hintId : '', errors.length ? errId : '']
+      .filter(Boolean)
+      .join(' ') || undefined;
 
   const editor = !field.secret && (field.control === 'list' || field.control === 'record');
   let control: ReactNode;
@@ -337,7 +338,11 @@ export function FieldView(props: {
           {help}
         </span>
       )}
-      <span className="help mono">{field.hint} · vem do schema</span>
+      {showHint && (
+        <span id={hintId} className="help mono">
+          {field.hint} · vem do schema
+        </span>
+      )}
       {errors.length > 0 && (
         <span id={errId} className="err" role="alert">
           {errors.join(' · ')}
@@ -370,7 +375,7 @@ export function Config() {
         // Plugin sem config legível (ex.: não carregou) fica sem badge de erro: o GET falho é o fallback.
         for (const r of list) {
           api<ConfigResponse>(`config/${encodeURIComponent(r.name)}`).then(
-            (d) => setIssueCounts((c) => ({ ...c, [r.name]: d.issues?.length ?? 0 })),
+            (d) => setIssueCounts((c) => ({ [r.name]: d.issues?.length ?? 0, ...c })),
             () => undefined,
           );
         }
@@ -415,6 +420,14 @@ export function Config() {
   const fields = useMemo(() => (loaded ? leaves(loaded.nodes) : []), [loaded]);
   const dirty = loaded ? isDirty(loaded.initial, values) : false;
   const grouped = groupIssues([...(loaded?.loadIssues ?? []), ...issues], fields);
+  // Erro local (limites do schema) antes do 400; mensagem repetida do servidor não duplica.
+  const errorsByPath = useMemo(() => {
+    const merged: Record<string, string[]> = { ...grouped.byPath };
+    for (const [path, msgs] of Object.entries(validateLocal(fields, values))) {
+      merged[path] = [...new Set([...(merged[path] ?? []), ...msgs])];
+    }
+    return merged;
+  }, [grouped.byPath, fields, values]);
 
   const save = async () => {
     if (!plugin || !loaded) return;
@@ -442,7 +455,12 @@ export function Config() {
         body: overrides,
       });
       await load(plugin);
-      if (data) setResult(data);
+      if (data) {
+        // Badge "falhou" velho: a linha nova do plugin e dos dependentes vem no resultado.
+        const fresh = new Map([data.plugin, ...data.dependents].map((r) => [r.name, r]));
+        setRows((old) => old.map((r) => fresh.get(r.name) ?? r));
+        setResult(data);
+      }
     } catch (e) {
       if (e instanceof ApiError && e.status === 400 && typeof e.body === 'object' && e.body) {
         setIssues((e.body as { issues?: ConfigIssue[] }).issues ?? []);
@@ -459,6 +477,8 @@ export function Config() {
     <FieldView
       key={`${epoch}-${node.path}`}
       plugin={plugin}
+      configKnown={loaded?.known}
+      showHint
       field={node}
       value={values[node.path]}
       masked={
@@ -467,7 +487,7 @@ export function Config() {
           : undefined
       }
       source={loaded?.sources[node.path]}
-      errors={grouped.byPath[node.path] ?? []}
+      errors={errorsByPath[node.path] ?? []}
       onChange={(value) => setValues((v) => ({ ...v, [node.path]: value }))}
     />
   );
