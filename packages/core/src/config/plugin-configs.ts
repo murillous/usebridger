@@ -599,10 +599,14 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
    * `clearSecret` trocam esse campo e não podem travar num envelope ilegível dele. Qualquer
    * outro que não decifre lança `PluginConfigError` `undecryptable`, sem valor nem envelope.
    */
+  // Quantos envelopes a última chamada de `decryptStored` não decifrou (só útil no modo tolerante).
+  let brokenCount = 0;
+
   function decryptStored(
     name: string,
     stored: Record<string, JsonValue>,
     omit?: string,
+    tolerant = false,
   ): PlainObject {
     const fields: PlainObject = {};
     const issues: PluginConfigIssue[] = [];
@@ -625,7 +629,9 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
         });
       }
     }
-    if (issues.length > 0) throw new PluginConfigError(name, issues);
+    // `tolerant` (clearSecret): os outros ilegíveis ficam de fora, para a remoção não depender deles.
+    if (issues.length > 0 && !tolerant) throw new PluginConfigError(name, issues);
+    brokenCount = issues.length;
     return fields;
   }
 
@@ -700,7 +706,8 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
   function isSecretField(schema: z.ZodType | undefined, path: readonly string[]): boolean {
     let shape = schema ? objectShape(schema) : undefined;
     for (const [index, key] of path.entries()) {
-      const field = shape?.[key];
+      // `hasOwn`: 'constructor' e afins existem em todo objeto e não são campos do schema.
+      const field = shape && Object.hasOwn(shape, key) ? shape[key] : undefined;
       if (!field) return false;
       if (index === path.length - 1) return isSecretSchema(field);
       shape = objectShape(field);
@@ -715,12 +722,15 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
     fields: PlainObject,
     action: string,
     label: string,
+    lenient = false,
   ): Promise<PluginChangeResult | undefined> {
     const { name } = definition;
     const result = compute(definition, dropLegacySecrets(definition, await kv.get(name)), fields);
-    if (!result.ok) throw result.error;
+    // Remoção com outros envelopes ilegíveis: o estado já era inválido e a remoção não o piora,
+    // então a validação não pode bloquear a saída (campo obrigatório ilegível, por exemplo).
+    if (!result.ok && !lenient) throw result.error;
     // Antes de salvar e de recarregar: o reload loga, e o segredo novo já precisa sair censurado.
-    trackSecrets(definition, result);
+    if (result.ok) trackSecrets(definition, result);
     if (Object.keys(next).length === 0) await secretKv.delete(name);
     else await secretKv.set(name, next);
     // Nunca o valor: só quem, onde e de qual camada.
@@ -796,8 +806,9 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
   ): Promise<PluginChangeResult | undefined> {
     const definition = definitionOf(name);
     const stored = await readStored(name);
+    const saved = Object.hasOwn(stored, label);
     // Campo que saiu do schema ainda pode ter envelope salvo: deixa limpar.
-    if (!(label in stored) && !isSecretField(definition.config, label.split('.'))) {
+    if (!saved && !isSecretField(definition.config, label.split('.'))) {
       throw new PluginConfigError(name, [
         {
           path: label,
@@ -807,8 +818,11 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
         },
       ]);
     }
+    // Nada salvo no caminho: nada a gravar, logar nem recarregar.
+    if (!saved) return undefined;
     const { [label]: _removed, ...next } = stored;
-    return commitSecrets(definition, next, decryptStored(name, stored, label), 'removido', label);
+    const fields = decryptStored(name, stored, label, true);
+    return commitSecrets(definition, next, fields, 'removido', label, brokenCount > 0);
   }
 
   async function runRotate(): Promise<number> {

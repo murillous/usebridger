@@ -114,6 +114,11 @@ export function readSecretKeys(env: ConfigEnv): SecretKeys {
   const previous = rawPrevious
     ? parseSecretKey(rawPrevious, 'BRIDGER_SECRET_KEY_PREVIOUS')
     : undefined;
+  if (current && previous && current.equals(previous)) {
+    throw new BotConfigError(
+      'BRIDGER_SECRET_KEY_PREVIOUS igual a BRIDGER_SECRET_KEY; remova a anterior ou use a chave antiga de verdade',
+    );
+  }
   if (previous && !current) {
     throw new BotConfigError('BRIDGER_SECRET_KEY_PREVIOUS exige BRIDGER_SECRET_KEY (a nova chave)');
   }

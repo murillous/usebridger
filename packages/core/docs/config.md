@@ -232,8 +232,17 @@ openssl rand -base64 32
 
 Formato inválido falha o boot. Sem a variável, `secretsWritable` é `false` e `setSecret` rejeita;
 o resto segue como antes. Segredo salvo que não decifra (chave trocada ou perdida, dado adulterado)
-vira `PluginConfigError` `undecryptable` e o plugin cai como config inválida; `clearSecret`
-remove o campo.
+vira `PluginConfigError` `undecryptable`, com plugin e caminho. **No boot isso aborta o `start()`
+com `PluginBootError`**, como qualquer config inválida ([ADR 0102](../../../docs/adr/0102-plugin-falho-derruba-o-boot.md));
+num reload, o plugin fica `setup-failed` e o bot segue. Recuperação:
+
+1. Restaure a chave certa em `BRIDGER_SECRET_KEY` (e a antiga em `BRIDGER_SECRET_KEY_PREVIOUS`, se
+   foi uma rotação), ou
+2. desligue o plugin (`disabledPlugins`), suba o bot e chame `clearSecret(plugin, caminho)` em cada
+   campo ilegível (um ilegível não bloqueia a remoção de outro). Com o plugin desligado, o
+   `clearSecret` grava a remoção, mas o reload rejeita com `PluginHostStateError` (o host só
+   recarrega plugin carregado); ignore o erro, tire o plugin de `disabledPlugins` ou chame
+   `plugins.enable`, e salve o segredo de novo com `setSecret`.
 
 > **Guarde a chave fora do banco e do backup dele.** Quem tem o banco e a chave tem os segredos, e
 > perder a chave perde os segredos salvos pelo dashboard (env e arquivo não são afetados). A chave
@@ -248,6 +257,10 @@ remove o campo.
    o caminho de `undecryptable`.
 4. Com o log confirmando, remova `BRIDGER_SECRET_KEY_PREVIOUS`. Só uma chave anterior por vez:
    rotações seguidas pedem um boot entre elas.
+
+Só migram os envelopes de plugins presentes no bot daquele boot. Os de plugin fora dele (removido
+ou não carregado) continuam com a chave antiga e ficam ilegíveis quando o `PREVIOUS` sai; quando o
+plugin voltar, chame `clearSecret` e salve de novo. Chaves atual e anterior iguais falham o boot.
 
 ## `messages` sobrescrevível
 

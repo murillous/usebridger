@@ -9,6 +9,7 @@ import { BotConfigError } from './owners.ts';
 const KEY_BYTES = 32;
 const IV_BYTES = 12;
 const KID_BYTES = 6;
+const TAG_BYTES = 16;
 // Rótulo fixo no hash: o `kid` não é o hash puro da chave, que alguém poderia usar noutro lugar.
 const KID_LABEL = 'bridger-secret-key-id-v1';
 
@@ -49,7 +50,7 @@ export function parseSecretKey(raw: string, variable: string): SecretKey {
 
 export function encrypt(key: SecretKey, aad: string, plaintext: string): SecretEnvelope {
   const iv = randomBytes(IV_BYTES);
-  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  const cipher = createCipheriv('aes-256-gcm', key, iv, { authTagLength: TAG_BYTES });
   cipher.setAAD(Buffer.from(aad));
   const data = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
   return {
@@ -82,10 +83,14 @@ export function decrypt(keys: readonly SecretKey[], aad: string, envelope: unkno
   if (!isEnvelope(envelope)) throw new Error('envelope malformado');
   const key = keys.find((candidate) => keyId(candidate) === envelope.kid);
   if (!key) throw new Error('nenhuma chave mestra com o kid do envelope');
+  const iv = Buffer.from(envelope.iv, 'base64');
+  const tag = Buffer.from(envelope.tag, 'base64');
+  // Tag curta enfraquece o GCM: exige os tamanhos que o `encrypt` produz.
+  if (iv.length !== IV_BYTES || tag.length !== TAG_BYTES) throw new Error('envelope malformado');
   try {
-    const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(envelope.iv, 'base64'));
+    const decipher = createDecipheriv('aes-256-gcm', key, iv, { authTagLength: TAG_BYTES });
     decipher.setAAD(Buffer.from(aad));
-    decipher.setAuthTag(Buffer.from(envelope.tag, 'base64'));
+    decipher.setAuthTag(tag);
     return Buffer.concat([
       decipher.update(Buffer.from(envelope.data, 'base64')),
       decipher.final(),
