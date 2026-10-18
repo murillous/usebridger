@@ -65,6 +65,8 @@ const bot = createBot({
 | `state` | `idle`, `starting`, `running`, `failed`, `stopping` ou `stopped` |
 | `start()` / `stop()` / `onStop()` | Lifecycle (abaixo) |
 | `config.setOverrides(nome, overrides)` | Valida, salva no storage e recarrega o plugin (`teardown` → `setup`) |
+| `config.setSecret(nome, caminho, valor)` / `config.clearSecret(nome, caminho)` | Salvam ou removem um segredo cifrado no storage e recarregam o plugin ([ADR 0121](../../../docs/adr/0121-segredos-cifrados-editaveis-pelo-dashboard.md), `config.md`). Rejeitam sem `BRIDGER_SECRET_KEY` (`setSecret`), fora de campo `secret()`, ou com `kind: 'shadowed'` se env/arquivo definem o campo |
+| `config.secretsWritable` | `true` se há `BRIDGER_SECRET_KEY` |
 | `config.describe(nome)` / `config.jsonSchema(nome)` | Config mascarada e JSON Schema, para o dashboard |
 | `plugins()` | Tabela de boot atual (`PluginReportEntry[]`, reflete reloads); vazia antes do `start()` |
 | `stats()` | Métricas das filas (`BotStats`): `inbound` e `outbound` (abaixo) |

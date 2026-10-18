@@ -86,6 +86,23 @@ describe('ctx.admin.config: segredos', () => {
     expect(String(error)).not.toContain(VALUE);
   });
 
+  it('clearSecret sobre plugin desligado grava a remoção e o reload rejeita; enable sobe', async () => {
+    const storage = await seeded(keyA);
+    const { bot, admin } = setup({
+      storage,
+      env: { BRIDGER_SECRET_KEY: keyB },
+      disabledPlugins: ['other'],
+    });
+    await bot.start();
+    expect(bot.plugins().find((e) => e.name === 'other')?.status).toBe('skipped');
+    // O host só recarrega plugin carregado: o reload rejeita, mas a remoção já foi gravada.
+    await expect(admin().config.clearSecret('other', 'apiKey')).rejects.toBeInstanceOf(
+      PluginHostStateError,
+    );
+    await admin().plugins.enable('other');
+    expect(bot.plugins().find((e) => e.name === 'other')?.status).toBe('loaded');
+  });
+
   it('rejeita setSecret e clearSecret sobre o próprio plugin', async () => {
     const { bot, admin } = setup();
     await bot.start();

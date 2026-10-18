@@ -36,6 +36,15 @@ describe('secret-cipher', () => {
     expect(() => decrypt([key], 'a:b', { v: 2 })).toThrow('malformado');
   });
 
+  it('tag truncada ou IV de tamanho errado não decifra', () => {
+    const key = newKey();
+    const envelope = encrypt(key, 'a:b', 'valor');
+    const short = Buffer.from(envelope.tag, 'base64').subarray(0, 4).toString('base64');
+    expect(() => decrypt([key], 'a:b', { ...envelope, tag: short })).toThrow('malformado');
+    const iv = Buffer.alloc(8).toString('base64');
+    expect(() => decrypt([key], 'a:b', { ...envelope, iv })).toThrow('malformado');
+  });
+
   it('kid desconhecido falha', () => {
     const envelope = encrypt(newKey(), 'a:b', 'valor');
     expect(() => decrypt([newKey()], 'a:b', envelope)).toThrow('kid');
@@ -75,6 +84,12 @@ describe('chave mestra no env', () => {
     } catch (error) {
       expect(String(error)).not.toContain(bad);
     }
+  });
+
+  it('chaves atual e anterior iguais falham', () => {
+    expect(() =>
+      readSecretKeys({ BRIDGER_SECRET_KEY: valid, BRIDGER_SECRET_KEY_PREVIOUS: valid }),
+    ).toThrow(BotConfigError);
   });
 
   it('a anterior sem a atual falha', () => {

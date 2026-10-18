@@ -212,6 +212,53 @@ describe('clearSecret', () => {
   });
 });
 
+describe('clearSecret tolerante', () => {
+  it('com 2 envelopes ilegíveis, limpa um e o outro, e o resolve volta a funcionar', async () => {
+    const { configs, kv } = setup();
+    await configs.setSecret('ai', 'apiKey', VALUE);
+    await configs.setSecret('ai', 'openai.token', 'tok-9876543210');
+    for (const env of [{ BRIDGER_SECRET_KEY: keyB }, { BRIDGER_SECRET_KEY: undefined }]) {
+      const other = setup({ env });
+      await other.kv.set('ai', (await kv.get('ai')) as never);
+      await expect(other.configs.resolve('ai')).rejects.toBeInstanceOf(PluginConfigError);
+      await other.configs.clearSecret('ai', 'apiKey');
+      await other.configs.clearSecret('ai', 'openai.token');
+      expect(await other.kv.get('ai')).toBeUndefined();
+      await expect(other.configs.resolve('ai')).resolves.toBeDefined();
+    }
+  });
+
+  it('campo obrigatório ilegível não bloqueia limpar o outro', async () => {
+    const both: PluginDefinition = {
+      ...strict,
+      name: 'both',
+      config: z.object({ apiKey: secret(z.string().min(8)), extra: secret(z.string()).optional() }),
+    };
+    const storage = createMemoryStorage();
+    const mk = (env: ConfigEnv) => createPluginConfigs({ plugins: [both], storage, env });
+    await mk({ BRIDGER_SECRET_KEY: keyA }).setSecret('both', 'apiKey', VALUE);
+    await mk({ BRIDGER_SECRET_KEY: keyA }).setSecret('both', 'extra', 'extra-value-1');
+    await mk({ BRIDGER_SECRET_KEY: keyB }).clearSecret('both', 'extra');
+    const left = await kernelStorage(storage, 'secrets').kv.get('both');
+    expect(Object.keys(left as object)).toEqual(['apiKey']);
+  });
+
+  it('nada salvo no caminho: não grava, não loga, não recarrega; prototype não engana', async () => {
+    const { configs, kv, reload, log } = setup();
+    await configs.setSecret('ai', 'apiKey', VALUE);
+    reload.mockClear();
+    const before = log.lines.length;
+    await expect(configs.clearSecret('ai', 'openai.token')).resolves.toBeUndefined();
+    expect(reload).not.toHaveBeenCalled();
+    expect(log.lines.length).toBe(before);
+    expect(await kv.get('ai')).toHaveProperty('apiKey');
+    expect(await issueOf(configs.clearSecret('ai', 'constructor'))).toMatchObject({
+      kind: 'invalid',
+    });
+    expect(reload).not.toHaveBeenCalled();
+  });
+});
+
 describe('envelope ilegível', () => {
   it('vira undecryptable com plugin, caminho e fonte secret, sem valor', async () => {
     const { configs, kv } = setup();
