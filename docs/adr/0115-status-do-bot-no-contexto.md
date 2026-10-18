@@ -1,4 +1,4 @@
-# ADR 0114 — Status do bot no contexto: no ar desde, reconexões, expiração do QR e nome
+# ADR 0115 — Status do bot no contexto: no ar desde, reconexões, expiração do QR e nome
 
 **Status:** Aceito (2026-10-17) · Complementa **D110** ([ADR 0110](0110-sessao-e-status-de-conexao-no-contexto.md)) ·
 Resolve lacunas do dashboard (**D108**) conforme o [ADR 0029](0029-open-core-repo-privado.md)

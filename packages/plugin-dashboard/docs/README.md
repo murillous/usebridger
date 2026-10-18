@@ -34,7 +34,7 @@ Todas sob `/plugins/dashboard` (ou `/sessions/<sessão>/plugins/dashboard` fora 
 `ConnectionStatus` guardado pelo core (`ctx.connectionStatus()`, ADR 0110).
 `name` é o nome do bot (`createBot({ name })`, senão o nome do transport) e aparece no cabeçalho
 como `name · sessão X`. `connectedSince`, `reconnections` e `qrExpiresAt` (ms epoch) vêm de
-`ctx.connectionInfo()` (ADR 0114) e alimentam o card do bot; `qrExpiresAt` só existe se o
+`ctx.connectionInfo()` (ADR 0115) e alimentam o card do bot; `qrExpiresAt` só existe se o
 transport informar `expiresAt` no `connection.qr` (o Baileys informa).
 
 ## Métricas

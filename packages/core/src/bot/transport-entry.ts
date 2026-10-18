@@ -39,7 +39,7 @@ export interface TransportEntryDeps {
   readonly stopping: () => boolean;
   /** Guarda o último `connection.status`, antes de reemitir no barramento (ADR 0110). */
   readonly recordStatus?: (status: ConnectionStatus) => void;
-  /** Guarda a expiração do QR, antes de reemitir no barramento (ADR 0114). */
+  /** Guarda a expiração do QR, antes de reemitir no barramento (ADR 0115). */
   readonly recordQr?: (expiresAt: number | undefined) => void;
   /** Getter: o logger nasce no `start()`. */
   readonly log: () => Logger;

@@ -391,7 +391,7 @@ export class BaileysTransport implements Transport {
       if (qr !== undefined) {
         pairing = true;
         if (this.#pairing === 'qr') {
-          // O WhatsApp vale o primeiro QR por 60 s e os seguintes por 20 s (ADR 0114).
+          // O WhatsApp vale o primeiro QR por 60 s e os seguintes por 20 s (ADR 0115).
           const expiresAt = Date.now() + (qrCount++ === 0 ? 60_000 : 20_000);
           this.#events.emit('connection.qr', { qr, expiresAt });
         } else if (!codeRequested && !state.creds.registered) {

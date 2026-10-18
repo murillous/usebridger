@@ -90,7 +90,7 @@ export interface BotConfig {
   readonly session?: string;
   /**
    * Nome de exibição do bot (ex.: `luma`), mostrado pelo dashboard. Só rótulo: não entra em
-   * storage nem em chave. Padrão: o `Transport.name` (ADR 0114).
+   * storage nem em chave. Padrão: o `Transport.name` (ADR 0115).
    */
   readonly name?: string;
   /**

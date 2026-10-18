@@ -163,7 +163,7 @@ export interface TransportEvents {
   /** QR a apresentar para parear; o kernel decide como mostrar. */
   'connection.qr': {
     readonly qr: string;
-    /** Quando este QR deixa de valer, em ms epoch; ausente se o transport não sabe (ADR 0114). */
+    /** Quando este QR deixa de valer, em ms epoch; ausente se o transport não sabe (ADR 0115). */
     readonly expiresAt?: number;
   };
   /**

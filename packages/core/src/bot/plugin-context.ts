@@ -112,7 +112,7 @@ export interface PluginContextDeps {
   readonly session: string;
   /** Último status de conexão visto pelo core (ADR 0110). */
   readonly connectionStatus: () => ConnectionStatus | undefined;
-  /** Horário de conexão, reconexões e expiração do QR (ADR 0114). */
+  /** Horário de conexão, reconexões e expiração do QR (ADR 0115). */
   readonly connectionInfo: () => ConnectionInfo;
   /** Nome do bot (`BotConfig.name`, senão o nome do transport). */
   readonly botName: string;
