@@ -3,7 +3,15 @@ import type { ConfigIssue } from './types.ts';
 type Json = Record<string, unknown>;
 export type FlatValues = Record<string, unknown>;
 
-export type Control = 'text' | 'number' | 'integer' | 'boolean' | 'enum' | 'list' | 'json';
+export type Control =
+  | 'text'
+  | 'number'
+  | 'integer'
+  | 'boolean'
+  | 'enum'
+  | 'list'
+  | 'record'
+  | 'json';
 
 export interface Field {
   /** Caminho com pontos (`openai.model`), o mesmo `path` das issues do servidor. */
@@ -15,10 +23,8 @@ export interface Field {
   /** Campo `secret`: só máscara, nunca entra no PUT. */
   secret: boolean;
   options?: string[];
-  /** Tipo dos itens de `list`. */
+  /** Tipo dos itens de `list` e dos valores de `record`. */
   item?: 'text' | 'number';
-  /** Tipo do valor de um `z.record` primitivo: o controle segue `json`, mas a tela edita pares chave/valor. */
-  record?: 'text' | 'number';
   default?: unknown;
 }
 
@@ -52,7 +58,7 @@ function unwrap(schema: Json): Json {
     : schema;
 }
 
-function control(schema: Json): Pick<Field, 'control' | 'options' | 'item' | 'record'> {
+function control(schema: Json): Pick<Field, 'control' | 'options' | 'item'> {
   const options = schema['enum'];
   if (Array.isArray(options)) return { control: 'enum', options: options.map(String) };
   if (schema['const'] !== undefined) return { control: 'enum', options: [String(schema['const'])] };
@@ -74,8 +80,8 @@ function control(schema: Json): Pick<Field, 'control' | 'options' | 'item' | 're
     case 'object': {
       const values = schema['additionalProperties'];
       const kind = isObject(values) ? typeOf(unwrap(values)) : undefined;
-      if (kind === 'string') return { control: 'json', record: 'text' };
-      if (kind === 'number' || kind === 'integer') return { control: 'json', record: 'number' };
+      if (kind === 'string') return { control: 'record', item: 'text' };
+      if (kind === 'number' || kind === 'integer') return { control: 'record', item: 'number' };
       return { control: 'json' };
     }
     default:
@@ -119,7 +125,7 @@ export function leaves(nodes: Node[]): Field[] {
 
 /**
  * `{a:{b:1}}` -> `{'a.b':1}`. Só desce em objetos simples; array e valor ficam folhas, e `stop`
- * lista os caminhos que são campos do form (um `z.record` é uma folha `json`, não várias chaves).
+ * lista os caminhos que são campos do form (um `z.record` é uma folha `record`, não várias chaves).
  */
 export function flatten(value: unknown, prefix = '', stop?: ReadonlySet<string>): FlatValues {
   if (!isObject(value) || (prefix !== '' && stop?.has(prefix))) {

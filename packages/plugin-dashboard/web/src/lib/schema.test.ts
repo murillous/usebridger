@@ -122,7 +122,7 @@ describe('record e messages', () => {
   const stop = new Set(fields.map((f) => f.path));
 
   it('o record é uma folha json com o valor atual', () => {
-    expect(fields.find((f) => f.path === 'extra')?.control).toBe('json');
+    expect(fields.find((f) => f.path === 'extra')?.control).toBe('record');
     expect(flatten({ modo: 'a', extra: { a: 'b' } }, '', stop)).toEqual({
       modo: 'a',
       extra: { a: 'b' },
@@ -182,10 +182,10 @@ describe('controles de lista e record', () => {
   });
   const byPath = Object.fromEntries(leaves(rec).map((f) => [f.path, f]));
 
-  it('record primitivo guarda o tipo do valor; o resto segue json cru', () => {
-    expect(byPath['numeros']).toMatchObject({ control: 'json', record: 'number' });
-    expect(byPath['textos']).toMatchObject({ control: 'json', record: 'text' });
-    expect(byPath['livre']?.record).toBeUndefined();
+  it('record primitivo vira control record com o tipo do valor; o resto segue json cru', () => {
+    expect(byPath['numeros']).toMatchObject({ control: 'record', item: 'number' });
+    expect(byPath['textos']).toMatchObject({ control: 'record', item: 'text' });
+    expect(byPath['livre']?.control).toBe('json');
   });
 
   it('lista: linhas viram itens e voltam', () => {

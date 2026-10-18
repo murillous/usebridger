@@ -145,7 +145,7 @@ function RecordControl(props: {
   const [rows, setRows] = useState(() => recordToRows(props.value));
   const update = (next: [string, string][]) => {
     setRows(next);
-    props.onChange(rowsToRecord(next, props.field.record ?? 'text'));
+    props.onChange(rowsToRecord(next, props.field.item ?? 'text'));
   };
   return (
     <fieldset
@@ -244,7 +244,7 @@ function FieldView(props: {
         ))}
       </select>
     );
-  } else if (field.control === 'list' || (field.control === 'json' && field.record)) {
+  } else if (field.control === 'list' || field.control === 'record') {
     const Editor = field.control === 'list' ? ListControl : RecordControl;
     control = (
       <Editor

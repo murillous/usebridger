@@ -108,7 +108,7 @@ token e navegue pelas telas (rotas por hash: `#/logs`, `#/plugins`, `#/config`).
   por nível e pausar), Plugins (enable/disable/reload com confirmação ao desativar e resultado da
   cascata; colunas estado, setup, `dependsOn`, serviços e contribuições, vindas da tabela do core) e
   Config (lista de plugins ao lado no desktop, `select` abaixo de 768 px; formulário gerado do JSON
-  Schema, com lista editável para array de primitivos e pares chave/valor para `z.record` primitivo;
+  Schema, com lista editável para array de primitivos e pares chave/valor (`control: 'record'`) para `z.record` primitivo;
   secret só como máscara; erros do 400 junto do campo). Abaixo de 768 px a navegação vira a barra inferior.
 - **Sem caminho fixo:** o plugin injeta `<base href>` no `index.html` e o app chama `api/...`
   relativo a ele; funciona atrás de qualquer prefixo de sessão.
