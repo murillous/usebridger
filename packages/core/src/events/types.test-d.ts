@@ -46,7 +46,10 @@ describe('eventos do §6.4', () => {
     expectTypeOf<BotEvents['message.edited']>().toEqualTypeOf<Message>();
     expectTypeOf<BotEvents['connection.status']>().toEqualTypeOf<ConnectionStatus>();
     expectTypeOf<BotEvents['plugin.error']>().toEqualTypeOf<PluginErrorEvent>();
-    expectTypeOf<BotEvents['connection.qr']>().toEqualTypeOf<{ readonly qr: string }>();
+    expectTypeOf<BotEvents['connection.qr']>().toEqualTypeOf<{
+      readonly qr: string;
+      readonly expiresAt?: number;
+    }>();
     expectTypeOf<BotEvents['connection.pairing-code']>().toEqualTypeOf<{
       readonly code: string;
     }>();
