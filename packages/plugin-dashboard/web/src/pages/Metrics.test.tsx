@@ -27,6 +27,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 const D1 = '2026-10-16';
@@ -164,6 +165,30 @@ describe('Metrics: período', () => {
   });
 });
 
+describe('useMetrics: resposta atrasada', () => {
+  it('ignora a resposta de 7 dias que chega depois da troca para 30', async () => {
+    const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+    const reply = (body: unknown) => new Response(JSON.stringify(body));
+    vi.stubGlobal('fetch', async (url: string) => {
+      if (url === 'api/metrics?days=7') {
+        await gate;
+        return reply({ ...full, metrics: [{ name: 'velha.sete', rows: [counter(D3, {}, 1)] }] });
+      }
+      return reply({ ...full, metrics: [{ name: 'nova.trinta', rows: [counter(D3, {}, 1)] }] });
+    });
+    const user = userEvent.setup();
+    render(<Metrics />);
+    await user.click(screen.getByRole('button', { name: '30 dias' }));
+    expect(await screen.findByRole('cell', { name: /nova\.trinta/ })).toBeTruthy();
+    release();
+    // Dá a chance de a resposta velha ser aplicada; a guarda `alive` deve descartá-la.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByRole('cell', { name: /velha\.sete/ })).toBeNull();
+    expect(screen.getByRole('cell', { name: /nova\.trinta/ })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: '3 dias' })).toBeTruthy();
+  });
+});
+
 describe('Metrics: painéis do kernel', () => {
   it('mensagens por dia: soma de hoje e gráfico acessível', async () => {
     serve(full);
@@ -212,7 +237,7 @@ describe('Metrics: painéis do kernel', () => {
     render(<Metrics />);
     const p = within(await panel('Usuários ativos por dia'));
     expect(p.getByText('12')).toBeTruthy();
-    expect(p.getByText('3').tagName).toBe('STRONG');
+    expect(p.getByText(/Grupos ativos hoje/).textContent).toBe('Grupos ativos hoje: 3');
   });
 
   it('sem dados do kernel: painéis zerados, com gráficos', async () => {
@@ -250,15 +275,13 @@ describe('Metrics: tabela de todas as métricas', () => {
     serve(full);
     render(<Metrics />);
     const row = await catalogRows();
-    const handled = within(row('bridger.messages.handled')).getAllByRole('cell');
-    expect(handled.at(-2)?.textContent).toBe('7');
-    expect(handled.at(-1)?.textContent).toBe('17');
-    const lat = within(row('handle_duration_ms')).getAllByRole('cell');
-    expect(lat.at(-2)?.textContent).toBe('p95 > 30.000 ms');
-    expect(lat.at(-1)?.textContent).toBe('p95 > 30.000 ms');
-    const pending = within(row('outbound.pending')).getAllByRole('cell');
-    expect(pending.at(-2)?.textContent).toBe('máx 9');
-    expect(pending.at(-1)?.textContent).toBe('máx 9');
+    const handled = within(row('bridger.messages.handled'));
+    expect(handled.getByRole('cell', { name: '7' })).toBeTruthy();
+    expect(handled.getByRole('cell', { name: '17' })).toBeTruthy();
+    const lat = within(row('handle_duration_ms'));
+    expect(lat.getAllByRole('cell', { name: 'p95 > 30.000 ms' })).toHaveLength(2);
+    const pending = within(row('outbound.pending'));
+    expect(pending.getAllByRole('cell', { name: 'máx 9' })).toHaveLength(2);
   });
 });
 
