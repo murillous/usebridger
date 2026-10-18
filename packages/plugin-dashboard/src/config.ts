@@ -18,7 +18,12 @@ const MAX_CONFIG_BODY = 64 * 1024;
 const text = (body: string, status: number): Response => new Response(body, { status });
 
 const toIssues = (error: PluginConfigError) =>
-  error.issues.map(({ path, message, kind }) => ({ path, message, kind }));
+  // `invalid` é o caso comum e fica sem `kind`: só os que mudam a UI (ex.: `undecryptable`) o levam.
+  error.issues.map(({ path, message, kind }) => ({
+    path,
+    message,
+    kind: kind === 'invalid' ? undefined : kind,
+  }));
 
 /**
  * Rotas `/api/config/:plugin` (M5-4.2): view com secrets mascarados + JSON Schema para o
