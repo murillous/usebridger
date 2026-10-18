@@ -1,0 +1,26 @@
+# ADR 0112 — Tabela de plugins com dependências, serviços e contribuições
+
+**Status:** Aceito (2026-10-17) · Estende **D111** ([ADR 0111](0111-acesso-admin-para-plugins.md)) ·
+Usado pelo dashboard (**D108**, [ADR 0108](0108-abas-do-dashboard-por-ponto-de-extensao.md))
+
+## Contexto
+
+O canvas de design da tela Plugins pede as colunas estado, setup, `dependsOn`, serviços e
+contribuições. A tabela do core (`PluginReportEntry`, de `ctx.admin.plugins()`) só trazia nome,
+versão, origem e estado, então o dashboard não tinha de onde ler o resto (#176).
+
+## Decisão
+
+- `PluginReportEntry` ganha três campos opcionais, só presentes quando há algo, como
+  `unregistered`: `dependsOn` (manifesto, nome → faixa; em linhas carregadas e ignoradas),
+  `services` (serviços providos no `setup`) e `contributions` (pontos de extensão com
+  contribuição do plugin; as duas últimas só em linhas `loaded`).
+- Serviços e contribuições são lidos do registry ao fim do `setup` (`PluginContextHandle.provided`
+  e `ServiceRegistry.describe`). Quem provê depois do `setup` não aparece até o próximo reload.
+- Mudança aditiva: quem não declara nada tem a mesma linha de antes. Nada muda na tabela de boot
+  em texto.
+
+## Consequências
+
+- O dashboard mostra as colunas sem consultar o registry por fora.
+- `optionalDependsOn` e `after` não entram: o canvas pede só `dependsOn`.

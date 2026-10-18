@@ -90,7 +90,7 @@ createBot({ plugins: [dashboard], adminPlugins: ['dashboard'] });
 
 | Rota | Resposta |
 | ---- | -------- |
-| `GET /api/plugins` | Tabela de boot: array de `{ name, version, origin, status: 'loaded', unregistered? }` ou `{ name, version, origin, status: 'skipped', reason }`, na ordem de carga. `reason` é `{ kind, ... }` como no core; em `setup-failed`, `error` vira `{ plugin, phase, timedOut, message }` (mensagem truncada, nunca o erro cru). |
+| `GET /api/plugins` | Tabela de boot: array de `{ name, version, origin, dependsOn?, status: 'loaded', unregistered?, services?, contributions? }` ou `{ name, version, origin, dependsOn?, status: 'skipped', reason }`, na ordem de carga. `reason` é `{ kind, ... }` como no core; em `setup-failed`, `error` vira `{ plugin, phase, timedOut, message }` (mensagem truncada, nunca o erro cru). |
 | `POST /api/plugins/:name/enable`, `/disable`, `/reload` | Sem corpo. 200 `{ plugin, dependents, teardownErrors }` (linhas novas do plugin e dos dependentes; falhas de teardown como `{ plugin, phase, timedOut, message }`). |
 
 Os `POST` exigem o cookie de sessão e `Origin` do mesmo host (senão 403). Nome desconhecido 404;
@@ -106,8 +106,10 @@ token e navegue pelas telas (rotas por hash: `#/logs`, `#/plugins`, `#/config`).
 - **Telas:** Visão geral (status, QR, código de pareamento com Copiar, indicador "ao vivo" que
   vira "Desatualizado" quando o WebSocket cai e reconecta com backoff de 1 a 15 s), Logs (filtro
   por nível e pausar), Plugins (enable/disable/reload com confirmação ao desativar e resultado da
-  cascata) e Config (formulário gerado do JSON Schema; secret só como máscara; erros do 400 junto do
-  campo). Abaixo de 768 px a navegação vira a barra inferior.
+  cascata; colunas estado, setup, `dependsOn`, serviços e contribuições, vindas da tabela do core) e
+  Config (lista de plugins ao lado no desktop, `select` abaixo de 768 px; formulário gerado do JSON
+  Schema, com lista editável para array de primitivos e pares chave/valor para `z.record` primitivo;
+  secret só como máscara; erros do 400 junto do campo). Abaixo de 768 px a navegação vira a barra inferior.
 - **Sem caminho fixo:** o plugin injeta `<base href>` no `index.html` e o app chama `api/...`
   relativo a ele; funciona atrás de qualquer prefixo de sessão.
 - **Rotas:** o app só atende GET de arquivos e o fallback do SPA (`index.html`); `api/*` que não

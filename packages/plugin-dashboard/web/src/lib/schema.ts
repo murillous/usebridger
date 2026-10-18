@@ -17,6 +17,8 @@ export interface Field {
   options?: string[];
   /** Tipo dos itens de `list`. */
   item?: 'text' | 'number';
+  /** Tipo do valor de um `z.record` primitivo: o controle segue `json`, mas a tela edita pares chave/valor. */
+  record?: 'text' | 'number';
   default?: unknown;
 }
 
@@ -50,7 +52,7 @@ function unwrap(schema: Json): Json {
     : schema;
 }
 
-function control(schema: Json): Pick<Field, 'control' | 'options' | 'item'> {
+function control(schema: Json): Pick<Field, 'control' | 'options' | 'item' | 'record'> {
   const options = schema['enum'];
   if (Array.isArray(options)) return { control: 'enum', options: options.map(String) };
   if (schema['const'] !== undefined) return { control: 'enum', options: [String(schema['const'])] };
@@ -67,6 +69,13 @@ function control(schema: Json): Pick<Field, 'control' | 'options' | 'item'> {
       const items = isObject(schema['items']) ? typeOf(unwrap(schema['items'])) : undefined;
       if (items === 'string') return { control: 'list', item: 'text' };
       if (items === 'number' || items === 'integer') return { control: 'list', item: 'number' };
+      return { control: 'json' };
+    }
+    case 'object': {
+      const values = schema['additionalProperties'];
+      const kind = isObject(values) ? typeOf(unwrap(values)) : undefined;
+      if (kind === 'string') return { control: 'json', record: 'text' };
+      if (kind === 'number' || kind === 'integer') return { control: 'json', record: 'number' };
       return { control: 'json' };
     }
     default:
@@ -213,4 +222,28 @@ export function groupIssues(
     else orphans.push(issue);
   }
   return { byPath, orphans };
+}
+
+/** Itens da lista -> linhas de texto do editor (uma por item). */
+export const listToRows = (value: unknown): string[] =>
+  Array.isArray(value) ? value.map(String) : [];
+
+/** Linhas do editor -> lista; linha em branco some, como no `parseList`. */
+export function rowsToList(rows: string[], item: 'text' | 'number'): unknown[] {
+  return parseList(rows.join('\n'), item);
+}
+
+/** Record -> pares `[chave, valor]` em texto. */
+export const recordToRows = (value: unknown): [string, string][] =>
+  isObject(value) ? Object.entries(value).map(([k, v]) => [k, String(v)]) : [];
+
+/**
+ * Pares -> record; par sem chave some, vazio vira ausente. shortcut: chave repetida fica com a
+ * última, sem aviso; avisar se a tela passar a aceitar records grandes.
+ */
+export function rowsToRecord(rows: [string, string][], kind: 'text' | 'number'): Json | undefined {
+  const entries = rows
+    .filter(([key]) => key.trim() !== '')
+    .map(([key, value]) => [key, kind === 'number' ? parseNumber(value) : value] as const);
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }

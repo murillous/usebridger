@@ -29,6 +29,8 @@ export interface PluginContextHandle {
   readonly context: PluginContext;
   /** Comandos que o contexto deixou de fora por capability ausente; vão para a tabela de boot. */
   unregisteredCommands?(): readonly UnregisteredCommand[];
+  /** Serviços providos e pontos de extensão contribuídos; vão para a tabela de plugins. */
+  provided?(): { services: readonly string[]; contributions: readonly string[] };
   dispose(reason?: unknown): void | Promise<void>;
 }
 
@@ -200,6 +202,8 @@ const reportBase = ({ definition, origin }: PluginEntry) => ({
   name: definition.name,
   version: definition.version,
   origin,
+  // Só quando há algo, como `unregistered`: a linha de quem não declara nada não muda.
+  ...(Object.keys(definition.dependsOn ?? {}).length > 0 && { dependsOn: definition.dependsOn }),
 });
 
 /** Cria o host de plugins. Não roda nada até `start()`. */
@@ -276,7 +280,14 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
     }
     slot.handle = handle;
     const unregistered = [...(handle.unregisteredCommands?.() ?? [])];
-    return { ...base, status: 'loaded', ...(unregistered.length > 0 && { unregistered }) };
+    const { services = [], contributions = [] } = handle.provided?.() ?? {};
+    return {
+      ...base,
+      status: 'loaded',
+      ...(unregistered.length > 0 && { unregistered }),
+      ...(services.length > 0 && { services }),
+      ...(contributions.length > 0 && { contributions }),
+    };
   }
 
   function fail(

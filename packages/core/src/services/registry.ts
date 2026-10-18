@@ -60,6 +60,8 @@ export interface ServiceRegistry {
   /** Remove os serviços e as contribuições do plugin (teardown, reload e disable). */
   removePlugin(plugin: string): void;
   list(): ProvidedService[];
+  /** Nomes dos serviços providos e dos pontos de extensão com contribuição do plugin (tabela de plugins). */
+  describe(plugin: string): { services: string[]; contributions: string[] };
 }
 
 export interface ServiceRegistryOptions {
@@ -156,6 +158,15 @@ export function createServiceRegistry(options: ServiceRegistryOptions = {}): Ser
 
     list() {
       return [...byName.values()];
+    },
+
+    describe(plugin) {
+      return {
+        services: [...byName.values()].filter((e) => e.plugin === plugin).map((e) => e.name),
+        contributions: [...contributions]
+          .filter(([, entries]) => entries.some((entry) => entry.plugin === plugin))
+          .map(([point]) => point),
+      };
     },
   };
 }

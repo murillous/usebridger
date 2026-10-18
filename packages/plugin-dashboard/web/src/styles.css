@@ -402,6 +402,56 @@ td {
   width: 100%;
 }
 
+/* Config: lista de plugins ao lado no desktop; o select só abaixo de 768 px. */
+.cfg {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.cfg-select {
+  display: none;
+}
+.cfg-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cfg-nav button {
+  min-height: var(--target);
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.cfg-nav button[aria-current="true"] {
+  background: var(--raised);
+  box-shadow: var(--e1);
+  font-weight: 700;
+}
+.editor {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+.editor .row {
+  flex-wrap: nowrap;
+}
+.editor .row .input {
+  flex: 1;
+  min-width: 0;
+}
+.editor > .btn {
+  align-self: flex-start;
+}
+
 .savebar {
   position: sticky;
   bottom: 0;
@@ -460,6 +510,15 @@ td {
   .list > div {
     padding: 8px 0;
     border-top: 1px solid var(--line);
+  }
+  .cfg {
+    display: block;
+  }
+  .cfg-nav {
+    display: none;
+  }
+  .cfg-select {
+    display: flex;
   }
   .savebar {
     bottom: calc(56px + env(safe-area-inset-bottom));

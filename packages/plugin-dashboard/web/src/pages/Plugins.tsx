@@ -28,6 +28,18 @@ function reasonText(reason: SkipReason | undefined): string {
   }
 }
 
+/** Resultado do `setup`: falhou, carregou com comando de fora, carregou inteiro; `—` se nem rodou. */
+function setupText(row: PluginRow): string {
+  if (row.status === 'loaded') {
+    return row.unregistered?.length ? `Parcial (${row.unregistered.length} sem comando)` : 'OK';
+  }
+  return row.reason?.kind === 'setup-failed' ? 'Falhou' : '—';
+}
+
+const list = (items: string[] | undefined): string => (items?.length ? items.join(', ') : '—');
+const deps = (row: PluginRow): string =>
+  list(row.dependsOn && Object.entries(row.dependsOn).map(([name, range]) => `${name} ${range}`));
+
 const errorText = (e: unknown): string =>
   e instanceof ApiError ? `${e.status}: ${e.message}` : 'Falha de rede.';
 
@@ -177,6 +189,10 @@ export function Plugins() {
                   <th>Versão</th>
                   <th>Origem</th>
                   <th>Estado</th>
+                  <th>Setup</th>
+                  <th>dependsOn</th>
+                  <th>Serviços</th>
+                  <th>Contribuições</th>
                   <th>Motivo</th>
                   <th>Ações</th>
                 </tr>
@@ -188,6 +204,10 @@ export function Plugins() {
                     <td className="mono">{row.version}</td>
                     <td>{row.origin}</td>
                     <td>{state(row)}</td>
+                    <td>{setupText(row)}</td>
+                    <td className="mono">{deps(row)}</td>
+                    <td className="mono">{list(row.services)}</td>
+                    <td className="mono">{list(row.contributions)}</td>
                     <td>{reasonText(row.reason)}</td>
                     <td>{actions(row)}</td>
                   </tr>
@@ -202,6 +222,10 @@ export function Plugins() {
                   </div>
                   <div className="mono muted">
                     {row.version} · {row.origin} {reasonText(row.reason)}
+                  </div>
+                  <div className="mono muted">
+                    Setup {setupText(row)} · dependsOn {deps(row)} · serviços {list(row.services)} ·
+                    contribuições {list(row.contributions)}
                   </div>
                   {actions(row)}
                 </div>

@@ -273,6 +273,10 @@ capabilities que faltam, e os com `services` que ninguém provia (`sem ds (servi
 o plugin subiu, mas eles não respondem ([Capability por comando](commands.md#capability-por-comando),
 [Serviço por comando](commands.md#serviço-por-comando)). Na entrada, ficam em `unregistered`.
 
+Ainda na entrada, quando há algo a dizer: `dependsOn` (o do manifesto, nome → faixa; também nas
+linhas ignoradas), e nas carregadas `services` (nomes providos no `setup`) e `contributions`
+(pontos de extensão a que o plugin contribuiu), lidos ao fim do `setup` (ADR 0112).
+
 `host.report()` devolve a tabela atual (reflete reloads).
 
 ### Parada (`stop`)

@@ -224,3 +224,15 @@ describe('serialização segura e erros', () => {
     expect(await res.text()).toHaveLength(300);
   });
 });
+
+describe('campos do core na tabela (M5-4.7)', () => {
+  it('dependsOn sai na linha, carregada ou ignorada', async () => {
+    const { post, get } = await start(true);
+    type Row = { name: string; dependsOn?: Record<string, string> };
+    const find = async () =>
+      ((await (await get('/api/plugins')).json()) as Row[]).find((e) => e.name === 'filho');
+    expect((await find())?.dependsOn).toEqual({ base: '*' });
+    await post('/api/plugins/base/disable');
+    expect((await find())?.dependsOn).toEqual({ base: '*' });
+  });
+});

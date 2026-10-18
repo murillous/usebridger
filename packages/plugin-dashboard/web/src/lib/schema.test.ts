@@ -6,8 +6,12 @@ import {
   groupIssues,
   isDirty,
   leaves,
+  listToRows,
   parseList,
   parseNumber,
+  recordToRows,
+  rowsToList,
+  rowsToRecord,
   unflatten,
 } from './schema.ts';
 
@@ -163,5 +167,56 @@ describe('groupIssues', () => {
     );
     expect(byPath['nested.model']).toEqual(['ruim']);
     expect(orphans).toEqual([{ path: '', message: 'geral' }]);
+  });
+});
+
+describe('controles de lista e record', () => {
+  const rec = buildFields({
+    type: 'object',
+    properties: {
+      numeros: { type: 'object', additionalProperties: { type: 'integer' } },
+      textos: { type: 'object', additionalProperties: { type: 'string' } },
+      livre: { type: 'object' },
+      segredo: { type: 'string', secret: true },
+    },
+  });
+  const byPath = Object.fromEntries(leaves(rec).map((f) => [f.path, f]));
+
+  it('record primitivo guarda o tipo do valor; o resto segue json cru', () => {
+    expect(byPath['numeros']).toMatchObject({ control: 'json', record: 'number' });
+    expect(byPath['textos']).toMatchObject({ control: 'json', record: 'text' });
+    expect(byPath['livre']?.record).toBeUndefined();
+  });
+
+  it('lista: linhas viram itens e voltam', () => {
+    expect(listToRows(['a', 'b'])).toEqual(['a', 'b']);
+    expect(listToRows(undefined)).toEqual([]);
+    expect(rowsToList(['a', '', 'b'], 'text')).toEqual(['a', 'b']);
+    expect(rowsToList(['1', '2.5'], 'number')).toEqual([1, 2.5]);
+  });
+
+  it('record: pares viram objeto; sem chave some; vazio é ausente', () => {
+    expect(recordToRows({ a: 1, b: 'x' })).toEqual([
+      ['a', '1'],
+      ['b', 'x'],
+    ]);
+    expect(
+      rowsToRecord(
+        [
+          ['a', '1'],
+          ['', 'lixo'],
+        ],
+        'number',
+      ),
+    ).toEqual({ a: 1 });
+    expect(rowsToRecord([['a', 'x']], 'text')).toEqual({ a: 'x' });
+    expect(rowsToRecord([], 'text')).toBeUndefined();
+  });
+
+  it('secret continua só máscara e fora do PUT', () => {
+    const fields = leaves(rec);
+    expect(byPath['segredo']?.secret).toBe(true);
+    const out = buildOverrides(fields, {}, { segredo: 'novo', textos: { a: 'b' } }, {});
+    expect(out).toEqual({ textos: { a: 'b' } });
   });
 });
