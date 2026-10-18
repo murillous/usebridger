@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initialLive, type LiveState } from '#web/lib/live.ts';
@@ -11,11 +11,14 @@ const NOW = new Date('2026-05-10T12:00:00').getTime();
 
 // `useMetrics` chama `fetch('api/metrics?days=1')`; cada teste escolhe a resposta.
 let metrics: MetricsResponse | 'erro';
+let metricsCalls: number;
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.setSystemTime(NOW);
   metrics = { available: false };
+  metricsCalls = 0;
   vi.stubGlobal('fetch', async (url: string) => {
+    metricsCalls++;
     if (url !== 'api/metrics?days=1' || metrics === 'erro')
       return new Response('falha', { status: 500 });
     return new Response(JSON.stringify(metrics), { status: 200 });
@@ -24,6 +27,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
@@ -47,6 +51,14 @@ const log = (message: string, over: Partial<LogEntry> = {}): LogEntry => ({
   message,
   ...over,
 });
+// `Kpis` devolve null também enquanto carrega: antes de afirmar a ausência, espera a chamada e a
+// atualização de estado dela.
+const metricsSettled = async () => {
+  await waitFor(() => expect(metricsCalls).toBe(1));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(50);
+  });
+};
 const hora = (ms: number) => new Date(ms).toLocaleTimeString();
 
 const kernelMetrics: MetricsResponse = {
@@ -206,10 +218,9 @@ describe('Overview: pareamento', () => {
   });
 
   it('código de pareamento: Copiar grava na área de transferência e volta ao normal', async () => {
-    const writeText = vi.fn(async () => undefined);
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTimeAsync });
-    // O `setup()` do user-event instala um clipboard próprio; o stub entra depois dele.
-    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    // O `setup()` do user-event instala o clipboard; o espião entra depois dele.
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
     render(
       <Overview
         live={live({ status: status({ status: 'connecting', pairingCode: 'ABCD-1234' }) })}
@@ -224,11 +235,8 @@ describe('Overview: pareamento', () => {
   });
 
   it('falha ao copiar avisa e o código segue visível', async () => {
-    const writeText = vi.fn(async () => {
-      throw new Error('negado');
-    });
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTimeAsync });
-    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('negado'));
     render(
       <Overview
         live={live({ status: status({ status: 'connecting', pairingCode: 'ABCD-1234' }) })}
@@ -246,14 +254,14 @@ describe('Overview: KPIs de Hoje', () => {
   it('sem plugin de métricas a seção some', async () => {
     metrics = { available: false };
     render(<Overview live={live({ status: status({ outboundPending: 4 }) })} />);
-    await vi.advanceTimersByTimeAsync(10);
+    await metricsSettled();
     expect(screen.queryByRole('heading', { name: 'Hoje (UTC)' })).toBeNull();
   });
 
   it('erro na chamada também esconde a seção, sem derrubar o resto', async () => {
     metrics = 'erro';
     render(<Overview live={live({ status: status() })} />);
-    await vi.advanceTimersByTimeAsync(10);
+    await metricsSettled();
     expect(screen.queryByRole('heading', { name: 'Hoje (UTC)' })).toBeNull();
     expect(screen.getByRole('article', { name: 'Bot Luma' })).toBeTruthy();
   });
