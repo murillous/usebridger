@@ -6,8 +6,12 @@ import {
   groupIssues,
   isDirty,
   leaves,
+  listToRows,
   parseList,
   parseNumber,
+  recordToRows,
+  rowsToList,
+  rowsToRecord,
   unflatten,
 } from './schema.ts';
 
@@ -117,8 +121,8 @@ describe('record e messages', () => {
   const fields = leaves(buildFields(rec));
   const stop = new Set(fields.map((f) => f.path));
 
-  it('o record é uma folha json com o valor atual', () => {
-    expect(fields.find((f) => f.path === 'extra')?.control).toBe('json');
+  it('o record primitivo é uma folha record com o valor atual', () => {
+    expect(fields.find((f) => f.path === 'extra')?.control).toBe('record');
     expect(flatten({ modo: 'a', extra: { a: 'b' } }, '', stop)).toEqual({
       modo: 'a',
       extra: { a: 'b' },
@@ -163,5 +167,57 @@ describe('groupIssues', () => {
     );
     expect(byPath['nested.model']).toEqual(['ruim']);
     expect(orphans).toEqual([{ path: '', message: 'geral' }]);
+  });
+});
+
+describe('controles de lista e record', () => {
+  const rec = buildFields({
+    type: 'object',
+    properties: {
+      numeros: { type: 'object', additionalProperties: { type: 'integer' } },
+      textos: { type: 'object', additionalProperties: { type: 'string' } },
+      livre: { type: 'object' },
+      segredo: { type: 'string', secret: true },
+    },
+  });
+  const byPath = Object.fromEntries(leaves(rec).map((f) => [f.path, f]));
+
+  it('record primitivo vira control record com o tipo do valor; o resto segue json cru', () => {
+    expect(byPath['numeros']).toMatchObject({ control: 'record', item: 'number' });
+    expect(byPath['textos']).toMatchObject({ control: 'record', item: 'text' });
+    expect(byPath['livre']?.control).toBe('json');
+  });
+
+  it('lista: linhas viram itens e voltam', () => {
+    expect(listToRows(['a', 'b'])).toEqual(['a', 'b']);
+    expect(listToRows(undefined)).toEqual([]);
+    expect(rowsToList(['a', '', 'b'], 'text')).toEqual(['a', 'b']);
+    expect(rowsToList(['1', '2.5'], 'number')).toEqual([1, 2.5]);
+    expect(rowsToList([], 'text')).toBeUndefined();
+  });
+
+  it('record: pares viram objeto; sem chave some; vazio é ausente', () => {
+    expect(recordToRows({ a: 1, b: 'x' })).toEqual([
+      ['a', '1'],
+      ['b', 'x'],
+    ]);
+    expect(
+      rowsToRecord(
+        [
+          ['a', '1'],
+          ['', 'lixo'],
+        ],
+        'number',
+      ),
+    ).toEqual({ a: 1 });
+    expect(rowsToRecord([['a', 'x']], 'text')).toEqual({ a: 'x' });
+    expect(rowsToRecord([], 'text')).toBeUndefined();
+  });
+
+  it('secret continua só máscara e fora do PUT', () => {
+    const fields = leaves(rec);
+    expect(byPath['segredo']?.secret).toBe(true);
+    const out = buildOverrides(fields, {}, { segredo: 'novo', textos: { a: 'b' } }, {});
+    expect(out).toEqual({ textos: { a: 'b' } });
   });
 });

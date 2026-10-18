@@ -49,6 +49,8 @@ interface ReportBase {
   readonly version: string;
   /** `'config'` ou caminho do módulo (ver `PluginEntry`). */
   readonly origin: string;
+  /** `dependsOn` do manifesto (nome → faixa semver). Só aparece quando há alguma. */
+  readonly dependsOn?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -72,6 +74,10 @@ export type PluginReportEntry =
        * aparece quando há algum: o plugin carregou, mas parte dele não responde neste transport.
        */
       readonly unregistered?: readonly UnregisteredCommand[];
+      /** Serviços que o plugin proveu no `setup`. Só aparece quando há algum. */
+      readonly services?: readonly string[];
+      /** Pontos de extensão a que o plugin contribuiu no `setup`. Só aparece quando há algum. */
+      readonly contributions?: readonly string[];
     })
   | (ReportBase & { readonly status: 'skipped'; readonly reason: PluginSkipReason });
 

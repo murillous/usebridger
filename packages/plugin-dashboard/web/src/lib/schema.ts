@@ -3,7 +3,15 @@ import type { ConfigIssue } from './types.ts';
 type Json = Record<string, unknown>;
 export type FlatValues = Record<string, unknown>;
 
-export type Control = 'text' | 'number' | 'integer' | 'boolean' | 'enum' | 'list' | 'json';
+export type Control =
+  | 'text'
+  | 'number'
+  | 'integer'
+  | 'boolean'
+  | 'enum'
+  | 'list'
+  | 'record'
+  | 'json';
 
 export interface Field {
   /** Caminho com pontos (`openai.model`), o mesmo `path` das issues do servidor. */
@@ -15,7 +23,7 @@ export interface Field {
   /** Campo `secret`: só máscara, nunca entra no PUT. */
   secret: boolean;
   options?: string[];
-  /** Tipo dos itens de `list`. */
+  /** Tipo dos itens de `list` e dos valores de `record`. */
   item?: 'text' | 'number';
   default?: unknown;
 }
@@ -69,6 +77,13 @@ function control(schema: Json): Pick<Field, 'control' | 'options' | 'item'> {
       if (items === 'number' || items === 'integer') return { control: 'list', item: 'number' };
       return { control: 'json' };
     }
+    case 'object': {
+      const values = schema['additionalProperties'];
+      const kind = isObject(values) ? typeOf(unwrap(values)) : undefined;
+      if (kind === 'string') return { control: 'record', item: 'text' };
+      if (kind === 'number' || kind === 'integer') return { control: 'record', item: 'number' };
+      return { control: 'json' };
+    }
     default:
       return { control: 'json' };
   }
@@ -110,7 +125,7 @@ export function leaves(nodes: Node[]): Field[] {
 
 /**
  * `{a:{b:1}}` -> `{'a.b':1}`. Só desce em objetos simples; array e valor ficam folhas, e `stop`
- * lista os caminhos que são campos do form (um `z.record` é uma folha `json`, não várias chaves).
+ * lista os caminhos que são campos do form (um `z.record` é uma folha `record`, não várias chaves).
  */
 export function flatten(value: unknown, prefix = '', stop?: ReadonlySet<string>): FlatValues {
   if (!isObject(value) || (prefix !== '' && stop?.has(prefix))) {
@@ -213,4 +228,29 @@ export function groupIssues(
     else orphans.push(issue);
   }
   return { byPath, orphans };
+}
+
+/** Itens da lista -> linhas de texto do editor (uma por item). */
+export const listToRows = (value: unknown): string[] =>
+  Array.isArray(value) ? value.map(String) : [];
+
+/** Linhas do editor -> lista; linha em branco some, como no `parseList`; vazia vira ausente, como o record. */
+export function rowsToList(rows: string[], item: 'text' | 'number'): unknown[] | undefined {
+  const list = parseList(rows.join('\n'), item);
+  return list.length > 0 ? list : undefined;
+}
+
+/** Record -> pares `[chave, valor]` em texto. */
+export const recordToRows = (value: unknown): [string, string][] =>
+  isObject(value) ? Object.entries(value).map(([k, v]) => [k, String(v)]) : [];
+
+/**
+ * Pares -> record; par sem chave some, vazio vira ausente. shortcut: chave repetida fica com a
+ * última, sem aviso; avisar se a tela passar a aceitar records grandes.
+ */
+export function rowsToRecord(rows: [string, string][], kind: 'text' | 'number'): Json | undefined {
+  const entries = rows
+    .filter(([key]) => key.trim() !== '')
+    .map(([key, value]) => [key, kind === 'number' ? parseNumber(value) : value] as const);
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }

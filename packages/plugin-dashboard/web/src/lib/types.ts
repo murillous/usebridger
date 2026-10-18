@@ -42,7 +42,14 @@ export interface PluginRow {
   origin: string;
   status: 'loaded' | 'skipped';
   reason?: SkipReason;
-  unregistered?: boolean;
+  /** Comandos que o plugin pediu e o kernel deixou de fora (`UnregisteredCommand` do core). */
+  unregistered?: { command: string }[];
+  /** `dependsOn` do manifesto: nome → faixa semver. */
+  dependsOn?: Record<string, string>;
+  /** Serviços providos no `setup`. */
+  services?: string[];
+  /** Pontos de extensão a que o plugin contribuiu. */
+  contributions?: string[];
 }
 
 export interface ChangeResult {

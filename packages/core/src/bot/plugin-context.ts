@@ -369,6 +369,7 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
     return {
       context,
       unregisteredCommands: () => unregistered,
+      provided: () => deps.services.describe(name),
       dispose(reason?: unknown): void {
         lifetime.expire(
           reason ?? new PluginHostStateError(`plugin "${name}": contexto descartado`),
