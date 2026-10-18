@@ -81,7 +81,7 @@ describe('GET /api/metrics', () => {
     expect(byName['lembretes.atraso_ms']).toMatchObject([{ type: 'histogram', count: 1 }]);
   });
 
-  it('devolve o plugin dono de cada métrica declarada', async () => {
+  it('devolve o plugin dono de cada métrica (core para as do kernel)', async () => {
     const dono = definePlugin({
       name: 'dono',
       version: '1.0.0',
@@ -90,15 +90,12 @@ describe('GET /api/metrics', () => {
       setup(ctx) {
         const m = ctx.services.get('metrics');
         m.counter('dono.x', {});
-        m.declareOwner('dono.x', 'dono');
-        m.counter('sem.dono', {});
       },
     });
     const { get } = await start([metrics, dono]);
     const body = (await (await get('/api/metrics?days=1')).json()) as MetricsView;
     const plugin = Object.fromEntries(body.metrics.map((m) => [m.name, m.plugin]));
     expect(plugin['dono.x']).toBe('dono');
-    expect(plugin['sem.dono']).toBeUndefined();
   });
 
   it('plugin-metrics sem names responde available: false com reason version, não 500', async () => {

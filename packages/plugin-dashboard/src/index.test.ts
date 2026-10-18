@@ -109,6 +109,15 @@ describe('autenticação', () => {
     expect((await fetch(`${base}/api/status`, { headers: { cookie: c } })).status).toBe(401);
   });
 
+  it('status traz a fila de saída ao vivo', async () => {
+    const { base, cookie } = await start();
+    const c = await cookie();
+    const body = (await (await fetch(`${base}/api/status`, { headers: { cookie: c } })).json()) as {
+      outboundPending: number;
+    };
+    expect(body.outboundPending).toBe(0);
+  });
+
   it('status traz as versões do core e do dashboard', async () => {
     const { base, cookie } = await start();
     const res = await fetch(`${base}/api/status`, { headers: { cookie: await cookie() } });

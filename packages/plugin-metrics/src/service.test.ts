@@ -106,3 +106,47 @@ describe('names', () => {
     await expect(runtime.service.names({ from: 'x', to: range.to })).rejects.toThrow(TypeError);
   });
 });
+
+describe('gauge', () => {
+  it('guarda o último valor e o máximo do dia, em memória e depois do flush', async () => {
+    const { runtime } = make(() => []);
+    const g = runtime.service;
+    g.gauge('fila', {}, 3);
+    g.gauge('fila', {}, 9);
+    g.gauge('fila', {}, 2);
+    expect(await g.query('fila', range)).toMatchObject([{ type: 'gauge', last: 2, max: 9 }]);
+    await runtime.flush();
+    g.gauge('fila', {}, 4);
+    expect(await g.query('fila', range)).toMatchObject([{ type: 'gauge', last: 4, max: 9 }]);
+    await runtime.flush();
+    expect(await g.query('fila', range)).toMatchObject([{ type: 'gauge', last: 4, max: 9 }]);
+    expect(runtime.totals()).toEqual([]); // gauge fica fora do acumulado do /metrics
+  });
+
+  it('rejeita valor negativo e mistura de tipos', () => {
+    const { runtime } = make(() => []);
+    expect(() => runtime.service.gauge('fila', {}, -1)).toThrow(TypeError);
+    runtime.service.counter('c', {});
+    expect(() => runtime.service.gauge('c', {}, 1)).toThrow(TypeError);
+  });
+});
+
+describe('dono da métrica', () => {
+  it('grava o caller na primeira escrita, core no serviço do plugin, e limpa no release', () => {
+    const { runtime } = make(() => []);
+    runtime.scoped('lembretes').counter('lembretes.x', {});
+    runtime.scoped('outro').counter('lembretes.x', {});
+    runtime.service.counter('bridger.y', {});
+    expect(runtime.service.ownerOf('lembretes.x')).toBe('lembretes');
+    expect(runtime.service.ownerOf('bridger.y')).toBe('core');
+    runtime.release('lembretes');
+    expect(runtime.service.ownerOf('lembretes.x')).toBeUndefined();
+    expect(runtime.service.ownerOf('bridger.y')).toBe('core');
+  });
+
+  it('escrita inválida não vira dono', () => {
+    const { runtime } = make(() => []);
+    expect(() => runtime.scoped('p').counter('m', {}, -1)).toThrow(TypeError);
+    expect(runtime.service.ownerOf('m')).toBeUndefined();
+  });
+});

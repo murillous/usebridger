@@ -36,6 +36,15 @@ O `declare module` precisa mirar `'@usebridger/core'`, o mesmo especificador que
 importa. `provide` só aceita nomes declarados em `Services` e a implementação com o tipo
 declarado; nome desconhecido não compila.
 
+## Serviço com escopo por quem chama
+
+Quando o serviço precisa saber quem o usa (por exemplo, para atribuir dados ao plugin), o
+provedor usa `ctx.services.provideScoped(name, factory, release?)` no lugar de `provide`. A
+`factory(caller)` roda no primeiro `get` de cada plugin e a instância fica guardada por
+`(name, caller)`; quem consome continua com `get(name)` e o mesmo tipo. `release(caller)` roda,
+sem lançar, quando o caller sai (teardown, reload ou disable) e para cada instância quando o
+provedor sai. Detalhes no [ADR 0116](../../../docs/adr/0116-servico-com-escopo-por-chamador.md).
+
 ## Consumir
 
 Quem consome declara `dependsOn` no provedor (o boot carrega as dependências antes) e chama

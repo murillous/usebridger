@@ -312,6 +312,10 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
           guard('services.provide');
           services.provide(service, implementation);
         },
+        provideScoped(service, factory, release) {
+          guard('services.provideScoped');
+          services.provideScoped(service, factory, release);
+        },
         get: (service) => services.get(service),
         has: (service) => services.has(service),
         contribute(point, contribution) {

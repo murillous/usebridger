@@ -3,10 +3,10 @@ import {
   byLabel,
   catalog,
   daysBetween,
-  fmtCount,
   fmtInt,
   fmtMs,
   KERNEL,
+  maxOf,
   percentile,
   percentilePerDay,
   perDay,
@@ -136,6 +136,14 @@ function Breakdown({ rows, label }: { rows: MetricRowView[]; label: string }) {
     </div>
   );
 }
+
+/** Valor da tabela: p95 do histograma, máximo do gauge (contagem, sem "ms") ou soma do contador. */
+const cell = (m: { type: string }, p95: number | undefined, n: number): string =>
+  m.type === 'histogram'
+    ? `p95 ${fmtMs(p95)}`
+    : m.type === 'gauge'
+      ? `máx ${fmtInt(n)}`
+      : fmtInt(n);
 
 function Missing({ outdated }: { outdated: boolean }) {
   if (outdated) {
@@ -267,24 +275,17 @@ function Panels({ data }: { data: Extract<MetricsResponse, { available: true }> 
           id="p-queue"
           title="Fila de saída"
           metric={KERNEL.pending}
-          value={`p95 ${fmtCount(percentile(onToday(pending), 0.95))}`}
+          value={`máx ${fmtInt(maxOf(onToday(pending)))}`}
         >
           <BarChart
-            title="Fila de saída, p95 de itens pendentes por dia"
-            points={percentilePerDay(pending, days, 0.95).map((p) => ({
-              ...p,
-              text: p.text.replace(' ms', ''),
-            }))}
+            title="Fila de saída, máximo de itens pendentes por dia"
+            points={perDay(pending, days)}
             today={data.to}
             tone="agent"
           />
-          <Details summary="Percentis (período)">
-            <p className="muted">
-              p50 {fmtCount(percentile(pending, 0.5))} · p95 {fmtCount(percentile(pending, 0.95))} ·
-              p99 {fmtCount(percentile(pending, 0.99))}. Itens pendentes no instante de cada envio;
-              limite superior do balde do histograma.
-            </p>
-          </Details>
+          <p className="muted">
+            Amostra a cada flush do plugin-metrics; o painel mostra o maior valor visto no dia.
+          </p>
         </Panel>
       </div>
 
@@ -321,12 +322,8 @@ function Panels({ data }: { data: Extract<MetricsResponse, { available: true }> 
                       <span className="chip mono">{m.type}</span>
                     </td>
                     <td className="muted">{m.labels.join(', ') || '-'}</td>
-                    <td className="num">
-                      {m.type === 'histogram' ? `p95 ${fmtMs(m.todayP95)}` : fmtInt(m.today)}
-                    </td>
-                    <td className="num">
-                      {m.type === 'histogram' ? `p95 ${fmtMs(m.p95)}` : fmtInt(m.total)}
-                    </td>
+                    <td className="num">{cell(m, m.todayP95, m.today)}</td>
+                    <td className="num">{cell(m, m.p95, m.total)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -340,9 +337,7 @@ function Panels({ data }: { data: Extract<MetricsResponse, { available: true }> 
                   </div>
                   <div className="mono muted">
                     {m.plugin ?? '-'} · {fmtInt(m.series)} séries · hoje{' '}
-                    {m.type === 'histogram' ? `p95 ${fmtMs(m.todayP95)}` : fmtInt(m.today)} ·{' '}
-                    {days.length}d{' '}
-                    {m.type === 'histogram' ? `p95 ${fmtMs(m.p95)}` : fmtInt(m.total)}
+                    {cell(m, m.todayP95, m.today)} · {days.length}d {cell(m, m.p95, m.total)}
                   </div>
                 </div>
               ))}

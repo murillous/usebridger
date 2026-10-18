@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   byLabel,
+  catalog,
   daysBetween,
-  fmtCount,
   fmtMs,
+  maxOf,
   percentile,
   perDay,
   summarize,
@@ -99,9 +100,24 @@ describe('dono e fila de saída', () => {
     expect(summarize(data).map((s) => s.plugin)).toEqual(['core', undefined]);
   });
 
-  it('fmtCount formata contagem sem unidade e o balde +Inf', () => {
-    expect(fmtCount(undefined)).toBe('-');
-    expect(fmtCount(25)).toBe('25');
-    expect(fmtCount(Number.POSITIVE_INFINITY)).toBe('> 30.000');
+  it('gauge: máximo do dia no resumo e na tabela, sem somar', () => {
+    const g = (day: string, max: number): MetricRowView => ({
+      type: 'gauge',
+      day,
+      labels: {},
+      last: 0,
+      max,
+    });
+    const rows = [g('2026-10-16', 7), g('2026-10-17', 3)];
+    expect(maxOf(rows)).toBe(7);
+    expect(perDay(rows, ['2026-10-16', '2026-10-17']).map((p) => p.value)).toEqual([7, 3]);
+    const data: MetricsResponse = {
+      available: true,
+      from: '2026-10-16',
+      to: '2026-10-17',
+      metrics: [{ name: 'fila', rows }],
+    };
+    expect(summarize(data)[0]).toMatchObject({ type: 'gauge', total: 7 });
+    expect(catalog(data)[0]).toMatchObject({ today: 3, total: 7 });
   });
 });

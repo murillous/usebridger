@@ -64,6 +64,18 @@ export interface ServiceAccess {
    * `setup`: o boot segue a ordem do `dependsOn`, então a dependência já rodou o dela.
    */
   get<K extends ServiceName>(name: K): Services[K];
+  /**
+   * Como `provide`, mas o serviço tem escopo por quem chama: `factory(caller)` roda no primeiro
+   * `get` de cada plugin e a instância fica guardada por `(nome, caller)`. Quem consome usa o
+   * mesmo tipo `Services[K]`. Útil quando o serviço precisa saber quem o usa (ADR 0116).
+   * `release(caller)` roda, sem lançar, para cada instância criada quando o caller sai
+   * (`removePlugin`) ou quando o provedor sai.
+   */
+  provideScoped<K extends ServiceName>(
+    name: K,
+    factory: (caller: string) => Services[K],
+    release?: (caller: string) => void,
+  ): void;
   has(name: ServiceName): boolean;
   /**
    * Acrescenta uma contribuição ao ponto de extensão, atribuída a este plugin: sai sozinha no

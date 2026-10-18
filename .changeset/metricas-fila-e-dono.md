@@ -2,4 +2,4 @@
 "@usebridger/plugin-metrics": minor
 ---
 
-Nova métrica `bridger.outbound.pending` (histograma de itens pendentes na fila de saída, amostrado a cada envio) e dono de cada métrica no serviço `metrics`: `declareOwner(nome, plugin)` e `ownerOf(nome)`. As métricas do kernel saem como `core`.
+Serviço `metrics` com escopo por plugin (ADR 0116): `ownerOf(nome)` devolve o plugin que gravou a métrica primeiro (`core` para o kernel) e o dono sai com o plugin. Novo `gauge(nome, rótulos, valor)` (último valor e máximo do dia, ADR 0117) e a métrica `bridger.outbound.pending`, a fila de saída amostrada a cada flush.

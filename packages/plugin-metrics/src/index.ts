@@ -41,19 +41,15 @@ export const metrics: PluginDefinition = definePlugin({
       maxSeriesPerMetric: ctx.config.maxSeriesPerMetric,
       retentionDays: ctx.config.retentionDays,
     });
-    ctx.services.provide('metrics', runtime.service);
+    // Serviço com escopo (ADR 0116): cada plugin recebe uma instância que grava o nome dele como dono.
+    ctx.services.provideScoped(
+      'metrics',
+      (caller) => runtime.scoped(caller),
+      (caller) => runtime.release(caller),
+    );
+    // Decisão explícita: o que o próprio plugin-metrics grava (observadores do kernel) é do `core`,
+    // não do plugin `metrics`, para a coluna "Plugin" separar kernel de plugin de terceiros.
     const m = runtime.service;
-    // Métricas do kernel: o dono é o rótulo "core" (ver ADR 0107).
-    for (const name of [
-      'bridger.messages.handled',
-      'bridger.messages.handle_duration_ms',
-      'bridger.outbound.sent',
-      'bridger.outbound.pending',
-      'bridger.active.users',
-      'bridger.active.groups',
-    ]) {
-      m.declareOwner(name, 'core');
-    }
 
     const active = createActiveTracker({
       now: Date.now,
@@ -61,6 +57,13 @@ export const metrics: PluginDefinition = definePlugin({
     });
     // Os ativos entram no agregado só aqui, como delta: o flush nunca soma a mesma contagem duas vezes.
     const flush = async (): Promise<void> => {
+      try {
+        // Fila de saída amostrada no timer, não no envio: fila pausada ou ociosa também gera amostra.
+        const { high, normal, low } = ctx.stats().outbound.pending;
+        m.gauge('bridger.outbound.pending', {}, high + normal + low);
+      } catch (error) {
+        ctx.log.error('falha ao amostrar a fila de saída', { error });
+      }
       try {
         active.sync();
       } catch (error) {
@@ -91,10 +94,6 @@ export const metrics: PluginDefinition = definePlugin({
         status: s.status,
         ...(s.chatType === undefined ? {} : { chatType: s.chatType }),
       });
-      // Itens pendentes na fila de saída (todas as prioridades) no instante do envio. Amostrado aqui,
-      // porque o serviço não tem gauge; fila ociosa não gera amostra, e o pico é o que importa.
-      const { high, normal, low } = ctx.stats().outbound.pending;
-      m.observe('bridger.outbound.pending', {}, high + normal + low);
     });
 
     // Gauges lidos no scrape: filas de entrada e de saída (saúde da fila) e ativos do dia.

@@ -117,3 +117,61 @@ describe('createServiceRegistry', () => {
     expect(() => two.forPlugin('p').provide('test.other', 'two')).not.toThrow();
   });
 });
+
+describe('serviço com escopo (provideScoped)', () => {
+  it('cria uma instância por caller, guardada, com o nome do caller', () => {
+    const registry = createServiceRegistry();
+    const calls: string[] = [];
+    registry.forPlugin('provedor').provideScoped('test.other', (caller) => {
+      calls.push(caller);
+      return `para ${caller}`;
+    });
+    const a = registry.forPlugin('a');
+    const b = registry.forPlugin('b');
+    expect(a.get('test.other')).toBe('para a');
+    expect(a.get('test.other')).toBe('para a');
+    expect(b.get('test.other')).toBe('para b');
+    expect(calls).toEqual(['a', 'b']);
+    expect(a.has('test.other')).toBe(true);
+  });
+
+  it('conflita com provide do mesmo nome', () => {
+    const registry = createServiceRegistry();
+    registry.forPlugin('p').provide('test.other', 'x');
+    expect(() => registry.forPlugin('q').provideScoped('test.other', () => 'y')).toThrow(
+      ServiceConflictError,
+    );
+  });
+
+  it('removePlugin(caller) descarta só a instância dele e chama o release', () => {
+    const registry = createServiceRegistry();
+    const released: string[] = [];
+    let n = 0;
+    registry.forPlugin('provedor').provideScoped(
+      'test.other',
+      (caller) => `${caller}#${++n}`,
+      (caller) => void released.push(caller),
+    );
+    expect(registry.forPlugin('a').get('test.other')).toBe('a#1');
+    expect(registry.forPlugin('b').get('test.other')).toBe('b#2');
+    registry.removePlugin('a');
+    expect(released).toEqual(['a']);
+    expect(registry.forPlugin('b').get('test.other')).toBe('b#2');
+    expect(registry.forPlugin('a').get('test.other')).toBe('a#3'); // instância nova
+  });
+
+  it('removePlugin(provedor) descarta todas as instâncias e o serviço', () => {
+    const registry = createServiceRegistry();
+    const released: string[] = [];
+    registry.forPlugin('provedor').provideScoped(
+      'test.other',
+      (caller) => caller,
+      (caller) => void released.push(caller),
+    );
+    registry.forPlugin('a').get('test.other');
+    registry.forPlugin('b').get('test.other');
+    registry.removePlugin('provedor');
+    expect(released.sort()).toEqual(['a', 'b']);
+    expect(() => registry.forPlugin('a').get('test.other')).toThrow(ServiceNotFoundError);
+  });
+});
