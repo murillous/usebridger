@@ -8,13 +8,18 @@ import type { z } from '@usebridger/core/zod';
 import { sameOrigin } from '#auth.ts';
 import { readLimited } from '#body.ts';
 
-// Contrato do ponto `dashboard.tabs` (ADR 0108). Quem contribui importa só estes tipos.
+// Contrato do ponto `dashboard.tabs` (ADRs 0108, 0113 e 0118). Quem contribui importa só estes tipos.
+
+/** Cor do valor de um `stats`: `warn` para atenção (atrasado), `danger` para falha, `ok` para sucesso. */
+export type StatTone = 'ok' | 'warn' | 'danger';
 
 export interface StatItem {
   label: string;
   value: string | number;
   /** Texto menor sob o valor (unidade, variação). */
   hint?: string;
+  /** Sem ele, cor neutra. Tom desconhecido também vira neutro (ADR 0118). */
+  tone?: StatTone;
 }
 
 export interface TableColumn {
@@ -43,23 +48,31 @@ export interface TableAction {
   run(input: { row: TableRow }): Promise<void>;
 }
 
-export type DashboardWidget =
-  | { kind: 'stats'; id: string; load(): Promise<StatItem[]> }
-  | {
-      kind: 'table';
-      id: string;
-      columns: TableColumn[];
-      load(q: { cursor?: string }): Promise<{ rows: TableRow[]; cursor?: string }>;
-      actions?: TableAction[];
-    }
-  | {
-      kind: 'series';
-      id: string;
-      title?: string;
-      load(q: { days: number }): Promise<SeriesPoint[]>;
-    }
-  | { kind: 'form'; id: string; schema: z.ZodType; submit(input: unknown): Promise<void> }
-  | { kind: 'text'; id: string; markdown: string };
+/** Campos de todo widget. `title` é o título do cartão; sem ele, o widget não tem título (ADR 0118). */
+interface WidgetBase {
+  id: string;
+  title?: string;
+}
+
+export type DashboardWidget = WidgetBase &
+  (
+    | { kind: 'stats'; load(): Promise<StatItem[]> }
+    | {
+        kind: 'table';
+        columns: TableColumn[];
+        load(q: { cursor?: string }): Promise<{ rows: TableRow[]; cursor?: string }>;
+        actions?: TableAction[];
+      }
+    | { kind: 'series'; load(q: { days: number }): Promise<SeriesPoint[]> }
+    | {
+        kind: 'form';
+        schema: z.ZodType;
+        /** Rótulo do botão de envio; sem ele, "Enviar". */
+        submitLabel?: string;
+        submit(input: unknown): Promise<void>;
+      }
+    | { kind: 'text'; markdown: string }
+  );
 
 export interface DashboardTab {
   /** `[a-z0-9-]{1,40}`, único dentro do plugin. */
@@ -95,6 +108,17 @@ const validRow = (r: unknown): boolean => isRecord(r) && typeof r['id'] === 'str
 
 const text = (body: string, status: number): Response => new Response(body, { status });
 const gone = (): Response => text('aba não está mais disponível', 404);
+
+const TONES = new Set<unknown>(['ok', 'warn', 'danger']);
+// Tom fora da lista (plugin feito para um dashboard mais novo, ou erro) não derruba o item: só some.
+const toneless = (s: StatItem): StatItem => {
+  if (s.tone === undefined || TONES.has(s.tone)) return s;
+  const { tone: _, ...rest } = s;
+  return rest;
+};
+// Campo opcional de texto: o que não é string some do manifesto em vez de chegar ao browser.
+const optText = (key: string, value: unknown) =>
+  typeof value === 'string' ? { [key]: value } : {};
 
 const isFn = (value: unknown): boolean => typeof value === 'function';
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -211,11 +235,11 @@ export function registerTabRoutes(
   };
 
   const manifestWidget = (w: DashboardWidget) => {
+    const base = { kind: w.kind, id: w.id, ...optText('title', w.title) };
     switch (w.kind) {
       case 'table':
         return {
-          kind: w.kind,
-          id: w.id,
+          ...base,
           columns: w.columns,
           actions: (w.actions ?? []).map(({ id, label, confirm }) => ({
             id,
@@ -225,17 +249,15 @@ export function registerTabRoutes(
         };
       case 'form':
         return {
-          kind: w.kind,
-          id: w.id,
+          ...base,
+          ...optText('submitLabel', w.submitLabel),
           // Mascarado como na Config: o `default` de campo secret não sai no manifesto.
           schema: maskedJsonSchema(w.schema),
         };
       case 'text':
-        return { kind: w.kind, id: w.id, markdown: w.markdown };
-      case 'series':
-        return { kind: w.kind, id: w.id, title: w.title };
+        return { ...base, markdown: w.markdown };
       default:
-        return { kind: w.kind, id: w.id };
+        return base;
     }
   };
 
@@ -325,7 +347,9 @@ export function registerTabRoutes(
       try {
         switch (widget.kind) {
           case 'stats':
-            return Response.json(cut(await widget.load(), MAX_STATS, hit, validStat));
+            return Response.json(
+              cut<StatItem>(await widget.load(), MAX_STATS, hit, validStat).map(toneless),
+            );
           case 'series':
             return Response.json(
               cut(

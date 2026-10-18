@@ -149,10 +149,18 @@ const lembretes: DashboardTab = {
   id: 'lembretes', // [a-z0-9-]{1,40}; a chave pública é "reminders/lembretes"
   title: 'Lembretes',
   widgets: [
-    { kind: 'stats', id: 'resumo', load: async () => [{ label: 'Pendentes', value: 3 }] },
+    {
+      kind: 'stats',
+      id: 'resumo',
+      load: async () => [
+        { label: 'Pendentes', value: 3 },
+        { label: 'Atrasados', value: 1, tone: 'warn' }, // tom: 'ok' | 'warn' | 'danger'
+      ],
+    },
     {
       kind: 'table',
       id: 'lista',
+      title: 'Próximos', // qualquer widget aceita title
       columns: [
         { key: 'texto', label: 'Texto' }, // a primeira coluna vira a linha principal no celular
         { key: 'quando', label: 'Quando' },
@@ -166,6 +174,8 @@ const lembretes: DashboardTab = {
     {
       kind: 'form',
       id: 'novo',
+      title: 'Novo lembrete',
+      submitLabel: 'Agendar', // sem ele, "Enviar"
       schema: z.object({ texto: z.string().min(3), minutos: z.number().int().min(1) }),
       submit: async (input) => criar(input),
     },
@@ -186,11 +196,15 @@ export const reminders = definePlugin({
 
 | Widget   | O plugin entrega                                        | O dashboard desenha                                              |
 | -------- | ------------------------------------------------------- | ---------------------------------------------------------------- |
-| `stats`  | `load(): StatItem[]` (`label`, `value`, `hint?`)        | Cartões; até 3 por linha no celular                              |
+| `stats`  | `load(): StatItem[]` (`label`, `value`, `hint?`, `tone?`) | Cartões; até 3 por linha no celular; `tone` (`ok`, `warn`, `danger`) colore o valor, e tom desconhecido vira neutro |
 | `table`  | `columns`, `load({ cursor })`, `actions?`               | Tabela; no celular vira lista (1ª coluna em cima, o resto em mono) |
-| `series` | `load({ days })`: `SeriesPoint[]` (`label`, `value`); `title?` ([ADR 0113](../../../docs/adr/0113-contrato-das-abas-do-dashboard-complemento.md)) | Gráfico de linha com `role="img"` e rótulo; seletor 7/30/90 dias |
-| `form`   | `schema` Zod e `submit(input)`                          | Formulário do mesmo gerador da Config; campo `secret` é entrada de senha, vazia, enviada no corpo    |
+| `series` | `load({ days })`: `SeriesPoint[]` (`label`, `value`)     | Gráfico de linha com `role="img"` e rótulo; seletor 7/30/90 dias |
+| `form`   | `schema` Zod, `submit(input)` e `submitLabel?`          | Formulário do mesmo gerador da Config; campo `secret` é entrada de senha, vazia, enviada no corpo    |
 | `text`   | `markdown`                                              | Texto puro: hoje o `markdown` não é renderizado (sem negrito, links ou listas) |
+
+Todo widget aceita `title?`: o dashboard desenha o título sobre o widget e o usa como rótulo da
+seção; a `series` o põe dentro do cartão, com "Série" quando falta
+([ADR 0118](../../../docs/adr/0118-titulo-tom-e-rotulo-nos-widgets-das-abas.md)).
 
 Rotas (sessão e `Origin` do mesmo host nos `POST`, como no resto):
 

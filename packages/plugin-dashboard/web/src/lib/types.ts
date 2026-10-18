@@ -115,12 +115,13 @@ export interface TabAction {
   confirm: boolean;
 }
 
-export type TabWidget =
-  | { kind: 'stats'; id: string }
-  | { kind: 'table'; id: string; columns: { key: string; label: string }[]; actions: TabAction[] }
-  | { kind: 'series'; id: string; title?: string }
-  | { kind: 'form'; id: string; schema: Record<string, unknown> }
-  | { kind: 'text'; id: string; markdown: string };
+export type TabWidget = { id: string; title?: string } & (
+  | { kind: 'stats' }
+  | { kind: 'table'; columns: { key: string; label: string }[]; actions: TabAction[] }
+  | { kind: 'series' }
+  | { kind: 'form'; schema: Record<string, unknown>; submitLabel?: string }
+  | { kind: 'text'; markdown: string }
+);
 
 export interface TabView {
   key: string;
@@ -136,6 +137,7 @@ export interface StatItem {
   label: string;
   value: string | number;
   hint?: string;
+  tone?: 'ok' | 'warn' | 'danger';
 }
 export interface SeriesPoint {
   label: string;
