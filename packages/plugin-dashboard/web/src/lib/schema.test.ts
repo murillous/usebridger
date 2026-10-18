@@ -193,6 +193,7 @@ describe('controles de lista e record', () => {
     expect(listToRows(undefined)).toEqual([]);
     expect(rowsToList(['a', '', 'b'], 'text')).toEqual(['a', 'b']);
     expect(rowsToList(['1', '2.5'], 'number')).toEqual([1, 2.5]);
+    expect(rowsToList([], 'text')).toBeUndefined();
   });
 
   it('record: pares viram objeto; sem chave some; vazio é ausente', () => {
