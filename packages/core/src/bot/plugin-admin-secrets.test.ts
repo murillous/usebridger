@@ -86,7 +86,7 @@ describe('ctx.admin.config: segredos', () => {
     expect(String(error)).not.toContain(VALUE);
   });
 
-  it('clearSecret sobre plugin desligado grava a remoção e o reload rejeita; enable sobe', async () => {
+  it('clearSecret e setSecret sobre plugin desligado gravam e pulam o reload; enable sobe', async () => {
     const storage = await seeded(keyA);
     const { bot, admin } = setup({
       storage,
@@ -95,10 +95,8 @@ describe('ctx.admin.config: segredos', () => {
     });
     await bot.start();
     expect(bot.plugins().find((e) => e.name === 'other')?.status).toBe('skipped');
-    // O host só recarrega plugin carregado: o reload rejeita, mas a remoção já foi gravada.
-    await expect(admin().config.clearSecret('other', 'apiKey')).rejects.toBeInstanceOf(
-      PluginHostStateError,
-    );
+    // Plugin desligado: grava e pula o reload, sem erro.
+    await expect(admin().config.clearSecret('other', 'apiKey')).resolves.toBeUndefined();
     await admin().plugins.enable('other');
     expect(bot.plugins().find((e) => e.name === 'other')?.status).toBe('loaded');
   });

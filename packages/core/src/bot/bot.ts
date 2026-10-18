@@ -427,6 +427,13 @@ export function createBot(config: BotConfig): Bot {
       secrets,
       log,
       reload: (name) => control.plugins.reload(name),
+      isDisabled: (name) =>
+        host
+          ?.report()
+          .some(
+            (entry) =>
+              entry.name === name && entry.status === 'skipped' && entry.reason.kind === 'disabled',
+          ) ?? false,
     });
     // Rotação da chave mestra (ADR 0121): antes do setup, para os plugins já lerem com a atual.
     await configs.rotateSecrets();

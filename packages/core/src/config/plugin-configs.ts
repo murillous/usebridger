@@ -75,6 +75,11 @@ export interface PluginConfigsOptions {
   readonly secrets?: SecretSet;
   /** Chamado depois de salvar um override válido; normalmente `(name) => host.reload(name)`. */
   readonly reload?: (plugin: string) => Promise<PluginChangeResult>;
+  /**
+   * `true` se o plugin está desligado (`disabledPlugins` ou `disable`): `setSecret` e
+   * `clearSecret` gravam mas pulam o `reload`, que o host recusaria; o plugin lê o valor ao ligar.
+   */
+  readonly isDisabled?: (plugin: string) => boolean;
   /** Avisos de configuração (ex.: `pluginConfig` citando plugin inexistente). */
   readonly log?: Logger;
 }
@@ -739,6 +744,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
       field: label,
       source: 'secret',
     });
+    if (options.isDisabled?.(name)) return undefined;
     return options.reload ? options.reload(name) : undefined;
   }
 

@@ -239,10 +239,10 @@ num reload, o plugin fica `setup-failed` e o bot segue. Recuperação:
 1. Restaure a chave certa em `BRIDGER_SECRET_KEY` (e a antiga em `BRIDGER_SECRET_KEY_PREVIOUS`, se
    foi uma rotação), ou
 2. desligue o plugin (`disabledPlugins`), suba o bot e chame `clearSecret(plugin, caminho)` em cada
-   campo ilegível (um ilegível não bloqueia a remoção de outro). Com o plugin desligado, o
-   `clearSecret` grava a remoção, mas o reload rejeita com `PluginHostStateError` (o host só
-   recarrega plugin carregado); ignore o erro, tire o plugin de `disabledPlugins` ou chame
-   `plugins.enable`, e salve o segredo de novo com `setSecret`.
+   campo ilegível (um ilegível não bloqueia a remoção de outro). Com o plugin desligado,
+   `setSecret` e `clearSecret` gravam e **pulam o reload** (devolvem `undefined`, sem erro);
+   depois chame `plugins.enable`, e o plugin sobe com o valor novo. Salve o segredo de novo com
+   `setSecret`, se for o caso.
 
 > **Guarde a chave fora do banco e do backup dele.** Quem tem o banco e a chave tem os segredos, e
 > perder a chave perde os segredos salvos pelo dashboard (env e arquivo não são afetados). A chave

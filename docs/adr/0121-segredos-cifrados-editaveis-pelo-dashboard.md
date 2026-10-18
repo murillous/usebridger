@@ -62,10 +62,12 @@ Alternativas consideradas:
   core decifra com a anterior todo envelope com `kid` dela, cifra de novo com a atual, regrava e
   registra quantos migrou. Depois que o log confirma a migração, o operador remove a variável
   anterior. Uma chave só de cada vez em `PREVIOUS`: rotações seguidas exigem um boot entre elas.
-- **Envelope ilegível** (`kid` desconhecido, chave errada ou dado adulterado) não derruba o bot
-  nem expõe nada. A resolução lança `PluginConfigError` (`kind: 'undecryptable'`, fonte `secret`)
-  com o plugin e o caminho, e o plugin cai em `setup-failed`, como a config inválida. O admin
-  limpa o campo pelo `clearSecret` ou restaura a chave.
+- **Envelope ilegível** (`kid` desconhecido, chave errada ou dado adulterado) não expõe nada. A
+  resolução lança `PluginConfigError` (`kind: 'undecryptable'`, fonte `secret`) com o plugin e o
+  caminho, como a config inválida. Em runtime (reload) o bot segue de pé e o plugin cai em
+  `setup-failed`; no boot vale o [ADR 0102](0102-plugin-falho-derruba-o-boot.md) e o `start()`
+  aborta com `PluginBootError`. Recuperação: restaurar a chave, ou desligar o plugin
+  (`disabledPlugins`), subir o bot e chamar `clearSecret`.
 
 ## Consequências
 
