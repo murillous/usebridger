@@ -273,6 +273,26 @@ O fonte está em `web/` (React + Vite, só `devDependencies`). O `pnpm build` do
 tarball (`files: ["dist"]`). O plugin lê `dist/web` do pacote, então rode o build antes de abrir o
 dashboard a partir do fonte.
 
+### Testar
+
+Lógica pura do app fica em `web/src/lib` e é testada em Node, como o resto do pacote. Componente
+(`web/src/pages/*.test.tsx`) roda no happy-dom com a Testing Library
+([ADR 0119](../../../docs/adr/0119-testes-de-componente-do-dashboard-no-happy-dom.md)):
+
+- A primeira linha do arquivo é `// @vitest-environment happy-dom`; os outros testes seguem em Node.
+- `afterEach` com `cleanup()`, `vi.unstubAllGlobals()` e `vi.restoreAllMocks()`: o Vitest roda sem
+  `globals`, e nem a Testing Library nem o user-event limpam sozinhos (um espião do clipboard
+  vaza para o teste seguinte).
+- Sem servidor: troque o `fetch` com `vi.stubGlobal` e responda por caminho (o `api` chama
+  `fetch('api/<caminho>')`). `Tab.test.tsx` tem o modelo.
+- Consulte por papel e nome (`getByRole('button', { name: 'Agendar' })`): o teste também cobre o
+  rótulo acessível.
+- `#web/*` resolve pelo `imports` do `package.json`, o mesmo mapa do `tsconfig` e do Vite.
+- `userEvent.setup()` instala o próprio `navigator.clipboard`: espione o `writeText` com
+  `vi.spyOn` depois do `setup()`, não antes.
+- O `happy-dom` também está nas `devDependencies` da raiz: sem ele lá, o pnpm cria uma segunda cópia
+  do Vitest e o `toContainText` do `@usebridger/testing` some dos tipos em `examples/`.
+
 ## Limites conhecidos
 
 - Depois de um reload, o QR e o código de pareamento não voltam: o snapshot do core só guarda o status de conexão, e eles valem até o próximo evento.
