@@ -23,7 +23,9 @@ Alternativas consideradas:
 ## Decisão
 
 - **happy-dom com a Testing Library** (`@testing-library/react`, `@testing-library/dom`,
-  `@testing-library/user-event`), só em `devDependencies` do `plugin-dashboard`.
+  `@testing-library/user-event`) em `devDependencies` do `plugin-dashboard`. O `happy-dom` também
+  vai na raiz: ele é peer opcional do Vitest, e só no pacote o pnpm resolve duas cópias do Vitest,
+  o que tira dos tipos os matchers que o `@usebridger/testing` acrescenta.
 - **Ambiente por arquivo:** `// @vitest-environment happy-dom` no topo de cada `*.test.tsx`. O
   projeto do pacote segue em Node; não há config de Vitest por pacote.
 - **Sem servidor:** o teste troca o `fetch` por um stub que responde por caminho. O contrato
@@ -35,6 +37,7 @@ Alternativas consideradas:
 ## Consequências
 
 - Mudança de tela ganha teste como o resto, e a conferência manual vira exceção.
-- Quatro dependências de dev a mais no pacote; nada muda no que é publicado.
+- Quatro dependências de dev a mais no pacote, e o `happy-dom` na raiz; nada muda no que é
+  publicado.
 - O happy-dom não faz layout: largura, media query e CSS não são testados. O comportamento abaixo
   de 768 px segue na conferência manual.

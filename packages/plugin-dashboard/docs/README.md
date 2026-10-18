@@ -287,6 +287,10 @@ Lógica pura do app fica em `web/src/lib` e é testada em Node, como o resto do 
 - Consulte por papel e nome (`getByRole('button', { name: 'Agendar' })`): o teste também cobre o
   rótulo acessível.
 - `#web/*` resolve pelo `imports` do `package.json`, o mesmo mapa do `tsconfig` e do Vite.
+- `userEvent.setup()` instala o próprio `navigator.clipboard`: espione o `writeText` com
+  `vi.spyOn` depois do `setup()`, não antes.
+- O `happy-dom` também está nas `devDependencies` da raiz: sem ele lá, o pnpm cria uma segunda cópia
+  do Vitest e o `toContainText` do `@usebridger/testing` some dos tipos em `examples/`.
 
 ## Limites conhecidos
 
