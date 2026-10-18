@@ -120,8 +120,8 @@ createBot({ plugins: [dashboard], adminPlugins: ['dashboard'] });
 
 | Rota | Resposta |
 | ---- | -------- |
-| `GET /api/plugins` | Tabela de boot: array de `{ name, version, origin, dependsOn?, status: 'loaded', unregistered?, services?, contributions? }` ou `{ name, version, origin, dependsOn?, status: 'skipped', reason }`, na ordem de carga. `reason` é `{ kind, ... }` como no core; em `setup-failed`, `error` vira `{ plugin, phase, timedOut, message }` (mensagem truncada, nunca o erro cru) e a `reason` ganha `causeMessage`: `Nome: mensagem` do erro lançado no `setup` (até 300 caracteres, sem stack, secrets já censurados pelo core). |
-| `GET /api/plugins/boot` | `{ bootedAt }` (ms): horário aproximado do boot (o do `setup` do dashboard), até o core expor o horário real. Exige sessão (401 sem ela). |
+| `GET /api/plugins` | Tabela de boot: array de `{ name, version, origin, dependsOn?, optionalDependsOn?, status: 'loaded', setupMs?, unregistered?, services?, contributions?, contributionCounts? }` ou `{ name, version, origin, dependsOn?, optionalDependsOn?, status: 'skipped', reason }`, na ordem de carga. `reason` é `{ kind, ... }` como no core; em `setup-failed`, `error` vira `{ plugin, phase, timedOut, message }` (mensagem truncada, nunca o erro cru) e a `reason` ganha `causeMessage`: `Nome: mensagem` do erro lançado no `setup` (até 300 caracteres, sem stack, secrets já censurados pelo core). |
+| `GET /api/plugins/boot` | `{ bootedAt }` (ms): horário real do boot, lido do core (`bot.plugins.bootedAt`; não reinicia com o reload do dashboard). Fica numa rota própria porque `GET /api/plugins` é um array. Exige sessão (401 sem ela). |
 | `POST /api/plugins/:name/enable`, `/disable`, `/reload` | Sem corpo. 200 `{ plugin, dependents, teardownErrors }` (linhas novas do plugin e dos dependentes; falhas de teardown como `{ plugin, phase, timedOut, message }`). |
 
 Os `POST` exigem o cookie de sessão e `Origin` do mesmo host (senão 403). Nome desconhecido 404;

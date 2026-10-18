@@ -447,8 +447,13 @@ function liveAdmin(
     ),
     enable: masked(live('admin.plugins.enable', (target: string) => admin.plugins.enable(target))),
   });
+  // Getter: `Object.assign` copiaria o valor de agora, e o boot pode ainda não ter terminado.
+  Object.defineProperty(plugins, 'bootedAt', {
+    get: () => admin.plugins.bootedAt,
+    enumerable: true,
+  });
   return {
-    plugins,
+    plugins: plugins as PluginAdmin['plugins'],
     config: {
       setOverrides: masked(
         live('admin.config.setOverrides', (target: string, overrides) =>

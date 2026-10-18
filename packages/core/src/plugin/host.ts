@@ -30,7 +30,11 @@ export interface PluginContextHandle {
   /** Comandos que o contexto deixou de fora por capability ausente; vão para a tabela de boot. */
   unregisteredCommands?(): readonly UnregisteredCommand[];
   /** Serviços providos e pontos de extensão contribuídos; vão para a tabela de plugins. */
-  provided?(): { services: readonly string[]; contributions: readonly string[] };
+  provided?(): {
+    services: readonly string[];
+    contributions: readonly string[];
+    contributionCounts: Readonly<Record<string, number>>;
+  };
   dispose(reason?: unknown): void | Promise<void>;
 }
 
@@ -87,6 +91,8 @@ export interface PluginChangeResult {
 
 export interface PluginHost {
   readonly state: PluginHostState;
+  /** Epoch ms em que o boot dos plugins terminou; `undefined` até lá. Reload não o muda. */
+  readonly bootedAt: number | undefined;
   /**
    * Valida, ordena e roda o `setup` de cada plugin compatível, em ordem topológica. Devolve a
    * tabela de boot (também logada). Rejeita — sem rodar nenhum `setup` — com
@@ -156,6 +162,8 @@ interface Slot {
   readonly entry: PluginEntry;
   report: PluginReportEntry;
   handle: PluginContextHandle | undefined;
+  /** Duração do contexto + `setup` que subiu o plugin; vale só enquanto ele está carregado. */
+  setupMs?: number;
 }
 
 /**
@@ -206,6 +214,9 @@ const reportBase = ({ definition, origin }: PluginEntry) => ({
   ...(Object.keys(definition.dependsOn ?? {}).length > 0 && {
     dependsOn: { ...definition.dependsOn },
   }),
+  ...(Object.keys(definition.optionalDependsOn ?? {}).length > 0 && {
+    optionalDependsOn: { ...definition.optionalDependsOn },
+  }),
 });
 
 /** Cria o host de plugins. Não roda nada até `start()`. */
@@ -218,6 +229,7 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
   const disabled = new Set(options.disabledPlugins ?? []);
 
   let state: PluginHostState = 'idle';
+  let bootedAt: number | undefined;
   let slots: Slot[] = [];
   const byName = new Map<string, Slot>();
   let stopPromise: Promise<PluginLifecycleError[]> | undefined;
@@ -262,6 +274,7 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
   async function bringUp(slot: Slot): Promise<PluginReportEntry> {
     const { definition } = slot.entry;
     const base = reportBase(slot.entry);
+    const startedAt = performance.now();
     const created = await runPhase(definition.name, 'context', setupTimeoutMs, () =>
       createContext(definition),
     );
@@ -282,18 +295,22 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
     }
     slot.handle = handle;
     const unregistered = [...(handle.unregisteredCommands?.() ?? [])];
+    // Contexto + setup: o que o plugin custou ao boot (ou ao reload).
+    slot.setupMs = Math.round(performance.now() - startedAt);
     return { ...base, status: 'loaded', ...(unregistered.length > 0 && { unregistered }) };
   }
 
   /** Linha com o que o plugin provê agora: um `provide` depois do `setup` também aparece. */
   function current(slot: Slot): PluginReportEntry {
-    const { report, handle } = slot;
-    if (report.status !== 'loaded' || !handle?.provided) return report;
-    const { services, contributions } = handle.provided();
+    const { report, handle, setupMs } = slot;
+    if (report.status !== 'loaded') return report;
+    const withTime = setupMs === undefined ? report : { ...report, setupMs };
+    if (!handle?.provided) return withTime;
+    const { services, contributions, contributionCounts } = handle.provided();
     return {
-      ...report,
+      ...withTime,
       ...(services.length > 0 && { services }),
-      ...(contributions.length > 0 && { contributions }),
+      ...(contributions.length > 0 && { contributions, contributionCounts }),
     };
   }
 
@@ -310,6 +327,7 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
     const { handle } = slot;
     if (!handle) return [];
     slot.handle = undefined;
+    slot.setupMs = undefined;
     const { definition } = slot.entry;
     const errors: PluginLifecycleError[] = [];
     if (definition.teardown && signal?.aborted) {
@@ -473,7 +491,10 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
       state = 'stopped';
       throw new PluginBootError([first, ...rest]);
     }
-    if (state === 'starting') state = 'running';
+    if (state === 'starting') {
+      state = 'running';
+      bootedAt = Date.now();
+    }
     return slots.map(current);
   }
 
@@ -587,6 +608,10 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
   return {
     get state(): PluginHostState {
       return state;
+    },
+
+    get bootedAt(): number | undefined {
+      return bootedAt;
     },
 
     start(): Promise<PluginReportEntry[]> {

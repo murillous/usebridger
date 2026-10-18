@@ -203,6 +203,10 @@ describe('release que lança', () => {
     expect((error as AggregateError).errors).toHaveLength(2); // um release não impede o outro
     expect(released.sort()).toEqual(['a', 'b']);
     expect(registry.list()).toEqual([]);
-    expect(registry.describe('p')).toEqual({ services: [], contributions: [] });
+    expect(registry.describe('p')).toEqual({
+      services: [],
+      contributions: [],
+      contributionCounts: {},
+    });
   });
 });

@@ -53,10 +53,16 @@ export interface PluginRow {
   unregistered?: { command: string }[];
   /** `dependsOn` do manifesto: nome → faixa semver. */
   dependsOn?: Record<string, string>;
+  /** `optionalDependsOn` do manifesto: o reload em cascata do core também o segue (ADR 0099). */
+  optionalDependsOn?: Record<string, string>;
+  /** Duração do contexto + `setup` em ms (só em plugin carregado). */
+  setupMs?: number;
   /** Serviços providos no `setup`. */
   services?: string[];
   /** Pontos de extensão a que o plugin contribuiu. */
   contributions?: string[];
+  /** Contribuições por ponto de extensão. */
+  contributionCounts?: Record<string, number>;
 }
 
 export interface ChangeResult {

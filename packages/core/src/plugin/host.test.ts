@@ -198,8 +198,21 @@ describe('createPluginHost — boot', () => {
     const table = await h.start();
 
     expect(table).toEqual([
-      { name: 'media', version: '1.0.0', origin: 'config', status: 'loaded', unregistered },
-      { name: 'ping', version: '1.0.0', origin: 'config', status: 'loaded' },
+      {
+        name: 'media',
+        version: '1.0.0',
+        origin: 'config',
+        status: 'loaded',
+        setupMs: expect.any(Number),
+        unregistered,
+      },
+      {
+        name: 'ping',
+        version: '1.0.0',
+        origin: 'config',
+        status: 'loaded',
+        setupMs: expect.any(Number),
+      },
     ]);
     const tableLine = log.lines.find((line) => line.message.startsWith('Plugins:'));
     expect(tableLine?.level).toBe('warn');
@@ -567,7 +580,13 @@ describe('createPluginHost — reload', () => {
     const result = await h.reload('ai');
     expect(calls).toEqual(['teardown:ai', 'dispose:ai', 'context:ai', 'setup:ai#2']);
     expect(result).toEqual({
-      plugin: { name: 'ai', version: '1.0.0', origin: 'config', status: 'loaded' },
+      plugin: {
+        name: 'ai',
+        version: '1.0.0',
+        origin: 'config',
+        status: 'loaded',
+        setupMs: expect.any(Number),
+      },
       dependents: [],
       teardownErrors: [],
     });

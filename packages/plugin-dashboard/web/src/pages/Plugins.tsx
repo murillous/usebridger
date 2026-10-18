@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, api } from '#web/lib/api.ts';
 import {
-  clock,
+  contributes,
   countFilter,
+  list,
   type PluginFilter,
+  setupText,
   skippedDependents,
   stateOf,
-  summary,
+  subtitle,
   visible,
 } from '#web/lib/plugins.ts';
 import type { ChangeResult, PluginRow, SkipReason } from '#web/lib/types.ts';
@@ -36,16 +38,6 @@ function reasonText(reason: SkipReason | undefined): string {
       return reason.kind;
   }
 }
-
-/** Resultado do `setup`: falhou, carregou com comando de fora, carregou inteiro; `—` se nem rodou. */
-function setupText(row: PluginRow): string {
-  if (row.status === 'loaded') {
-    return row.unregistered?.length ? `Parcial (${row.unregistered.length} comandos fora)` : 'OK';
-  }
-  return row.reason?.kind === 'setup-failed' ? 'Falhou' : '—';
-}
-
-const list = (items: string[] | undefined): string => (items?.length ? items.join(', ') : '—');
 
 const errorText = (e: unknown): string =>
   e instanceof ApiError ? `${e.status}: ${e.message}` : 'Falha de rede.';
@@ -94,7 +86,7 @@ export function Plugins() {
   useEffect(() => {
     void load();
   }, [load]);
-  // O horário do boot é enfeite do subtítulo: sem ele a tela segue só com o resumo.
+  // O horário do boot (real, do core) é enfeite do subtítulo: sem ele a tela segue só com o resumo.
   useEffect(() => {
     api<{ bootedAt: number }>('plugins/boot').then(
       (b) => setBootedAt(b.bootedAt),
@@ -187,12 +179,7 @@ export function Plugins() {
 
   return (
     <>
-      {rows && (
-        <p className="muted pl-sub">
-          {bootedAt !== undefined && `Boot de ${clock(bootedAt)} · `}
-          {summary(rows)}
-        </p>
-      )}
+      {rows && <p className="muted pl-sub">{subtitle(rows, bootedAt)}</p>}
       <div className="row spread pl-head">
         <h1>Plugins</h1>
         <label className="pl-search">
@@ -322,7 +309,7 @@ export function Plugins() {
                     <td className="mono">{setupText(row)}</td>
                     <td className="mono">{list(row.dependsOn && Object.keys(row.dependsOn))}</td>
                     <td className="mono">{list(row.services)}</td>
-                    <td className="mono">{list(row.contributions)}</td>
+                    <td className="mono">{contributes(row)}</td>
                     <td>
                       <span className="row">
                         {toggle(row)}

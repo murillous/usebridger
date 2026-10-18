@@ -63,14 +63,14 @@ export function createPluginControl(deps: PluginControlDeps): PluginControl {
     return result;
   }
 
-  const plugins: BotPlugins = Object.assign(
-    (): PluginReportEntry[] => deps.host()?.report() ?? [],
-    {
+  const plugins: BotPlugins = Object.defineProperties(
+    Object.assign((): PluginReportEntry[] => deps.host()?.report() ?? [], {
       reload: (name: string) => change('reload', name),
       disable: (name: string) => change('disable', name),
       enable: (name: string) => change('enable', name),
-    },
-  );
+    }),
+    { bootedAt: { get: () => deps.host()?.bootedAt, enumerable: true } },
+  ) as BotPlugins;
 
   function requireConfigs(method: string): PluginConfigs {
     const configs = deps.configs();

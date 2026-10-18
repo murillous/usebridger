@@ -72,9 +72,12 @@ describe('ctx.admin', () => {
     // Mesmas instâncias de `bot.config`: o resultado é o mesmo.
     expect(admin().config.describe('other')).toEqual(bot.config.describe('other'));
     expect(admin().config.jsonSchema('other')).toEqual(bot.config.jsonSchema('other'));
-    await expect(admin().config.setOverrides('other', {})).resolves.toEqual(
-      await bot.config.setOverrides('other', {}),
-    );
+    // Cada `setOverrides` recarrega o plugin e mede o `setupMs` de novo: só ele pode divergir.
+    const expected = await bot.config.setOverrides('other', {});
+    await expect(admin().config.setOverrides('other', {})).resolves.toEqual({
+      ...expected,
+      ...(expected?.plugin && { plugin: { ...expected.plugin, setupMs: expect.any(Number) } }),
+    });
   });
 
   it('rejeita disable, reload e setOverrides sobre o próprio plugin', async () => {
