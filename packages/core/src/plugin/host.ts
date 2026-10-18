@@ -327,6 +327,7 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
     const { handle } = slot;
     if (!handle) return [];
     slot.handle = undefined;
+    slot.setupMs = undefined;
     const { definition } = slot.entry;
     const errors: PluginLifecycleError[] = [];
     if (definition.teardown && signal?.aborted) {

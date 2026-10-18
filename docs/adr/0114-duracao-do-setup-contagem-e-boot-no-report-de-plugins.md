@@ -16,7 +16,7 @@ X e N dependentes" da Config contava a menos.
 - `PluginReportEntry` ganha `optionalDependsOn` (manifesto, só quando há) e, nas linhas
   `loaded`, `setupMs` (duração do contexto + `setup` em ms, a do boot ou a do último reload;
   medida com `performance.now()`) e `contributionCounts` (ponto → nº de contribuições do plugin),
-  junto de `contributions`. `setupMs` é opcional no tipo: linhas montadas à mão (testes) não o têm.
+  junto de `contributions`. `setupMs` é opcional no tipo: durante o boot, o `report()` devolve os placeholders `loaded` do `plan()`, sem `setupMs`, e é isso que um plugin vê ao chamar `ctx.admin.plugins()` no próprio `setup`.
 - `bot.plugins.bootedAt` (e, igual, `ctx.admin.plugins.bootedAt`) é o epoch ms do fim do boot dos
   plugins; `undefined` antes do `start()`; reload não o muda.
 - O dashboard lê `setupMs` direto da linha. `GET /api/plugins/boot` fica: a lista
@@ -27,4 +27,4 @@ X e N dependentes" da Config contava a menos.
 ## Consequências
 
 - Mudança aditiva; a tabela de boot em texto não muda.
-- Plugin recarregado tem `setupDurations` novo; plugin desligado ou que falhou não tem.
+- Plugin recarregado tem `setupMs` novo; plugin desligado ou que falhou não tem.

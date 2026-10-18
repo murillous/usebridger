@@ -19,6 +19,24 @@ const lento = definePlugin({
   },
 });
 
+it('GET /api/plugins/boot responde 503 sem adminPlugins', async () => {
+  const http = createHttp({ port: 0, hostname: '127.0.0.1' });
+  const bot = await createTestBot({
+    plugins: [dashboard],
+    http,
+    logLevel: 'info',
+    pluginConfig: { dashboard: { token: TOKEN } },
+  });
+  bots.push(bot);
+  const url = `http://127.0.0.1:${http.port}/plugins/dashboard`;
+  const login = await fetch(`${url}/api/login`, {
+    method: 'POST',
+    body: JSON.stringify({ token: TOKEN }),
+  });
+  const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+  expect((await fetch(`${url}/api/plugins/boot`, { headers: { cookie } })).status).toBe(503);
+});
+
 it('GET /api/plugins traz setupMs, e /boot traz o horário do core', async () => {
   const http = createHttp({ port: 0, hostname: '127.0.0.1' });
   const before = Date.now();

@@ -71,7 +71,7 @@ export interface UnregisteredCommand {
 export type PluginReportEntry =
   | (ReportBase & {
       readonly status: 'loaded';
-      /** Duração do contexto + `setup` em ms (a do boot ou a do último reload). */
+      /** Duração do contexto + `setup` em ms (a do boot ou a do último reload). Ausente no placeholder do boot: um plugin que lê `ctx.admin.plugins()` no próprio `setup` ainda não o vê. */
       readonly setupMs?: number;
       /**
        * Comandos do `setup` que não entraram no registro, na ordem em que foram pedidos. Só
