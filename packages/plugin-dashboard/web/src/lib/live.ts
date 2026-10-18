@@ -18,6 +18,15 @@ export const initialLive: LiveState = {
   lastUpdate: null,
 };
 
+/** "há 2 s", "há 3 min", "há 1 h": tempo relativo curto; menos de 1 s conta como "agora". */
+export function relativeAgo(then: number, now: number): string {
+  const sec = Math.max(0, Math.floor((now - then) / 1000));
+  if (sec < 1) return 'agora';
+  if (sec < 60) return `há ${sec} s`;
+  if (sec < 3600) return `há ${Math.floor(sec / 60)} min`;
+  return `há ${Math.floor(sec / 3600)} h`;
+}
+
 /** Aplica uma mensagem do servidor ao estado. Pura: o hook só repassa. */
 export function reduceLive(state: LiveState, message: LiveMessage, now: number): LiveState {
   const base = { ...state, lastUpdate: now };

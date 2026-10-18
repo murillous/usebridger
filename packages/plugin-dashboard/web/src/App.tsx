@@ -7,9 +7,10 @@ import {
   reduceLive,
   type SocketLike,
 } from './lib/live.ts';
-import { applyTheme, loadTheme, saveTheme, THEMES, type Theme } from './lib/theme.ts';
+import { applyTheme, loadTheme, resolveTheme, saveTheme, type Theme } from './lib/theme.ts';
 import type { TabView } from './lib/types.ts';
 import { Config } from './pages/Config.tsx';
+import { LiveBadge } from './pages/LiveBadge.tsx';
 import { Login } from './pages/Login.tsx';
 import { Logs } from './pages/Logs.tsx';
 import { Metrics } from './pages/Metrics.tsx';
@@ -17,42 +18,24 @@ import { Overview } from './pages/Overview.tsx';
 import { Plugins } from './pages/Plugins.tsx';
 import { Tab } from './pages/Tab.tsx';
 
-const THEME_LABEL: Record<Theme, string> = { auto: 'Automático', light: 'Claro', dark: 'Escuro' };
-
-function ThemeSwitch({ theme, onChange }: { theme: Theme; onChange: (theme: Theme) => void }) {
-  return (
-    <div className="field">
-      <label htmlFor="theme">Tema</label>
-      <select
-        id="theme"
-        className="input"
-        value={theme}
-        onChange={(e) => onChange(e.target.value as Theme)}
-      >
-        {THEMES.map((t) => (
-          <option key={t} value={t}>
-            {THEME_LABEL[t]}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
 // Ícones simples (traço de 2 px); o texto da aba continua ao lado, o ícone é decorativo.
 const ICONS: Record<string, string> = {
   inicio: 'M3 11l9-8 9 8M5 10v10h14V10',
   plugins: 'M9 3v4M15 3v4M6 7h12v5a6 6 0 0 1-12 0zM12 18v3',
   config: 'M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6',
   metricas: 'M4 20V10M10 20V4M16 20v-8M22 20H2',
+  pausa: 'M8 5v14M16 5v14',
+  retomar: 'M7 4l13 8-13 8z',
+  lua: 'M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z',
+  sol: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
   mais: 'M5 12h.01M12 12h.01M19 12h.01',
 };
 
-function Icon({ id }: { id: string }) {
+function Icon({ id, size = 22 }: { id: string; size?: number }) {
   return (
     <svg
-      width="22"
-      height="22"
+      width={size}
+      height={size}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -68,19 +51,19 @@ function Icon({ id }: { id: string }) {
 
 // Roteamento por hash: o servidor só conhece `/` e os estáticos, e o app funciona em qualquer basePath.
 const ROUTES = [
-  { id: 'inicio', label: 'Início', group: 'Bot' },
+  { id: 'inicio', label: 'Visão geral', group: 'Bot' },
   { id: 'metricas', label: 'Métricas', group: 'Bot' },
   { id: 'logs', label: 'Logs', group: 'Bot' },
   { id: 'plugins', label: 'Plugins', group: 'Administração' },
-  { id: 'config', label: 'Config', group: 'Administração' },
+  { id: 'config', label: 'Configuração', group: 'Administração' },
 ] as const;
 
 // TabBar do celular (design.md): Logs e a conta ficam em "Mais".
 const TABS = [
-  { id: 'inicio', label: 'Início', match: ['inicio'] },
+  { id: 'inicio', label: 'Visão geral', match: ['inicio'] },
   { id: 'metricas', label: 'Métricas', match: ['metricas'] },
   { id: 'plugins', label: 'Plugins', match: ['plugins'] },
-  { id: 'config', label: 'Config', match: ['config'] },
+  { id: 'config', label: 'Configuração', match: ['config'] },
   { id: 'mais', label: 'Mais', match: ['mais', 'logs'] },
 ];
 const KNOWN = ['inicio', 'metricas', 'logs', 'plugins', 'config', 'mais'];
@@ -88,7 +71,7 @@ const KNOWN = ['inicio', 'metricas', 'logs', 'plugins', 'config', 'mais'];
 const EXT = 'ext/';
 const current = (): string => location.hash.replace(/^#\/?/, '') || 'inicio';
 
-function useLive(enabled: boolean): LiveState {
+function useLive(enabled: boolean, paused: boolean): LiveState {
   const [state, setState] = useState<LiveState>(initialLive);
   useEffect(() => {
     if (!enabled) {
@@ -96,6 +79,8 @@ function useLive(enabled: boolean): LiveState {
       setState(initialLive);
       return;
     }
+    // Pausado: sem WS, a tela congela no último estado (o selo avisa); retomar reconecta e recebe novo snapshot.
+    if (paused) return;
     const client = createLiveClient({
       // A WebSocket do navegador cumpre o subconjunto que o cliente usa.
       open: () => new WebSocket(liveUrl()) as unknown as SocketLike,
@@ -108,7 +93,7 @@ function useLive(enabled: boolean): LiveState {
       },
     });
     return () => client.close();
-  }, [enabled]);
+  }, [enabled, paused]);
   return state;
 }
 
@@ -137,7 +122,38 @@ export function App() {
     saveTheme(next);
     setTheme(next);
   };
-  const live = useLive(authed === true);
+  const [paused, setPaused] = useState(false);
+  const live = useLive(authed === true, paused);
+  const dark = resolveTheme(theme, matchMedia('(prefers-color-scheme: dark)').matches) === 'dark';
+  const actions = (
+    <>
+      <button
+        type="button"
+        className="btn iconbtn"
+        aria-pressed={paused}
+        aria-label={paused ? 'Retomar atualização' : 'Pausar atualização'}
+        onClick={() => setPaused((p) => !p)}
+      >
+        <Icon id={paused ? 'retomar' : 'pausa'} size={18} />
+        <span className="label">{paused ? 'Retomar atualização' : 'Pausar atualização'}</span>
+      </button>
+      <button
+        type="button"
+        className="btn iconbtn"
+        aria-label={dark ? 'Mudar para o tema claro' : 'Mudar para o tema escuro'}
+        onClick={() => chooseTheme(dark ? 'light' : 'dark')}
+      >
+        <Icon id={dark ? 'sol' : 'lua'} size={18} />
+      </button>
+    </>
+  );
+  const session = live.status?.session ?? 'default';
+  const sessionSelect = (
+    // A API expõe só a sessão deste plugin (ADR 0110); trocar de sessão é abrir o dashboard dela.
+    <select className="input" aria-label="Sessão" value={session}>
+      <option value={session}>{session}</option>
+    </select>
+  );
   const { tabs, refresh } = useTabs(authed === true, route, live.connected);
 
   useEffect(() => {
@@ -163,7 +179,17 @@ export function App() {
   return (
     <div className="shell">
       <nav className="side" aria-label="Principal">
-        <div className="brand">Bridger</div>
+        <div className="brand">
+          <span className="mark" aria-hidden="true">
+            B
+          </span>
+          <span>
+            Bridger
+            <small>dashboard</small>
+          </span>
+        </div>
+        <div className="group">Sessão</div>
+        {sessionSelect}
         {groups.map((group) => (
           <div key={group} style={{ display: 'contents' }}>
             <div className="group">{group}</div>
@@ -194,14 +220,34 @@ export function App() {
             ))}
           </>
         )}
-        <div style={{ marginTop: 'auto' }}>
-          <ThemeSwitch theme={theme} onChange={chooseTheme} />
+        <div className="foot">
+          {live.status?.versions && (
+            <p className="mono muted versions">
+              core {live.status.versions.core} · dashboard {live.status.versions.dashboard}
+            </p>
+          )}
           <button type="button" className="btn" onClick={logout}>
             Sair
           </button>
         </div>
       </nav>
       <main className="main">
+        <div className="topbar">
+          <span className="mark" aria-hidden="true">
+            B
+          </span>
+          {sessionSelect}
+          <div className="row">{actions}</div>
+        </div>
+        <header className="head">
+          <span className="muted">
+            {live.status ? `${live.status.transport} · sessão ${live.status.session}` : '—'}
+          </span>
+          <div className="row">
+            <LiveBadge live={live} paused={paused} />
+            {actions}
+          </div>
+        </header>
         {route === 'logs' ? (
           <Logs live={live} />
         ) : route === 'metricas' ? (
@@ -233,7 +279,6 @@ export function App() {
                   ))}
                 </>
               )}
-              <ThemeSwitch theme={theme} onChange={chooseTheme} />
               <button type="button" className="btn" onClick={logout}>
                 Sair
               </button>

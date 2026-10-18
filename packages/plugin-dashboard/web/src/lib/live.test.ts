@@ -5,6 +5,7 @@ import {
   initialLive,
   MAX_LOGS,
   reduceLive,
+  relativeAgo,
   type SocketLike,
 } from './live.ts';
 import type { LogEntry, StatusView } from './types.ts';
@@ -101,5 +102,15 @@ describe('createLiveClient', () => {
     expect(t.timers).toHaveLength(0);
     t.sockets[0]?.onclose?.();
     expect(t.delays).toHaveLength(1);
+  });
+});
+
+describe('relativeAgo', () => {
+  it('formata o tempo relativo curto', () => {
+    expect(relativeAgo(1000, 1400)).toBe('agora');
+    expect(relativeAgo(0, 2500)).toBe('há 2 s');
+    expect(relativeAgo(0, 180_000)).toBe('há 3 min');
+    expect(relativeAgo(0, 7_300_000)).toBe('há 2 h');
+    expect(relativeAgo(5000, 1000)).toBe('agora');
   });
 });

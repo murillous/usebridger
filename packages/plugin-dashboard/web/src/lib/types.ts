@@ -7,6 +7,8 @@ export interface StatusView {
   qr?: string;
   pairingCode?: string;
   updatedAt: number;
+  /** Opcional: um backend anterior não envia. */
+  versions?: { core: string; dashboard: string };
 }
 
 export interface LogEntry {
