@@ -22,7 +22,7 @@ function Qr({ value }: { value: string }) {
   return src ? <img className="qr" src={src} alt="QR code para parear o WhatsApp" /> : null;
 }
 
-function Kpis() {
+function Kpis({ pending }: { pending: number | undefined }) {
   const { data } = useMetrics(1);
   // Sem o plugin de métricas (ou enquanto carrega) a seção some; a aba Métricas explica.
   if (!data?.available) return null;
@@ -37,6 +37,7 @@ function Kpis() {
         <Stat label="Usuários ativos" value={fmtInt(total(rowsOf(data, KERNEL.users)))} />
         <Stat label="Grupos ativos" value={fmtInt(total(rowsOf(data, KERNEL.groups)))} />
         <Stat label="Latência p95" value={fmtMs(percentile(rowsOf(data, KERNEL.duration), 0.95))} />
+        <Stat label="Fila de saída" value={pending === undefined ? '-' : fmtInt(pending)} />
       </div>
     </section>
   );
@@ -139,7 +140,7 @@ export function Overview({ live }: { live: LiveState }) {
           <p className="muted">Aguardando o status do bot…</p>
         )}
       </section>
-      <Kpis />
+      <Kpis pending={status?.outboundPending} />
       <RecentLogs live={live} />
     </>
   );

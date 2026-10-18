@@ -10,6 +10,8 @@ export interface StatusView {
   updatedAt: number;
   /** Opcional: um backend anterior não envia. */
   versions?: { core: string; dashboard: string };
+  /** Opcional: um backend anterior não envia. */
+  outboundPending?: number;
 }
 
 export interface LogEntry {
@@ -72,7 +74,8 @@ export type MetricRowView =
       count: number;
       sum: number;
       buckets: number[];
-    };
+    }
+  | { type: 'gauge'; day: string; labels: Record<string, string>; last: number; max: number };
 
 export type MetricsResponse =
   | { available: false; reason?: 'version' }
@@ -80,7 +83,7 @@ export type MetricsResponse =
       available: true;
       from: string;
       to: string;
-      metrics: { name: string; rows: MetricRowView[] }[];
+      metrics: { name: string; rows: MetricRowView[]; plugin?: string }[];
     };
 
 export interface ConfigIssue {
