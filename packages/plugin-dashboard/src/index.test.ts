@@ -1,4 +1,4 @@
-import { createHttp, definePlugin, type Logger } from '@usebridger/core';
+import { CORE_VERSION, createHttp, definePlugin, type Logger } from '@usebridger/core';
 import { createTestBot } from '@usebridger/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createSessions } from './auth.ts';
@@ -107,6 +107,13 @@ describe('autenticação', () => {
     const out = await fetch(`${base}/api/logout`, { method: 'POST', headers: { cookie: c } });
     expect(out.status).toBe(204);
     expect((await fetch(`${base}/api/status`, { headers: { cookie: c } })).status).toBe(401);
+  });
+
+  it('status traz as versões do core e do dashboard', async () => {
+    const { base, cookie } = await start();
+    const res = await fetch(`${base}/api/status`, { headers: { cookie: await cookie() } });
+    const { versions } = (await res.json()) as StatusView;
+    expect(versions).toEqual({ core: CORE_VERSION, dashboard: dashboard.version });
   });
 
   it('sessão expira', () => {

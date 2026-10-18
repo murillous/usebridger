@@ -147,11 +147,60 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  background: var(--sunken);
 }
 .side .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-weight: 700;
   font-size: 17px;
-  padding: 0 12px 16px;
+  line-height: 1.1;
+  padding: 0 4px 16px;
+}
+.brand small {
+  display: block;
+  font-family: var(--sans);
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--muted);
+}
+.mark {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 9px;
+  background: var(--raised);
+  box-shadow: var(--e1), var(--top);
+  font: 700 15px var(--display);
+}
+.side .side-foot {
+  margin-top: auto;
+  padding-top: 12px;
+}
+.side .versions {
+  margin: 0 0 12px;
+  padding: 0 4px;
+  font-size: 10px;
+}
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.topbar {
+  display: none;
+}
+.iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 .side .group {
   font-size: 12px;
@@ -525,20 +574,39 @@ td {
   .main {
     padding: 16px;
   }
+  .head {
+    display: none;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .topbar .input {
+    flex: 1;
+    min-width: 0;
+  }
+  .iconbtn .label {
+    display: none;
+  }
   .tabbar {
     display: flex;
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
-    background: var(--raised);
+    background: var(--sunken);
     box-shadow: 0 -1px 0 var(--line);
-    padding-bottom: env(safe-area-inset-bottom);
+    padding: 4px 4px env(safe-area-inset-bottom);
+    gap: 4px;
     z-index: 5;
   }
   .tabbar a {
     flex: 1;
+    min-width: 0;
     min-height: 56px;
+    border-radius: 12px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -551,6 +619,8 @@ td {
     margin-bottom: 2px;
   }
   .tabbar a[aria-current="page"] {
+    background: var(--raised);
+    box-shadow: var(--e1), var(--top);
     color: var(--ink);
     font-weight: 700;
   }
@@ -1017,4 +1087,56 @@ h3 {
   .pl-search {
     flex-basis: auto;
   }
+}
+
+/* Tela "Mais" (celular) */
+.mais .group {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 12px 4px 4px;
+}
+.mais .spread-group {
+  display: flex;
+  justify-content: space-between;
+}
+.list-card {
+  padding: 0;
+  margin-bottom: 8px;
+}
+.list-card .item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 16px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.list-card .item + .item {
+  border-top: 1px solid var(--line);
+}
+.item .sub {
+  display: block;
+  font-size: 11px;
+}
+.item .plain {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  text-align: right;
+}
+.mais .note {
+  font-size: 12px;
+  padding: 0 4px;
+  margin: 0 0 8px;
+}
+.versions-line {
+  text-align: center;
+  font-size: 11px;
+  margin-top: 24px;
 }

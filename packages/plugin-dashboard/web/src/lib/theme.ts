@@ -34,3 +34,8 @@ export function applyTheme(theme: Theme, root: HTMLElement = document.documentEl
   if (theme === 'auto') root.removeAttribute('data-theme');
   else root.setAttribute('data-theme', theme);
 }
+
+/** Tema efetivo (o `auto` segue o sistema), para o botão do cabeçalho alternar claro/escuro. */
+export function resolveTheme(theme: Theme, prefersDark: boolean): 'light' | 'dark' {
+  return theme === 'auto' ? (prefersDark ? 'dark' : 'light') : theme;
+}

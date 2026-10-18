@@ -7,7 +7,8 @@ const LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'];
 
 export function Logs({ live }: { live: LiveState }) {
   const [level, setLevel] = useState('info');
-  // Pausar congela a lista exibida; o WS segue acumulando e "Retomar" volta ao vivo.
+  // Pausar local: congela só a lista exibida; o WS segue acumulando e "Retomar" volta ao vivo.
+  // Difere do pausar global do cabeçalho (App), que fecha o WS e para todas as telas.
   const [frozen, setFrozen] = useState<LogEntry[] | null>(null);
   const source = frozen ?? live.logs;
   const min = LEVELS.indexOf(level);

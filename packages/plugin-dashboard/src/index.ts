@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
+  CORE_VERSION,
   type ConnectionStatus,
   definePlugin,
   type HttpHandler,
@@ -17,6 +18,7 @@ import { registerMetricsRoutes } from '#metrics.ts';
 import { registerPluginRoutes } from '#plugins.ts';
 import { createStaticHandler } from '#static.ts';
 import { registerTabRoutes } from '#tabs.ts';
+import { DASHBOARD_VERSION } from '#version.ts';
 
 export interface StatusView {
   transport: string;
@@ -28,6 +30,8 @@ export interface StatusView {
   qr?: string;
   pairingCode?: string;
   updatedAt: number;
+  /** Versões exibidas no rodapé da sidebar. */
+  versions: { core: string; dashboard: string };
 }
 
 export type { LogEntry } from '#logs.ts';
@@ -56,7 +60,7 @@ const unauthorized = (): Response => new Response('não autorizado', { status: 4
 /** Plugin oficial `dashboard` (ADR 0107, 0108): autenticação, status, QR, logs e WebSocket. */
 export const dashboard: PluginDefinition = definePlugin({
   name: 'dashboard',
-  version: '0.1.0',
+  version: DASHBOARD_VERSION,
   engine: '<1.0.0',
   config: z.object({
     // Segredo de acesso ao dashboard; o core o mascara em logs e na config exibida.
@@ -76,6 +80,7 @@ export const dashboard: PluginDefinition = definePlugin({
       session: ctx.session,
       status: 'connecting',
       updatedAt: Date.now(),
+      versions: { core: CORE_VERSION, dashboard: DASHBOARD_VERSION },
     };
 
     const broadcast = (text: string): void => {

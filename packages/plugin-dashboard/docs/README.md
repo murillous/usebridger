@@ -235,7 +235,8 @@ token e navegue pelas telas (rotas por hash: `#/logs`, `#/plugins`, `#/config`).
   cache longo (`immutable`); o resto é `no-cache`. Os estáticos não pedem login (os dados passam
   pela API autenticada).
 - **Sem fonte externa:** Onest, Funnel Display e Martian Mono (latin e latin-ext) vão empacotadas em `dist/web/assets` via `@fontsource-variable`, com a pilha do sistema como fallback e `font-display: swap`. Nada vem de CDN.
-- **Tema:** segue o `prefers-color-scheme`; a conta (sidebar, ou Mais no celular) permite fixar claro ou escuro, guardado em `localStorage`.
+- **Tema:** segue o `prefers-color-scheme`; o botão do cabeçalho (topo no celular) alterna claro/escuro, guardado em `localStorage`. Em Mais (celular), a linha Tema volta ao Sistema (`auto`).
+- **Cabeçalho e pausa:** `<transport> · sessão <id>`, selo "Ao vivo · atualizado há N s" e "Pausar atualização", que fecha o WebSocket (a tela congela e o selo avisa); retomar reconecta e recebe novo snapshot. O rodapé da sidebar mostra `versions` (core e dashboard) do `/api/status`. O seletor de Sessão lista só a sessão do plugin: a API não expõe as outras.
 - **Config:** o Salvar devolve os overrides que o formulário não edita (`messages.*`, chaves de `z.record`); com a config atual inválida (`view: null`) ele substitui todos os overrides e pede confirmação.
 - **Portão de login:** sem sessão, ou com 401 em qualquer chamada, o app mostra só a tela de login; depois de entrar, volta à rota em que estava. Sair fica na sidebar (desktop) e em Mais (celular).
 
