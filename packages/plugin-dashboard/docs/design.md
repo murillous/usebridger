@@ -122,7 +122,18 @@ Abaixo de 768 px a sidebar sai e entra a barra inferior (TabBar).
   (config atual inválida, lida do GET de cada plugin) ou "falhou" (setup falhou) na lista;
   secret só leitura com chips `secret`/origem e o nome real da variável (`BRIDGER_<PLUGIN>__<CAMPO>`);
   dica de tipo do schema sob cada campo; "Salvar recarrega X e N dependente(s)" calculado do
-  `dependsOn` dos plugins (limite: dependentes por `optionalDependsOn`, que o core também recarrega, não entram na contagem, porque a linha do plugin não os expõe). Não há botão "Substituir" no secret: o PUT recusa secret (ADR 0111).
+  `dependsOn` dos plugins (limite: dependentes por `optionalDependsOn`, que o core também recarrega, não entram na contagem, porque a linha do plugin não os expõe). O `PUT` da config segue recusando secret (ADR 0111).
+- **Config, secret cifrado (ADR 0121):** o manifesto (`GET /api/config/:plugin`) leva `secretsWritable`
+  e o schema marca o campo com `x-bridger-set-secret`. "Substituir" abre um `<input type="password">`
+  (largura total no celular) e salva por `PUT /api/config/:plugin/secrets/:path` com `{ "value": ... }`;
+  "Remover" (só com fonte `secret`) usa `DELETE` na mesma rota e funciona sem chave mestra. Fonte `env`
+  ou `file` mostra "Definido por env" / "Definido pelo arquivo", sem botão (o core recusa com
+  `shadowed`, 409). Sem `BRIDGER_SECRET_KEY` a tela mostra o motivo. As rotas têm a mesma autenticação e
+  checagem de origem das outras, nunca ecoam o valor, e o aviso "Salvar recarrega X e N dependentes"
+  vale também para o secret. Os botões ficam travados enquanto há edição pendente no form, porque o
+  reload descartaria essa edição. "Remover" pede confirmação e também aparece para envelope
+  `undecryptable` (a view vem nula, só há a issue com `kind`), mesmo sem chave mestra.
+  `shortcut:` o dashboard só envia segredo string; secret não-string cai em 400, até algum plugin precisar de outro tipo.
 - **Alvos de 44 px** (40 px no desktop), campos com fonte de 16 px (evita o zoom do iOS),
   `inputmode` nos campos numéricos, `env(safe-area-inset-bottom)` na barra inferior.
 - **QR** cresce para 200 px, e o código de pareamento ganha botão Copiar.

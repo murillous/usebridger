@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, api } from '#web/lib/api.ts';
 import { badgeOf, secretOrigin, validateLocal } from '#web/lib/config-view.ts';
 import {
@@ -32,6 +32,7 @@ interface Loaded {
   extra: FlatValues;
   /** Falso com `view: null`: sem `sources` não se sabe quais overrides existem. */
   known: boolean;
+  secretsWritable: boolean;
 }
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -204,6 +205,136 @@ function RecordControl(props: {
   );
 }
 
+/** Ações do secret cifrado (ADR 0121): o valor só vive no input até o PUT e nunca é exibido. */
+function SecretActions(props: {
+  id: string;
+  field: Field;
+  source: string | undefined;
+  secretsWritable: boolean;
+  /** Há edição pendente no form: salvar o secret recarrega e a descartaria. */
+  locked: boolean;
+  /** Envelope salvo que não decifra: sem `sources` (view nula), só remover resolve. */
+  unreadable: boolean;
+  reloadNote: string;
+  /** Devolve a mensagem de erro, ou `undefined` se salvou. `null` remove. */
+  onSecret: (path: string, value: string | null) => Promise<string | undefined>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const replaceRef = useRef<HTMLButtonElement>(null);
+  const refocus = useRef(false);
+  // Ao cancelar o input some: devolve o foco ao botão que o abriu.
+  useEffect(() => {
+    if (!editing && refocus.current) {
+      refocus.current = false;
+      replaceRef.current?.focus();
+    }
+  }, [editing]);
+  const { field, source } = props;
+  if (source === 'env' || source === 'file') {
+    return (
+      <span className="help">
+        {source === 'env' ? 'Definido por env' : 'Definido pelo arquivo'}
+      </span>
+    );
+  }
+  const run = async (value: string | null) => {
+    if (value === null && !window.confirm(`Remover ${field.label}? ${props.reloadNote}`)) return;
+    setBusy(true);
+    setError(undefined);
+    const failure = await props.onSecret(field.path, value);
+    setBusy(false);
+    if (failure) setError(failure);
+    else {
+      setEditing(false);
+      setDraft('');
+    }
+  };
+  const canSet = field.settable && props.secretsWritable;
+  const removable = source === 'secret' || props.unreadable;
+  const errId = `${props.id}-secret-err`;
+  const cancel = () => {
+    refocus.current = true;
+    setDraft('');
+    setEditing(false);
+  };
+  return (
+    <div className="secret-actions">
+      {!canSet && (
+        <span className="help">
+          Edição desligada: configure BRIDGER_SECRET_KEY (32 bytes em base64) no ambiente.
+        </span>
+      )}
+      {editing ? (
+        <div className="row">
+          <input
+            id={`${props.id}-new`}
+            className="input mono"
+            type="password"
+            autoComplete="new-password"
+            // biome-ignore lint/a11y/noAutofocus: o foco vai para o campo que a pessoa acabou de abrir
+            autoFocus
+            aria-label={`Novo valor de ${field.label}`}
+            aria-describedby={error ? errId : undefined}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+          />
+          <button
+            type="button"
+            className="btn primary"
+            disabled={draft === '' || busy}
+            onClick={() => run(draft)}
+          >
+            Salvar secret
+          </button>
+          <button type="button" className="btn" disabled={busy} onClick={cancel}>
+            Cancelar
+          </button>
+        </div>
+      ) : (
+        <div className="row">
+          {canSet && (
+            <button
+              type="button"
+              ref={replaceRef}
+              className="btn"
+              aria-label={`Substituir ${field.label}`}
+              disabled={props.locked || busy}
+              onClick={() => setEditing(true)}
+            >
+              Substituir
+            </button>
+          )}
+          {removable && (
+            <button
+              type="button"
+              className="btn danger"
+              aria-label={`Remover ${field.label}`}
+              disabled={props.locked || busy}
+              onClick={() => run(null)}
+            >
+              Remover
+            </button>
+          )}
+        </div>
+      )}
+      {props.locked && (canSet || removable) && (
+        <span className="help">
+          Salve ou descarte as outras alterações antes de mexer no secret.
+        </span>
+      )}
+      {(canSet || removable) && <span className="help">{props.reloadNote}</span>}
+      {error && (
+        <span id={errId} className="err" role="alert">
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function FieldView(props: {
   field: Field;
   value: unknown;
@@ -218,6 +349,8 @@ export function FieldView(props: {
   configKnown?: boolean;
   /** Dica do tipo do schema: só na Config, não no form das abas. */
   showHint?: boolean;
+  /** Só na Config: habilita as ações do secret cifrado (ADR 0121). */
+  secretActions?: Omit<Parameters<typeof SecretActions>[0], 'id' | 'field' | 'source'>;
   onChange: (value: unknown) => void;
 }) {
   const { field, errors } = props;
@@ -352,6 +485,9 @@ export function FieldView(props: {
           {help}
         </span>
       )}
+      {secretView && props.secretActions && (
+        <SecretActions id={id} field={field} source={props.source} {...props.secretActions} />
+      )}
       {showHint && (
         <span id={hintId} className="help mono">
           {field.hint} · vem do schema
@@ -417,6 +553,7 @@ export function Config({ selected }: { selected?: string }) {
         sources: data.view?.sources ?? {},
         extra: flatten({ messages }),
         known: data.view !== null,
+        secretsWritable: data.secretsWritable === true,
         loadIssues: data.issues ?? [],
       });
       setIssueCounts((c) => ({ ...c, [name]: data.issues?.length ?? 0 }));
@@ -491,12 +628,55 @@ export function Config({ selected }: { selected?: string }) {
     }
   };
 
+  // Secret cifrado grava na hora, fora do form: PUT/DELETE em `secrets/:path` (ADR 0121).
+  const saveSecret = async (path: string, value: string | null): Promise<string | undefined> => {
+    if (!plugin) return undefined;
+    setResult(undefined);
+    try {
+      const data = await api<ChangeResult | null>(
+        `config/${encodeURIComponent(plugin)}/secrets/${encodeURIComponent(path)}`,
+        value === null ? { method: 'DELETE' } : { method: 'PUT', body: { value } },
+      );
+      await load(plugin);
+      if (data) {
+        const fresh = new Map([data.plugin, ...data.dependents].map((r) => [r.name, r]));
+        setRows((old) => old.map((r) => fresh.get(r.name) ?? r));
+        setResult(data);
+      }
+      return undefined;
+    } catch (e) {
+      if (e instanceof ApiError && typeof e.body === 'object' && e.body) {
+        const issues = (e.body as { issues?: ConfigIssue[] }).issues;
+        if (issues?.length) return issues.map((i) => i.message).join(' · ');
+      }
+      // 409 sem issues: o segredo já foi gravado e só o reload falhou; a tela não pode ficar velha.
+      if (e instanceof ApiError && e.status === 409) void load(plugin);
+      return e instanceof ApiError ? `${e.status}: ${e.message}` : 'Falha de rede.';
+    }
+  };
+
+  const dependents = plugin ? dependentsOf(rows, plugin) : [];
+  const reloadNote = `Salvar recarrega ${plugin}${
+    dependents.length > 0
+      ? ` e ${dependents.length} ${dependents.length === 1 ? 'dependente' : 'dependentes'}`
+      : ''
+  } (reload em cascata).`;
+
   const fieldView = (node: Field) => (
     <FieldView
       key={`${epoch}-${node.path}`}
       plugin={plugin}
       configKnown={loaded?.known}
       showHint
+      secretActions={{
+        secretsWritable: loaded?.secretsWritable ?? false,
+        locked: dirty,
+        unreadable: (loaded?.loadIssues ?? []).some(
+          (i) => i.kind === 'undecryptable' && i.path === node.path,
+        ),
+        reloadNote,
+        onSecret: saveSecret,
+      }}
       field={node}
       value={values[node.path]}
       masked={
@@ -539,7 +719,6 @@ export function Config({ selected }: { selected?: string }) {
     return out;
   };
 
-  const dependents = plugin ? dependentsOf(rows, plugin) : [];
   const rowOf = (n: string) => rows.find((r) => r.name === n);
   const label = (n: string) => {
     const badge = badgeOf(rowOf(n), issueCounts[n]);
@@ -635,12 +814,7 @@ export function Config({ selected }: { selected?: string }) {
               )}
               {loaded.nodes.length > 0 && (
                 <div className="savebar">
-                  <span className="help">
-                    Salvar recarrega {plugin}
-                    {dependents.length > 0 &&
-                      ` e ${dependents.length} ${dependents.length === 1 ? 'dependente' : 'dependentes'}`}{' '}
-                    (reload em cascata).
-                  </span>
+                  <span className="help">{reloadNote}</span>
                   <button
                     type="button"
                     className="btn"
