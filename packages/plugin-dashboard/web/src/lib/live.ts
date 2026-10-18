@@ -9,6 +9,8 @@ export interface LiveState {
   connected: boolean;
   /** Hora (ms) da última mensagem recebida. */
   lastUpdate: number | null;
+  /** Atualização pausada pelo usuário (WS fechado de propósito): não é queda de conexão. */
+  paused: boolean;
 }
 
 export const initialLive: LiveState = {
@@ -16,7 +18,17 @@ export const initialLive: LiveState = {
   logs: [],
   connected: false,
   lastUpdate: null,
+  paused: false,
 };
+
+/** "há 2 s", "há 3 min", "há 1 h": tempo relativo curto; menos de 1 s conta como "agora". */
+export function relativeAgo(then: number, now: number): string {
+  const sec = Math.max(0, Math.floor((now - then) / 1000));
+  if (sec < 1) return 'agora';
+  if (sec < 60) return `há ${sec} s`;
+  if (sec < 3600) return `há ${Math.floor(sec / 60)} min`;
+  return `há ${Math.floor(sec / 3600)} h`;
+}
 
 /** Aplica uma mensagem do servidor ao estado. Pura: o hook só repassa. */
 export function reduceLive(state: LiveState, message: LiveMessage, now: number): LiveState {
@@ -29,7 +41,9 @@ export function reduceLive(state: LiveState, message: LiveMessage, now: number):
       return { ...base, status };
     }
     case 'qr':
-      return state.status ? { ...base, status: { ...state.status, qr: message.qr } } : base;
+      return state.status
+        ? { ...base, status: { ...state.status, qr: message.qr, qrExpiresAt: message.qrExpiresAt } }
+        : base;
     case 'pairing-code':
       return state.status
         ? { ...base, status: { ...state.status, pairingCode: message.code } }
@@ -100,7 +114,13 @@ export function createLiveClient(options: LiveClientOptions): { close(): void } 
     close() {
       stopped = true;
       cancel?.();
-      socket?.close();
+      if (socket) {
+        // Solta os handlers antes: um `onclose` atrasado não pode sobrescrever o estado do socket
+        // novo (pausar e retomar rápido).
+        socket.onopen = socket.onmessage = socket.onclose = null;
+        socket.close();
+      }
+      options.onConnection(false);
     },
   };
 }

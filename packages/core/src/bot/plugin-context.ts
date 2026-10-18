@@ -67,6 +67,7 @@ import { type Capability, missingCapabilities } from '#transport/capabilities.ts
 import type { ConnectionStatus, Unsubscribe } from '#transport/types.ts';
 import type { UnsafeAccess } from '#unsafe/access.ts';
 import type { BotStats, PluginAdmin } from './config.ts';
+import type { ConnectionInfo } from './connection-info.ts';
 import {
   type CommandViews,
   commandViewFactory,
@@ -111,6 +112,10 @@ export interface PluginContextDeps {
   readonly session: string;
   /** Último status de conexão visto pelo core (ADR 0110). */
   readonly connectionStatus: () => ConnectionStatus | undefined;
+  /** Horário de conexão, reconexões e expiração do QR (ADR 0115). */
+  readonly connectionInfo: () => ConnectionInfo;
+  /** Nome do bot (`BotConfig.name`, senão o nome do transport). */
+  readonly botName: string;
   /** Contadores das filas deste bot, os mesmos de `bot.stats()` (ADR 0106). */
   readonly stats: () => BotStats;
   /** Observadores do bot; os do plugin saem no `dispose` (ADR 0106). */
@@ -312,6 +317,10 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
           guard('services.provide');
           services.provide(service, implementation);
         },
+        provideScoped(service, factory, release) {
+          guard('services.provideScoped');
+          services.provideScoped(service, factory, release);
+        },
         get: (service) => services.get(service),
         has: (service) => services.has(service),
         contribute(point, contribution) {
@@ -353,6 +362,8 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
       transportName: deps.transport.name,
       session: deps.session,
       connectionStatus: deps.connectionStatus,
+      connectionInfo: deps.connectionInfo,
+      botName: deps.botName,
       capabilities: deps.transport.capabilities,
       get self(): Contact | null {
         return deps.transport.self;
@@ -374,14 +385,28 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         lifetime.expire(
           reason ?? new PluginHostStateError(`plugin "${name}": contexto descartado`),
         );
-        deps.router.registry.removePlugin(name);
-        deps.router.roles.removePlugin(name);
-        deps.conversations.removePlugin(name);
-        deps.bus.removePlugin(name);
-        deps.services.removePlugin(name);
-        deps.scheduler.removePlugin(name);
-        deps.observers.removePlugin(name);
-        deps.http?.removeOwner(name);
+        // Um passo que lança não pode pular os seguintes (scheduler, observers e http ficariam
+        // com o plugin morto): termina todos e relança junto no fim.
+        const errors: unknown[] = [];
+        for (const step of [
+          () => deps.router.registry.removePlugin(name),
+          () => deps.router.roles.removePlugin(name),
+          () => deps.conversations.removePlugin(name),
+          () => deps.bus.removePlugin(name),
+          () => deps.services.removePlugin(name),
+          () => deps.scheduler.removePlugin(name),
+          () => deps.observers.removePlugin(name),
+          () => deps.http?.removeOwner(name),
+        ]) {
+          try {
+            step();
+          } catch (error) {
+            errors.push(error);
+          }
+        }
+        if (errors.length > 0) {
+          throw new AggregateError(errors, `plugin "${name}": falha ao limpar o contexto`);
+        }
       },
     };
   };
@@ -429,8 +454,13 @@ function liveAdmin(
     ),
     enable: masked(live('admin.plugins.enable', (target: string) => admin.plugins.enable(target))),
   });
+  // Getter: `Object.assign` copiaria o valor de agora, e o boot pode ainda não ter terminado.
+  Object.defineProperty(plugins, 'bootedAt', {
+    get: () => admin.plugins.bootedAt,
+    enumerable: true,
+  });
   return {
-    plugins,
+    plugins: plugins as PluginAdmin['plugins'],
     config: {
       setOverrides: masked(
         live('admin.config.setOverrides', (target: string, overrides) =>
@@ -439,6 +469,23 @@ function liveAdmin(
             : admin.config.setOverrides(target, overrides),
         ),
       ),
+      setSecret: masked(
+        live('admin.config.setSecret', (target: string, path: string, value) =>
+          target === self
+            ? refuse('admin.config.setSecret')
+            : admin.config.setSecret(target, path, value),
+        ),
+      ),
+      clearSecret: masked(
+        live('admin.config.clearSecret', (target: string, path: string) =>
+          target === self
+            ? refuse('admin.config.clearSecret')
+            : admin.config.clearSecret(target, path),
+        ),
+      ),
+      get secretsWritable() {
+        return admin.config.secretsWritable;
+      },
       describe: masked((target: string) => admin.config.describe(target)),
       jsonSchema: (target: string) => redact(admin.config.jsonSchema(target)),
     },

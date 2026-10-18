@@ -4,7 +4,7 @@
 // `/sessions/<sessão>`; WebSocket para os dois.
 
 import { createServer } from 'node:net';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { BotConfigError } from '#config/owners.ts';
 import type { PluginErrorEvent } from '#events/types.ts';
@@ -131,6 +131,23 @@ describe('HTTP do core (ADR 0076)', () => {
     const health = await fetch(url(http, '/health'));
     expect(health.status).toBe(200);
     expect(await health.json()).toEqual({ status: 'ok', sessions: { default: 'running' } });
+  });
+
+  it('em failed o HTTP segue no ar com /health 503; o stop() fecha a porta (ADR 0120)', async () => {
+    const http = server();
+    const transport = new RecordingTransport();
+    const b = bot({ http, plugins: [api], transport });
+    await b.start();
+
+    transport.emit('connection.status', { status: 'closed', reason: 'fatal', error: null });
+    await vi.waitFor(() => expect(b.state).toBe('failed'));
+
+    expect((await fetch(url(http, '/plugins/api/users/7'))).status).toBe(200);
+    expect((await fetch(url(http, '/health'))).status).toBe(503);
+
+    const port = url(http, '/health');
+    await b.stop();
+    await expect(fetch(port)).rejects.toThrow();
   });
 
   it('/health responde 503 enquanto uma sessão não está running', async () => {

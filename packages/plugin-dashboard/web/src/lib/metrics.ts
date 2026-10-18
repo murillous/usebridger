@@ -8,6 +8,7 @@ export const KERNEL = {
   sent: 'bridger.outbound.sent',
   users: 'bridger.active.users',
   groups: 'bridger.active.groups',
+  pending: 'bridger.outbound.pending',
 } as const;
 
 // Espelha HISTOGRAM_BUCKETS do plugin-metrics (o app web não importa o pacote); o último é o `+Inf`.
@@ -16,7 +17,12 @@ const BOUNDS = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10_000, 30_000];
 export const rowsOf = (data: MetricsResponse, name: string): MetricRowView[] =>
   (data.available && data.metrics.find((m) => m.name === name)?.rows) || [];
 
-const amount = (row: MetricRowView): number => (row.type === 'counter' ? row.value : row.count);
+const amount = (row: MetricRowView): number =>
+  row.type === 'counter' ? row.value : row.type === 'gauge' ? row.max : row.count;
+
+/** Maior valor entre as linhas de gauge (máximo do dia); 0 sem linhas. */
+export const maxOf = (rows: MetricRowView[]): number =>
+  rows.reduce((n, r) => Math.max(n, r.type === 'gauge' ? r.max : 0), 0);
 
 export const total = (rows: MetricRowView[]): number => rows.reduce((n, r) => n + amount(r), 0);
 
@@ -70,9 +76,11 @@ export function percentile(rows: MetricRowView[], p: number): number | undefined
 
 export interface Summary {
   name: string;
-  type: 'counter' | 'histogram';
+  type: 'counter' | 'histogram' | 'gauge';
   series: number;
-  /** Contador: soma. Histograma: número de observações. */
+  /** Plugin que declarou a métrica; `core` para as do kernel. */
+  plugin?: string;
+  /** Contador: soma. Histograma: número de observações. Gauge: máximo. */
   total: number;
   p95?: number;
 }
@@ -80,7 +88,7 @@ export interface Summary {
 /** Uma linha por métrica registrada, para a seção genérica. Métrica sem dado no período fica de fora. */
 export function summarize(data: MetricsResponse): Summary[] {
   if (!data.available) return [];
-  return data.metrics.flatMap(({ name, rows }) => {
+  return data.metrics.flatMap(({ name, rows, plugin }) => {
     const first = rows[0];
     if (!first) return [];
     const series = new Set(rows.map((r) => JSON.stringify(Object.entries(r.labels).sort()))).size;
@@ -90,12 +98,77 @@ export function summarize(data: MetricsResponse): Summary[] {
         name,
         type: first.type,
         series,
-        total: total(rows),
+        ...(plugin === undefined ? {} : { plugin }),
+        total: first.type === 'gauge' ? maxOf(rows) : total(rows),
         ...(p95 === undefined ? {} : { p95 }),
       },
     ];
   });
 }
+
+/** Rótulo curto do eixo: "hoje" para o último dia, "12 out" para os outros. */
+export function shortDay(day: string, today: string): string {
+  if (day === today) return 'hoje';
+  const parts = new Intl.DateTimeFormat('pt-BR', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  }).formatToParts(new Date(`${day}T00:00:00Z`));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${get('day')} ${get('month').replace('.', '')}`;
+}
+
+/**
+ * Percentil por dia (limite do balde), para o gráfico de latência. `value` desenha a barra (dia sem
+ * observação em zero, balde `+Inf` no maior teto); `text` é o valor para ler: "sem dado" ou "> 30.000 ms".
+ */
+export function percentilePerDay(
+  rows: MetricRowView[],
+  days: string[],
+  p: number,
+): { day: string; value: number; text: string }[] {
+  return days.map((day) => {
+    const v = percentile(
+      rows.filter((r) => r.day === day),
+      p,
+    );
+    return {
+      day,
+      value: v === undefined ? 0 : Number.isFinite(v) ? v : (BOUNDS.at(-1) ?? 0),
+      text: v === undefined ? 'sem dado' : fmtMs(v),
+    };
+  });
+}
+
+/** Nomes dos rótulos usados pelas linhas, em ordem alfabética (`"status, route"` vira `"route, status"`). */
+export const labelNames = (rows: MetricRowView[]): string[] =>
+  [...new Set(rows.flatMap((r) => Object.keys(r.labels)))].sort();
+
+export interface CatalogEntry extends Summary {
+  labels: string[];
+  /** Total do último dia do intervalo (contador) ou número de observações (histograma). */
+  today: number;
+  todayP95?: number;
+}
+
+/** `summarize` mais o que a tabela da tela mostra: rótulos e o valor de hoje. */
+export function catalog(data: MetricsResponse): CatalogEntry[] {
+  if (!data.available) return [];
+  return summarize(data).map((s) => {
+    const rows = data.metrics.find((m) => m.name === s.name)?.rows ?? [];
+    const todayRows = rows.filter((r) => r.day === data.to);
+    const todayP95 = percentile(todayRows, 0.95);
+    return {
+      ...s,
+      labels: labelNames(rows),
+      today: s.type === 'gauge' ? maxOf(todayRows) : total(todayRows),
+      ...(todayP95 === undefined ? {} : { todayP95 }),
+    };
+  });
+}
+
+/** URL do scrape do plugin-metrics, irmã do dashboard sob `/plugins/` (e sob `/sessions/<s>/plugins/`). */
+export const scrapeUrl = (baseURI: string): string => new URL('../metrics/metrics', baseURI).href;
 
 export const fmtInt = (n: number): string => n.toLocaleString('pt-BR');
 export const fmtMs = (n: number | undefined): string =>

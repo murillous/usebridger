@@ -13,7 +13,7 @@ import type { PluginChangeResult } from '#plugin/host.ts';
 import { PREFIX_PLACEHOLDER, placeholders } from '#plugin/messages.ts';
 import type { PluginDefinition, PluginMessages } from '#plugin/types.ts';
 import { kernelStorage } from '#storage/namespace.ts';
-import type { JsonObject, StoragePort } from '#storage/types.ts';
+import type { JsonObject, JsonValue, StoragePort } from '#storage/types.ts';
 import {
   type ConfigEnv,
   type EnvEntry,
@@ -21,9 +21,11 @@ import {
   envName,
   processEnv,
   readEnvFields,
+  readSecretKeys,
 } from './env.ts';
 import { type ConfigSource, PluginConfigError, type PluginConfigIssue } from './errors.ts';
 import { isSecretSchema, misplacedSecrets, objectShape, SECRET_MASK } from './schema.ts';
+import { decrypt, encrypt, isEnvelope, keyId } from './secret-cipher.ts';
 
 /**
  * Config de um plugin vinda do app ou do storage: os campos do schema e, opcionalmente,
@@ -55,7 +57,8 @@ export interface PluginConfigView {
 
 /**
  * JSON Schema (draft 2020-12) da entrada da config; campos secretos com `secret: true`,
- * `writeOnly: true` e `x-bridger-override: false` (não editáveis por override).
+ * `writeOnly: true` e `x-bridger-override: false` (não editáveis por override). Com chave mestra
+ * (`secretsWritable`), também `x-bridger-set-secret: true`: editável por `setSecret` (ADR 0121).
  */
 export type PluginConfigJsonSchema = Readonly<Record<string, unknown>>;
 
@@ -72,6 +75,11 @@ export interface PluginConfigsOptions {
   readonly secrets?: SecretSet;
   /** Chamado depois de salvar um override válido; normalmente `(name) => host.reload(name)`. */
   readonly reload?: (plugin: string) => Promise<PluginChangeResult>;
+  /**
+   * `true` se o plugin está desligado (`disabledPlugins` ou `disable`): `setSecret` e
+   * `clearSecret` gravam mas pulam o `reload`, que o host recusaria; o plugin lê o valor ao ligar.
+   */
+  readonly isDisabled?: (plugin: string) => boolean;
   /** Avisos de configuração (ex.: `pluginConfig` citando plugin inexistente). */
   readonly log?: Logger;
 }
@@ -82,9 +90,34 @@ export interface PluginConfigs {
    * alguma camada tiver valor inválido. Registra os segredos no `SecretSet`.
    */
   resolve(plugin: string): Promise<ResolvedPluginConfig>;
+  /** `true` se há `BRIDGER_SECRET_KEY`: sem ela `setSecret` rejeita (ADR 0121). */
+  readonly secretsWritable: boolean;
+  /**
+   * Salva o segredo `path` (pontilhado, ex.: `openai.apiKey`) do plugin, cifrado no storage.
+   * Rejeita com `PluginConfigError` se: não há chave mestra; o caminho não é campo `secret` do
+   * schema; o env ou o arquivo definem o campo (`kind: 'shadowed'`); ou a config resultante é
+   * inválida. Nesses casos nada muda. Se válida, salva e chama `reload`.
+   */
+  setSecret(
+    plugin: string,
+    path: string,
+    value: JsonValue,
+  ): Promise<PluginChangeResult | undefined>;
+  /**
+   * Remove o segredo salvo em `path` (o campo volta à camada de baixo) e recarrega. Rejeita se a
+   * config ficar inválida (campo obrigatório). Funciona sem chave mestra: é como se limpa um
+   * envelope ilegível.
+   */
+  clearSecret(plugin: string, path: string): Promise<PluginChangeResult | undefined>;
+  /**
+   * Rotação da chave mestra (ADR 0121): migra para a chave atual os envelopes com o `kid` de
+   * `BRIDGER_SECRET_KEY_PREVIOUS`. Devolve quantos migrou. Chamado no boot.
+   */
+  rotateSecrets(): Promise<number>;
   /**
    * Substitui os overrides do plugin (`{}` remove). Campo `secret` (em qualquer nível) é
-   * recusado com `PluginConfigError` (fonte `override`): segredo vem de env ou do arquivo.
+   * recusado com `PluginConfigError` (fonte `override`): segredo vem de env, do arquivo ou de
+   * `setSecret`.
    * Valida a config resultante antes de salvar:
    * se inválida, rejeita com `PluginConfigError` e nada muda — o plugin segue rodando. Se
    * válida, salva e chama `reload` (devolve o resultado dele; `undefined` sem `reload`).
@@ -237,24 +270,27 @@ function secretStrings(value: unknown, into: string[]): void {
 
 /** Anotação do JSON Schema que diz ao dashboard que o campo não aceita override. */
 const OVERRIDE_ANNOTATION = 'x-bridger-override';
+/** Anotação que diz ao dashboard que o campo secreto é editável por `setSecret` (ADR 0121). */
+const SET_SECRET_ANNOTATION = 'x-bridger-set-secret';
 
 /**
  * No JSON Schema exportado, marca campo secreto como não editável por override e troca o
  * `default` dele pela máscara. `x-bridger-override` em vez de `readOnly`: o campo já é
  * `writeOnly`, e `readOnly` + `writeOnly` juntos se contradizem no JSON Schema.
  */
-function markSecrets(node: unknown): void {
+function markSecrets(node: unknown, writable: boolean): void {
   if (Array.isArray(node)) {
-    for (const item of node) markSecrets(item);
+    for (const item of node) markSecrets(item, writable);
     return;
   }
   if (typeof node !== 'object' || node === null) return;
   const record = node as PlainObject;
   if (record['secret'] === true) {
     record[OVERRIDE_ANNOTATION] = false;
+    if (writable) record[SET_SECRET_ANNOTATION] = true;
     if ('default' in record) record['default'] = SECRET_MASK;
   }
-  for (const value of Object.values(record)) markSecrets(value);
+  for (const value of Object.values(record)) markSecrets(value, writable);
 }
 
 /**
@@ -262,9 +298,12 @@ function markSecrets(node: unknown): void {
  * pela máscara. É o que o dashboard usa em formulários de config e de aba (ADR 0108).
  * Transform não tem JSON Schema; vira `{}` em vez de lançar.
  */
-export function maskedJsonSchema(schema: z.ZodType): PluginConfigJsonSchema {
+export function maskedJsonSchema(
+  schema: z.ZodType,
+  secretsWritable = false,
+): PluginConfigJsonSchema {
   const json = schema.toJSONSchema({ io: 'input', unrepresentable: 'any' });
-  markSecrets(json);
+  markSecrets(json, secretsWritable);
   return json as PluginConfigJsonSchema;
 }
 
@@ -287,6 +326,10 @@ type Computed =
 export function createPluginConfigs(options: PluginConfigsOptions): PluginConfigs {
   const env = options.env ?? processEnv();
   const kv = kernelStorage(options.storage, 'config').kv;
+  const secretKv = kernelStorage(options.storage, 'secrets').kv;
+  // Chave inválida lança aqui (`BotConfigError`) e derruba o boot (ADR 0121).
+  const keys = readSecretKeys(env);
+  const decryptKeys = [keys.current, keys.previous].filter((key) => key !== undefined);
   const log = options.log ?? createNoopLogger();
   const file = options.file ?? {};
   const byName = new Map(options.plugins.map((plugin) => [plugin.name, plugin]));
@@ -337,7 +380,11 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
     return { source, fields, messages: messages ?? {} };
   }
 
-  function compute(definition: PluginDefinition, override: unknown): Computed {
+  function compute(
+    definition: PluginDefinition,
+    override: unknown,
+    secretFields: PlainObject,
+  ): Computed {
     const { name } = definition;
     const schema = definition.config;
     const shape = schema ? objectShape(schema) : undefined;
@@ -372,6 +419,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
     // Da menor para a maior precedência.
     const layers = [
       toLayer('override', override, issues),
+      toLayer('secret', secretFields, issues),
       toLayer('file', file[name], issues),
     ].filter((layer) => layer !== undefined);
     const envFields = shape ? readEnvFields(name, shape, env) : [];
@@ -545,9 +593,60 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
     options.secrets?.set(SECRETS_OWNER(definition.name), result.secrets);
   }
 
+  /** Envelopes salvos do plugin: `{ [caminho pontilhado]: envelope }`. */
+  async function readStored(name: string): Promise<Record<string, JsonValue>> {
+    const stored = await secretKv.get(name);
+    return isPlainObject(stored) ? (stored as Record<string, JsonValue>) : {};
+  }
+
+  /**
+   * Decifra os envelopes na forma de camada de config. `omit` fica de fora: `setSecret` e
+   * `clearSecret` trocam esse campo e não podem travar num envelope ilegível dele. Qualquer
+   * outro que não decifre lança `PluginConfigError` `undecryptable`, sem valor nem envelope.
+   */
+  // Quantos envelopes a última chamada de `decryptStored` não decifrou (só útil no modo tolerante).
+  let brokenCount = 0;
+
+  function decryptStored(
+    name: string,
+    stored: Record<string, JsonValue>,
+    omit?: string,
+    tolerant = false,
+  ): PlainObject {
+    const fields: PlainObject = {};
+    const issues: PluginConfigIssue[] = [];
+    for (const [label, envelope] of Object.entries(stored)) {
+      if (label === omit) continue;
+      try {
+        setIn(
+          fields,
+          label.split('.'),
+          JSON.parse(decrypt(decryptKeys, `${name}:${label}`, envelope)),
+        );
+      } catch {
+        issues.push({
+          path: label,
+          kind: 'undecryptable',
+          message:
+            'segredo salvo não decifra (BRIDGER_SECRET_KEY ausente ou trocada, ou dado ' +
+            'adulterado); restaure a chave ou remova o campo com clearSecret',
+          source: 'secret',
+        });
+      }
+    }
+    // `tolerant` (clearSecret): os outros ilegíveis ficam de fora, para a remoção não depender deles.
+    if (issues.length > 0 && !tolerant) throw new PluginConfigError(name, issues);
+    brokenCount = issues.length;
+    return fields;
+  }
+
   async function current(name: string): Promise<Computed & { ok: true }> {
     const definition = definitionOf(name);
-    const result = compute(definition, dropLegacySecrets(definition, await kv.get(name)));
+    const result = compute(
+      definition,
+      dropLegacySecrets(definition, await kv.get(name)),
+      decryptStored(name, await readStored(name)),
+    );
     if (!result.ok) throw result.error;
     trackSecrets(definition, result);
     return result;
@@ -598,7 +697,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
         }))
       : [];
     if (secretIssues.length > 0) throw new PluginConfigError(name, secretIssues);
-    const result = compute(definition, overrides);
+    const result = compute(definition, overrides, decryptStored(name, await readStored(name)));
     if (!result.ok) throw result.error;
     warnShadowed(name, overrides, result.sources);
     // Antes de salvar e de recarregar: o reload loga, e o segredo novo já precisa sair censurado.
@@ -608,18 +707,184 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
     return options.reload ? options.reload(name) : undefined;
   }
 
+  /** `path` é um campo `secret` do schema (folha, em qualquer nível de objetos)? */
+  function isSecretField(schema: z.ZodType | undefined, path: readonly string[]): boolean {
+    let shape = schema ? objectShape(schema) : undefined;
+    for (const [index, key] of path.entries()) {
+      // `hasOwn`: 'constructor' e afins existem em todo objeto e não são campos do schema.
+      const field = shape && Object.hasOwn(shape, key) ? shape[key] : undefined;
+      if (!field) return false;
+      if (index === path.length - 1) return isSecretSchema(field);
+      shape = objectShape(field);
+    }
+    return false;
+  }
+
+  /** Persiste o resultado de uma escrita de segredo: valida, grava, loga e recarrega. */
+  async function commitSecrets(
+    definition: PluginDefinition,
+    next: Record<string, JsonValue>,
+    fields: PlainObject,
+    action: string,
+    label: string,
+    lenient = false,
+  ): Promise<PluginChangeResult | undefined> {
+    const { name } = definition;
+    const result = compute(definition, dropLegacySecrets(definition, await kv.get(name)), fields);
+    // Remoção com outros envelopes ilegíveis: o estado já era inválido e a remoção não o piora,
+    // então a validação não pode bloquear a saída (campo obrigatório ilegível, por exemplo).
+    if (!result.ok && !lenient) throw result.error;
+    // Antes de salvar e de recarregar: o reload loga, e o segredo novo já precisa sair censurado.
+    if (result.ok) trackSecrets(definition, result);
+    if (Object.keys(next).length === 0) await secretKv.delete(name);
+    else await secretKv.set(name, next);
+    // Nunca o valor: só quem, onde e de qual camada.
+    log.info(`segredo do plugin "${name}" ${action}`, {
+      plugin: name,
+      field: label,
+      source: 'secret',
+    });
+    if (options.isDisabled?.(name)) return undefined;
+    return options.reload ? options.reload(name) : undefined;
+  }
+
+  async function runSetSecret(
+    name: string,
+    label: string,
+    value: JsonValue,
+  ): Promise<PluginChangeResult | undefined> {
+    const definition = definitionOf(name);
+    const path = label.split('.');
+    const refuse = (
+      kind: PluginConfigIssue['kind'],
+      message: string,
+      source: ConfigSource,
+      envVar?: string,
+    ): PluginConfigError =>
+      new PluginConfigError(name, [
+        { path: label, kind, message, source, ...(envVar ? { env: envVar } : {}) },
+      ]);
+    if (!keys.current) {
+      throw refuse(
+        'invalid',
+        'escrita de segredo desligada: defina BRIDGER_SECRET_KEY (32 bytes em base64)',
+        'secret',
+      );
+    }
+    if (!isSecretField(definition.config, path)) {
+      throw refuse('invalid', 'não é um campo secret() do schema do plugin', 'secret');
+    }
+    const shape = definition.config ? objectShape(definition.config) : undefined;
+    const fromEnv = shape
+      ? readEnvFields(name, shape, env).find((entry) => entry.path.join('.') === label)
+      : undefined;
+    if (fromEnv) {
+      throw refuse(
+        'shadowed',
+        `o campo é definido pela env ${fromEnv.name}, que vale mais que o segredo salvo; ` +
+          'remova a variável para gerenciá-lo pelo dashboard',
+        'env',
+        fromEnv.name,
+      );
+    }
+    const fromFile = file[name];
+    if (isPlainObject(fromFile) && provides(fromFile, path)) {
+      throw refuse(
+        'shadowed',
+        `o campo é definido pelo arquivo pluginConfig["${name}"].${label}, que vale mais que o ` +
+          'segredo salvo; remova-o do arquivo para gerenciá-lo pelo dashboard',
+        'file',
+      );
+    }
+    const stored = await readStored(name);
+    const fields = decryptStored(name, stored, label);
+    setIn(fields, path, value);
+    const next = {
+      ...stored,
+      [label]: encrypt(keys.current, `${name}:${label}`, JSON.stringify(value)),
+    };
+    return commitSecrets(definition, next, fields, 'salvo', label);
+  }
+
+  async function runClearSecret(
+    name: string,
+    label: string,
+  ): Promise<PluginChangeResult | undefined> {
+    const definition = definitionOf(name);
+    const stored = await readStored(name);
+    const saved = Object.hasOwn(stored, label);
+    // Campo que saiu do schema ainda pode ter envelope salvo: deixa limpar.
+    if (!saved && !isSecretField(definition.config, label.split('.'))) {
+      throw new PluginConfigError(name, [
+        {
+          path: label,
+          kind: 'invalid',
+          message: 'não é um campo secret() do schema do plugin',
+          source: 'secret',
+        },
+      ]);
+    }
+    // Nada salvo no caminho: nada a gravar, logar nem recarregar.
+    if (!saved) return undefined;
+    const { [label]: _removed, ...next } = stored;
+    const fields = decryptStored(name, stored, label, true);
+    return commitSecrets(definition, next, fields, 'removido', label, brokenCount > 0);
+  }
+
+  async function runRotate(): Promise<number> {
+    const { current: now, previous } = keys;
+    if (!now || !previous) return 0;
+    const oldKid = keyId(previous);
+    let migrated = 0;
+    for (const name of byName.keys()) {
+      const stored = await readStored(name);
+      const next = { ...stored };
+      let changed = false;
+      for (const [label, envelope] of Object.entries(stored)) {
+        if (!isEnvelope(envelope) || envelope.kid !== oldKid) continue;
+        const aad = `${name}:${label}`;
+        try {
+          next[label] = encrypt(now, aad, decrypt([previous], aad, envelope));
+          changed = true;
+          migrated++;
+        } catch {
+          // Fica como está: a resolução do plugin reporta `undecryptable` com o caminho.
+          log.warn('segredo com a chave anterior não decifra; não migrado', {
+            plugin: name,
+            field: label,
+          });
+        }
+      }
+      if (changed) await secretKv.set(name, next);
+    }
+    log.info(`rotação da chave mestra: ${migrated} segredo(s) migrado(s)`, { migrated });
+    return migrated;
+  }
+
+  // Uma mudança por vez: duas gravações concorrentes reordenariam save e reload.
+  function enqueue<T>(run: () => Promise<T>): Promise<T> {
+    const result = queue.then(run);
+    queue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+
   return {
     resolve: async (name) => (await current(name)).resolved,
 
-    setOverrides(name: string, overrides: JsonObject): Promise<PluginChangeResult | undefined> {
-      // Uma mudança por vez: duas gravações concorrentes reordenariam save e reload.
-      const result = queue.then(() => runSetOverrides(name, overrides));
-      queue = result.then(
-        () => undefined,
-        () => undefined,
-      );
-      return result;
-    },
+    secretsWritable: keys.current !== undefined,
+
+    setOverrides: (name: string, overrides: JsonObject) =>
+      enqueue(() => runSetOverrides(name, overrides)),
+
+    setSecret: (name: string, path: string, value: JsonValue) =>
+      enqueue(() => runSetSecret(name, path, value)),
+
+    clearSecret: (name: string, path: string) => enqueue(() => runClearSecret(name, path)),
+
+    rotateSecrets: () => enqueue(runRotate),
 
     async describe(name: string): Promise<PluginConfigView> {
       const definition = definitionOf(name);
@@ -635,7 +900,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
       const schema = definitionOf(name).config;
       if (!schema) return undefined;
       // `input`: o formulário preenche a entrada (campos com default são opcionais).
-      return maskedJsonSchema(schema);
+      return maskedJsonSchema(schema, keys.current !== undefined);
     },
   };
 }

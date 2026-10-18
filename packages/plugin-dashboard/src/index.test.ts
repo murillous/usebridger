@@ -1,5 +1,5 @@
-import { createHttp, definePlugin, type Logger } from '@usebridger/core';
-import { createTestBot } from '@usebridger/testing';
+import { CORE_VERSION, createHttp, definePlugin, type Logger } from '@usebridger/core';
+import { createTestBot, FakeTransport } from '@usebridger/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createSessions } from './auth.ts';
 import { dashboard, type StatusView } from './index.ts';
@@ -22,12 +22,16 @@ const logger = definePlugin({
   },
 });
 
-async function start(config: Record<string, unknown> = {}) {
+async function start(
+  config: Record<string, unknown> = {},
+  botConfig: Record<string, unknown> = {},
+) {
   const http = createHttp({ port: 0, hostname: '127.0.0.1' });
   const bot = await createTestBot({
     plugins: [dashboard, logger],
     http,
     logLevel: 'info',
+    ...botConfig,
     pluginConfig: { dashboard: { token: TOKEN, ...config } },
   });
   bots.push(bot);
@@ -107,6 +111,22 @@ describe('autenticação', () => {
     const out = await fetch(`${base}/api/logout`, { method: 'POST', headers: { cookie: c } });
     expect(out.status).toBe(204);
     expect((await fetch(`${base}/api/status`, { headers: { cookie: c } })).status).toBe(401);
+  });
+
+  it('status traz a fila de saída ao vivo', async () => {
+    const { base, cookie } = await start();
+    const c = await cookie();
+    const body = (await (await fetch(`${base}/api/status`, { headers: { cookie: c } })).json()) as {
+      outboundPending: number;
+    };
+    expect(body.outboundPending).toBe(0);
+  });
+
+  it('status traz as versões do core e do dashboard', async () => {
+    const { base, cookie } = await start();
+    const res = await fetch(`${base}/api/status`, { headers: { cookie: await cookie() } });
+    const { versions } = (await res.json()) as StatusView;
+    expect(versions).toEqual({ core: CORE_VERSION, dashboard: dashboard.version });
   });
 
   it('sessão expira', () => {
@@ -209,6 +229,45 @@ describe('endurecimento', () => {
 });
 
 describe('estado', () => {
+  it('status informa se o transport pareia (capability pairing)', async () => {
+    const { base, cookie } = await start();
+    const res = await fetch(`${base}/api/status`, { headers: { cookie: await cookie() } });
+    // O FakeTransport padrão tem todas as capabilities.
+    expect(((await res.json()) as StatusView).pairing).toBe(true);
+  });
+
+  it('erro fatal com a reconexão padrão leva o bot a failed e o painel segue respondendo', async () => {
+    const { bot, base, cookie } = await start({}, { reconnection: {} });
+    const headers = { cookie: await cookie() };
+
+    await bot.emit('connection.status', { status: 'closed', reason: 'fatal', error: null });
+    await until(() => bot.bot.state === 'failed');
+
+    const res = await fetch(`${base}/api/status`, { headers });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ status: 'closed', reason: 'fatal' });
+  });
+
+  it('pairing é false quando o transport não tem a capability', async () => {
+    const http = createHttp({ port: 0, hostname: '127.0.0.1' });
+    bots.push(
+      await createTestBot({
+        plugins: [dashboard],
+        http,
+        transport: new FakeTransport({ capabilities: [] }),
+        pluginConfig: { dashboard: { token: TOKEN } },
+      }),
+    );
+    const base = `http://127.0.0.1:${http.port}/plugins/dashboard`;
+    const login = await fetch(`${base}/api/login`, {
+      method: 'POST',
+      body: JSON.stringify({ token: TOKEN }),
+    });
+    const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    const res = await fetch(`${base}/api/status`, { headers: { cookie } });
+    expect(((await res.json()) as StatusView).pairing).toBe(false);
+  });
+
   it('status reflete a conexão; QR e código saem no open; closed expõe só reason e mensagem', async () => {
     const { bot, base, cookie } = await start();
     const headers = { cookie: await cookie() };
@@ -237,6 +296,51 @@ describe('estado', () => {
     const closed = await get();
     expect(closed).toMatchObject({ status: 'closed', reason: 'connection-lost', message: 'caiu' });
     expect(JSON.stringify(closed)).not.toContain('socket');
+  });
+
+  it('status traz horário no ar, reconexões, nome do bot e expiração do QR', async () => {
+    const { bot, base, cookie } = await start();
+    const headers = { cookie: await cookie() };
+    const get = async (): Promise<StatusView> =>
+      (await (await fetch(`${base}/api/status`, { headers })).json()) as StatusView;
+
+    await bot.emit('connection.status', { status: 'open' });
+    const open = await get();
+    expect(open.connectedSince).toEqual(expect.any(Number));
+    expect(open.reconnections).toBe(0);
+    expect(open.name).toBe(open.transport);
+
+    await bot.emit('connection.status', {
+      status: 'closed',
+      reason: 'connection-lost',
+      error: null,
+    });
+    expect((await get()).connectedSince).toBeUndefined();
+    await bot.emit('connection.qr', { qr: 'QR1', expiresAt: 4242 });
+    expect((await get()).qrExpiresAt).toBe(4242);
+    await bot.emit('connection.status', { status: 'open' });
+    const back = await get();
+    expect(back.reconnections).toBe(1);
+    expect(back.qrExpiresAt).toBeUndefined();
+  });
+
+  it('o nome do bot vem de createBot({ name })', async () => {
+    const http = createHttp({ port: 0, hostname: '127.0.0.1' });
+    const bot = await createTestBot({
+      plugins: [dashboard],
+      http,
+      name: 'luma',
+      pluginConfig: { dashboard: { token: TOKEN } },
+    });
+    bots.push(bot);
+    const base = `http://127.0.0.1:${http.port}/plugins/dashboard`;
+    const login = await fetch(`${base}/api/login`, {
+      method: 'POST',
+      body: JSON.stringify({ token: TOKEN }),
+    });
+    const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    const res = await fetch(`${base}/api/status`, { headers: { cookie } });
+    expect(((await res.json()) as StatusView).name).toBe('luma');
   });
 
   it('status traz a sessão do bot', async () => {

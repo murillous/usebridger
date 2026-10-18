@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, api } from '#web/lib/api.ts';
+import {
+  contributes,
+  countFilter,
+  dependsText,
+  list,
+  type PluginFilter,
+  setupText,
+  skippedDependents,
+  stateOf,
+  subtitle,
+  visible,
+} from '#web/lib/plugins.ts';
 import type { ChangeResult, PluginRow, SkipReason } from '#web/lib/types.ts';
 
 type Action = 'enable' | 'disable' | 'reload';
@@ -28,18 +40,6 @@ function reasonText(reason: SkipReason | undefined): string {
   }
 }
 
-/** Resultado do `setup`: falhou, carregou com comando de fora, carregou inteiro; `—` se nem rodou. */
-function setupText(row: PluginRow): string {
-  if (row.status === 'loaded') {
-    return row.unregistered?.length ? `Parcial (${row.unregistered.length} comandos fora)` : 'OK';
-  }
-  return row.reason?.kind === 'setup-failed' ? 'Falhou' : '—';
-}
-
-const list = (items: string[] | undefined): string => (items?.length ? items.join(', ') : '—');
-const deps = (row: PluginRow): string =>
-  list(row.dependsOn && Object.entries(row.dependsOn).map(([name, range]) => `${name} ${range}`));
-
 const errorText = (e: unknown): string =>
   e instanceof ApiError ? `${e.status}: ${e.message}` : 'Falha de rede.';
 
@@ -52,9 +52,14 @@ export function Plugins() {
   const notice = useRef<HTMLDivElement>(null);
   const [rows, setRows] = useState<PluginRow[]>();
   const [error, setError] = useState<string>();
+  // Separado do erro da lista: o `load()` que segue a ação limparia o motivo da falha (409/500).
+  const [actionError, setActionError] = useState<string>();
   const [busy, setBusy] = useState<string>();
   const [result, setResult] = useState<{ action: Action; data: ChangeResult }>();
   const [confirm, setConfirm] = useState<PluginRow>();
+  const [bootedAt, setBootedAt] = useState<number>();
+  const [filter, setFilter] = useState<PluginFilter>('todos');
+  const [query, setQuery] = useState('');
   const opener = useRef<HTMLElement | null>(null);
   const ask = (row: PluginRow) => {
     opener.current = document.activeElement as HTMLElement | null;
@@ -84,74 +89,121 @@ export function Plugins() {
   useEffect(() => {
     void load();
   }, [load]);
+  // O horário do boot (real, do core) é enfeite do subtítulo: sem ele a tela segue só com o resumo.
+  useEffect(() => {
+    api<{ bootedAt: number }>('plugins/boot').then(
+      (b) => setBootedAt(b.bootedAt),
+      () => setBootedAt(undefined),
+    );
+  }, []);
 
   const run = async (name: string, action: Action) => {
     close();
     setBusy(name);
     setResult(undefined);
+    setActionError(undefined);
     try {
       const data = await api<ChangeResult>(`plugins/${encodeURIComponent(name)}/${action}`, {
         method: 'POST',
       });
       setResult({ action, data });
-      setError(undefined);
     } catch (e) {
-      setError(errorText(e));
+      setActionError(errorText(e));
     } finally {
       setBusy(undefined);
       await load();
     }
   };
 
-  const actions = (row: PluginRow) => {
-    const disabled = busy !== undefined;
+  // Ligado = não desligado: plugin que falhou ou foi pulado segue "ativo" na config, só não carregou; o core aceita desligá-lo.
+  const toggle = (row: PluginRow) => {
+    const on = row.reason?.kind !== 'disabled';
+    const locked = row.name === SELF;
     return (
-      <span className="row">
-        {row.name === SELF ? (
-          <span className="muted">Este painel (não pode ser alterado por aqui)</span>
-        ) : row.status === 'loaded' ? (
-          <>
-            <button
-              type="button"
-              className="btn"
-              disabled={disabled}
-              onClick={() => run(row.name, 'reload')}
-            >
-              Recarregar
-            </button>
-            <button
-              type="button"
-              className="btn danger"
-              disabled={disabled}
-              onClick={() => ask(row)}
-            >
-              Desativar
-            </button>
-          </>
-        ) : row.reason?.kind === 'disabled' ? (
-          <button
-            type="button"
-            className="btn primary"
-            disabled={disabled}
-            onClick={() => run(row.name, 'enable')}
-          >
-            Ativar
-          </button>
-        ) : null}
+      <button
+        type="button"
+        role="switch"
+        className="switch"
+        aria-checked={on}
+        aria-label={`Ativo: ${row.name}`}
+        title={row.name === SELF ? 'Este painel não pode ser alterado por aqui' : undefined}
+        disabled={busy !== undefined || locked}
+        onClick={() => (on ? ask(row) : run(row.name, 'enable'))}
+      />
+    );
+  };
+  const reload = (row: PluginRow) =>
+    row.status === 'loaded' && row.name !== SELF ? (
+      <button
+        type="button"
+        className="btn sm"
+        aria-label={`Recarregar ${row.name}`}
+        disabled={busy !== undefined}
+        onClick={() => run(row.name, 'reload')}
+      >
+        Recarregar
+      </button>
+    ) : null;
+
+  const chip = (row: PluginRow, short = false) => {
+    const state = stateOf(row);
+    const kind = { carregado: 'ok', falhou: 'danger', pulado: 'warn', desligado: '' }[state];
+    return (
+      <span className={`chip ${kind}`} title={reasonText(row.reason) || undefined}>
+        {short && state === 'carregado' ? 'ok' : state}
       </span>
     );
   };
 
-  const state = (row: PluginRow) =>
-    row.status === 'loaded' ? (
-      <span className="chip ok">Ativo</span>
-    ) : (
-      <span className="chip warn">Ignorado</span>
-    );
+  const failed = rows?.filter((r) => stateOf(r) === 'falhou') ?? [];
+  const shown = rows ? visible(rows, filter, query) : [];
+  const filters: [PluginFilter, string][] = [
+    ['todos', 'Todos'],
+    ['problema', 'Com problema'],
+    ['desligados', 'Desligados'],
+  ];
+  // Linha compacta do mobile: versão, setup e o que mais explica o plugin.
+  const meta = (row: PluginRow) =>
+    [
+      row.version,
+      row.status === 'loaded' ? setupText(row) : undefined,
+      row.status === 'loaded' && dependsText(row) !== '—'
+        ? `depende de ${dependsText(row)}`
+        : undefined,
+      row.status === 'loaded'
+        ? row.services?.length
+          ? `provê ${row.services.join(', ')}`
+          : undefined
+        : row.reason?.kind === 'dependency-skipped'
+          ? `depende de ${String(row.reason['dependency'])}`
+          : stateOf(row) === 'pulado'
+            ? reasonText(row.reason)
+            : undefined,
+    ]
+      .filter(Boolean)
+      .join(' · ');
 
   return (
     <>
-      <h1>Plugins</h1>
+      {rows && <p className="muted pl-sub">{subtitle(rows, bootedAt)}</p>}
+      <div className="row spread pl-head">
+        <h1>Plugins</h1>
+        <label className="pl-search">
+          <span className="sr">Buscar plugin</span>
+          <input
+            type="search"
+            className="input"
+            placeholder="Buscar plugin"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </label>
+      </div>
+      {actionError && (
+        <p className="notice danger" role="alert">
+          {actionError}
+        </p>
+      )}
       {error && (
         <p className="notice danger" role="alert">
           {error}
@@ -180,59 +232,127 @@ export function Plugins() {
       {!rows ? (
         !error && <p className="muted">Carregando…</p>
       ) : (
-        <div className="card">
-          <div className="scroll tbl">
-            <table>
+        <>
+          <div className="pl-filters row">
+            {filters.map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                className="pl-pill"
+                aria-pressed={filter === id}
+                onClick={() => setFilter(id)}
+              >
+                {label} {countFilter(rows, id)}
+              </button>
+            ))}
+          </div>
+          {failed.map((row) => {
+            const dependents = skippedDependents(rows, row.name);
+            return (
+              <section key={row.name} className="card problem" aria-label={`${row.name} falhou`}>
+                <div className="row spread">
+                  <h2>
+                    <span className="pl-desk">{row.name} · falhou no setup</span>
+                    <span className="pl-mob">
+                      {row.name} <span className="muted mono">{row.version}</span>
+                    </span>
+                  </h2>
+                  <span className="chip danger pl-mob">falhou</span>
+                  <button
+                    type="button"
+                    className="btn pl-desk"
+                    disabled={busy !== undefined}
+                    onClick={() => run(row.name, 'reload')}
+                  >
+                    Recarregar plugin
+                  </button>
+                </div>
+                <pre className="mono errbox">
+                  {row.reason?.causeMessage ?? row.reason?.error?.message ?? 'Falha no setup.'}
+                </pre>
+                {dependents.length > 0 && (
+                  <p className="muted pl-small">
+                    {dependents.length === 1 ? 'O dependente ' : 'Os dependentes '}
+                    <span className="mono">{dependents.join(', ')}</span>{' '}
+                    {dependents.length === 1 ? 'foi pulado' : 'foram pulados'} (dependency-skipped).
+                    Recarregar o {row.name} reavalia o subgrafo.
+                  </p>
+                )}
+                <div className="row pl-mob actions2">
+                  <a className="btn" href={`#/config/${encodeURIComponent(row.name)}`}>
+                    Abrir config
+                  </a>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={busy !== undefined}
+                    onClick={() => run(row.name, 'reload')}
+                  >
+                    Recarregar
+                  </button>
+                </div>
+              </section>
+            );
+          })}
+          <div className="card">
+            <table className="ptable">
               <thead>
                 <tr>
                   <th>Plugin</th>
-                  <th>Versão</th>
-                  <th>Origem</th>
                   <th>Estado</th>
                   <th>Setup</th>
-                  <th>dependsOn</th>
-                  <th>Serviços</th>
-                  <th>Contribuições</th>
-                  <th>Motivo</th>
-                  <th>Ações</th>
+                  <th>Depende de</th>
+                  <th>Provê</th>
+                  <th>Contribui</th>
+                  <th>Ativo</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
+                {shown.map((row) => (
                   <tr key={row.name}>
-                    <td className="mono">{row.name}</td>
-                    <td className="mono">{row.version}</td>
-                    <td>{row.origin}</td>
-                    <td>{state(row)}</td>
-                    <td>{setupText(row)}</td>
-                    <td className="mono">{deps(row)}</td>
+                    <td>
+                      <div className="pl-name">{row.name}</div>
+                      <div className="mono muted" title={row.origin}>
+                        {row.version}
+                      </div>
+                    </td>
+                    <td>{chip(row)}</td>
+                    <td className="mono">{setupText(row)}</td>
+                    <td className="mono">{dependsText(row)}</td>
                     <td className="mono">{list(row.services)}</td>
-                    <td className="mono">{list(row.contributions)}</td>
-                    <td>{reasonText(row.reason)}</td>
-                    <td>{actions(row)}</td>
+                    <td className="mono">{contributes(row)}</td>
+                    <td>
+                      <span className="row">
+                        {toggle(row)}
+                        {reload(row)}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div className="list">
-              {rows.map((row) => (
-                <div key={row.name}>
-                  <div>
-                    {row.name} {state(row)}
-                  </div>
-                  <div className="mono muted">
-                    {row.version} · {row.origin} {reasonText(row.reason)}
-                  </div>
-                  <div className="mono muted">
-                    Setup {setupText(row)} · dependsOn {deps(row)} · serviços {list(row.services)} ·
-                    contribuições {list(row.contributions)}
-                  </div>
-                  {actions(row)}
-                </div>
-              ))}
-            </div>
+            <ul className="plist">
+              {shown
+                .filter((row) => stateOf(row) !== 'falhou')
+                .map((row) => (
+                  <li key={row.name}>
+                    <div>
+                      <div className="row">
+                        <span className="pl-name">{row.name}</span>
+                        {chip(row, true)}
+                      </div>
+                      <div className="mono muted">{meta(row)}</div>
+                    </div>
+                    <span className="row">
+                      {reload(row)}
+                      {toggle(row)}
+                    </span>
+                  </li>
+                ))}
+            </ul>
+            {shown.length === 0 && <p className="muted">Nenhum plugin encontrado.</p>}
           </div>
-        </div>
+        </>
       )}
       {confirm && (
         <div className="overlay">

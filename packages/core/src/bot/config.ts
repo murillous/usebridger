@@ -24,8 +24,12 @@ import type { ShutdownOptions, StopHook, StopHookOptions } from './stop-hooks.ts
 /**
  * Ciclo de vida: `idle → starting → running → stopping → stopped`. `stopped` é terminal —
  * uma instância não reinicia; para subir de novo, crie outro `Bot`.
+ *
+ * `failed` (ADR 0120): a reconexão desistiu (erro `fatal`, credencial rejeitada, `replaced`,
+ * sessão a parear sem `clearSession`). Transport e filas estão parados; plugins e HTTP seguem no
+ * ar para o painel mostrar o erro. `start()` rejeita (não reinicia) e `stop()` chega a `stopped`.
  */
-export type BotState = 'idle' | 'starting' | 'running' | 'stopping' | 'stopped';
+export type BotState = 'idle' | 'starting' | 'running' | 'stopping' | 'stopped' | 'failed';
 
 /** Middleware do app com prioridade (maior roda antes). */
 export interface BotMiddlewareEntry {
@@ -88,6 +92,11 @@ export interface BotConfig {
    * Dois bots vivos no mesmo storage não podem usar a mesma. Padrão: `'default'`.
    */
   readonly session?: string;
+  /**
+   * Nome de exibição do bot (ex.: `luma`), mostrado pelo dashboard. Só rótulo: não entra em
+   * storage nem em chave. Padrão: o `Transport.name` (ADR 0115).
+   */
+  readonly name?: string;
   /**
    * Storage do bot (plugins, scheduler, overrides de config). O bot o fecha no `stop()` — o
    * último a parar, se vários bots o dividem. Padrão: em memória (`createMemoryStorage`), com
@@ -153,7 +162,10 @@ export interface BotConfig {
 }
 
 /** Config de plugin em runtime, para o dashboard: overrides, visão mascarada e schema. */
-export type BotPluginConfigs = Pick<PluginConfigs, 'setOverrides' | 'describe' | 'jsonSchema'>;
+export type BotPluginConfigs = Pick<
+  PluginConfigs,
+  'setOverrides' | 'setSecret' | 'clearSecret' | 'secretsWritable' | 'describe' | 'jsonSchema'
+>;
 
 /**
  * Controle dos plugins que `ctx.admin` dá aos listados em `adminPlugins` (ADR 0111): delega às
@@ -214,6 +226,8 @@ export interface Bot {
  */
 export interface BotPlugins {
   (): PluginReportEntry[];
+  /** Epoch ms em que o boot dos plugins terminou; `undefined` antes do `start()`. Reload não o muda. */
+  readonly bootedAt: number | undefined;
   /** Derruba e sobe de novo o plugin e os dependentes (ADR 0041). */
   reload(name: string): Promise<PluginChangeResult>;
   /** Desliga o plugin e os dependentes, que viram `dependency-skipped`; até `enable`. */

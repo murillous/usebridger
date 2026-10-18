@@ -1,13 +1,20 @@
 import QRCode from 'qrcode';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { LiveState } from '#web/lib/live.ts';
 import { fmtInt, fmtMs, KERNEL, percentile, rowsOf, total } from '#web/lib/metrics.ts';
-import { LiveBadge } from './LiveBadge.tsx';
+import {
+  botChip,
+  botName,
+  fmtRemaining,
+  fmtSince,
+  isFatal,
+  logOrigin,
+  recentLogs,
+  stateLabel,
+} from '#web/lib/overview.ts';
+import type { StatusView } from '#web/lib/types.ts';
 import { Stat } from './Stat.tsx';
 import { useMetrics } from './useMetrics.ts';
-
-const LABEL = { connecting: 'Conectando', open: 'Conectado', closed: 'Desconectado' } as const;
-const TONE = { connecting: 'warn', open: 'ok', closed: 'danger' } as const;
 
 function Qr({ value }: { value: string }) {
   const [src, setSrc] = useState<string>();
@@ -24,87 +31,158 @@ function Qr({ value }: { value: string }) {
   return src ? <img className="qr" src={src} alt="QR code para parear o WhatsApp" /> : null;
 }
 
-function Kpis() {
+function Kpis({ pending }: { pending: number | undefined }) {
   const { data } = useMetrics(1);
-  // Sem o plugin de métricas (ou enquanto carrega) a Visão geral segue sem KPIs; a aba Métricas explica.
+  // Sem o plugin de métricas (ou enquanto carrega) a seção some; a aba Métricas explica.
   if (!data?.available) return null;
   return (
     <section aria-labelledby="kpis-t">
-      <h2 id="kpis-t">Hoje (UTC)</h2>
+      <div className="row spread">
+        <h2 id="kpis-t">Hoje (UTC)</h2>
+        <a href="#/metricas">Ver métricas</a>
+      </div>
       <div className="kpis">
-        <Stat label="Mensagens tratadas" value={fmtInt(total(rowsOf(data, KERNEL.handled)))} />
-        <Stat label="Latência p95" value={fmtMs(percentile(rowsOf(data, KERNEL.duration), 0.95))} />
+        <Stat label="Mensagens" value={fmtInt(total(rowsOf(data, KERNEL.handled)))} />
         <Stat label="Usuários ativos" value={fmtInt(total(rowsOf(data, KERNEL.users)))} />
         <Stat label="Grupos ativos" value={fmtInt(total(rowsOf(data, KERNEL.groups)))} />
+        <Stat label="Latência p95" value={fmtMs(percentile(rowsOf(data, KERNEL.duration), 0.95))} />
+        <Stat label="Fila de saída" value={pending === undefined ? '-' : fmtInt(pending)} />
       </div>
     </section>
   );
 }
 
-export function Overview({ live }: { live: LiveState }) {
-  const { status } = live;
-  const [copied, setCopied] = useState(false);
+function RecentLogs({ live }: { live: LiveState }) {
+  const rows = recentLogs(live.logs, 6);
+  return (
+    <section className="card" aria-labelledby="logs-t">
+      <div className="row spread">
+        <h2 id="logs-t">Logs recentes</h2>
+        <a href="#/logs">Abrir logs</a>
+      </div>
+      {rows.length === 0 && <p className="muted">Nenhuma linha ainda.</p>}
+      <ul className="ov-recent-logs">
+        {rows.map((entry, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: lista curta recalculada a cada log; sem estado por item.
+          <li key={i}>
+            <span className="mono muted">{new Date(entry.time).toLocaleTimeString()}</span>
+            <span className={`mono lv-${entry.level}`}>{entry.level}</span>
+            <span className="mono muted">{logOrigin(entry)}</span>
+            <span className="msg">{entry.message}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!active) return;
+    // O `now` do render anterior pode estar velho (QR novo depois de um tempo parado).
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [active]);
+  return now;
+}
+
+function BotCard({ status }: { status: StatusView }) {
+  const [copied, setCopied] = useState<boolean | 'erro'>(false);
+  const chip = botChip(status);
+  const copyTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(copyTimer.current), []);
+  const now = useNow(status.qrExpiresAt !== undefined);
+  const qrLeft =
+    status.qrExpiresAt === undefined ? undefined : fmtRemaining(status.qrExpiresAt - now);
 
   const copy = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     } catch {
       // Sem permissão de área de transferência: o código segue visível para copiar à mão.
-      setCopied(false);
+      setCopied('erro');
     }
+    // Sucesso e erro voltam sozinhos ao botão normal; um clique novo reinicia o prazo.
+    clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <>
+    <article className="card ov-bot" aria-label={`Bot ${botName(status)}`}>
       <div className="row spread">
-        <h1>Visão geral</h1>
-        <LiveBadge live={live} />
+        <div>
+          <h3>{botName(status)}</h3>
+          <span className="muted">
+            sessão <span className="mono">{status.session}</span>
+          </span>
+        </div>
+        <span className={`chip ${chip.tone}`}>{chip.label}</span>
       </div>
-      <Kpis />
-      {!status ? (
-        <p className="muted">Aguardando o status do bot…</p>
-      ) : (
-        <section className="card" aria-labelledby="conn">
-          <h2 id="conn">Conexão</h2>
-          <p className="row">
-            <span className={`chip ${TONE[status.status]}`}>{LABEL[status.status]}</span>
-            <span className="muted">
-              {status.transport} · sessão <span className="mono">{status.session}</span>
-            </span>
+      <dl className="ov-facts">
+        <dt>Estado</dt>
+        <dd>{stateLabel(status)}</dd>
+        {status.connectedSince !== undefined && (
+          <>
+            <dt>No ar desde</dt>
+            <dd>{fmtSince(status.connectedSince)}</dd>
+          </>
+        )}
+        <dt>Reconexões</dt>
+        <dd>{status.reconnections ?? 0}</dd>
+        {status.status === 'connecting' && status.qr && qrLeft !== undefined && (
+          <>
+            <dt>Expira em</dt>
+            <dd>{qrLeft}</dd>
+          </>
+        )}
+        <dt>Atualizado</dt>
+        <dd>{new Date(status.updatedAt).toLocaleTimeString()}</dd>
+      </dl>
+      {isFatal(status) && (
+        <div className="notice danger" role="status">
+          <strong>Erro fatal</strong>
+          <p>
+            {status.reason ?? 'conexão encerrada'}
+            {status.message ? `: ${status.message}` : ''}
           </p>
-          {status.status === 'closed' && (status.reason || status.message) && (
-            <p className="notice danger" role="status">
-              {status.reason}
-              {status.message ? `: ${status.message}` : ''}
-            </p>
-          )}
-          {status.qr && (
-            <div>
-              <h2>Escaneie o QR</h2>
-              <Qr value={status.qr} />
-            </div>
-          )}
-          {status.pairingCode && (
-            <div>
-              <h2>Código de pareamento</h2>
-              <p className="row">
-                <span className="mono" style={{ fontSize: 20 }}>
-                  {status.pairingCode}
-                </span>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => copy(status.pairingCode ?? '')}
-                >
-                  {copied ? 'Copiado' : 'Copiar'}
-                </button>
-              </p>
-            </div>
-          )}
-        </section>
+          <a href="#/config">Abrir config</a>
+        </div>
       )}
+      {status.status === 'connecting' && status.qr && (
+        <div className="bot-pair">
+          <Qr value={status.qr} />
+        </div>
+      )}
+      {status.status === 'connecting' && status.pairingCode && (
+        <div className="bot-pair">
+          <span className="bot-pair-code mono">{status.pairingCode}</span>
+          <button type="button" className="btn" onClick={() => copy(status.pairingCode ?? '')}>
+            {copied === 'erro' ? 'Não foi possível copiar' : copied ? 'Copiado' : 'Copiar'}
+          </button>
+        </div>
+      )}
+    </article>
+  );
+}
+
+export function Overview({ live }: { live: LiveState }) {
+  const { status } = live;
+  return (
+    <>
+      <h1>Visão geral</h1>
+      <section aria-labelledby="bots-t">
+        <h2 id="bots-t">Bots e transports</h2>
+        {status ? (
+          <BotCard status={status} />
+        ) : (
+          <p className="muted">Aguardando o status do bot…</p>
+        )}
+      </section>
+      <Kpis pending={status?.outboundPending} />
+      <RecentLogs live={live} />
     </>
   );
 }

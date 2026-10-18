@@ -14,6 +14,13 @@ const ACTIONS = ['enable', 'disable', 'reload'] as const;
 const NO_ADMIN =
   'controle de plugins indisponível: ponha "dashboard" em adminPlugins no createBot ({ adminPlugins: ["dashboard"] })';
 
+/**
+ * Texto da causa (`Nome: mensagem`), nunca o objeto: pode carregar dados sensíveis. O `admin` do
+ * core já passa o erro pelo redator de secrets, então a mensagem chega censurada; sem stack.
+ */
+const causeText = (cause: unknown): string | undefined =>
+  cause instanceof Error ? `${cause.name}: ${cause.message}`.slice(0, 300) : undefined;
+
 /** Só o necessário do erro de lifecycle: o objeto cru pode carregar `cause` com dados sensíveis. */
 const lifecycle = (error: PluginLifecycleError) => ({
   plugin: error.plugin,
@@ -22,13 +29,19 @@ const lifecycle = (error: PluginLifecycleError) => ({
   message: error.message.slice(0, 300),
 });
 
-/** Linha da tabela em JSON seguro: o `PluginLifecycleError` de `setup-failed` vira `{ plugin, phase, timedOut, message }`. */
+/** Linha da tabela em JSON seguro: o `PluginLifecycleError` de `setup-failed` vira `{ plugin, phase, timedOut, message }` e a `reason` ganha `causeMessage` (texto; nunca o objeto `cause` cru). */
 function serializeEntry(entry: PluginReportEntry) {
   if (entry.status === 'loaded') return entry;
   const { reason } = entry;
+  if (reason.kind !== 'setup-failed') return entry;
+  const causeMessage = causeText(reason.error.cause);
   return {
     ...entry,
-    reason: reason.kind === 'setup-failed' ? { ...reason, error: lifecycle(reason.error) } : reason,
+    reason: {
+      ...reason,
+      error: lifecycle(reason.error),
+      ...(causeMessage !== undefined && { causeMessage }),
+    },
   };
 }
 
@@ -50,6 +63,13 @@ export function registerPluginRoutes(
   if (admin === undefined) log.warn(`dashboard: ${NO_ADMIN}`);
   const unavailable = () => new Response(NO_ADMIN, { status: 503 });
   const plugins = admin?.plugins;
+
+  // Separada da lista, que é um array puro; o horário vem do core e não muda com o reload.
+  http.route(
+    'GET',
+    '/api/plugins/boot',
+    guarded(() => (plugins ? Response.json({ bootedAt: plugins.bootedAt }) : unavailable())),
+  );
 
   http.route(
     'GET',

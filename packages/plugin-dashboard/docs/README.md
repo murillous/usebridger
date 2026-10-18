@@ -32,6 +32,10 @@ Todas sob `/plugins/dashboard` (ou `/sessions/<sessão>/plugins/dashboard` fora 
 `closed` traz `reason` e `message` (texto do erro, truncado); o objeto de erro cru nunca sai.
 `session` é o nome da sessão do bot. Depois de um reload do plugin, o status parte do último
 `ConnectionStatus` guardado pelo core (`ctx.connectionStatus()`, ADR 0110).
+`name` é o nome do bot (`createBot({ name })`, senão o nome do transport) e aparece no cabeçalho
+como `name · sessão X`. `connectedSince`, `reconnections` e `qrExpiresAt` (ms epoch) vêm de
+`ctx.connectionInfo()` (ADR 0115) e alimentam o card do bot; `qrExpiresAt` só existe se o
+transport informar `expiresAt` no `connection.qr` (o Baileys informa).
 
 ## Métricas
 
@@ -51,8 +55,8 @@ o reload do `metrics` reiniciaria o dashboard em cascata.
 A tela tem painéis fixos das métricas do kernel (`bridger.messages.*`, `bridger.outbound.sent`,
 `bridger.active.*`) e a seção "Todas as métricas registradas", que lista tudo o que o serviço
 conhece: métrica nova de qualquer plugin aparece ali sem mudar o dashboard. Os gráficos são SVG
-com `role="img"`, `aria-label` com os valores por dia e `<title>` por barra; o eixo mostra primeiro
-dia, último dia e pico em texto. Percentil no balde `+Inf` aparece como "> 30.000 ms". A Visão geral
+com `role="img"`, `aria-label` com os valores por dia e `<title>` por barra; o eixo mostra o primeiro
+dia ("12 out") e o último ("hoje") em texto; o valor de cada dia fica no `aria-label` e no `<title>`. Percentil no balde `+Inf` aparece como "> 30.000 ms". A Visão geral
 mostra os KPIs de hoje (dia UTC; mensagens, p95, usuários e grupos ativos) quando o serviço existe.
 
 ## Config dos plugins
@@ -62,8 +66,10 @@ Base dos formulários gerados dos schemas Zod. Exige `createBot({ adminPlugins: 
 
 | Rota                       | Resposta                                                                 |
 | -------------------------- | ------------------------------------------------------------------------ |
-| `GET /api/config/:plugin`  | `{ view: { config, messages, sources }, schema }`. `schema` é o JSON Schema da config (`null` se o plugin não declara `config`). Se a config atual está inválida, 200 com `{ view: null, schema, issues: [{ path, message }] }` para o admin corrigir pelo formulário. Plugin desconhecido 404. |
+| `GET /api/config/:plugin`  | `{ view: { config, messages, sources }, schema, secretsWritable }` (`secretsWritable`: há `BRIDGER_SECRET_KEY`, o core aceita gravar segredo). `schema` é o JSON Schema da config (`null` se o plugin não declara `config`). Se a config atual está inválida, 200 com `{ view: null, schema, secretsWritable, issues: [{ path, message, kind }] }` para o admin corrigir pelo formulário. Plugin desconhecido 404. |
 | `PUT /api/config/:plugin`  | Corpo (objeto JSON de overrides, até 64 KiB, senão 413); recusa (403) `Origin` de outro host; sem `Origin`, passa. 200 com o resultado do reload (`{ plugin, dependents, teardownErrors }`); erros de lifecycle saem só como `{ plugin, phase, timedOut, message }` (mensagem truncada em 300), sem stack nem cause. |
+| `PUT /api/config/:plugin/secrets/:path` | Grava o segredo cifrado (ADR 0121). `:path` é o caminho pontilhado do campo. Corpo `{ "value": ... }` (até 64 KiB, senão 413). 200 com o resultado do reload; o valor nunca volta. 400: JSON inválido, sem `value`, valor inválido ou sem chave mestra (`{ error, issues }`); 403: `Origin` de outro host; 404: plugin desconhecido; 409: `{ error: "shadowed" }` (env ou arquivo definem o campo), ação no próprio dashboard, ou reload que falhou depois de gravar. |
+| `DELETE /api/config/:plugin/secrets/:path` | Remove o segredo (funciona sem chave mestra, também para envelope ilegível). Mesmas respostas, sem corpo. |
 
 Erros do `PUT`: config inválida ou campo `secret` 400 com
 `{ "error": "invalid" | "secret", "issues": [{ "path": "campo.aninhado", "message": "..." }] }`
@@ -71,6 +77,14 @@ Erros do `PUT`: config inválida ou campo `secret` 400 com
 plugin desconhecido 404; ação no próprio dashboard 409 (sem chamar o core: a config do dashboard vem do arquivo ou do env); outro erro vai ao log e dá 500.
 
 **O override é gravado antes do reload.** Se o reload falhar (409 ou 500), a config válida já ficou salva (a mensagem avisa); corrija e recarregue pelo `reload` de plugins.
+
+**Rótulos, placeholders e datas dos campos.** O rótulo vem do `title` do JSON Schema; sem ele, da
+`description` (que então não repete como ajuda); sem ela, do nome da propriedade com inicial
+maiúscula. Declare o `title` no schema Zod, junto da descrição: `z.string().meta({ title: 'Chave da API', description: '...' })`
+(o core gera o JSON Schema com `toJSONSchema`, que lê o `meta`). `examples[0]` (string ou número,
+`.meta({ examples: ['gpt-4o'] })`) vira o placeholder. `z.iso.datetime()` (`format: 'date-time'`)
+vira um seletor de data e hora, enviado como ISO em UTC. `#/config/<plugin>` abre a Config já
+no plugin (é o destino de "Abrir config" na lista de Plugins).
 
 **Secrets são só leitura no dashboard.** O `GET` os devolve mascarados (o valor real nunca sai) e o
 `PUT` recusa qualquer campo `secret`: o valor vem do arquivo (`pluginConfig`) ou do env. A
@@ -112,7 +126,8 @@ createBot({ plugins: [dashboard], adminPlugins: ['dashboard'] });
 
 | Rota | Resposta |
 | ---- | -------- |
-| `GET /api/plugins` | Tabela de boot: array de `{ name, version, origin, dependsOn?, status: 'loaded', unregistered?, services?, contributions? }` ou `{ name, version, origin, dependsOn?, status: 'skipped', reason }`, na ordem de carga. `reason` é `{ kind, ... }` como no core; em `setup-failed`, `error` vira `{ plugin, phase, timedOut, message }` (mensagem truncada, nunca o erro cru). |
+| `GET /api/plugins` | Tabela de boot: array de `{ name, version, origin, dependsOn?, optionalDependsOn?, status: 'loaded', setupMs?, unregistered?, services?, contributions?, contributionCounts? }` ou `{ name, version, origin, dependsOn?, optionalDependsOn?, status: 'skipped', reason }`, na ordem de carga. `reason` é `{ kind, ... }` como no core; em `setup-failed`, `error` vira `{ plugin, phase, timedOut, message }` (mensagem truncada, nunca o erro cru) e a `reason` ganha `causeMessage`: `Nome: mensagem` do erro lançado no `setup` (até 300 caracteres, sem stack, secrets já censurados pelo core). |
+| `GET /api/plugins/boot` | `{ bootedAt }` (ms): horário real do boot, lido do core (`bot.plugins.bootedAt`; não reinicia com o reload do dashboard). Fica numa rota própria porque `GET /api/plugins` é um array. Exige sessão (401 sem ela). |
 | `POST /api/plugins/:name/enable`, `/disable`, `/reload` | Sem corpo. 200 `{ plugin, dependents, teardownErrors }` (linhas novas do plugin e dos dependentes; falhas de teardown como `{ plugin, phase, timedOut, message }`). |
 
 Os `POST` exigem o cookie de sessão e `Origin` do mesmo host (senão 403). Nome desconhecido 404;
@@ -136,10 +151,18 @@ const lembretes: DashboardTab = {
   id: 'lembretes', // [a-z0-9-]{1,40}; a chave pública é "reminders/lembretes"
   title: 'Lembretes',
   widgets: [
-    { kind: 'stats', id: 'resumo', load: async () => [{ label: 'Pendentes', value: 3 }] },
+    {
+      kind: 'stats',
+      id: 'resumo',
+      load: async () => [
+        { label: 'Pendentes', value: 3 },
+        { label: 'Atrasados', value: 1, tone: 'warn' }, // tom: 'ok' | 'warn' | 'danger'
+      ],
+    },
     {
       kind: 'table',
       id: 'lista',
+      title: 'Próximos', // qualquer widget aceita title
       columns: [
         { key: 'texto', label: 'Texto' }, // a primeira coluna vira a linha principal no celular
         { key: 'quando', label: 'Quando' },
@@ -153,6 +176,8 @@ const lembretes: DashboardTab = {
     {
       kind: 'form',
       id: 'novo',
+      title: 'Novo lembrete',
+      submitLabel: 'Agendar', // sem ele, "Enviar"
       schema: z.object({ texto: z.string().min(3), minutos: z.number().int().min(1) }),
       submit: async (input) => criar(input),
     },
@@ -173,11 +198,15 @@ export const reminders = definePlugin({
 
 | Widget   | O plugin entrega                                        | O dashboard desenha                                              |
 | -------- | ------------------------------------------------------- | ---------------------------------------------------------------- |
-| `stats`  | `load(): StatItem[]` (`label`, `value`, `hint?`)        | Cartões; até 3 por linha no celular                              |
+| `stats`  | `load(): StatItem[]` (`label`, `value`, `hint?`, `tone?`) | Cartões; até 3 por linha no celular; `tone` (`ok`, `warn`, `danger`) colore o valor, e tom desconhecido vira neutro |
 | `table`  | `columns`, `load({ cursor })`, `actions?`               | Tabela; no celular vira lista (1ª coluna em cima, o resto em mono) |
-| `series` | `load({ days })`: `SeriesPoint[]` (`label`, `value`); `title?` ([ADR 0113](../../../docs/adr/0113-contrato-das-abas-do-dashboard-complemento.md)) | Gráfico de linha com `role="img"` e rótulo; seletor 7/30/90 dias |
-| `form`   | `schema` Zod e `submit(input)`                          | Formulário do mesmo gerador da Config; campo `secret` é entrada de senha, vazia, enviada no corpo    |
+| `series` | `load({ days })`: `SeriesPoint[]` (`label`, `value`)     | Gráfico de linha com `role="img"` e rótulo; seletor 7/30/90 dias |
+| `form`   | `schema` Zod, `submit(input)` e `submitLabel?`          | Formulário do mesmo gerador da Config; campo `secret` é entrada de senha, vazia, enviada no corpo    |
 | `text`   | `markdown`                                              | Texto puro: hoje o `markdown` não é renderizado (sem negrito, links ou listas) |
+
+Todo widget aceita `title?`: o dashboard desenha o título sobre o widget e o usa como rótulo da
+seção; a `series` o põe dentro do cartão, com "Série" quando falta
+([ADR 0118](../../../docs/adr/0118-titulo-tom-e-rotulo-nos-widgets-das-abas.md)).
 
 Rotas (sessão e `Origin` do mesmo host nos `POST`, como no resto):
 
@@ -221,7 +250,9 @@ token e navegue pelas telas (rotas por hash: `#/logs`, `#/plugins`, `#/config`).
 - **Telas:** Visão geral (status, QR, código de pareamento com Copiar, indicador "ao vivo" que
   vira "Desatualizado" quando o WebSocket cai e reconecta com backoff de 1 a 15 s), Logs (filtro
   por nível e pausar), Plugins (enable/disable/reload com confirmação ao desativar e resultado da
-  cascata; colunas estado, setup, `dependsOn`, serviços e contribuições, vindas da tabela do core) e
+  cascata; estado carregado/falhou/pulado/desligado, toggle de ativo, busca, painel com a causa do erro
+  de setup e, no mobile, filtros e card de problema; contribuições sem contagem e setup sem duração, pois o
+  core não expõe nenhum dos dois) e
   Config (lista de plugins ao lado no desktop, `select` abaixo de 768 px; formulário gerado do JSON
   Schema, com lista editável para array de primitivos e pares chave/valor (`control: 'record'`) para `z.record` primitivo;
   secret só como máscara; erros do 400 junto do campo). Abaixo de 768 px a navegação vira a barra inferior.
@@ -232,7 +263,8 @@ token e navegue pelas telas (rotas por hash: `#/logs`, `#/plugins`, `#/config`).
   cache longo (`immutable`); o resto é `no-cache`. Os estáticos não pedem login (os dados passam
   pela API autenticada).
 - **Sem fonte externa:** Onest, Funnel Display e Martian Mono (latin e latin-ext) vão empacotadas em `dist/web/assets` via `@fontsource-variable`, com a pilha do sistema como fallback e `font-display: swap`. Nada vem de CDN.
-- **Tema:** segue o `prefers-color-scheme`; a conta (sidebar, ou Mais no celular) permite fixar claro ou escuro, guardado em `localStorage`.
+- **Tema:** segue o `prefers-color-scheme`; o botão do cabeçalho (topo no celular) alterna claro/escuro, guardado em `localStorage`. Em Mais (celular), a linha Tema volta ao Sistema (`auto`).
+- **Cabeçalho e pausa:** `<transport> · sessão <id>`, selo "Ao vivo · atualizado há N s" e "Pausar atualização", que fecha o WebSocket (a tela congela e o selo avisa); retomar reconecta e recebe novo snapshot. O rodapé da sidebar mostra `versions` (core e dashboard) do `/api/status`. O seletor de Sessão lista só a sessão do plugin: a API não expõe as outras.
 - **Config:** o Salvar devolve os overrides que o formulário não edita (`messages.*`, chaves de `z.record`); com a config atual inválida (`view: null`) ele substitui todos os overrides e pede confirmação.
 - **Portão de login:** sem sessão, ou com 401 em qualquer chamada, o app mostra só a tela de login; depois de entrar, volta à rota em que estava. Sair fica na sidebar (desktop) e em Mais (celular).
 
@@ -242,6 +274,26 @@ O fonte está em `web/` (React + Vite, só `devDependencies`). O `pnpm build` do
 `tsdown` e depois `vite build --config web/vite.config.ts`, que gera `dist/web/`; a pasta vai no
 tarball (`files: ["dist"]`). O plugin lê `dist/web` do pacote, então rode o build antes de abrir o
 dashboard a partir do fonte.
+
+### Testar
+
+Lógica pura do app fica em `web/src/lib` e é testada em Node, como o resto do pacote. Componente
+(`web/src/pages/*.test.tsx`) roda no happy-dom com a Testing Library
+([ADR 0119](../../../docs/adr/0119-testes-de-componente-do-dashboard-no-happy-dom.md)):
+
+- A primeira linha do arquivo é `// @vitest-environment happy-dom`; os outros testes seguem em Node.
+- `afterEach` com `cleanup()`, `vi.unstubAllGlobals()` e `vi.restoreAllMocks()`: o Vitest roda sem
+  `globals`, e nem a Testing Library nem o user-event limpam sozinhos (um espião do clipboard
+  vaza para o teste seguinte).
+- Sem servidor: troque o `fetch` com `vi.stubGlobal` e responda por caminho (o `api` chama
+  `fetch('api/<caminho>')`). `Tab.test.tsx` tem o modelo.
+- Consulte por papel e nome (`getByRole('button', { name: 'Agendar' })`): o teste também cobre o
+  rótulo acessível.
+- `#web/*` resolve pelo `imports` do `package.json`, o mesmo mapa do `tsconfig` e do Vite.
+- `userEvent.setup()` instala o próprio `navigator.clipboard`: espione o `writeText` com
+  `vi.spyOn` depois do `setup()`, não antes.
+- O `happy-dom` também está nas `devDependencies` da raiz: sem ele lá, o pnpm cria uma segunda cópia
+  do Vitest e o `toContainText` do `@usebridger/testing` some dos tipos em `examples/`.
 
 ## Limites conhecidos
 

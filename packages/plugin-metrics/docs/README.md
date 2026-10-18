@@ -19,7 +19,17 @@ const rows = await m.query('ai.latency', { from: '2026-10-01', to: '2026-10-17' 
 ainda está em memória (`from`/`to` inclusivos, `YYYY-MM-DD` em UTC):
 
 - contador: `{ metric, type: 'counter', day, labels, value }`;
-- histograma: `{ metric, type: 'histogram', day, labels, count, sum, p50, p95, p99, buckets }`.
+- histograma: `{ metric, type: 'histogram', day, labels, count, sum, p50, p95, p99, buckets }`;
+- gauge: `{ metric, type: 'gauge', day, labels, last, max }`.
+
+`gauge(nome, rótulos, valor)` amostra um valor (>= 0) e guarda o último e o máximo do dia por
+série. O gauge vai ao snapshot dos exportadores e ao `GET /metrics` (valor `last`). A exceção é
+`bridger.outbound.pending`, que já sai ao vivo como `bridger_outbound_pending` e fica fora dos dois.
+
+`ownerOf(nome)` devolve o plugin que gravou a métrica primeiro. O serviço `metrics` tem escopo por
+quem chama (ADR 0116): cada plugin recebe uma instância que grava o nome dele como dono na primeira
+escrita, sem declaração. O que o próprio plugin-metrics grava é `core`. Quando o plugin dono sai
+(reload ou disable), a métrica fica sem dono (`undefined`) até alguém gravá-la de novo.
 
 `names({ from, to })` lista os nomes das métricas com dados no intervalo (persistidos ou em memória),
 em ordem alfabética; é como o dashboard descobre métricas de outros plugins.
@@ -99,6 +109,7 @@ rótulos de baixa cardinalidade e nunca id de chat ou de usuário:
 | --- | --- | --- |
 | `bridger.messages.handled` | contador | `chatType`, `route`, `status`, `command` (se houver) |
 | `bridger.messages.handle_duration_ms` | histograma | `route`, `status` |
+| `bridger.outbound.pending` | gauge | nenhum; itens pendentes na fila de saída (todas as prioridades), amostrados de `ctx.stats()` a cada flush (ADR 0117) |
 | `bridger.outbound.sent` | contador | `kind`, `status`, `chatType` (só em `ctx.reply`) |
 | `bridger.active.users` / `bridger.active.groups` | contador (por dia) | nenhum |
 

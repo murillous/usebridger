@@ -1,12 +1,22 @@
 export interface StatusView {
   transport: string;
+  /** Opcional: um backend anterior não envia. */
+  name?: string;
   session: string;
   status: 'connecting' | 'open' | 'closed';
   reason?: string;
   message?: string;
   qr?: string;
   pairingCode?: string;
+  pairing?: boolean;
   updatedAt: number;
+  connectedSince?: number;
+  reconnections?: number;
+  qrExpiresAt?: number;
+  /** Opcional: um backend anterior não envia. */
+  versions?: { core: string; dashboard: string };
+  /** Opcional: um backend anterior não envia. */
+  outboundPending?: number;
 }
 
 export interface LogEntry {
@@ -19,7 +29,7 @@ export interface LogEntry {
 export type LiveMessage =
   | { type: 'snapshot'; status: StatusView; logs: LogEntry[] }
   | ({ type: 'status' } & StatusView)
-  | { type: 'qr'; qr: string }
+  | { type: 'qr'; qr: string; qrExpiresAt?: number }
   | { type: 'pairing-code'; code: string }
   | { type: 'log'; entry: LogEntry };
 
@@ -33,6 +43,8 @@ export interface LifecycleError {
 export interface SkipReason {
   kind: string;
   error?: LifecycleError;
+  /** `Nome: mensagem` do erro lançado no setup (`setup-failed`), já censurado pelo core. */
+  causeMessage?: string;
   [key: string]: unknown;
 }
 
@@ -46,10 +58,16 @@ export interface PluginRow {
   unregistered?: { command: string }[];
   /** `dependsOn` do manifesto: nome → faixa semver. */
   dependsOn?: Record<string, string>;
+  /** `optionalDependsOn` do manifesto: o reload em cascata do core também o segue (ADR 0099). */
+  optionalDependsOn?: Record<string, string>;
+  /** Duração do contexto + `setup` em ms (só em plugin carregado). */
+  setupMs?: number;
   /** Serviços providos no `setup`. */
   services?: string[];
   /** Pontos de extensão a que o plugin contribuiu. */
   contributions?: string[];
+  /** Contribuições por ponto de extensão. */
+  contributionCounts?: Record<string, number>;
 }
 
 export interface ChangeResult {
@@ -67,7 +85,8 @@ export type MetricRowView =
       count: number;
       sum: number;
       buckets: number[];
-    };
+    }
+  | { type: 'gauge'; day: string; labels: Record<string, string>; last: number; max: number };
 
 export type MetricsResponse =
   | { available: false; reason?: 'version' }
@@ -75,18 +94,21 @@ export type MetricsResponse =
       available: true;
       from: string;
       to: string;
-      metrics: { name: string; rows: MetricRowView[] }[];
+      metrics: { name: string; rows: MetricRowView[]; plugin?: string }[];
     };
 
 export interface ConfigIssue {
   path: string;
   message: string;
+  kind?: 'secret' | 'shadowed' | 'undecryptable' | 'invalid';
 }
 
 export interface ConfigResponse {
   view: { config: unknown; messages: unknown; sources: Record<string, string> } | null;
   schema: Record<string, unknown> | null;
   issues?: ConfigIssue[];
+  /** Há chave mestra: o core aceita `setSecret` (ADR 0121). */
+  secretsWritable?: boolean;
 }
 
 // Manifesto de `GET /api/tabs` (ADR 0108): o servidor tira as funções; o `form` leva o JSON Schema.
@@ -96,12 +118,13 @@ export interface TabAction {
   confirm: boolean;
 }
 
-export type TabWidget =
-  | { kind: 'stats'; id: string }
-  | { kind: 'table'; id: string; columns: { key: string; label: string }[]; actions: TabAction[] }
-  | { kind: 'series'; id: string; title?: string }
-  | { kind: 'form'; id: string; schema: Record<string, unknown> }
-  | { kind: 'text'; id: string; markdown: string };
+export type TabWidget = { id: string; title?: string } & (
+  | { kind: 'stats' }
+  | { kind: 'table'; columns: { key: string; label: string }[]; actions: TabAction[] }
+  | { kind: 'series' }
+  | { kind: 'form'; schema: Record<string, unknown>; submitLabel?: string }
+  | { kind: 'text'; markdown: string }
+);
 
 export interface TabView {
   key: string;
@@ -117,6 +140,7 @@ export interface StatItem {
   label: string;
   value: string | number;
   hint?: string;
+  tone?: 'ok' | 'warn' | 'danger';
 }
 export interface SeriesPoint {
   label: string;

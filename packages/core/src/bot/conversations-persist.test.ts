@@ -658,3 +658,29 @@ describe('Bot: esperas persistidas (ADR 0098)', () => {
     expect(opened).not.toContain('$conversations');
   });
 });
+
+describe('Bot: failed não apaga esperas persistidas (ADR 0120)', () => {
+  it('a espera vence em failed sem onExpire nem remoção; o boot seguinte dispara o onExpire', async () => {
+    const storage = durableStorage();
+    const first = await boot(storage, [cadastro()]);
+    await say(first, '!cadastro');
+    expect(await waits(storage).find()).toHaveLength(1);
+
+    first.transport.emit('connection.status', { status: 'closed', reason: 'fatal', error: null });
+    await vi.waitFor(() => expect(first.bot.state).toBe('failed'));
+    await vi.advanceTimersByTimeAsync(2 * 60_000);
+
+    // Passou do TTL em failed: nada foi enviado e o registro continua para o próximo boot.
+    expect(sentTexts(first.transport)).toEqual([]);
+    expect(await waits(storage).find()).toHaveLength(1);
+    await stop(first.bot);
+
+    const second = await boot(storage, [cadastro()]);
+    await second.bot.settled();
+    expect(sentTexts(second.transport)).toEqual([
+      'Encerrei: user@test em chat@test/- ({"etapa":1})',
+    ]);
+    await stop(second.bot);
+    expect(await waits(storage).find()).toEqual([]);
+  });
+});

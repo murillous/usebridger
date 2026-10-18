@@ -17,6 +17,7 @@ export type {
   PluginAdmin,
 } from '#bot/config.ts';
 export { BotStateError } from '#bot/config.ts';
+export type { ConnectionInfo } from '#bot/connection-info.ts';
 export { GroupAdminTimeoutError } from '#bot/group-admin.ts';
 export { CommandTimeoutError } from '#bot/plugin-context.ts';
 export type { BotReconnectionOptions } from '#bot/reconnect.ts';
@@ -39,6 +40,7 @@ export { CommandConflictError } from '#commands/registry.ts';
 export type { RoleCheck, RoleContext, RoleName, Roles } from '#commands/roles.ts';
 export { RoleConflictError, RoleTimeoutError } from '#commands/roles.ts';
 export type { ConfigEnv } from '#config/env.ts';
+export { envName, toEnvSegment } from '#config/env.ts';
 export {
   type ConfigSource,
   PluginConfigError,

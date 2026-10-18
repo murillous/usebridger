@@ -47,6 +47,10 @@ export function renderPrometheus(
   for (const [name, family] of [...families].sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))) {
     out.push(`# TYPE ${name} ${family[0]?.type}`);
     for (const row of family) {
+      if (row.type === 'gauge') {
+        out.push(`${name}${labelText(row.labels)} ${row.last}`);
+        continue;
+      }
       if (row.type === 'counter') {
         out.push(`${name}${labelText(row.labels)} ${row.value}`);
         continue;

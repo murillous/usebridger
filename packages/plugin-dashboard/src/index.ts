@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
+  CORE_VERSION,
   type ConnectionStatus,
   definePlugin,
   type HttpHandler,
@@ -17,9 +18,12 @@ import { registerMetricsRoutes } from '#metrics.ts';
 import { registerPluginRoutes } from '#plugins.ts';
 import { createStaticHandler } from '#static.ts';
 import { registerTabRoutes } from '#tabs.ts';
+import { DASHBOARD_VERSION } from '#version.ts';
 
 export interface StatusView {
   transport: string;
+  /** Nome do bot (`createBot({ name })`, senão o transport; ADR 0115). */
+  name: string;
   /** Sessão do bot (ADR 0110): `/plugins/dashboard` é a `default`; as outras ficam sob `/sessions/<sessão>`. */
   session: string;
   status: 'connecting' | 'open' | 'closed';
@@ -27,7 +31,18 @@ export interface StatusView {
   message?: string;
   qr?: string;
   pairingCode?: string;
+  /** O transport pareia por QR/código: um `auth-failed` limpa a sessão e reconecta, não é terminal. */
+  pairing: boolean;
   updatedAt: number;
+  /** Desde quando a conexão está no ar (ms epoch); ausente fora do ar (ADR 0115). */
+  connectedSince?: number;
+  reconnections: number;
+  /** Quando o QR atual expira (ms epoch); ausente sem QR ou sem expiração. */
+  qrExpiresAt?: number;
+  /** Versões exibidas no rodapé da sidebar. */
+  versions: { core: string; dashboard: string };
+  /** Itens na fila de saída agora. */
+  outboundPending?: number;
 }
 
 export type { LogEntry } from '#logs.ts';
@@ -36,6 +51,7 @@ export type {
   DashboardWidget,
   SeriesPoint,
   StatItem,
+  StatTone,
   TableAction,
   TableColumn,
   TableRow,
@@ -56,7 +72,7 @@ const unauthorized = (): Response => new Response('não autorizado', { status: 4
 /** Plugin oficial `dashboard` (ADR 0107, 0108): autenticação, status, QR, logs e WebSocket. */
 export const dashboard: PluginDefinition = definePlugin({
   name: 'dashboard',
-  version: '0.1.0',
+  version: DASHBOARD_VERSION,
   engine: '<1.0.0',
   config: z.object({
     // Segredo de acesso ao dashboard; o core o mascara em logs e na config exibida.
@@ -71,11 +87,14 @@ export const dashboard: PluginDefinition = definePlugin({
     const sessions = createSessions(cookieMaxAgeSec);
     const logs = createLogBuffer(logBufferSize);
     const sockets = new Set<HttpSocket>();
-    const state: StatusView = {
+    const state: Omit<StatusView, 'reconnections'> = {
       transport: ctx.transportName,
+      name: ctx.botName,
       session: ctx.session,
+      pairing: ctx.capabilities.has('pairing'),
       status: 'connecting',
       updatedAt: Date.now(),
+      versions: { core: CORE_VERSION, dashboard: DASHBOARD_VERSION },
     };
 
     const broadcast = (text: string): void => {
@@ -89,7 +108,19 @@ export const dashboard: PluginDefinition = definePlugin({
       }
     };
 
-    const status = (): StatusView => ({ ...state });
+    // Fila de saída ao vivo (soma das prioridades), lida do core a cada status.
+    const pending = (): number => {
+      const { high, normal, low } = ctx.stats().outbound.pending;
+      return high + normal + low;
+    };
+    // Os horários vêm do core a cada leitura: sobrevivem a reload do plugin e não divergem do evento.
+    const status = (): StatusView => {
+      const { connectedSince, reconnections, qrExpiresAt } = ctx.connectionInfo();
+      const view: StatusView = { ...state, reconnections, outboundPending: pending() };
+      if (connectedSince !== undefined) view.connectedSince = connectedSince;
+      if (qrExpiresAt !== undefined && view.qr !== undefined) view.qrExpiresAt = qrExpiresAt;
+      return view;
+    };
 
     // Mesma regra para o evento e para o snapshot do core no setup.
     const applyStatus = (payload: ConnectionStatus): void => {
@@ -115,10 +146,20 @@ export const dashboard: PluginDefinition = definePlugin({
       applyStatus(payload);
       broadcast(JSON.stringify({ type: 'status', ...status() }));
     });
+    // A fila muda sem evento de conexão: empurra o status só quando o número muda.
+    let lastPending = pending();
+    const queueTimer = setInterval(() => {
+      const now = pending();
+      if (now === lastPending) return;
+      lastPending = now;
+      broadcast(JSON.stringify({ type: 'status', ...status() }));
+    }, 2000);
+    queueTimer.unref();
+    ctx.signal.addEventListener('abort', () => clearInterval(queueTimer), { once: true });
     ctx.events.on('connection.qr', ({ payload }) => {
       state.qr = payload.qr;
       state.updatedAt = Date.now();
-      broadcast(JSON.stringify({ type: 'qr', qr: payload.qr }));
+      broadcast(JSON.stringify({ type: 'qr', qr: payload.qr, qrExpiresAt: payload.expiresAt }));
     });
     ctx.events.on('connection.pairing-code', ({ payload }) => {
       state.pairingCode = payload.code;

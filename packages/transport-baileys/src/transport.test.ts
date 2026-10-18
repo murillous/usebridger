@@ -130,6 +130,24 @@ describe('BaileysTransport: pareamento', () => {
     expect(codes).toEqual([]);
   });
 
+  it('modo qr: o primeiro QR vale 60 s e os seguintes 20 s', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(1_000);
+      const { driver, transport } = setup('qr');
+      const expiries: (number | undefined)[] = [];
+      transport.on('connection.qr', ({ expiresAt }) => {
+        expiries.push(expiresAt);
+      });
+      await transport.connect();
+      driver.last.emit('connection.update', { qr: 'QR-1' });
+      driver.last.emit('connection.update', { qr: 'QR-2' });
+      expect(expiries).toEqual([61_000, 21_000]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('modo código: pede um código por tentativa e não emite QR', async () => {
     const { driver, transport, qrs, codes } = setup({ phone: '5511999999999' });
     await transport.connect();

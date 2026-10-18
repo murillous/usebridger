@@ -97,6 +97,7 @@ sendo a referência; um ADR novo entra nos dois.
 - [0033](0033-cancelamento-cooperativo.md) — Cancelamento cooperativo do código de plugin (detalha D05)
 - [0041](0041-reload-em-cascata.md) — Reload de plugin em cascata pelos dependentes (detalha D17/D18)
 - [0102](0102-plugin-falho-derruba-o-boot.md) — Plugin incompatível ou com `setup` falho derruba o boot (substitui em parte D10/D16/D32/D41)
+- [0121](0121-segredos-cifrados-editaveis-pelo-dashboard.md) — Segredos cifrados no storage, editáveis pelo dashboard (substitui em parte D32)
 
 **Fila de saída e ações do transport**
 
@@ -117,6 +118,7 @@ sendo a referência; um ADR novo entra nos dois.
 - [0020](0020-http-unico-hono.md) — Servidor HTTP único no core (Hono)
 - [0021](0021-dashboard-vira-plugin.md) — Dashboard vira plugin
 - [0107](0107-plugins-oficiais-de-metricas-e-dashboard.md) — Plugins oficiais `plugin-metrics` e `plugin-dashboard` (substitui parte do D86)
+- [0115](0115-status-do-bot-no-contexto.md) — Status do bot no contexto: `ctx.connectionInfo()`, `ctx.botName` e `expiresAt` do QR, mostrados pelo dashboard (complementa D110)
 
 **Testes e kit de autor**
 
@@ -168,7 +170,7 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0029](0029-open-core-repo-privado.md) | D29 | Open core com repo privado | Aceito (transports públicos: ADR 0055) |
 | [0030](0030-metas-de-performance.md) | D30 | Metas de performance com benchmark no CI | Aceito |
 | [0031](0031-nome-do-kernel.md) | D31 | Nome do kernel | Substituído por ADR 0083 |
-| [0032](0032-camadas-da-config-de-plugin.md) | D32 | Camadas e convenções da config de plugin (detalha D17) | Aceito (plugin falho no boot: ADR 0102) |
+| [0032](0032-camadas-da-config-de-plugin.md) | D32 | Camadas e convenções da config de plugin (detalha D17) | Aceito (plugin falho no boot: ADR 0102; segredo por override: ADR 0121) |
 | [0033](0033-cancelamento-cooperativo.md) | D33 | Cancelamento cooperativo do código de plugin (detalha D05) | Aceito |
 | [0034](0034-biblioteca-sem-runner.md) | D34 | Bridger é uma biblioteca, sem runner; API pública por público | Aceito |
 | [0035](0035-papeis-nomeados-por-plugin.md) | D35 | Papéis custom nomeados, definidos por plugin (substitui parte de D12/D24) | Aceito |
@@ -250,3 +252,11 @@ ADR 0055). Ao serem aceitos, entram aqui e no índice numérico.
 | [0111](0111-acesso-admin-para-plugins.md) | D111 | Acesso admin para plugins: `ctx.admin` (`{ plugins, config }`, as instâncias de `bot.plugins`/`bot.config`) só para os nomes em `createBot({ adminPlugins })`, `undefined` para os demais; `warn` para nome inexistente; reload/disable/setOverrides sobre si mesmo rejeitam (detalha D107) | Aceito |
 | [0112](0112-tabela-de-plugins-com-dependencias-servicos-e-contribuicoes.md) | D112 | `PluginReportEntry` ganha `dependsOn`, `services` e `contributions` (opcionais, só quando há algo) para a tela Plugins do dashboard (estende D111) | Aceito |
 | [0113](0113-contrato-das-abas-do-dashboard-complemento.md) | D113 | Complementos às abas do dashboard: `series.title?`, manifesto do `form` mascarado por `maskedJsonSchema` (core), secret de form de aba como entrada (password), widget que não vira manifesto sai sozinho, itens do `load` fora do contrato descartados com `warn`, `order` inválido vale 0, `text` como texto puro (detalha D108) | Aceito |
+| [0114](0114-duracao-do-setup-contagem-e-boot-no-report-de-plugins.md) | D114 | Report de plugins completo para o dashboard: `optionalDependsOn` e `contributionCounts` na linha, `setupMs` na linha e `bootedAt` em `bot.plugins`/`ctx.admin.plugins` (complementa D112) | Aceito |
+| [0115](0115-status-do-bot-no-contexto.md) | D115 | `ctx.connectionInfo()` (no ar desde, reconexões, expiração do QR), `connection.qr.expiresAt?` (preenchido pelo Baileys), `BotConfig.name` e `ctx.botName` (fallback: `Transport.name`); o dashboard mostra no card do bot e no cabeçalho (complementa D110) | Aceito |
+| [0116](0116-servico-com-escopo-por-chamador.md) | D116 | `ServiceAccess.provideScoped(name, factory, release?)`: serviço com instância por plugin que chama, descartada no `removePlugin`; o `metrics` usa para gravar o dono de cada métrica (detalha D18 e ADR 0096) | Aceito |
+| [0117](0117-gauge-e-fila-de-saida-nas-metricas.md) | D117 | `metrics.gauge` (último valor e máximo do dia), que vai aos exportadores e ao `/metrics`, exceto a fila de saída, já exposta ao vivo; fila de saída como gauge amostrado no flush e KPI ao vivo pelo status do dashboard (detalha D107) | Aceito |
+| [0118](0118-titulo-tom-e-rotulo-nos-widgets-das-abas.md) | D118 | Abas do dashboard: `title?` em todo widget (antes só `series`), `tone?` (`ok`, `warn`, `danger`) em `StatItem` e `submitLabel?` no `form`; o que não é texto ou tom conhecido some sem derrubar o item (complementa D108 e D113) | Aceito |
+| [0119](0119-testes-de-componente-do-dashboard-no-happy-dom.md) | D119 | Testes de componente do app web do dashboard no happy-dom com a Testing Library, ambiente por arquivo (`// @vitest-environment happy-dom`), `fetch` trocado por stub e `#web/*` no `imports` do `package.json` (usa D107) | Aceito |
+| [0120](0120-giveup-da-reconexao-leva-ao-estado-failed.md) | D120 | O `giveUp` da reconexão leva o bot ao estado `failed` (transport e filas parados; plugins e HTTP no ar) em vez de `stop()`; `stop()` chega a `stopped`, `start()` rejeita (ajusta D36, D45 e D68) | Aceito |
+| [0121](0121-segredos-cifrados-editaveis-pelo-dashboard.md) | D121 | Segredos editados pelo dashboard ficam cifrados (AES-256-GCM, chave mestra em `BRIDGER_SECRET_KEY`) numa camada própria do storage, abaixo do env e do arquivo; `setSecret`/`clearSecret` separados do `setOverrides`; rotação por `BRIDGER_SECRET_KEY_PREVIOUS` no boot (substitui em parte D32, complementa D111) | Aceito |

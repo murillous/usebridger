@@ -9,6 +9,7 @@ export type Control =
   | 'integer'
   | 'boolean'
   | 'enum'
+  | 'datetime'
   | 'list'
   | 'record'
   | 'json';
@@ -22,10 +23,19 @@ export interface Field {
   required: boolean;
   /** Campo `secret`: só máscara, nunca entra no PUT. */
   secret: boolean;
+  /** `x-bridger-set-secret` (ADR 0121): o core aceita `setSecret` neste campo (há chave mestra). */
+  settable: boolean;
   options?: string[];
+  /** Exemplo do schema (`examples[0]`), usado como placeholder. */
+  placeholder?: string;
   /** Tipo dos itens de `list` e dos valores de `record`. */
   item?: 'text' | 'number';
   default?: unknown;
+  /** Tipo Zod aproximado a partir do JSON Schema (`z.number().min(0)`), para a dica do campo. */
+  hint: string;
+  /** Limites do schema (`minimum`/`minLength`, `maximum`/`maxLength`), para a validação local. */
+  min?: number;
+  max?: number;
 }
 
 export interface Group {
@@ -64,7 +74,7 @@ function control(schema: Json): Pick<Field, 'control' | 'options' | 'item'> {
   if (schema['const'] !== undefined) return { control: 'enum', options: [String(schema['const'])] };
   switch (typeOf(schema)) {
     case 'string':
-      return { control: 'text' };
+      return { control: schema['format'] === 'date-time' ? 'datetime' : 'text' };
     case 'number':
       return { control: 'number' };
     case 'integer':
@@ -89,6 +99,36 @@ function control(schema: Json): Pick<Field, 'control' | 'options' | 'item'> {
   }
 }
 
+const ZOD: Record<string, string> = {
+  string: 'z.string()',
+  number: 'z.number()',
+  integer: 'z.int()',
+  boolean: 'z.boolean()',
+  array: 'z.array()',
+  object: 'z.record()',
+};
+
+/** `z.int()` vira `±MAX_SAFE_INTEGER` no JSON Schema: limite que ninguém escreveu não conta. */
+export function boundsOf(schema: Json): { min?: number; max?: number } {
+  const [lo, hi] =
+    typeOf(schema) === 'string' ? ['minLength', 'maxLength'] : ['minimum', 'maximum'];
+  const pick = (key: string | undefined): number | undefined => {
+    const v = key === undefined ? undefined : schema[key];
+    return typeof v === 'number' && Math.abs(v) < Number.MAX_SAFE_INTEGER ? v : undefined;
+  };
+  return { min: pick(lo), max: pick(hi) };
+}
+
+/** Só o que o JSON Schema deixa ver: tipo e limites. Não tenta reconstruir refinamentos. */
+export function hintOf(schema: Json): string {
+  if (Array.isArray(schema['enum']) || schema['const'] !== undefined) return 'z.enum';
+  let hint = ZOD[typeOf(schema) ?? ''] ?? 'z.json()';
+  const { min, max } = boundsOf(schema);
+  if (min !== undefined) hint += `.min(${min})`;
+  if (max !== undefined) hint += `.max(${max})`;
+  return hint;
+}
+
 /** Gera os campos do formulário a partir do JSON Schema (objeto) da config do plugin. */
 export function buildFields(schema: Json | null, prefix = ''): Node[] {
   if (!schema) return [];
@@ -99,8 +139,14 @@ export function buildFields(schema: Json | null, prefix = ''): Node[] {
     if (!isObject(raw)) continue;
     const prop = unwrap(raw);
     const path = prefix ? `${prefix}.${key}` : key;
-    const label = typeof prop['title'] === 'string' ? prop['title'] : key;
-    const description = typeof prop['description'] === 'string' ? prop['description'] : undefined;
+    const title = typeof prop['title'] === 'string' ? prop['title'] : undefined;
+    const text = typeof prop['description'] === 'string' ? prop['description'] : undefined;
+    // title > description > nome da propriedade (com inicial maiúscula); a descrição que virou rótulo não repete na ajuda.
+    const label = title ?? text ?? key.charAt(0).toUpperCase() + key.slice(1);
+    const description = title === undefined && text !== undefined ? undefined : text;
+    const [example] = Array.isArray(prop['examples']) ? prop['examples'] : [];
+    const placeholder =
+      typeof example === 'string' || typeof example === 'number' ? String(example) : undefined;
     if (typeOf(prop) === 'object' && isObject(prop['properties'])) {
       nodes.push({ node: 'group', path, label, description, fields: buildFields(prop, path) });
       continue;
@@ -111,8 +157,13 @@ export function buildFields(schema: Json | null, prefix = ''): Node[] {
       label,
       description,
       required: required.includes(key),
-      secret: prop['secret'] === true,
+      // `x-bridger-override: false` também marca secreto: o core o põe sempre, sem depender de `secret`.
+      secret: prop['secret'] === true || prop['x-bridger-override'] === false,
+      settable: prop['x-bridger-set-secret'] === true,
+      placeholder,
       default: prop['default'],
+      hint: hintOf(prop),
+      ...boundsOf(prop),
       ...control(prop),
     });
   }
@@ -209,6 +260,20 @@ export function parseNumber(text: string): number | string | undefined {
   return Number.isNaN(n) ? text : n;
 }
 
+/** ISO (`2026-01-02T03:04:05Z`) -> valor do `datetime-local` no fuso local; ausente ou inválido vira vazio. */
+export function isoToLocal(value: unknown): string {
+  const date = typeof value === 'string' ? new Date(value) : undefined;
+  if (!date || Number.isNaN(date.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+/** Valor do `datetime-local` (fuso local) -> ISO em UTC; vazio ou inválido vira ausente. */
+export function localToIso(text: string): string | undefined {
+  const date = new Date(text);
+  return text === '' || Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
 /** Uma linha por item; `number` converte cada linha. */
 export function parseList(text: string, item: 'text' | 'number'): unknown[] {
   const lines = text.split('\n').filter((line) => line.trim() !== '');
@@ -253,4 +318,49 @@ export function rowsToRecord(rows: [string, string][], kind: 'text' | 'number'):
     .filter(([key]) => key.trim() !== '')
     .map(([key, value]) => [key, kind === 'number' ? parseNumber(value) : value] as const);
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+/** Espelha `toEnvSegment` do core (`apiKey` -> `API_KEY`): o web não importa o core. */
+const envSegment = (name: string): string =>
+  name
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1_$2')
+    .replace(/-/g, '_')
+    .toUpperCase();
+
+/** Variável de ambiente de um campo: `BRIDGER_<PLUGIN>__<CAMPO>[__<SUBCAMPO>]` (`envName` do core). */
+export const envName = (plugin: string, path: string): string =>
+  [`BRIDGER_${envSegment(plugin)}`, ...path.split('.').map(envSegment)].join('__');
+
+/** Plugins que recarregam junto com `name` no reload em cascata: dependentes diretos e indiretos. */
+export function dependentsOf(
+  rows: {
+    name: string;
+    dependsOn?: Record<string, string>;
+    optionalDependsOn?: Record<string, string>;
+  }[],
+  name: string,
+): string[] {
+  const out = new Set<string>();
+  const queue = [name];
+  for (let cur = queue.shift(); cur !== undefined; cur = queue.shift()) {
+    for (const row of rows) {
+      const depends = cur in (row.dependsOn ?? {}) || cur in (row.optionalDependsOn ?? {});
+      if (depends && !out.has(row.name) && row.name !== name) {
+        out.add(row.name);
+        queue.push(row.name);
+      }
+    }
+  }
+  return [...out];
+}
+
+/** Plugin do hash `config/<plugin>`; vazio ou `%` malformado não derruba o app (volta a `undefined`). */
+export function configPluginOf(route: string): string | undefined {
+  if (!route.startsWith('config/')) return undefined;
+  try {
+    return decodeURIComponent(route.slice('config/'.length)) || undefined;
+  } catch {
+    return undefined;
+  }
 }

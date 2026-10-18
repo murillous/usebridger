@@ -53,6 +53,7 @@ const entries: Record<string, { file: string; load: () => Promise<object> } & En
       'createMemoryStorage',
       'createSecretSet',
       'definePlugin',
+      'envName',
       'fmt',
       'ignoreBots',
       'ignoreSelf',
@@ -65,6 +66,7 @@ const entries: Record<string, { file: string; load: () => Promise<object> } & En
       'sanitize',
       'secret',
       'textWithMentionNames',
+      'toEnvSegment',
     ],
     types: [
       'AcceptSpec',
@@ -100,6 +102,7 @@ const entries: Record<string, { file: string; load: () => Promise<object> } & En
       'CommandRole',
       'ConfigEnv',
       'ConfigSource',
+      'ConnectionInfo',
       'ConnectionStatus',
       'Contact',
       'ContactMessage',

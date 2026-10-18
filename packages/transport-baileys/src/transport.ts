@@ -238,6 +238,7 @@ export class BaileysTransport implements Transport {
     // Mostrou QR/código e não abriu: o 408 que vier é o pareamento que expirou.
     let pairing = false;
     let codeRequested = false;
+    let qrCount = 0;
 
     socket.ev.on('creds.update', () => {
       if (!current()) return;
@@ -390,7 +391,9 @@ export class BaileysTransport implements Transport {
       if (qr !== undefined) {
         pairing = true;
         if (this.#pairing === 'qr') {
-          this.#events.emit('connection.qr', { qr });
+          // O Baileys gira o QR em 60 s e depois em 20 s (`qrTimeout` padrão, não configurado aqui); a validade segue isso (ADR 0115).
+          const expiresAt = Date.now() + (qrCount++ === 0 ? 60_000 : 20_000);
+          this.#events.emit('connection.qr', { qr, expiresAt });
         } else if (!codeRequested && !state.creds.registered) {
           // Um código por tentativa: o Baileys segue girando o QR, mas o código vale até a
           // tentativa expirar (408), e aí a política pede outro.

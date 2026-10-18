@@ -276,7 +276,13 @@ o plugin subiu, mas eles não respondem ([Capability por comando](commands.md#ca
 Ainda na entrada, quando há algo a dizer: `dependsOn` (o do manifesto, nome → faixa; também nas
 linhas ignoradas), e nas carregadas `services` (nomes providos no `setup`) e `contributions`
 (pontos de extensão a que o plugin contribuiu), lidos do registry na hora em que a tabela é
-montada, então um `provide` posterior ao `setup` também aparece (ADR 0112).
+montada, então um `provide` posterior ao `setup` também aparece (ADR 0112). Também `optionalDependsOn`
+(como o `dependsOn`) e, junto de `contributions`, `contributionCounts` (ponto → quantas contribuições
+o plugin fez nele), e nas carregadas `setupMs` (ms do contexto + `setup`, o do boot ou o do último
+reload; ADR 0114).
+
+`bot.plugins.bootedAt` (e `ctx.admin.plugins.bootedAt`, ADR 0111) é o epoch ms em que o boot dos
+plugins terminou (`undefined` antes do `start()`; reload não o muda).
 
 `host.report()` devolve a tabela atual (reflete reloads).
 
@@ -407,6 +413,8 @@ setup(ctx) {
 | `ctx.self` | contato da sessão; `null` até a primeira conexão | — | — |
 | `ctx.session` | nome da sessão do bot (`default` se a config não define) | — | — |
 | `ctx.connectionStatus()` | último `ConnectionStatus` do transport, `undefined` antes do primeiro evento ([ADR 0110](../../../docs/adr/0110-sessao-e-status-de-conexao-no-contexto.md)) | — | — |
+| `ctx.connectionInfo()` | `{ connectedSince, reconnections, qrExpiresAt }`: desde quando a conexão está no ar, reaberturas depois da primeira e expiração do QR atual (ms epoch; `undefined` quando não se aplica; [ADR 0115](../../../docs/adr/0115-status-do-bot-no-contexto.md)) | — | — |
+| `ctx.botName` | `createBot({ name })`, ou o `name` do transport sem config (ADR 0115) | — | — |
 | `ctx.transportName` | `name` do transport (`baileys`, `web`...), para compor chaves de ID no [`ctx.storage.shared`](storage.md#dados-comuns-a-vários-bots) | — | — |
 | `ctx.capabilities` | `ReadonlySet` do que o transport suporta | — | — |
 | `ctx.http.route(method, path, handler)` / `ctx.http.ws(path, accept)` | rota HTTP ou WebSocket sob `/plugins/<nome>` ([HTTP](http.md)) | — | — |
@@ -431,21 +439,21 @@ setup(ctx) {
 ## Acesso admin
 
 `ctx.admin` é `{ plugins, config }`: delega às instâncias de `bot.plugins` (tabela de boot,
-`reload`/`disable`/`enable`) e `bot.config` (`describe`, `jsonSchema`, `setOverrides`). Só os
+`reload`/`disable`/`enable`) e `bot.config` (`describe`, `jsonSchema`, `setOverrides`, `setSecret`, `clearSecret` e `secretsWritable`, ADR 0121). Só os
 plugins listados em `createBot({ adminPlugins: ['dashboard'] })` o recebem; os demais veem
 `undefined`. A lista fica no app, e não no manifesto, para o plugin não se autoconceder o poder
 ([ADR 0111](../../../docs/adr/0111-acesso-admin-para-plugins.md)). Nome em `adminPlugins` que
 não existe gera `warn` no boot.
 
 Sobre o **próprio** plugin, `admin.plugins.reload`, `admin.plugins.disable` e
-`admin.config.setOverrides` (que recarrega) rejeitam com `PluginHostStateError`: o plugin
+`admin.config.setOverrides`, `admin.config.setSecret` e `admin.config.clearSecret` (que recarregam) rejeitam com `PluginHostStateError`: o plugin
 desceria no meio da própria chamada. A outra diferença: `reload`/`disable`/`enable` e
-`setOverrides` rejeitam com `ContextExpiredError` depois do `dispose` do plugin (ADR 0033); as
+`setOverrides`/`setSecret`/`clearSecret` rejeitam com `ContextExpiredError` depois do `dispose` do plugin (ADR 0033); as
 leituras ficam livres. No mais, o comportamento é o de `bot.plugins` e `bot.config`.
 
 Tudo o que sai pelo `ctx.admin` passa pela máscara de segredos do bot (os mesmos valores que o
 logger censura, trocados por `[REDACTED]`): a tabela de `plugins()`, o `PluginChangeResult`
-(`reason.error`, `dependents`, `teardownErrors`), o `describe`/`jsonSchema` e o erro rejeitado
+(`reason.error`, `dependents`, `teardownErrors`), o `describe`/`jsonSchema`, o resultado e o erro de `setSecret`/`clearSecret` e o erro rejeitado
 (`message`, `stack`, `cause`, `issues`). Recebe-se uma cópia profunda: o `Error` mantém o
 protótipo (`instanceof` vale; `Error.isError(copia)` dá `false`), `Map`/`Set` são recriados e
 instância de outra classe vira objeto simples com as propriedades próprias. Chaves `Symbol` são

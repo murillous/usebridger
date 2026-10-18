@@ -352,3 +352,96 @@ describe('abas de plugins: contrato defensivo', () => {
     expect(await label('?days=2.5')).toBe('30');
   });
 });
+
+// ADR 0118: título por widget, tom de `stats` e rótulo do botão do `form`.
+const rotulos = definePlugin({
+  name: 'rotulos',
+  version: '1.0.0',
+  engine: '<1.0.0',
+  after: ['dashboard'],
+  setup(ctx) {
+    ctx.services.contribute('dashboard.tabs', {
+      id: 'rotulos',
+      title: 'Rótulos',
+      widgets: [
+        {
+          kind: 'stats',
+          id: 'resumo',
+          load: async () =>
+            [
+              { label: 'Atrasados', value: 1, tone: 'warn' },
+              { label: 'Pendentes', value: 2 },
+              { label: 'Futuro', value: 3, tone: 'roxo' },
+            ] as never,
+        },
+        {
+          kind: 'table',
+          id: 'proximos',
+          title: 'Próximos',
+          columns: [{ key: 'a', label: 'A' }],
+          load: async () => ({ rows: [] }),
+        },
+        {
+          kind: 'form',
+          id: 'novo',
+          title: 'Novo lembrete global',
+          submitLabel: 'Agendar',
+          schema: z.object({ texto: z.string() }),
+          submit: async () => undefined,
+        },
+        {
+          kind: 'form',
+          id: 'ruim',
+          title: 7,
+          submitLabel: 1,
+          schema: z.object({ texto: z.string() }),
+          submit: async () => undefined,
+        } as never,
+      ],
+    });
+  },
+});
+
+describe('abas de plugins: título, tom e rótulo do envio', () => {
+  async function startRotulos() {
+    const http = createHttp({ port: 0, hostname: '127.0.0.1' });
+    const bot = await createTestBot({
+      plugins: [dashboard, rotulos],
+      http,
+      pluginConfig: { dashboard: { token: TOKEN } },
+    });
+    bots.push(bot);
+    const url = `http://127.0.0.1:${http.port}/plugins/dashboard`;
+    const login = await fetch(`${url}/api/login`, {
+      method: 'POST',
+      body: JSON.stringify({ token: TOKEN }),
+    });
+    const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    return (path: string) => fetch(`${url}${path}`, { headers: { cookie } });
+  }
+
+  it('manifesto leva title de qualquer widget e submitLabel do form; o que não é texto some', async () => {
+    const get = await startRotulos();
+    const [tab] = (await (await get('/api/tabs')).json()) as Record<string, unknown>[];
+    const widgets = tab?.['widgets'] as Record<string, unknown>[];
+    // O form `ruim` fica no manifesto: só o title e o submitLabel que não são texto saem.
+    expect(widgets.map((w) => w['kind'])).toEqual(['stats', 'table', 'form', 'form']);
+    expect(widgets.map((w) => w['title'])).toEqual([
+      undefined,
+      'Próximos',
+      'Novo lembrete global',
+      undefined,
+    ]);
+    expect(widgets[2]?.['submitLabel']).toBe('Agendar');
+    expect(widgets[3]).not.toHaveProperty('submitLabel');
+  });
+
+  it('stats repassa tom conhecido e tira o desconhecido sem descartar o item', async () => {
+    const get = await startRotulos();
+    expect(await (await get('/api/tabs/rotulos/rotulos/resumo')).json()).toEqual([
+      { label: 'Atrasados', value: 1, tone: 'warn' },
+      { label: 'Pendentes', value: 2 },
+      { label: 'Futuro', value: 3 },
+    ]);
+  });
+});

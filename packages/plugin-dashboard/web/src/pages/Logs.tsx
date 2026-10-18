@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import type { LiveState } from '#web/lib/live.ts';
 import type { LogEntry } from '#web/lib/types.ts';
-import { LiveBadge } from './LiveBadge.tsx';
 
 const LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'];
 
 export function Logs({ live }: { live: LiveState }) {
   const [level, setLevel] = useState('info');
-  // Pausar congela a lista exibida; o WS segue acumulando e "Retomar" volta ao vivo.
+  // Pausar local: congela só a lista exibida; o WS segue acumulando e "Retomar" volta ao vivo.
+  // Difere do pausar global do cabeçalho (App), que fecha o WS e para todas as telas.
   const [frozen, setFrozen] = useState<LogEntry[] | null>(null);
   const source = frozen ?? live.logs;
   const min = LEVELS.indexOf(level);
@@ -17,7 +17,7 @@ export function Logs({ live }: { live: LiveState }) {
     <>
       <div className="row spread">
         <h1>Logs</h1>
-        <LiveBadge live={live} paused={frozen !== null} />
+        {frozen !== null && <span className="chip warn">Pausado</span>}
       </div>
       <div className="row" style={{ marginBottom: 16 }}>
         <div className="field" style={{ margin: 0 }}>

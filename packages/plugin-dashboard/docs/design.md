@@ -17,7 +17,7 @@ O canvas é a fonte visual, aberto a quem tiver o link. Quadros:
 | --- | --- |
 | Visão geral | Status por bot/transport (QR e código só no WhatsApp, erro `fatal` nos de token), KPIs do dia, logs recentes |
 | Métricas | Painéis fixos do kernel e a seção genérica com toda métrica registrada no serviço `metrics` |
-| Plugins | Tabela de boot (estado, setup, `dependsOn`, serviços, contribuições) e enable/disable |
+| Plugins | Tabela de boot (nome e versão, estado, setup, depende de, provê, contribui), busca, painel de erro do setup e toggle de ativo; no mobile, filtros, card de problema e lista com toggle |
 | Config de plugin (Zod) | Formulário gerado do schema, secret mascarado, erro junto do campo, reload em cascata |
 | Aba contribuída por plugin | Aba `Lembretes` do plugin `reminders`, montada só com widgets, e o `contribute` que a gera |
 | Design system | Tokens, tipografia, espaço, raio, elevação, componentes e widgets |
@@ -114,8 +114,26 @@ Abaixo de 768 px a sidebar sai e entra a barra inferior (TabBar).
 - **Tabela vira lista:** uma linha por item, com o campo principal em cima e os secundários em
   mono 11 embaixo. Vale para o widget `table` de plugin, que o dashboard converte sozinho.
 - **Grades:** KPIs em 2 colunas, `stats` de plugin em até 3; o resto em 1 coluna.
-- **Config:** a lista de plugins vira um `select` acima do formulário. Salvar e Descartar ficam
-  numa barra fixa acima da TabBar.
+- **Config:** a lista de plugins vira um `select` ("ai · 1 erro") acima do formulário. A barra
+  de salvar fica dentro do card e, no mobile, fixa acima da TabBar (rola com o card, sem
+  tapar o formulário). Campos numéricos consecutivos ficam lado a lado no desktop (grade de 2
+  colunas) e empilham no mobile.
+- **Config, regras da tela:** cabeçalho `bridger.config.json · plugins.<id>`; badge "N erros"
+  (config atual inválida, lida do GET de cada plugin) ou "falhou" (setup falhou) na lista;
+  secret só leitura com chips `secret`/origem e o nome real da variável (`BRIDGER_<PLUGIN>__<CAMPO>`);
+  dica de tipo do schema sob cada campo; "Salvar recarrega X e N dependente(s)" calculado do
+  `dependsOn` dos plugins (limite: dependentes por `optionalDependsOn`, que o core também recarrega, não entram na contagem, porque a linha do plugin não os expõe). O `PUT` da config segue recusando secret (ADR 0111).
+- **Config, secret cifrado (ADR 0121):** o manifesto (`GET /api/config/:plugin`) leva `secretsWritable`
+  e o schema marca o campo com `x-bridger-set-secret`. "Substituir" abre um `<input type="password">`
+  (largura total no celular) e salva por `PUT /api/config/:plugin/secrets/:path` com `{ "value": ... }`;
+  "Remover" (só com fonte `secret`) usa `DELETE` na mesma rota e funciona sem chave mestra. Fonte `env`
+  ou `file` mostra "Definido por env" / "Definido pelo arquivo", sem botão (o core recusa com
+  `shadowed`, 409). Sem `BRIDGER_SECRET_KEY` a tela mostra o motivo. As rotas têm a mesma autenticação e
+  checagem de origem das outras, nunca ecoam o valor, e o aviso "Salvar recarrega X e N dependentes"
+  vale também para o secret. Os botões ficam travados enquanto há edição pendente no form, porque o
+  reload descartaria essa edição. "Remover" pede confirmação e também aparece para envelope
+  `undecryptable` (a view vem nula, só há a issue com `kind`), mesmo sem chave mestra.
+  `shortcut:` o dashboard só envia segredo string; secret não-string cai em 400, até algum plugin precisar de outro tipo.
 - **Alvos de 44 px** (40 px no desktop), campos com fonte de 16 px (evita o zoom do iOS),
   `inputmode` nos campos numéricos, `env(safe-area-inset-bottom)` na barra inferior.
 - **QR** cresce para 200 px, e o código de pareamento ganha botão Copiar.
@@ -154,3 +172,21 @@ browser ──HTTP (autenticação do dashboard)──▶ plugin-dashboard ─�
   inválido mostra as issues do Zod junto dos campos.
 - **Métricas não precisam de aba.** Métrica registrada no serviço `metrics` já aparece na seção
   genérica (ADR 0107). Aba é para o que não é métrica: listas, ações, formulários.
+
+## Métricas e abas de plugin: diferenças aceitas do canvas
+
+Conferidas na M5-4.8 (#180). O canvas é ilustrativo; o que o contrato ou o core não sustenta fica de fora:
+
+- **Painel "Fila de saída"**: lê `bridger.outbound.pending`, gauge amostrado a cada flush (ADR 0117); o painel mostra o máximo por dia. "Envios por dia" deixou de ter painel; a métrica `bridger.outbound.sent` segue na tabela.
+- **Coluna "Plugin" da tabela de métricas**: vem de `metrics.ownerOf(nome)`, gravado pelo serviço `metrics` com escopo por quem chama (ADR 0116); as métricas do kernel saem como `core` e as sem dono, como `-`. A contagem de séries fica no texto, ao lado do nome.
+- **Latência em ms**: a métrica real é `bridger.messages.handle_duration_ms`, o canvas mostra `_seconds`.
+- **Etiqueta de widget** ("widget: table + action"): anotação do canvas. Título por widget, tom em `stats` e rótulo do botão do form entraram no contrato (ADR 0118).
+- **Painel "Como o plugin declara esta aba"**: documentação do canvas, não faz parte do app.
+
+## Visão geral: o que o core ainda não expõe
+
+O card do bot mostra só o que o status de conexão traz (transport, sessão, estado, QR, código de
+pareamento, motivo do erro). "No ar desde", reconexões, validade do QR ("Expira em") não saem do core hoje.
+Os 5 KPIs de "Hoje" incluem "Fila de saída": o valor ao vivo vem de `outboundPending` no status
+(`GET /api/status` e WebSocket, soma das prioridades de `ctx.stats()`); o servidor reenvia o status
+quando o número muda, checando a cada 2 s.

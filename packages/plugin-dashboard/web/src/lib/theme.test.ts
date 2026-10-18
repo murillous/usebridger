@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyTheme, loadTheme, saveTheme } from './theme.ts';
+import { applyTheme, loadTheme, resolveTheme, saveTheme } from './theme.ts';
 
 const memory = () => {
   const data = new Map<string, string>();
@@ -42,5 +42,13 @@ describe('tema', () => {
     expect(attrs.get('data-theme')).toBe('dark');
     applyTheme('auto', root);
     expect(attrs.has('data-theme')).toBe(false);
+  });
+});
+
+describe('resolveTheme', () => {
+  it('auto segue o sistema; escolha explícita vale', () => {
+    expect(resolveTheme('auto', true)).toBe('dark');
+    expect(resolveTheme('auto', false)).toBe('light');
+    expect(resolveTheme('light', true)).toBe('light');
   });
 });
