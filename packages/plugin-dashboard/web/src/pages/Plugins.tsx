@@ -31,7 +31,7 @@ function reasonText(reason: SkipReason | undefined): string {
 /** Resultado do `setup`: falhou, carregou com comando de fora, carregou inteiro; `—` se nem rodou. */
 function setupText(row: PluginRow): string {
   if (row.status === 'loaded') {
-    return row.unregistered?.length ? `Parcial (${row.unregistered.length} sem comando)` : 'OK';
+    return row.unregistered?.length ? `Parcial (${row.unregistered.length} comandos fora)` : 'OK';
   }
   return row.reason?.kind === 'setup-failed' ? 'Falhou' : '—';
 }

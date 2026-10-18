@@ -121,7 +121,7 @@ describe('record e messages', () => {
   const fields = leaves(buildFields(rec));
   const stop = new Set(fields.map((f) => f.path));
 
-  it('o record é uma folha json com o valor atual', () => {
+  it('o record primitivo é uma folha record com o valor atual', () => {
     expect(fields.find((f) => f.path === 'extra')?.control).toBe('record');
     expect(flatten({ modo: 'a', extra: { a: 'b' } }, '', stop)).toEqual({
       modo: 'a',

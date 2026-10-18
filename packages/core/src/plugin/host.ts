@@ -203,7 +203,9 @@ const reportBase = ({ definition, origin }: PluginEntry) => ({
   version: definition.version,
   origin,
   // Só quando há algo, como `unregistered`: a linha de quem não declara nada não muda.
-  ...(Object.keys(definition.dependsOn ?? {}).length > 0 && { dependsOn: definition.dependsOn }),
+  ...(Object.keys(definition.dependsOn ?? {}).length > 0 && {
+    dependsOn: { ...definition.dependsOn },
+  }),
 });
 
 /** Cria o host de plugins. Não roda nada até `start()`. */
@@ -280,11 +282,16 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
     }
     slot.handle = handle;
     const unregistered = [...(handle.unregisteredCommands?.() ?? [])];
-    const { services = [], contributions = [] } = handle.provided?.() ?? {};
+    return { ...base, status: 'loaded', ...(unregistered.length > 0 && { unregistered }) };
+  }
+
+  /** Linha com o que o plugin provê agora: um `provide` depois do `setup` também aparece. */
+  function current(slot: Slot): PluginReportEntry {
+    const { report, handle } = slot;
+    if (report.status !== 'loaded' || !handle?.provided) return report;
+    const { services, contributions } = handle.provided();
     return {
-      ...base,
-      status: 'loaded',
-      ...(unregistered.length > 0 && { unregistered }),
+      ...report,
       ...(services.length > 0 && { services }),
       ...(contributions.length > 0 && { contributions }),
     };
@@ -467,7 +474,7 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
       throw new PluginBootError([first, ...rest]);
     }
     if (state === 'starting') state = 'running';
-    return slots.map((slot) => slot.report);
+    return slots.map(current);
   }
 
   /** Plugins que não carregaram por motivo que derruba o boot: tudo menos `disabled`. */
@@ -541,7 +548,7 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
         ? { ...reportBase(each.entry), status: 'skipped', reason }
         : await bringUp(each);
     }
-    const dependents = affected.slice(1).map((each) => each.report);
+    const dependents = affected.slice(1).map(current);
     log.info(
       `plugin "${name}" ${verb}: ${slot.report.status === 'loaded' ? 'carregado' : 'ignorado'}`,
       {
@@ -552,7 +559,7 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
         }),
       },
     );
-    return { plugin: slot.report, dependents, teardownErrors: errors };
+    return { plugin: current(slot), dependents, teardownErrors: errors };
   }
 
   /**
@@ -612,7 +619,7 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
     },
 
     report(): PluginReportEntry[] {
-      return slots.map((slot) => slot.report);
+      return slots.map(current);
     },
   };
 }

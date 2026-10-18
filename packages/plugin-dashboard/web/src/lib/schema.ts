@@ -234,9 +234,10 @@ export function groupIssues(
 export const listToRows = (value: unknown): string[] =>
   Array.isArray(value) ? value.map(String) : [];
 
-/** Linhas do editor -> lista; linha em branco some, como no `parseList`. */
-export function rowsToList(rows: string[], item: 'text' | 'number'): unknown[] {
-  return parseList(rows.join('\n'), item);
+/** Linhas do editor -> lista; linha em branco some, como no `parseList`; vazia vira ausente, como o record. */
+export function rowsToList(rows: string[], item: 'text' | 'number'): unknown[] | undefined {
+  const list = parseList(rows.join('\n'), item);
+  return list.length > 0 ? list : undefined;
 }
 
 /** Record -> pares `[chave, valor]` em texto. */

@@ -64,3 +64,32 @@ describe('PluginReportEntry: dependsOn, services e contributions', () => {
     expect(base).not.toHaveProperty('services');
   });
 });
+
+describe('provide depois do setup', () => {
+  it('aparece no report sem reload', async () => {
+    let late: (() => void) | undefined;
+    const b = createBot({
+      env: {},
+      logger: recordingLogger(),
+      outbound: { globalIntervalMs: 0, chatIntervalMs: 0 },
+      transport: new RecordingTransport(),
+      storage: createMemoryStorage(),
+      plugins: [
+        definePlugin({
+          name: 'tardio',
+          version: '1.0.0',
+          engine: ENGINE,
+          setup: (ctx) => {
+            late = () => ctx.services.provide('relatorio.teste', { ok: true });
+          },
+        }),
+      ],
+    });
+    bots.push(b);
+    await b.start();
+    expect(b.plugins()[0]).not.toHaveProperty('services');
+
+    late?.();
+    expect(b.plugins()[0]).toMatchObject({ services: ['relatorio.teste'] });
+  });
+});

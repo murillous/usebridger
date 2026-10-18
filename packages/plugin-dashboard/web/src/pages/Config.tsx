@@ -102,7 +102,7 @@ function ListControl(props: {
     <fieldset
       className="editor"
       id={props.id}
-      aria-label={props.field.label}
+      aria-labelledby={`${props.id}-lbl`}
       aria-describedby={props.describedBy}
     >
       {rows.map((text, i) => (
@@ -151,7 +151,7 @@ function RecordControl(props: {
     <fieldset
       className="editor"
       id={props.id}
-      aria-label={props.field.label}
+      aria-labelledby={`${props.id}-lbl`}
       aria-describedby={props.describedBy}
     >
       {rows.map(([key, value], i) => (
@@ -206,6 +206,7 @@ function FieldView(props: {
   const describedBy =
     [help ? helpId : '', errors.length ? errId : ''].filter(Boolean).join(' ') || undefined;
 
+  const editor = !field.secret && (field.control === 'list' || field.control === 'record');
   let control: ReactNode;
   if (field.secret) {
     control = (
@@ -244,7 +245,7 @@ function FieldView(props: {
         ))}
       </select>
     );
-  } else if (field.control === 'list' || field.control === 'record') {
+  } else if (editor) {
     const Editor = field.control === 'list' ? ListControl : RecordControl;
     control = (
       <Editor
@@ -271,10 +272,17 @@ function FieldView(props: {
 
   return (
     <div className="field">
-      <label htmlFor={id}>
-        {field.label}
-        {field.secret && <span className="muted"> (secret, só leitura)</span>}
-      </label>
+      {/* Fieldset não é rotulável por `for`: os editores usam `aria-labelledby` neste texto. */}
+      {editor ? (
+        <span className="lbl" id={`${id}-lbl`}>
+          {field.label}
+        </span>
+      ) : (
+        <label htmlFor={id}>
+          {field.label}
+          {field.secret && <span className="muted"> (secret, só leitura)</span>}
+        </label>
+      )}
       {control}
       {help && (
         <span id={helpId} className="help">

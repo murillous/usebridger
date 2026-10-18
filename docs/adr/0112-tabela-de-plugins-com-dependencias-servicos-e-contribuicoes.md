@@ -15,8 +15,9 @@ versão, origem e estado, então o dashboard não tinha de onde ler o resto (#17
   `unregistered`: `dependsOn` (manifesto, nome → faixa; em linhas carregadas e ignoradas),
   `services` (serviços providos no `setup`) e `contributions` (pontos de extensão com
   contribuição do plugin; as duas últimas só em linhas `loaded`).
-- Serviços e contribuições são lidos do registry ao fim do `setup` (`PluginContextHandle.provided`
-  e `ServiceRegistry.describe`). Quem provê depois do `setup` não aparece até o próximo reload.
+- Serviços e contribuições são lidos do registry na hora de montar a linha (`host.report()` e os
+  resultados de start/reload/disable/enable), por `PluginContextHandle.provided` e
+  `ServiceRegistry.describe`: um `provide` depois do `setup` também aparece.
 - Mudança aditiva: quem não declara nada tem a mesma linha de antes. Nada muda na tabela de boot
   em texto.
 
