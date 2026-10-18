@@ -62,7 +62,7 @@ function Stats({ url, onGone }: { url: string; onGone: () => void }) {
   return (
     <div className="stats">
       {data.map((s) => (
-        <div key={s.label} className="card stat">
+        <div key={s.label} className={`card stat${s.tone ? ` ${s.tone}` : ''}`}>
           <div className="stat-label">{s.label}</div>
           <div className="stat-value">{s.value}</div>
           {s.hint && <div className="stat-label mono">{s.hint}</div>}
@@ -355,7 +355,7 @@ function Form({
         />
       ))}
       <button type="submit" className="btn primary" disabled={sending}>
-        Enviar
+        {widget.submitLabel ?? 'Enviar'}
       </button>
     </form>
   );
@@ -421,7 +421,9 @@ export function Tab({
           </p>
           <h1>{tab.title}</h1>
           {tab.widgets.map((w) => (
-            <section key={w.id} aria-label={w.id}>
+            <section key={w.id} aria-label={w.title ?? w.id}>
+              {/* A série desenha o próprio título dentro do cartão, junto do seletor de período. */}
+              {w.title && w.kind !== 'series' && <h3>{w.title}</h3>}
               <Widget tab={tab} widget={w} onGone={refresh} />
             </section>
           ))}

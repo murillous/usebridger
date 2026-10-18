@@ -902,6 +902,15 @@ th.num {
   height: 80px;
   display: block;
 }
+.stat.ok .stat-value {
+  color: var(--ok);
+}
+.stat.warn .stat-value {
+  color: var(--warn);
+}
+.stat.danger .stat-value {
+  color: var(--danger);
+}
 .prewrap {
   white-space: pre-wrap;
 }

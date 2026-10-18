@@ -169,8 +169,7 @@ Conferidas na M5-4.8 (#180). O canvas é ilustrativo; o que o contrato ou o core
 - **Painel "Fila de saída"**: lê `bridger.outbound.pending`, gauge amostrado a cada flush (ADR 0117); o painel mostra o máximo por dia. "Envios por dia" deixou de ter painel; a métrica `bridger.outbound.sent` segue na tabela.
 - **Coluna "Plugin" da tabela de métricas**: vem de `metrics.ownerOf(nome)`, gravado pelo serviço `metrics` com escopo por quem chama (ADR 0116); as métricas do kernel saem como `core` e as sem dono, como `-`. A contagem de séries fica no texto, ao lado do nome.
 - **Latência em ms**: a métrica real é `bridger.messages.handle_duration_ms`, o canvas mostra `_seconds`.
-- **Título e etiqueta de widget** ("Próximos", "widget: table + action"): o contrato `dashboard.tabs` (ADR 0108) só tem título em `series`; as etiquetas são anotação do canvas.
-- **Cor de tom em `stats`** ("Atrasados" em âmbar) e **rótulo do botão do form** ("Agendar"): o contrato não tem os campos; o botão é "Enviar".
+- **Etiqueta de widget** ("widget: table + action"): anotação do canvas. Título por widget, tom em `stats` e rótulo do botão do form entraram no contrato (ADR 0118).
 - **Painel "Como o plugin declara esta aba"**: documentação do canvas, não faz parte do app.
 
 ## Visão geral: o que o core ainda não expõe
