@@ -1,5 +1,5 @@
 import { CORE_VERSION, createHttp, definePlugin, type Logger } from '@usebridger/core';
-import { createTestBot } from '@usebridger/testing';
+import { createTestBot, FakeTransport } from '@usebridger/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createSessions } from './auth.ts';
 import { dashboard, type StatusView } from './index.ts';
@@ -216,6 +216,33 @@ describe('endurecimento', () => {
 });
 
 describe('estado', () => {
+  it('status informa se o transport pareia (capability pairing)', async () => {
+    const { base, cookie } = await start();
+    const res = await fetch(`${base}/api/status`, { headers: { cookie: await cookie() } });
+    // O FakeTransport padrão tem todas as capabilities.
+    expect(((await res.json()) as StatusView).pairing).toBe(true);
+  });
+
+  it('pairing é false quando o transport não tem a capability', async () => {
+    const http = createHttp({ port: 0, hostname: '127.0.0.1' });
+    bots.push(
+      await createTestBot({
+        plugins: [dashboard],
+        http,
+        transport: new FakeTransport({ capabilities: [] }),
+        pluginConfig: { dashboard: { token: TOKEN } },
+      }),
+    );
+    const base = `http://127.0.0.1:${http.port}/plugins/dashboard`;
+    const login = await fetch(`${base}/api/login`, {
+      method: 'POST',
+      body: JSON.stringify({ token: TOKEN }),
+    });
+    const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    const res = await fetch(`${base}/api/status`, { headers: { cookie } });
+    expect(((await res.json()) as StatusView).pairing).toBe(false);
+  });
+
   it('status reflete a conexão; QR e código saem no open; closed expõe só reason e mensagem', async () => {
     const { bot, base, cookie } = await start();
     const headers = { cookie: await cookie() };

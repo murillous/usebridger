@@ -29,6 +29,8 @@ export interface StatusView {
   message?: string;
   qr?: string;
   pairingCode?: string;
+  /** O transport pareia por QR/código: um `auth-failed` limpa a sessão e reconecta, não é terminal. */
+  pairing: boolean;
   updatedAt: number;
   /** Versões exibidas no rodapé da sidebar. */
   versions: { core: string; dashboard: string };
@@ -78,6 +80,7 @@ export const dashboard: PluginDefinition = definePlugin({
     const state: StatusView = {
       transport: ctx.transportName,
       session: ctx.session,
+      pairing: ctx.capabilities.has('pairing'),
       status: 'connecting',
       updatedAt: Date.now(),
       versions: { core: CORE_VERSION, dashboard: DASHBOARD_VERSION },

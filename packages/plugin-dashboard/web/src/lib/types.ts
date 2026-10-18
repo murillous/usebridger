@@ -6,6 +6,7 @@ export interface StatusView {
   message?: string;
   qr?: string;
   pairingCode?: string;
+  pairing?: boolean;
   updatedAt: number;
   /** Opcional: um backend anterior não envia. */
   versions?: { core: string; dashboard: string };

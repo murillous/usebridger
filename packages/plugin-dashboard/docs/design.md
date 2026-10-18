@@ -172,3 +172,9 @@ Conferidas na M5-4.8 (#180). O canvas é ilustrativo; o que o contrato ou o core
 - **Título e etiqueta de widget** ("Próximos", "widget: table + action"): o contrato `dashboard.tabs` (ADR 0108) só tem título em `series`; as etiquetas são anotação do canvas.
 - **Cor de tom em `stats`** ("Atrasados" em âmbar) e **rótulo do botão do form** ("Agendar"): o contrato não tem os campos; o botão é "Enviar".
 - **Painel "Como o plugin declara esta aba"**: documentação do canvas, não faz parte do app.
+
+## Visão geral: o que o core ainda não expõe
+
+O card do bot mostra só o que o status de conexão traz (transport, sessão, estado, QR, código de
+pareamento, motivo do erro). "No ar desde", reconexões, validade do QR ("Expira em") e fila de saída
+não saem do core hoje. O canvas tem 5 KPIs em "Hoje"; o app mostra 4, sem "Fila de saída", até o core expor a fila.
