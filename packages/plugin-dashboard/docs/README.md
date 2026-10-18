@@ -204,6 +204,9 @@ Rotas (sessão e `Origin` do mesmo host nos `POST`, como no resto):
 - **Forma do `load`:** item fora do contrato (`stats` sem `label` string ou `value` string/número;
   linha sem `id` string; ponto sem `label` string ou `value` número) é descartado com `warn`. `order`
   que não é número finito vale 0.
+- **Cuidado com o valor de entrada:** `submit` e `refine` não devem pôr o valor recebido em erros ou
+  mensagens. O valor de um `secret` iria sem censura ao `log.error` do dashboard, ou voltaria na issue
+  do Zod ao browser.
 - **Limites:** corpo até 64 KiB (413); resposta cortada em 500 linhas, 1000 pontos e 50 `stats`, com
   `warn`. Não há prazo próprio: trabalho longo é de quem contribui.
 - **Navegação:** grupo **Extensões** na sidebar. No celular as abas ficam em **Mais**, e a aba

@@ -275,6 +275,23 @@ describe('createPluginConfigs: secrets', () => {
     expect(json).toContain(SECRET_MASK);
   });
 
+  it('maskedJsonSchema mascara secret aninhado em objeto e secret opcional com default', () => {
+    const json = maskedJsonSchema(
+      z.object({
+        openai: z.object({ key: secret(z.string()).default('aninhado-real') }),
+        extra: secret(z.string()).optional().default('opcional-real'),
+      }),
+    );
+    const text = JSON.stringify(json);
+    expect(text).not.toContain('aninhado-real');
+    expect(text).not.toContain('opcional-real');
+    const props = json['properties'] as Record<string, Record<string, unknown>>;
+    expect(props['extra']).toMatchObject({ secret: true, default: SECRET_MASK });
+    const inner = props['openai']?.['properties'] as Record<string, unknown>;
+    const nested = inner['key'];
+    expect(nested).toMatchObject({ secret: true, default: SECRET_MASK });
+  });
+
   it('JSON Schema marca secretos e não expõe default secreto', async () => {
     const withDefault = plugin('def', {
       config: z.object({ key: secret(z.string()).default('padrão-secreto'), n: z.number() }),
