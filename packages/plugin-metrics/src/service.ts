@@ -29,7 +29,7 @@ interface Cell {
   readonly fields: Map<string, number>;
 }
 
-type Kind = 'counter' | 'histogram';
+type Kind = 'counter' | 'histogram' | 'gauge';
 
 interface Metric {
   readonly kind: Kind;
@@ -50,8 +50,19 @@ export interface MetricsRuntimeOptions {
   readonly now?: () => number;
 }
 
+/** Dono das métricas que o próprio plugin-metrics grava (kernel). */
+export const CORE_OWNER = 'core';
+
+/** Gauge amostrado do `ctx.stats()` que o scrape já expõe ao vivo (`bridger_outbound_pending`). */
+export const LIVE_GAUGE = 'bridger.outbound.pending';
+
 export interface MetricsRuntime {
+  /** Serviço do próprio plugin-metrics: as métricas que ele grava têm o dono `core`. */
   readonly service: MetricsService;
+  /** Serviço de um plugin consumidor: a primeira escrita de uma métrica grava `caller` como dono. */
+  scoped(caller: string): MetricsService;
+  /** O caller saiu: as métricas dele ficam sem dono. */
+  release(caller: string): void;
   /** Soma ao contador de um dia específico (o dia anterior, na virada); fora dos totais. */
   counterAt(name: string, labels: MetricLabels, value: number, day: string): void;
   /** Acumulado desde o início do processo (campo `day` vazio), para o /metrics. */
@@ -108,6 +119,19 @@ function percentile(buckets: readonly number[], count: number, p: number): numbe
 }
 
 function toRow(metric: string, kind: Kind, c: Cell): MetricRow | undefined {
+  if (kind === 'gauge') {
+    const max = c.fields.get('max');
+    return max === undefined
+      ? undefined
+      : {
+          metric,
+          type: kind,
+          day: c.day,
+          labels: c.labels,
+          last: c.fields.get('last') ?? max,
+          max,
+        };
+  }
   if (kind === 'counter') {
     const value = c.fields.get('value') ?? 0;
     return value > 0 ? { metric, type: kind, day: c.day, labels: c.labels, value } : undefined;
@@ -129,6 +153,12 @@ function toRow(metric: string, kind: Kind, c: Cell): MetricRow | undefined {
   };
 }
 
+// Amostra nova: o último vale o mais recente e o máximo só sobe.
+function sample(cell: Cell, last: number, max = last): void {
+  cell.fields.set('last', last);
+  cell.fields.set('max', Math.max(cell.fields.get('max') ?? 0, max));
+}
+
 function addTo(cell: Cell, field: string, by: number): void {
   cell.fields.set(field, (cell.fields.get(field) ?? 0) + by);
 }
@@ -137,6 +167,7 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
   const { collection, log, maxSeriesPerMetric, retentionDays } = options;
   const now = options.now ?? Date.now;
   const metrics = new Map<string, Metric>();
+  const owners = new Map<string, string>();
   let flushing: Promise<void> = Promise.resolve();
   let purgedDay = '';
   let generation = 0;
@@ -193,14 +224,21 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
     for (const cell of cellFor(name, 'counter', labels)) addTo(cell, 'value', value);
   }
 
+  function gauge(name: string, labels: MetricLabels, value: number): void {
+    assertValue(name, value);
+    for (const cell of cellFor(name, 'gauge', labels)) sample(cell, value);
+  }
+
   function counterAt(name: string, labels: MetricLabels, value: number, day: string): void {
     assertValue(name, value);
     for (const cell of cellFor(name, 'counter', labels, day)) addTo(cell, 'value', value);
+    if (!owners.has(name)) owners.set(name, CORE_OWNER);
   }
 
   function totals(): MetricRow[] {
     const rows: MetricRow[] = [];
     for (const [name, metric] of metrics) {
+      if (name === LIVE_GAUGE) continue;
       for (const cell of metric.totals.values()) {
         const row = toRow(name, metric.kind, cell);
         if (row) rows.push(row);
@@ -236,6 +274,38 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
       for (const cell of cells.values()) {
         // Só entra no snapshot o que foi gravado: o que falhar volta ao agregado e sai no próximo flush.
         const written: Cell = { ...cell, fields: new Map() };
+        if (metric.kind === 'gauge') {
+          const last = cell.fields.get('last') ?? 0;
+          const max = cell.fields.get('max') ?? last;
+          const where = { metric: name, day: cell.day, key: cell.key, field: 'gauge' };
+          try {
+            const [stored] = await collection.find({ where });
+            if (stored) {
+              await collection.update(
+                { id: stored.id },
+                { value: Math.max(stored.value, max), last },
+              );
+            } else {
+              await collection.insert({ ...where, labels: cell.labels, value: max, last });
+            }
+            sample(written, last, max);
+          } catch (error) {
+            // Não perde a amostra: volta ao agregado para o próximo flush tentar de novo.
+            log.error('falha ao gravar métrica; mantida em memória', { metric: name, error });
+            const id = `${cell.day}|${cell.key}`;
+            let target = metric.cells.get(id);
+            if (!target) {
+              target = { ...cell, fields: new Map() };
+              metric.cells.set(id, target);
+            }
+            // O que chegou durante a gravação (`last` do `target`) é mais novo que o devolvido.
+            sample(target, target.fields.get('last') ?? last, max);
+          }
+          const row = toRow(name, metric.kind, written);
+          // A fila de saída já sai ao vivo no scrape e em exportador seria só ruído de amostra.
+          if (row && name !== LIVE_GAUGE) rows.push(row);
+          continue;
+        }
         for (const [field, value] of cell.fields) {
           if (value <= 0) continue;
           const where = { metric: name, day: cell.day, key: cell.key, field };
@@ -326,8 +396,16 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
     };
     let kind: Kind | undefined;
     for (const d of docs) {
-      kind ??= d.field === 'value' ? 'counter' : 'histogram';
-      addTo(take(d.day, d.key, d.labels), d.field, d.value);
+      kind ??= d.field === 'value' ? 'counter' : d.field === 'gauge' ? 'gauge' : 'histogram';
+      if (d.field === 'gauge') {
+        sample(
+          take(d.day, d.key, d.labels),
+          typeof d['last'] === 'number' ? d['last'] : d.value,
+          d.value,
+        );
+      } else {
+        addTo(take(d.day, d.key, d.labels), d.field, d.value);
+      }
     }
     const mem = metrics.get(name);
     if (mem) {
@@ -335,7 +413,8 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
       for (const c of mem.cells.values()) {
         if (c.day < range.from || c.day > range.to) continue;
         const cell = take(c.day, c.key, c.labels);
-        for (const [f, v] of c.fields) addTo(cell, f, v);
+        if (mem.kind === 'gauge') sample(cell, c.fields.get('last') ?? 0, c.fields.get('max'));
+        else for (const [f, v] of c.fields) addTo(cell, f, v);
       }
     }
     const k = kind;
@@ -363,5 +442,37 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
     return [...found].sort();
   }
 
-  return { service: { counter, observe, query, names }, counterAt, totals, flush };
+  // Cada serviço grava o dono na primeira escrita que dá certo; as seguintes não o trocam.
+  const serviceFor = (owner: string): MetricsService => ({
+    counter(name, labels, value) {
+      counter(name, labels, value);
+      if (!owners.has(name)) owners.set(name, owner);
+    },
+    observe(name, labels, value) {
+      observe(name, labels, value);
+      if (!owners.has(name)) owners.set(name, owner);
+    },
+    gauge(name, labels, value) {
+      gauge(name, labels, value);
+      if (!owners.has(name)) owners.set(name, owner);
+    },
+    query,
+    names,
+    ownerOf: (name) => owners.get(name),
+  });
+
+  function release(caller: string): void {
+    for (const [name, owner] of owners) {
+      if (owner === caller) owners.delete(name);
+    }
+  }
+
+  return {
+    service: serviceFor(CORE_OWNER),
+    scoped: serviceFor,
+    release,
+    counterAt,
+    totals,
+    flush,
+  };
 }

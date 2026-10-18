@@ -268,7 +268,7 @@ export function Plugins() {
                   </p>
                 )}
                 <div className="row pl-mob actions2">
-                  <a className="btn" href="#/config">
+                  <a className="btn" href={`#/config/${encodeURIComponent(row.name)}`}>
                     Abrir config
                   </a>
                   <button

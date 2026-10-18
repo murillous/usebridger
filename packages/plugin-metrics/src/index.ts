@@ -41,7 +41,14 @@ export const metrics: PluginDefinition = definePlugin({
       maxSeriesPerMetric: ctx.config.maxSeriesPerMetric,
       retentionDays: ctx.config.retentionDays,
     });
-    ctx.services.provide('metrics', runtime.service);
+    // Serviço com escopo (ADR 0116): cada plugin recebe uma instância que grava o nome dele como dono.
+    ctx.services.provideScoped(
+      'metrics',
+      (caller) => runtime.scoped(caller),
+      (caller) => runtime.release(caller),
+    );
+    // Decisão explícita: o que o próprio plugin-metrics grava (observadores do kernel) é do `core`,
+    // não do plugin `metrics`, para a coluna "Plugin" separar kernel de plugin de terceiros.
     const m = runtime.service;
 
     const active = createActiveTracker({
@@ -50,6 +57,13 @@ export const metrics: PluginDefinition = definePlugin({
     });
     // Os ativos entram no agregado só aqui, como delta: o flush nunca soma a mesma contagem duas vezes.
     const flush = async (): Promise<void> => {
+      try {
+        // Fila de saída amostrada no timer, não no envio: fila pausada ou ociosa também gera amostra.
+        const { high, normal, low } = ctx.stats().outbound.pending;
+        m.gauge('bridger.outbound.pending', {}, high + normal + low);
+      } catch (error) {
+        ctx.log.error('falha ao amostrar a fila de saída', { error });
+      }
       try {
         active.sync();
       } catch (error) {

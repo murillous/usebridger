@@ -11,7 +11,7 @@ export interface MetricsView {
   from: string;
   to: string;
   /** Uma entrada por métrica registrada, qualquer que seja o plugin dono. */
-  metrics: { name: string; rows: MetricRow[] }[];
+  metrics: { name: string; rows: MetricRow[]; plugin?: string }[];
 }
 
 const dayOf = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
@@ -48,7 +48,15 @@ export function registerMetricsRoutes(
         }
         const names = await service.names(range);
         const metrics = await Promise.all(
-          names.map(async (name) => ({ name, rows: await service.query(name, range) })),
+          names.map(async (name) => {
+            // Plugin-metrics sem `ownerOf` (anterior ao dono): a coluna mostra "-".
+            const plugin = service.ownerOf?.(name);
+            return {
+              name,
+              rows: await service.query(name, range),
+              ...(plugin === undefined ? {} : { plugin }),
+            };
+          }),
         );
         const view: MetricsView = { ...range, metrics };
         return Response.json({ available: true, ...view });

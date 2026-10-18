@@ -8,6 +8,7 @@ export const KERNEL = {
   sent: 'bridger.outbound.sent',
   users: 'bridger.active.users',
   groups: 'bridger.active.groups',
+  pending: 'bridger.outbound.pending',
 } as const;
 
 // Espelha HISTOGRAM_BUCKETS do plugin-metrics (o app web não importa o pacote); o último é o `+Inf`.
@@ -16,7 +17,12 @@ const BOUNDS = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10_000, 30_000];
 export const rowsOf = (data: MetricsResponse, name: string): MetricRowView[] =>
   (data.available && data.metrics.find((m) => m.name === name)?.rows) || [];
 
-const amount = (row: MetricRowView): number => (row.type === 'counter' ? row.value : row.count);
+const amount = (row: MetricRowView): number =>
+  row.type === 'counter' ? row.value : row.type === 'gauge' ? row.max : row.count;
+
+/** Maior valor entre as linhas de gauge (máximo do dia); 0 sem linhas. */
+export const maxOf = (rows: MetricRowView[]): number =>
+  rows.reduce((n, r) => Math.max(n, r.type === 'gauge' ? r.max : 0), 0);
 
 export const total = (rows: MetricRowView[]): number => rows.reduce((n, r) => n + amount(r), 0);
 
@@ -70,9 +76,11 @@ export function percentile(rows: MetricRowView[], p: number): number | undefined
 
 export interface Summary {
   name: string;
-  type: 'counter' | 'histogram';
+  type: 'counter' | 'histogram' | 'gauge';
   series: number;
-  /** Contador: soma. Histograma: número de observações. */
+  /** Plugin que declarou a métrica; `core` para as do kernel. */
+  plugin?: string;
+  /** Contador: soma. Histograma: número de observações. Gauge: máximo. */
   total: number;
   p95?: number;
 }
@@ -80,7 +88,7 @@ export interface Summary {
 /** Uma linha por métrica registrada, para a seção genérica. Métrica sem dado no período fica de fora. */
 export function summarize(data: MetricsResponse): Summary[] {
   if (!data.available) return [];
-  return data.metrics.flatMap(({ name, rows }) => {
+  return data.metrics.flatMap(({ name, rows, plugin }) => {
     const first = rows[0];
     if (!first) return [];
     const series = new Set(rows.map((r) => JSON.stringify(Object.entries(r.labels).sort()))).size;
@@ -90,7 +98,8 @@ export function summarize(data: MetricsResponse): Summary[] {
         name,
         type: first.type,
         series,
-        total: total(rows),
+        ...(plugin === undefined ? {} : { plugin }),
+        total: first.type === 'gauge' ? maxOf(rows) : total(rows),
         ...(p95 === undefined ? {} : { p95 }),
       },
     ];
@@ -152,7 +161,7 @@ export function catalog(data: MetricsResponse): CatalogEntry[] {
     return {
       ...s,
       labels: labelNames(rows),
-      today: total(todayRows),
+      today: s.type === 'gauge' ? maxOf(todayRows) : total(todayRows),
       ...(todayP95 === undefined ? {} : { todayP95 }),
     };
   });

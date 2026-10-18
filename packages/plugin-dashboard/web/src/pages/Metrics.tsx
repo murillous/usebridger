@@ -6,6 +6,7 @@ import {
   fmtInt,
   fmtMs,
   KERNEL,
+  maxOf,
   percentile,
   percentilePerDay,
   perDay,
@@ -136,6 +137,14 @@ function Breakdown({ rows, label }: { rows: MetricRowView[]; label: string }) {
   );
 }
 
+/** Valor da tabela: p95 do histograma, máximo do gauge (contagem, sem "ms") ou soma do contador. */
+const cell = (m: { type: string }, p95: number | undefined, n: number): string =>
+  m.type === 'histogram'
+    ? `p95 ${fmtMs(p95)}`
+    : m.type === 'gauge'
+      ? `máx ${fmtInt(n)}`
+      : fmtInt(n);
+
 function Missing({ outdated }: { outdated: boolean }) {
   if (outdated) {
     return (
@@ -206,13 +215,12 @@ function Panels({ data }: { data: Extract<MetricsResponse, { available: true }> 
   const days = daysBetween(data.from, data.to);
   const handled = rowsOf(data, KERNEL.handled);
   const duration = rowsOf(data, KERNEL.duration);
-  const sent = rowsOf(data, KERNEL.sent);
+  const pending = rowsOf(data, KERNEL.pending);
   const users = rowsOf(data, KERNEL.users);
   const groups = rowsOf(data, KERNEL.groups);
   const all = catalog(data);
   const onToday = (rows: MetricRowView[]) => rows.filter((r) => r.day === data.to);
   const handledDays = perDay(handled, days);
-  const sentDays = perDay(sent, days);
   const usersDays = perDay(users, days);
   return (
     <>
@@ -264,15 +272,20 @@ function Panels({ data }: { data: Extract<MetricsResponse, { available: true }> 
         </Panel>
 
         <Panel
-          id="p-sent"
-          title="Envios por dia"
-          metric={KERNEL.sent}
-          value={fmtInt(total(onToday(sent)))}
+          id="p-queue"
+          title="Fila de saída"
+          metric={KERNEL.pending}
+          value={`máx ${fmtInt(maxOf(onToday(pending)))}`}
         >
-          <BarChart title="Mensagens enviadas por dia" points={sentDays} today={data.to} />
-          <Details summary="Por status (período)">
-            <Breakdown rows={sent} label="status" />
-          </Details>
+          <BarChart
+            title="Fila de saída, máximo de itens pendentes por dia"
+            points={perDay(pending, days)}
+            today={data.to}
+            tone="agent"
+          />
+          <p className="muted">
+            Amostra a cada flush do plugin-metrics; o painel mostra o maior valor visto no dia.
+          </p>
         </Panel>
       </div>
 
@@ -290,6 +303,7 @@ function Panels({ data }: { data: Extract<MetricsResponse, { available: true }> 
               <thead>
                 <tr>
                   <th>Métrica</th>
+                  <th>Plugin</th>
                   <th>Tipo</th>
                   <th>Rótulos</th>
                   <th className="num">Hoje</th>
@@ -299,19 +313,17 @@ function Panels({ data }: { data: Extract<MetricsResponse, { available: true }> 
               <tbody>
                 {all.map((m) => (
                   <tr key={m.name}>
-                    <td className="mono" title={`${fmtInt(m.series)} séries`}>
+                    <td className="mono">
                       {m.name}
+                      <span className="muted"> · {fmtInt(m.series)} séries</span>
                     </td>
+                    <td className="mono">{m.plugin ?? '-'}</td>
                     <td>
                       <span className="chip mono">{m.type}</span>
                     </td>
                     <td className="muted">{m.labels.join(', ') || '-'}</td>
-                    <td className="num">
-                      {m.type === 'histogram' ? `p95 ${fmtMs(m.todayP95)}` : fmtInt(m.today)}
-                    </td>
-                    <td className="num">
-                      {m.type === 'histogram' ? `p95 ${fmtMs(m.p95)}` : fmtInt(m.total)}
-                    </td>
+                    <td className="num">{cell(m, m.todayP95, m.today)}</td>
+                    <td className="num">{cell(m, m.p95, m.total)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -320,15 +332,12 @@ function Panels({ data }: { data: Extract<MetricsResponse, { available: true }> 
               {all.map((m) => (
                 <div key={m.name}>
                   <div className="list-head">
-                    <span className="mono" title={`${fmtInt(m.series)} séries`}>
-                      {m.name}
-                    </span>
+                    <span className="mono">{m.name}</span>
                     <span className="chip mono">{m.type}</span>
                   </div>
                   <div className="mono muted">
-                    hoje {m.type === 'histogram' ? `p95 ${fmtMs(m.todayP95)}` : fmtInt(m.today)} ·{' '}
-                    {days.length}d{' '}
-                    {m.type === 'histogram' ? `p95 ${fmtMs(m.p95)}` : fmtInt(m.total)}
+                    {m.plugin ?? '-'} · {fmtInt(m.series)} séries · hoje{' '}
+                    {cell(m, m.todayP95, m.today)} · {days.length}d {cell(m, m.p95, m.total)}
                   </div>
                 </div>
               ))}
