@@ -17,7 +17,7 @@ O canvas é a fonte visual, aberto a quem tiver o link. Quadros:
 | --- | --- |
 | Visão geral | Status por bot/transport (QR e código só no WhatsApp, erro `fatal` nos de token), KPIs do dia, logs recentes |
 | Métricas | Painéis fixos do kernel e a seção genérica com toda métrica registrada no serviço `metrics` |
-| Plugins | Tabela de boot (estado, setup, `dependsOn`, serviços, contribuições) e enable/disable |
+| Plugins | Tabela de boot (nome e versão, estado, setup, depende de, provê, contribui), busca, painel de erro do setup e toggle de ativo; no mobile, filtros, card de problema e lista com toggle |
 | Config de plugin (Zod) | Formulário gerado do schema, secret mascarado, erro junto do campo, reload em cascata |
 | Aba contribuída por plugin | Aba `Lembretes` do plugin `reminders`, montada só com widgets, e o `contribute` que a gera |
 | Design system | Tokens, tipografia, espaço, raio, elevação, componentes e widgets |
