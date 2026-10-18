@@ -125,7 +125,7 @@ describe('Bot: fila de saída durante a queda de conexão', () => {
     transport.emit('connection.status', { status: 'closed', reason: 'replaced', error: null });
     const result = send.send('c@test', text('oi'));
     result.catch(() => undefined);
-    await vi.waitFor(() => expect(bot.state).toBe('stopped'));
+    await vi.waitFor(() => expect(bot.state).toBe('failed'));
 
     await expect(result).rejects.toMatchObject({ reason: 'closed' });
     expect(sentTexts(transport)).toEqual([]);

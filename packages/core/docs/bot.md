@@ -62,7 +62,7 @@ const bot = createBot({
 
 | Membro | O que é |
 | --- | --- |
-| `state` | `idle`, `starting`, `running`, `stopping` ou `stopped` |
+| `state` | `idle`, `starting`, `running`, `failed`, `stopping` ou `stopped` |
 | `start()` / `stop()` / `onStop()` | Lifecycle (abaixo) |
 | `config.setOverrides(nome, overrides)` | Valida, salva no storage e recarrega o plugin (`teardown` → `setup`) |
 | `config.describe(nome)` / `config.jsonSchema(nome)` | Config mascarada e JSON Schema, para o dashboard |
@@ -385,17 +385,26 @@ Limites:
 
 ```
 idle ──start()──▶ starting ──boot ok──▶ running ──stop()──▶ stopping ──▶ stopped
-                      │                                          ▲
-                      └────────── boot falhou / stop() ──────────┘
+                      │                      │                     ▲  ▲
+                      │                      └─ giveUp ─▶ failed ─stop()┘
+                      └────────── boot falhou / stop() ──────────────┘
 ```
 
 `stopped` é terminal: um bot parado não reinicia. Para subir de novo, crie outra instância.
 
-| Chamada | `idle` | `starting` | `running` | `stopping` | `stopped` |
-| --- | --- | --- | --- | --- | --- |
-| `start()` | sobe | mesma promise | resolve | `BotStateError` | `BotStateError` |
-| `stop()` | ganchos, sem `disconnect` | espera o boot e encerra | encerra | mesma promise | resolve |
-| `onStop()` | registra | registra | registra | `BotStateError` | `BotStateError` |
+`failed` ([ADR 0120](../../../docs/adr/0120-giveup-da-reconexao-leva-ao-estado-failed.md)): saída de
+`running` quando a reconexão desiste. Transport e filas ficam parados; plugins e HTTP seguem no ar
+(o dashboard mostra o erro). Nenhum handler é despachado. `stop()` encerra o resto e chega a
+`stopped`; `start()` rejeita com `BotStateError`. Um erro fatal durante o connect inicial do
+`start()` também termina em `failed`, e nesse caso o `start()` resolve (o painel tem que ficar no
+ar). O scheduler para (os jobs seguem no storage) e a trava da sessão continua sendo renovada: outro
+processo só assume a sessão depois do `stop()`. O `/health` responde 503 em `failed`.
+
+| Chamada | `idle` | `starting` | `running` | `failed` | `stopping` | `stopped` |
+| --- | --- | --- | --- | --- | --- | --- |
+| `start()` | sobe | mesma promise | resolve | `BotStateError` | `BotStateError` | `BotStateError` |
+| `stop()` | ganchos, sem `disconnect` | espera o boot e encerra | encerra | encerra | mesma promise | resolve |
+| `onStop()` | registra | registra | registra | registra | `BotStateError` | `BotStateError` |
 
 ## Boot (`start`)
 
@@ -545,14 +554,14 @@ O transport avisa as quedas por `connection.status`; a `ReconnectionPolicy`
 | `reconnect` | espera `delayMs` e chama `transport.connect()` |
 | `clean-session` com `clearSession` | espera `delayMs`, chama `clearSession()` e reconecta |
 | `clean-session`, transport por fábrica, sem `clearSession` | espera `delayMs`, limpa o `auth` que a fábrica recebeu e reconecta |
-| `clean-session`, instância pronta, sem `clearSession` | loga em `error` que a sessão precisa de novo pareamento e para o bot (`stop()`) |
-| `stop` (motivo `replaced`) | loga em `error` que outra conexão assumiu a sessão e para o bot, sem reconectar nem limpar |
-| `stop` (motivo `fatal`) | loga em `fatal` o erro de configuração, com `cause` e o erro nativo em `err`, e para o bot, sem reconectar nem limpar |
-| `stop` (`auth-failed` em transport sem a capability `pairing`) | loga em `fatal` que a credencial foi rejeitada e para o bot, sem limpar o `auth` nem chamar `clearSession` |
+| `clean-session`, instância pronta, sem `clearSession` | loga em `error` que a sessão precisa de novo pareamento e leva o bot a `failed` |
+| `stop` (motivo `replaced`) | loga em `error` que outra conexão assumiu a sessão e leva o bot a `failed`, sem reconectar nem limpar |
+| `stop` (motivo `fatal`) | loga em `fatal` o erro de configuração, com `cause` e o erro nativo em `err`, e leva o bot a `failed`, sem reconectar nem limpar |
+| `stop` (`auth-failed` em transport sem a capability `pairing`) | loga em `fatal` que a credencial foi rejeitada e leva o bot a `failed`, sem limpar o `auth` nem chamar `clearSession` |
 
 - `clean-session` só vem de `logged-out`, `qr-limit` ou `auth-failed` num transport com a
   capability `pairing` (o Baileys a declara). Num transport por token (Discord, Telegram), limpar
-  não traz token novo: o bot para em vez de limpar e falhar de novo a cada `minCleanIntervalMs`
+  não traz token novo: o bot vai a `failed` em vez de limpar e falhar de novo a cada `minCleanIntervalMs`
   ([ADR 0068](../../../docs/adr/0068-desconexao-fatal-e-transport-sem-pareamento.md)). Queda de rede reconecta
   sem limite de tentativas e nunca apaga as credenciais
   ([ADR 0045](../../../docs/adr/0045-queda-de-rede-nao-limpa-sessao.md)); para desistir após um
@@ -590,13 +599,14 @@ Com um transport pronto (instância), o bot não sabe onde estão as credenciais
 substitui a limpeza padrão (ex.: para também apagar arquivos do adapter).
 
 `replaced` é o caso de dois processos com o mesmo número: reconectar derrubaria a outra conexão,
-que derrubaria esta, em laço. O bot para e deixa a outra seguir.
+que derrubaria esta, em laço. O bot vai a `failed` e deixa a outra seguir.
 
-### Quando o bot para sozinho
+### Quando a reconexão desiste
 
-Em todo caso da tabela acima em que o bot para (os `stop` e o `clean-session` sem
-`clearSession` com instância pronta), o `closed` chega aos listeners de `connection.status` antes
-de o bot terminar de parar, e ele termina em `stopped` (os ganchos do `onStop()` rodam). O core
+Em todo caso da tabela acima em que a reconexão desiste (os `stop` e o `clean-session` sem
+`clearSession` com instância pronta), o `closed` chega aos listeners de `connection.status` e o
+bot vai a `failed`: transport e filas param, plugins e HTTP seguem no ar para o painel mostrar o
+erro. Quem chama `bot.stop()` leva o bot a `stopped` (os ganchos do `onStop()` rodam). O core
 não encerra o processo nem escolhe o código de saída ([Sinais do processo](#sinais-do-processo));
 quem quer sair com erro, para o supervisor ou o alerta, olha o motivo num listener:
 
@@ -608,11 +618,14 @@ const saida = definePlugin({
   setup(ctx) {
     ctx.events.on('connection.status', ({ payload }) => {
       if (payload.status !== 'closed') return;
-      // `auth-failed` só para o bot em transport sem a capability `pairing`; com ela, o bot
-      // limpa a sessão e pareia de novo.
+      // `auth-failed` só leva o bot a `failed` em transport sem a capability `pairing`; com ela, o
+      // bot limpa a sessão e pareia de novo.
+      // O plugin não tem acesso ao `bot`: quem chama `bot.stop()` para sair é a aplicação, que
+      // guarda o `bot` do `createBot` (ex.: um `onFailed` que ela mesma passa ao plugin por closure).
       const parou =
         payload.reason === 'fatal' ||
         (payload.reason === 'auth-failed' && !ctx.capabilities.has('pairing'));
+      // Em `failed` o HTTP segue aberto: o processo só sai quando a aplicação chama `bot.stop()`.
       if (parou) process.exitCode = 1;
     });
   },

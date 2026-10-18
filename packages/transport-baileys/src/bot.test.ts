@@ -108,7 +108,7 @@ describe('BaileysTransport no Bot', () => {
       lastDisconnect: { error: boom(DisconnectReason.connectionReplaced), date: new Date() },
     });
 
-    await vi.waitFor(() => expect(bot.state).toBe('stopped'));
+    await vi.waitFor(() => expect(bot.state).toBe('failed'));
     expect(driver.sockets).toHaveLength(1);
   });
 

@@ -576,7 +576,7 @@ mantém cache por grupo e o invalida em `group.participants` e `group.updated` (
 
 `pairing` não é de envio: diz que a sessão se pareia por QR ou código (`connection.qr`,
 `connection.pairing-code`). Com ela, credencial rejeitada (`auth-failed`) limpa a sessão e pareia
-de novo; sem ela (transport por token), o bot para ([Política de reconexão](#política-de-reconexão)).
+de novo; sem ela (transport por token), o bot vai a `failed` ([Política de reconexão](#política-de-reconexão)).
 
 A lista é só a do core: capability nova entra numa minor do `@usebridger/core`, e `requires` com nome
 fora dela recusa o plugin. O que cada transport declara está na matriz do plano §6.10. Limites de

@@ -113,21 +113,21 @@ export function createReconnector({
       case 'replaced':
         log().error(
           'conexão encerrada (replaced): outra conexão assumiu esta sessão (o mesmo número ' +
-            'rodando em outro processo?); o bot vai parar em vez de derrubá-la',
+            'rodando em outro processo?); o bot passa a failed em vez de derrubá-la',
           fields,
         );
         return;
       case 'fatal':
         log().fatal(
           'conexão encerrada por erro fatal do transport (token sem permissão, intents, porta?); ' +
-            'reconectar não resolve: corrija a configuração. O bot vai parar',
+            'reconectar não resolve: corrija a configuração. O bot passa a failed (plugins e HTTP seguem no ar)',
           fields,
         );
         return;
       case 'auth-failed':
         log().fatal(
           'conexão encerrada (auth-failed): credenciais rejeitadas, e o transport não pareia de ' +
-            'novo (token inválido?); limpar a sessão não resolve. O bot vai parar',
+            'novo (token inválido?); limpar a sessão não resolve. O bot passa a failed (plugins e HTTP seguem no ar)',
           fields,
         );
         return;
@@ -153,7 +153,7 @@ export function createReconnector({
     if (decision.action === 'clean-session' && clearSession === undefined) {
       log().error(
         `conexão encerrada (${status.reason}): a sessão precisa ser pareada de novo e não há ` +
-          'clearSession configurado; o bot vai parar',
+          'clearSession configurado; o bot passa a failed',
         fields,
       );
       giveUp(decision);

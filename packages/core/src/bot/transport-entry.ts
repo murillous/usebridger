@@ -35,12 +35,14 @@ export interface TransportEntryDeps {
   readonly chatIsAllowed: (chat: Pick<Chat, 'id' | 'parentId'>) => boolean;
   readonly dropsSelf: boolean;
   readonly dropsBots: boolean;
-  /** `true` em `stopping`/`stopped`: a espera vencida some em silêncio. */
+  /** `true` em `stopping`/`stopped`/`failed`: a espera vencida some em silêncio. */
   readonly stopping: () => boolean;
   /** Guarda o último `connection.status`, antes de reemitir no barramento (ADR 0110). */
   readonly recordStatus?: (status: ConnectionStatus) => void;
   /** Guarda a expiração do QR, antes de reemitir no barramento (ADR 0115). */
   readonly recordQr?: (expiresAt: number | undefined) => void;
+  /** O giveUp da reconexão já levou o bot a `failed` (ADR 0120). */
+  readonly failed?: () => boolean;
   /** Getter: o logger nasce no `start()`. */
   readonly log: () => Logger;
 }
@@ -137,6 +139,8 @@ export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
         enqueue(interaction, deps.flow.handleInteraction),
       ),
       deps.transport.on('connection.status', (status) => {
+        // `failed`: o status final é o do erro; o `closed` do nosso próprio disconnect não o apaga.
+        if (deps.failed?.()) return;
         // Com a conexão caída, o envio falharia e esgotaria o retry antes da reconexão (#198).
         if (status.status === 'closed') deps.outbound.pause();
         else if (status.status === 'open') deps.outbound.resume();

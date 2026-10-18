@@ -22,12 +22,16 @@ const logger = definePlugin({
   },
 });
 
-async function start(config: Record<string, unknown> = {}) {
+async function start(
+  config: Record<string, unknown> = {},
+  botConfig: Record<string, unknown> = {},
+) {
   const http = createHttp({ port: 0, hostname: '127.0.0.1' });
   const bot = await createTestBot({
     plugins: [dashboard, logger],
     http,
     logLevel: 'info',
+    ...botConfig,
     pluginConfig: { dashboard: { token: TOKEN, ...config } },
   });
   bots.push(bot);
@@ -230,6 +234,18 @@ describe('estado', () => {
     const res = await fetch(`${base}/api/status`, { headers: { cookie: await cookie() } });
     // O FakeTransport padrão tem todas as capabilities.
     expect(((await res.json()) as StatusView).pairing).toBe(true);
+  });
+
+  it('erro fatal com a reconexão padrão leva o bot a failed e o painel segue respondendo', async () => {
+    const { bot, base, cookie } = await start({}, { reconnection: {} });
+    const headers = { cookie: await cookie() };
+
+    await bot.emit('connection.status', { status: 'closed', reason: 'fatal', error: null });
+    await until(() => bot.bot.state === 'failed');
+
+    const res = await fetch(`${base}/api/status`, { headers });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ status: 'closed', reason: 'fatal' });
   });
 
   it('pairing é false quando o transport não tem a capability', async () => {
