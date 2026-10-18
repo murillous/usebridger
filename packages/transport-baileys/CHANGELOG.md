@@ -1,5 +1,21 @@
 # @usebridger/transport-baileys
 
+## 0.5.0
+
+### Minor Changes
+
+- a784db1: Status do bot no contexto (M5-4.8): `ctx.connectionInfo()`, `ctx.botName`, `BotConfig.name` e `expiresAt` opcional em `connection.qr` (preenchido pelo Baileys). O card do bot na Visão geral mostra "No ar desde", Reconexões e "Expira em", o cabeçalho mostra o nome do bot, e o botão Copiar volta ao normal depois de uma falha.
+
+### Patch Changes
+
+- Updated dependencies [f707794]
+- Updated dependencies [c26a895]
+- Updated dependencies [201c06a]
+- Updated dependencies [c095ec7]
+- Updated dependencies [5ef42f6]
+- Updated dependencies [a784db1]
+  - @usebridger/core@0.9.0
+
 ## 0.4.4
 
 ### Patch Changes

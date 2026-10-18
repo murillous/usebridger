@@ -1,5 +1,16 @@
 # @usebridger/core
 
+## 0.9.0
+
+### Minor Changes
+
+- f707794: Exporta `envName` e `toEnvSegment` na API pública: o nome da variável de ambiente de um campo de config de plugin, para ferramentas (como o dashboard) mostrarem o mesmo nome que o core lê.
+- c26a895: Erro fatal não derruba mais o painel (#194): o giveUp da reconexão (`fatal`, `auth-failed` sem pareamento, `replaced`, sessão a parear sem `clearSession`) leva o bot ao novo `BotState` `failed` (transport e filas parados; plugins e HTTP no ar) em vez de chamar `stop()`. `stop()` a partir de `failed` chega a `stopped`; `start()` rejeita.
+- 201c06a: Report de plugins completo para o dashboard (M5-4.8, ADR 0114): `optionalDependsOn`, `contributionCounts` e `setupMs` (duração do setup) na linha de `bot.plugins()`, e `bot.plugins.bootedAt` (também em `ctx.admin.plugins`) com o horário do boot.
+- c095ec7: Segredos cifrados no storage, editáveis em runtime (ADR 0121). Nova camada `secret` (`env > arquivo > secret > override > default`), cifrada com AES-256-GCM pela chave `BRIDGER_SECRET_KEY` (32 bytes em base64; `BRIDGER_SECRET_KEY_PREVIOUS` migra os envelopes no boot, na rotação). `bot.config` e `ctx.admin.config` ganham `setSecret(plugin, path, value)`, `clearSecret(plugin, path)` e `secretsWritable`. `ConfigSource` ganha `'secret'`, `PluginConfigIssue.kind` ganha `'shadowed'` e `'undecryptable'`, e o JSON Schema marca o campo secreto com `x-bridger-set-secret: true` quando há chave mestra. `maskedJsonSchema` aceita `secretsWritable` como 2º argumento. `setSecret` e `clearSecret` sobre plugin desligado gravam e pulam o reload (devolvem `undefined`); o plugin lê o valor ao ser ligado.
+- 5ef42f6: `ctx.services.provideScoped(nome, factory, release?)`: serviço com instância por plugin que chama (ADR 0116). A fábrica recebe o nome do caller, a instância é guardada por `(nome, caller)` e é descartada, com `release`, quando o caller ou o provedor saem. Um `release` que lança não interrompe a limpeza: o registry e o `dispose` terminam tudo e relançam `AggregateError`. Quebra de tipo: `provideScoped` é método obrigatório em `ServiceAccess`, então quem implementa essa interface (fakes e wrappers de teste) precisa acrescentá-lo.
+- a784db1: Status do bot no contexto (M5-4.8): `ctx.connectionInfo()`, `ctx.botName`, `BotConfig.name` e `expiresAt` opcional em `connection.qr` (preenchido pelo Baileys). O card do bot na Visão geral mostra "No ar desde", Reconexões e "Expira em", o cabeçalho mostra o nome do bot, e o botão Copiar volta ao normal depois de uma falha.
+
 ## 0.8.0
 
 ### Minor Changes

@@ -4,4 +4,4 @@
  * `pnpm version-packages` a reescreve (`packages/core/scripts/sync-version.ts`) e o
  * `version.test.ts` falha se divergir do `package.json`.
  */
-export const DASHBOARD_VERSION = '0.1.0';
+export const DASHBOARD_VERSION = '0.2.0';

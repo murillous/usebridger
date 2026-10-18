@@ -1,6 +1,6 @@
 {
   "name": "@usebridger/transport-baileys",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "description": "Transport do Bridger para o WhatsApp via Baileys.",
   "license": "Apache-2.0",
   "repository": {
