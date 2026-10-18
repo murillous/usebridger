@@ -40,14 +40,18 @@ Todas sob `/plugins/dashboard` (ou `/sessions/<sessão>/plugins/dashboard` fora 
 serviço a cada pedido (`services.has('metrics')`), então o plugin pode subir depois.
 
 - Sem o plugin: `{ "available": false }` e a tela Métricas explica como instalar; o resto segue.
+- Plugin antigo, sem `names`: `{ "available": false, "reason": "version" }` e a tela pede para atualizar.
+
+O serviço é lido a cada pedido, sem `optionalDependsOn`, de propósito: com a dependência declarada,
+o reload do `metrics` reiniciaria o dashboard em cascata.
 - Com o plugin: `{ available: true, from, to, metrics: [{ name, rows }] }`, uma entrada por métrica
   devolvida por `names(range)` com as linhas de `query` (contador ou histograma, por dia e rótulos).
 
 A tela tem painéis fixos das métricas do kernel (`bridger.messages.*`, `bridger.outbound.sent`,
 `bridger.active.*`) e a seção "Todas as métricas registradas", que lista tudo o que o serviço
 conhece: métrica nova de qualquer plugin aparece ali sem mudar o dashboard. Os gráficos são SVG
-com `role="img"` e `aria-label` com os valores por dia; dia e valor também saem em texto. A Visão
-geral mostra os KPIs de hoje (mensagens, p95, usuários e grupos ativos) quando o serviço existe.
+com `role="img"`, `aria-label` com os valores por dia e `<title>` por barra; o eixo mostra primeiro dia, último dia e pico em texto. Percentil no balde `+Inf` aparece como "> 30.000 ms". A Visão
+geral mostra os KPIs de hoje (dia UTC; mensagens, p95, usuários e grupos ativos) quando o serviço existe.
 
 ## Config dos plugins
 

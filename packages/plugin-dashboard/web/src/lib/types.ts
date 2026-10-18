@@ -70,7 +70,7 @@ export type MetricRowView =
     };
 
 export type MetricsResponse =
-  | { available: false }
+  | { available: false; reason?: 'version' }
   | {
       available: true;
       from: string;

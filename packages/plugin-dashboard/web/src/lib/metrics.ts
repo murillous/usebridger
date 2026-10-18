@@ -62,9 +62,10 @@ export function percentile(rows: MetricRowView[], p: number): number | undefined
   let acc = 0;
   for (let i = 0; i < buckets.length; i++) {
     acc += buckets[i] ?? 0;
-    if (acc >= rank) return BOUNDS[i] ?? BOUNDS[BOUNDS.length - 1];
+    // Balde `+Inf` (índice além dos limites): o valor passou do maior limite, não há teto a mostrar.
+    if (acc >= rank) return BOUNDS[i] ?? Number.POSITIVE_INFINITY;
   }
-  return BOUNDS[BOUNDS.length - 1];
+  return Number.POSITIVE_INFINITY;
 }
 
 export interface Summary {
@@ -97,4 +98,9 @@ export function summarize(data: MetricsResponse): Summary[] {
 }
 
 export const fmtInt = (n: number): string => n.toLocaleString('pt-BR');
-export const fmtMs = (n: number | undefined): string => (n === undefined ? '-' : `${fmtInt(n)} ms`);
+export const fmtMs = (n: number | undefined): string =>
+  n === undefined
+    ? '-'
+    : n === Number.POSITIVE_INFINITY
+      ? `> ${fmtInt(BOUNDS[BOUNDS.length - 1] ?? 0)} ms`
+      : `${fmtInt(n)} ms`;

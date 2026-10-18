@@ -36,11 +36,16 @@ export function registerMetricsRoutes(
       if (!Number.isInteger(days) || days < 1 || days > MAX_DAYS) {
         return new Response(`days precisa ser inteiro de 1 a ${MAX_DAYS}`, { status: 400 });
       }
-      // Consulta a cada pedido: o plugin de métricas pode subir, cair ou recarregar depois do dashboard.
+      // Lê o serviço a cada pedido, sem `optionalDependsOn`: assim o reload do metrics não reinicia o
+      // dashboard em cascata e o plugin pode subir, cair ou voltar depois dele.
       if (!services.has('metrics')) return Response.json({ available: false });
       const range = { from: dayOf(now() - (days - 1) * DAY_MS), to: dayOf(now()) };
       try {
         const service = services.get('metrics');
+        // Plugin-metrics anterior ao `names`: resposta explícita em vez de 500.
+        if (typeof service.names !== 'function') {
+          return Response.json({ available: false, reason: 'version' });
+        }
         const names = await service.names(range);
         const metrics = await Promise.all(
           names.map(async (name) => ({ name, rows: await service.query(name, range) })),

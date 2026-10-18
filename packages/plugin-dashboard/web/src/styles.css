@@ -507,6 +507,9 @@ td {
   .list {
     display: block;
   }
+  .list .muted {
+    font-size: 11px;
+  }
   .list > div {
     padding: 8px 0;
     border-top: 1px solid var(--line);

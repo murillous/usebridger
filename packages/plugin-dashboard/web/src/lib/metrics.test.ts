@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { byLabel, daysBetween, percentile, perDay, summarize, total } from './metrics.ts';
+import { byLabel, daysBetween, fmtMs, percentile, perDay, summarize, total } from './metrics.ts';
 import type { MetricRowView, MetricsResponse } from './types.ts';
 
 const counter = (day: string, value: number, labels = {}): MetricRowView => ({
@@ -66,5 +66,12 @@ describe('métricas do dashboard', () => {
       { name: 'lat', type: 'histogram', series: 1, total: 2, p95: 100 },
     ]);
     expect(summarize({ available: false })).toEqual([]);
+  });
+
+  it('p95 no balde +Inf vira marcador e é formatado como "> 30.000 ms"', () => {
+    const p = percentile([hist({ 12: 5 })], 0.95);
+    expect(p).toBe(Number.POSITIVE_INFINITY);
+    expect(fmtMs(p)).toMatch(/^> 30\.000 ms$/);
+    expect(fmtMs(100)).toBe('100 ms');
   });
 });

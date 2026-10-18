@@ -1,5 +1,5 @@
 import { createHttp, definePlugin, type PluginDefinition } from '@usebridger/core';
-import { metrics } from '@usebridger/plugin-metrics';
+import { type MetricsService, metrics } from '@usebridger/plugin-metrics';
 import { createTestBot } from '@usebridger/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 import { dashboard } from './index.ts';
@@ -21,6 +21,17 @@ const lembretes = definePlugin({
     const m = ctx.services.get('metrics');
     m.counter('lembretes.enviados', { canal: 'email' }, 3);
     m.observe('lembretes.atraso_ms', { canal: 'email' }, 40);
+  },
+});
+
+// Simula um plugin-metrics anterior ao `names`.
+const antigo = definePlugin({
+  name: 'metrics',
+  version: '0.0.1',
+  engine: '<1.0.0',
+  setup(ctx) {
+    const old = { counter: () => undefined, observe: () => undefined, query: async () => [] };
+    ctx.services.provide('metrics', old as unknown as MetricsService);
   },
 });
 
@@ -68,6 +79,13 @@ describe('GET /api/metrics', () => {
     );
     expect(byName['lembretes.enviados']).toMatchObject([{ type: 'counter', value: 3 }]);
     expect(byName['lembretes.atraso_ms']).toMatchObject([{ type: 'histogram', count: 1 }]);
+  });
+
+  it('plugin-metrics sem names responde available: false com reason version, não 500', async () => {
+    const { get } = await start([antigo]);
+    const res = await get('/api/metrics');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ available: false, reason: 'version' });
   });
 
   it('days inválido dá 400', async () => {

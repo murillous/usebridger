@@ -12,11 +12,12 @@ import {
   total,
 } from '#web/lib/metrics.ts';
 import type { MetricRowView, MetricsResponse } from '#web/lib/types.ts';
+import { Stat } from './Stat.tsx';
 import { useMetrics } from './useMetrics.ts';
 
 const PERIODS = [7, 30] as const;
 
-/** Barras por dia. O valor e o dia saem em texto no SVG e no rótulo: a cor não carrega o dado. */
+/** Barras por dia. Dia e valor saem no `aria-label`, no `<title>` de cada barra (dica ao passar o mouse) e no eixo em texto: a cor não carrega o dado. */
 function BarChart({ title, points }: { title: string; points: { day: string; value: number }[] }) {
   const max = Math.max(1, ...points.map((p) => p.value));
   const W = 100;
@@ -42,7 +43,9 @@ function BarChart({ title, points }: { title: string; points: { day: string; val
               width={step * 0.7}
               height={Math.max(h, 0.6)}
               rx="0.6"
-            />
+            >
+              <title>{`${p.day}: ${fmtInt(p.value)}`}</title>
+            </rect>
           );
         })}
       </svg>
@@ -60,37 +63,52 @@ function Breakdown({ rows, label }: { rows: MetricRowView[]; label: string }) {
   const sum = items.reduce((n, i) => n + i.value, 0);
   if (items.length === 0) return <p className="muted">Sem dados no período.</p>;
   return (
-    <table>
-      <thead>
-        <tr>
-          <th>{label}</th>
-          <th>Total</th>
-          <th>Parte</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((i) => (
-          <tr key={i.key}>
-            <td className="mono">{i.key}</td>
-            <td>{fmtInt(i.value)}</td>
-            <td>{Math.round((i.value / sum) * 100)}%</td>
+    <div className="scroll tbl">
+      <table>
+        <thead>
+          <tr>
+            <th>{label}</th>
+            <th>Total</th>
+            <th>Parte</th>
           </tr>
+        </thead>
+        <tbody>
+          {items.map((i) => (
+            <tr key={i.key}>
+              <td className="mono">{i.key}</td>
+              <td>{fmtInt(i.value)}</td>
+              <td>{Math.round((i.value / sum) * 100)}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="list">
+        {items.map((i) => (
+          <div key={i.key}>
+            <div className="mono">{i.key}</div>
+            <div className="mono muted">
+              {fmtInt(i.value)} · {Math.round((i.value / sum) * 100)}%
+            </div>
+          </div>
         ))}
-      </tbody>
-    </table>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="stat">
-      <div className="stat-label">{label}</div>
-      <div className="stat-value">{value}</div>
+      </div>
     </div>
   );
 }
 
-function Missing() {
+function Missing({ outdated }: { outdated: boolean }) {
+  if (outdated) {
+    return (
+      <section className="card" aria-labelledby="falta">
+        <h2 id="falta">Atualize o plugin de métricas</h2>
+        <p>
+          O <span className="mono">@usebridger/plugin-metrics</span> carregado é antigo e não lista
+          as métricas. Atualize:{' '}
+          <span className="mono">pnpm update @usebridger/plugin-metrics</span> e reinicie o bot.
+        </p>
+      </section>
+    );
+  }
   return (
     <section className="card" aria-labelledby="falta">
       <h2 id="falta">Plugin de métricas não carregado</h2>
@@ -167,7 +185,7 @@ function Panels({ data }: { data: Extract<MetricsResponse, { available: true }> 
         {all.length === 0 ? (
           <p className="muted">Nenhuma métrica com dados no período.</p>
         ) : (
-          <div className="scroll">
+          <div className="scroll tbl">
             <table>
               <thead>
                 <tr>
@@ -194,6 +212,18 @@ function Panels({ data }: { data: Extract<MetricsResponse, { available: true }> 
                 ))}
               </tbody>
             </table>
+            <div className="list">
+              {all.map((m) => (
+                <div key={m.name}>
+                  <div className="mono">{m.name}</div>
+                  <div className="mono muted">
+                    {m.type === 'counter' ? 'Contador' : 'Histograma'} · {fmtInt(m.series)} séries ·{' '}
+                    {fmtInt(m.total)}
+                    {m.type === 'histogram' ? ` · p95 ${fmtMs(m.p95)}` : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </section>
@@ -233,7 +263,7 @@ export function Metrics() {
       ) : data.available ? (
         <Panels data={data} />
       ) : (
-        <Missing />
+        <Missing outdated={data.reason === 'version'} />
       )}
     </>
   );

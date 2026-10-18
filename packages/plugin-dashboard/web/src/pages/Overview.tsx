@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { LiveState } from '#web/lib/live.ts';
 import { fmtInt, fmtMs, KERNEL, percentile, rowsOf, total } from '#web/lib/metrics.ts';
 import { LiveBadge } from './LiveBadge.tsx';
+import { Stat } from './Stat.tsx';
 import { useMetrics } from './useMetrics.ts';
 
 const LABEL = { connecting: 'Conectando', open: 'Conectado', closed: 'Desconectado' } as const;
@@ -27,20 +28,14 @@ function Kpis() {
   const { data } = useMetrics(1);
   // Sem o plugin de métricas (ou enquanto carrega) a Visão geral segue sem KPIs; a aba Métricas explica.
   if (!data?.available) return null;
-  const stat = (label: string, value: string) => (
-    <div className="stat">
-      <div className="stat-label">{label}</div>
-      <div className="stat-value">{value}</div>
-    </div>
-  );
   return (
     <section aria-labelledby="kpis-t">
-      <h2 id="kpis-t">Hoje</h2>
+      <h2 id="kpis-t">Hoje (UTC)</h2>
       <div className="kpis">
-        {stat('Mensagens tratadas', fmtInt(total(rowsOf(data, KERNEL.handled))))}
-        {stat('Latência p95', fmtMs(percentile(rowsOf(data, KERNEL.duration), 0.95)))}
-        {stat('Usuários ativos', fmtInt(total(rowsOf(data, KERNEL.users))))}
-        {stat('Grupos ativos', fmtInt(total(rowsOf(data, KERNEL.groups))))}
+        <Stat label="Mensagens tratadas" value={fmtInt(total(rowsOf(data, KERNEL.handled)))} />
+        <Stat label="Latência p95" value={fmtMs(percentile(rowsOf(data, KERNEL.duration), 0.95))} />
+        <Stat label="Usuários ativos" value={fmtInt(total(rowsOf(data, KERNEL.users)))} />
+        <Stat label="Grupos ativos" value={fmtInt(total(rowsOf(data, KERNEL.groups)))} />
       </div>
     </section>
   );
