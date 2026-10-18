@@ -31,6 +31,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 const W = 'tabs/reminders/lembretes';
@@ -76,12 +77,15 @@ describe('Tab: título por widget (ADR 0118)', () => {
           actions: [],
         },
         { kind: 'text', id: 'ajuda', markdown: 'Use !lembrar' },
+        { kind: 'text', id: 'vazio', title: '', markdown: 'x' },
       ]),
     );
-    expect(screen.getByRole('heading', { level: 3, name: 'Próximos' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'Próximos' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Próximos' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'ajuda' })).toBeTruthy();
-    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(1);
+    // Título vazio: sem h2 e a seção rotulada pelo id, não por texto vazio.
+    expect(screen.getByRole('region', { name: 'vazio' })).toBeTruthy();
+    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1);
     await screen.findByText('Nada por aqui.');
   });
 
@@ -121,7 +125,7 @@ describe('Tab: stats', () => {
     const late = (await screen.findByText('Atrasados')).closest('.stat');
     const pending = screen.getByText('Pendentes').closest('.stat');
     expect(late?.classList.contains('warn')).toBe(true);
-    expect([...(pending?.classList ?? [])]).toEqual(['card', 'stat']);
+    expect(pending?.className).not.toMatch(/\b(ok|warn|danger)\b/);
     expect(screen.getByText('hoje')).toBeTruthy();
   });
 
@@ -223,7 +227,7 @@ describe('Tab: form', () => {
     );
     expect(screen.getByRole('button', { name: 'Agendar' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Enviar' })).toBeTruthy();
-    expect(screen.getByRole('heading', { level: 3, name: 'Novo lembrete global' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'Novo lembrete global' })).toBeTruthy();
   });
 
   it('envia os campos, confirma e limpa o formulário', async () => {
