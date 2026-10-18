@@ -146,6 +146,28 @@ describe("Bot: desconexão 'fatal'", () => {
 });
 
 describe('Bot: estado failed (ADR 0120)', () => {
+  // Fatal que chega durante o connect inicial (token ou intents inválidos): o caso principal do #194.
+  class FatalOnConnect extends RecordingTransport {
+    override async connect(): Promise<void> {
+      this.calls.push('connect');
+      await Promise.resolve();
+      this.emit('connection.status', { status: 'closed', reason: 'fatal', error: null });
+    }
+  }
+
+  it('fatal durante o connect inicial: start() resolve em failed, com o transport desconectado', async () => {
+    const transport = new FatalOnConnect();
+    const b = bot({ transport });
+
+    await b.start();
+
+    expect(b.state).toBe('failed');
+    expect(transport.calls).toEqual(['connect', 'disconnect']);
+    await b.stop();
+    expect(b.state).toBe('stopped');
+    expect(transport.calls).toEqual(['connect', 'disconnect']);
+  });
+
   it('mantém plugins no ar, para transport e filas, rejeita start() e o stop() chega a stopped', async () => {
     const transport = new RecordingTransport(['send.text']);
     const disposed = vi.fn();

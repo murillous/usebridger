@@ -35,7 +35,7 @@ export interface TransportEntryDeps {
   readonly chatIsAllowed: (chat: Pick<Chat, 'id' | 'parentId'>) => boolean;
   readonly dropsSelf: boolean;
   readonly dropsBots: boolean;
-  /** `true` em `stopping`/`stopped`: a espera vencida some em silêncio. */
+  /** `true` em `stopping`/`stopped`/`failed`: a espera vencida some em silêncio. */
   readonly stopping: () => boolean;
   /** Guarda o último `connection.status`, antes de reemitir no barramento (ADR 0110). */
   readonly recordStatus?: (status: ConnectionStatus) => void;

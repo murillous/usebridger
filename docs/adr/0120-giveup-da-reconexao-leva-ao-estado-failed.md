@@ -1,8 +1,8 @@
 # ADR 0120 — O giveUp da reconexão leva o bot ao estado `failed`
 
-**Status:** Aceito (2026-10-18) · Ajusta **D45** ([ADR 0045](0045-queda-de-rede-nao-limpa-sessao.md)),
-**D68** ([ADR 0068](0068-desconexao-fatal-e-transport-sem-pareamento.md)) e
-**D102** ([ADR 0102](0102-plugin-falho-derruba-o-boot.md))
+**Status:** Aceito (2026-10-18) · Ajusta **D36** ([ADR 0036](0036-escopo-de-sessao.md), `replaced`:
+parar é o certo), **D45** ([ADR 0045](0045-queda-de-rede-nao-limpa-sessao.md)) e **D68**
+([ADR 0068](0068-desconexao-fatal-e-transport-sem-pareamento.md))
 
 ## Contexto
 
@@ -14,13 +14,19 @@ nem corrigir a config (#194).
 
 ## Decisão
 
-- `BotState` ganha `'failed'`. O `giveUp` leva `running → failed`: para o reconector, desconecta
-  o transport e fecha as filas de entrada e saída. Plugins, scheduler e HTTP seguem no ar.
+- `BotState` ganha `'failed'`. O `giveUp` (`fatal`, `auth-failed` sem pareamento, `replaced`,
+  `clean-session` sem `clearSession`) leva `running → failed`: para o reconector, desconecta o
+  transport, fecha as filas de entrada e saída e as esperas de conversa (para o TTL não apagar
+  esperas persistidas sem `onExpire`, ADR 0097/0098) e para o scheduler (os jobs ficam no storage
+  para o próximo boot). Plugins e HTTP seguem no ar.
+- Se o giveUp chega durante o `start()` (erro fatal no connect inicial, o caso de token ou
+  intents inválidos), o boot termina em `failed` sem iniciar o scheduler e o `start()` RESOLVE:
+  o painel tem que ficar no ar para o admin ver o erro.
 - Em `failed` nenhum handler ou comando é despachado (a fila de entrada está fechada) e os eventos
   `connection.status` do transport deixam de ser registrados e reemitidos. O último status (o do
   erro) fica guardado e é o que o painel mostra.
 - `stop()` a partir de `failed` faz o shutdown normal (plugins, HTTP, sessão) e chega a `stopped`,
-  sem desconectar o transport de novo.
+  esperando a desconexão do transport já iniciada, sem repeti-la.
 - `start()` a partir de `failed` rejeita com `BotStateError`, como em `stopped`: a instância não
   reinicia; para subir de novo, crie outro `Bot`. É o mais simples e coerente com o estado
   terminal que já existe.
@@ -37,5 +43,7 @@ nem corrigir a config (#194).
 - Quem esperava `bot.state === 'stopped'` ou o processo sair após erro fatal precisa tratar
   `failed` (chamar `bot.stop()` ou observar o estado). Um processo com HTTP aberto não termina
   sozinho.
+- A trava da sessão (ADR 0074) continua sendo renovada em `failed`: nenhum outro processo assume a
+  sessão até alguém chamar `stop()`. O `/health` responde 503 em `failed`.
 - Os testes de `fatal-disconnect` e `reconnect` passam a esperar `failed`.
 - `BotState` é API pública: novo valor na união (minor).
