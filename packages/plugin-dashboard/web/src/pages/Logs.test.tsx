@@ -1,11 +1,14 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { initialLive, type LiveState } from '#web/lib/live.ts';
 import { Logs } from './Logs.tsx';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 const entry = (level: string, message: string) => ({ level, time: 1_700_000_000_000, message });
 const live = (logs: LiveState['logs']): LiveState => ({ ...initialLive, connected: true, logs });

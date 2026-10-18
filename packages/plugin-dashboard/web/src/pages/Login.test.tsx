@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setUnauthorizedHandler } from '#web/lib/api.ts';
@@ -8,6 +8,7 @@ import { Login } from './Login.tsx';
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   setUnauthorizedHandler(() => undefined);
 });
 
@@ -25,12 +26,12 @@ describe('Login', () => {
     render(<Login onDone={onDone} />);
     await user.type(screen.getByLabelText('Token de acesso'), 'segredo');
     await user.click(screen.getByRole('button', { name: 'Entrar' }));
+    await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('api/login');
     expect(init.method).toBe('POST');
     expect(JSON.parse(String(init.body))).toEqual({ token: 'segredo' });
-    expect(onDone).toHaveBeenCalledOnce();
   });
 
   it('token errado (401) mostra o erro, não chama onDone nem o handler de sessão expirada', async () => {
@@ -56,8 +57,8 @@ describe('Login', () => {
       true,
     );
     await user.type(screen.getByLabelText('Token de acesso'), 'abc{Enter}');
+    await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(onDone).toHaveBeenCalledOnce();
   });
 
   it('Mostrar/Ocultar alterna o tipo do campo', async () => {

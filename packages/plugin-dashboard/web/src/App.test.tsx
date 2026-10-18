@@ -2,6 +2,7 @@
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setUnauthorizedHandler } from '#web/lib/api.ts';
 import type { SocketLike } from '#web/lib/live.ts';
 import type { LiveMessage, StatusView, TabView } from '#web/lib/types.ts';
 import { App } from './App.tsx';
@@ -68,6 +69,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  setUnauthorizedHandler(() => undefined);
   localStorage.clear();
   window.location.hash = '';
   document.documentElement.removeAttribute('data-theme');
@@ -78,8 +81,17 @@ const goto = (hash: string) =>
     window.location.hash = hash;
     window.dispatchEvent(new Event('hashchange'));
   });
-const side = () => screen.getAllByRole('navigation', { name: 'Principal' })[0] as HTMLElement;
-const tabbar = () => screen.getAllByRole('navigation', { name: 'Principal' })[1] as HTMLElement;
+// O componente renderiza duas `nav` com o mesmo nome "Principal" (lateral e barra de abas) e não há
+// outro ancestral distinguível: a classe é o único desempate.
+const navBy = (cls: string) => {
+  const nav = Array.from(document.querySelectorAll('nav[aria-label="Principal"]')).find((n) =>
+    n.classList.contains(cls),
+  );
+  if (!nav) throw new Error(`nav.${cls} não encontrada`);
+  return nav as HTMLElement;
+};
+const side = () => navBy('side');
+const tabbar = () => navBy('tabbar');
 const current = (nav: HTMLElement) =>
   within(nav)
     .getAllByRole('link')
@@ -157,10 +169,12 @@ describe('App: abas de plugins', () => {
   });
 
   it('com falha em api/tabs o grupo Extensões some', async () => {
-    routes['GET tabs'] = () => ({ status: 500, body: 'erro' });
     await boot();
-    await waitFor(() => expect(calls).toContain('GET tabs'));
-    expect(within(side()).queryByText('Extensões')).toBeNull();
+    // Só afirma a ausência depois de ver o grupo com dados e de a releitura falhar.
+    await within(side()).findByText('Extensões');
+    routes['GET tabs'] = () => ({ status: 500, body: 'erro' });
+    goto('#/logs');
+    await waitFor(() => expect(within(side()).queryByText('Extensões')).toBeNull());
   });
 
   it('a página Mais também lista as abas', async () => {
