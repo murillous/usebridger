@@ -1,5 +1,21 @@
 # @usebridger/plugin-metrics
 
+## 0.2.0
+
+### Minor Changes
+
+- 7996b2a: Serviço `metrics` com escopo por plugin (ADR 0116): `ownerOf(nome)` devolve o plugin que gravou a métrica primeiro (`core` para o kernel) e o dono sai com o plugin. Novo `gauge(nome, rótulos, valor)` (último valor e máximo do dia, ADR 0117) e a métrica `bridger.outbound.pending`, a fila de saída amostrada a cada flush. Quebra de tipo: `MetricRow` ganhou o membro `GaugeRow`, e quem consome a união (`switch` em `type`, exportador) precisa tratar o caso novo; `MetricsService` ganhou `gauge` e `ownerOf`, obrigatórios para quem o implementa.
+
+### Patch Changes
+
+- Updated dependencies [f707794]
+- Updated dependencies [c26a895]
+- Updated dependencies [201c06a]
+- Updated dependencies [c095ec7]
+- Updated dependencies [5ef42f6]
+- Updated dependencies [a784db1]
+  - @usebridger/core@0.9.0
+
 ## 0.1.0
 
 ### Minor Changes
