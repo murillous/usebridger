@@ -724,6 +724,11 @@ td {
   font-size: 12px;
   margin-bottom: 12px;
 }
+@media (max-width: 1023px) {
+  .kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
 @media (max-width: 767px) {
   .kpis {
     grid-template-columns: repeat(2, 1fr);
@@ -962,6 +967,9 @@ h3 {
 .plist .pl-name {
   font-weight: 600;
 }
+.card:has(> .ptable) {
+  overflow-x: auto;
+}
 .ptable .mono {
   overflow-wrap: anywhere;
 }
@@ -1136,10 +1144,15 @@ h3 {
 .list-card .item + .item {
   border-top: 1px solid var(--line);
 }
-/* Dono da aba à direita via CSS: o nome acessível do link continua só o título. */
+/* Dono da aba à direita; o texto alternativo vazio ("/ ''") o tira do nome acessível, e o
+   aria-description do link o expõe como descrição. A 1ª declaração é fallback p/ navegador sem suporte. */
 .nav[data-plugin]::after {
   content: attr(data-plugin);
+  /* biome-ignore lint/suspicious/noDuplicateProperties: fallback intencional */
+  content: attr(data-plugin) / "";
   margin-left: auto;
+  padding-left: 8px;
+  flex: none;
   font: 11px var(--mono);
   color: var(--muted);
 }

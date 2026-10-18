@@ -343,13 +343,9 @@ describe('LiveBadge', () => {
     expect(screen.getByRole('status').textContent).toContain('última atualização —');
   });
 
-  it('pausa global ou local mostra "Pausado", mesmo conectado', () => {
-    const { rerender } = render(
-      <LiveBadge live={live({ paused: true, lastUpdate: NOW - 7_200_000 })} />,
-    );
+  it('pausa global mostra "Pausado", mesmo conectado', () => {
+    render(<LiveBadge live={live({ paused: true, lastUpdate: NOW - 7_200_000 })} />);
     expect(screen.getByText('Pausado · última atualização há 2 h')).toBeTruthy();
-    rerender(<LiveBadge live={live({ lastUpdate: NOW - 1000 })} paused />);
-    expect(screen.getByText('Pausado · última atualização há 1 s')).toBeTruthy();
     expect(screen.queryByRole('status')).toBeNull();
   });
 });

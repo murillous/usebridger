@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   botChip,
   botName,
-  fmtCountdown,
   fmtRemaining,
   fmtSince,
   isFatal,
@@ -70,18 +69,10 @@ describe('botName', () => {
   });
 });
 
-describe('fmtCountdown', () => {
-  it('formata m:ss e some quando vence', () => {
-    expect(fmtCountdown(42_000)).toBe('0:42');
-    expect(fmtCountdown(65_000)).toBe('1:05');
-    expect(fmtCountdown(0)).toBeUndefined();
-  });
-});
-
 describe('fmtRemaining', () => {
   it('formata segundos e minutos; vencido vira undefined', () => {
-    expect(fmtRemaining(12_000)).toBe('12s');
-    expect(fmtRemaining(65_000)).toBe('1m 05s');
+    expect(fmtRemaining(12_000)).toBe('0:12');
+    expect(fmtRemaining(65_000)).toBe('1:05');
     expect(fmtRemaining(0)).toBeUndefined();
     expect(fmtRemaining(-5)).toBeUndefined();
   });

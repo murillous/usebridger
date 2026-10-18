@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { type LiveState, relativeAgo } from '#web/lib/live.ts';
 
 /** "Ao vivo" só quando o WS está aberto; senão mostra há quanto tempo os dados estão parados. */
-export function LiveBadge({ live, paused }: { live: LiveState; paused?: boolean }) {
+export function LiveBadge({ live }: { live: LiveState }) {
   // Relógio de 1 s só para o texto relativo avançar entre mensagens.
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
@@ -10,9 +10,7 @@ export function LiveBadge({ live, paused }: { live: LiveState; paused?: boolean 
     return () => clearInterval(id);
   }, []);
   const ago = live.lastUpdate ? relativeAgo(live.lastUpdate, now) : '—';
-  // `live.paused` é o pausar global (fecha o WS); `paused` é o local do Logs (congela a lista).
-  if (paused || live.paused)
-    return <span className="chip warn">Pausado · última atualização {ago}</span>;
+  if (live.paused) return <span className="chip warn">Pausado · última atualização {ago}</span>;
   if (!live.connected) {
     return (
       <span className="chip danger" role="status">

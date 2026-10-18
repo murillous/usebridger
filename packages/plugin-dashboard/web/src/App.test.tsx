@@ -162,12 +162,17 @@ describe('App: abas de plugins', () => {
     await boot();
     const link = await within(side()).findByRole('link', { name: 'Lembretes' });
     expect(link.getAttribute('href')).toBe('#/ext/reminders/lembretes');
-    expect(link.getAttribute('data-plugin')).toBe('reminders');
-    expect(within(side()).getByText('de plugins')).toBeTruthy();
     goto('#/ext/reminders/lembretes');
     expect(await screen.findByRole('heading', { level: 1, name: 'Lembretes' })).toBeTruthy();
     expect(current(side())).toBe('Lembretes');
     expect(current(tabbar())).toBe('Mais');
+  });
+
+  it("sidebar mostra 'de plugins' e o dono da aba", async () => {
+    await boot();
+    const link = await within(side()).findByRole('link', { name: 'Lembretes' });
+    expect(link.getAttribute('aria-description')).toBe('reminders');
+    expect(within(side()).getByText('de plugins')).toBeTruthy();
   });
 
   it('com falha em api/tabs o grupo Extensões some', async () => {

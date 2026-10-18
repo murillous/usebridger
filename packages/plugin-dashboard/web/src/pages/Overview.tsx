@@ -5,7 +5,7 @@ import { fmtInt, fmtMs, KERNEL, percentile, rowsOf, total } from '#web/lib/metri
 import {
   botChip,
   botName,
-  fmtCountdown,
+  fmtRemaining,
   fmtSince,
   isFatal,
   logOrigin,
@@ -95,7 +95,7 @@ function BotCard({ status }: { status: StatusView }) {
   useEffect(() => () => clearTimeout(copyTimer.current), []);
   const now = useNow(status.qrExpiresAt !== undefined);
   const qrLeft =
-    status.qrExpiresAt === undefined ? undefined : fmtCountdown(status.qrExpiresAt - now);
+    status.qrExpiresAt === undefined ? undefined : fmtRemaining(status.qrExpiresAt - now);
 
   const copy = async (text: string) => {
     try {

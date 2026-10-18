@@ -61,16 +61,9 @@ export function fmtSince(at: number, now = Date.now()): string {
     : d.toLocaleString();
 }
 
-/** Contagem regressiva `m:ss` ("0:42", "1:05"); `undefined` quando já passou. */
-export function fmtCountdown(ms: number): string | undefined {
-  if (ms <= 0) return undefined;
-  const s = Math.ceil(ms / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
-
-/** Tempo restante ("1m 05s", "12s"); `undefined` quando já passou. */
+/** Tempo restante em `m:ss` ("0:12", "1:05"); `undefined` quando já passou. */
 export function fmtRemaining(ms: number): string | undefined {
   if (ms <= 0) return undefined;
   const s = Math.ceil(ms / 1000);
-  return s >= 60 ? `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s` : `${s}s`;
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }

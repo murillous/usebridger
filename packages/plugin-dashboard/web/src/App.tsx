@@ -254,7 +254,7 @@ export function App() {
                 key={t.key}
                 className="nav"
                 href={`#/${EXT}${t.key}`}
-                data-plugin={t.plugin}
+                aria-description={t.plugin}
                 aria-current={route === `${EXT}${t.key}` ? 'page' : undefined}
               >
                 {t.title}
