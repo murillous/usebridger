@@ -9,6 +9,7 @@ export type Control =
   | 'integer'
   | 'boolean'
   | 'enum'
+  | 'datetime'
   | 'list'
   | 'record'
   | 'json';
@@ -23,6 +24,8 @@ export interface Field {
   /** Campo `secret`: só máscara, nunca entra no PUT. */
   secret: boolean;
   options?: string[];
+  /** Exemplo do schema (`examples[0]`), usado como placeholder. */
+  placeholder?: string;
   /** Tipo dos itens de `list` e dos valores de `record`. */
   item?: 'text' | 'number';
   default?: unknown;
@@ -69,7 +72,7 @@ function control(schema: Json): Pick<Field, 'control' | 'options' | 'item'> {
   if (schema['const'] !== undefined) return { control: 'enum', options: [String(schema['const'])] };
   switch (typeOf(schema)) {
     case 'string':
-      return { control: 'text' };
+      return { control: schema['format'] === 'date-time' ? 'datetime' : 'text' };
     case 'number':
       return { control: 'number' };
     case 'integer':
@@ -134,8 +137,14 @@ export function buildFields(schema: Json | null, prefix = ''): Node[] {
     if (!isObject(raw)) continue;
     const prop = unwrap(raw);
     const path = prefix ? `${prefix}.${key}` : key;
-    const label = typeof prop['title'] === 'string' ? prop['title'] : key;
-    const description = typeof prop['description'] === 'string' ? prop['description'] : undefined;
+    const title = typeof prop['title'] === 'string' ? prop['title'] : undefined;
+    const text = typeof prop['description'] === 'string' ? prop['description'] : undefined;
+    // title > description > nome da propriedade (com inicial maiúscula); a descrição que virou rótulo não repete na ajuda.
+    const label = title ?? text ?? key.charAt(0).toUpperCase() + key.slice(1);
+    const description = title === undefined && text !== undefined ? undefined : text;
+    const [example] = Array.isArray(prop['examples']) ? prop['examples'] : [];
+    const placeholder =
+      typeof example === 'string' || typeof example === 'number' ? String(example) : undefined;
     if (typeOf(prop) === 'object' && isObject(prop['properties'])) {
       nodes.push({ node: 'group', path, label, description, fields: buildFields(prop, path) });
       continue;
@@ -147,6 +156,7 @@ export function buildFields(schema: Json | null, prefix = ''): Node[] {
       description,
       required: required.includes(key),
       secret: prop['secret'] === true,
+      placeholder,
       default: prop['default'],
       hint: hintOf(prop),
       ...boundsOf(prop),
@@ -246,6 +256,20 @@ export function parseNumber(text: string): number | string | undefined {
   return Number.isNaN(n) ? text : n;
 }
 
+/** ISO (`2026-01-02T03:04:05Z`) -> valor do `datetime-local` no fuso local; ausente ou inválido vira vazio. */
+export function isoToLocal(value: unknown): string {
+  const date = typeof value === 'string' ? new Date(value) : undefined;
+  if (!date || Number.isNaN(date.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+/** Valor do `datetime-local` (fuso local) -> ISO em UTC; vazio ou inválido vira ausente. */
+export function localToIso(text: string): string | undefined {
+  const date = new Date(text);
+  return text === '' || Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
 /** Uma linha por item; `number` converte cada linha. */
 export function parseList(text: string, item: 'text' | 'number'): unknown[] {
   const lines = text.split('\n').filter((line) => line.trim() !== '');
@@ -322,4 +346,14 @@ export function dependentsOf(
     }
   }
   return [...out];
+}
+
+/** Plugin do hash `config/<plugin>`; vazio ou `%` malformado não derruba o app (volta a `undefined`). */
+export function configPluginOf(route: string): string | undefined {
+  if (!route.startsWith('config/')) return undefined;
+  try {
+    return decodeURIComponent(route.slice('config/'.length)) || undefined;
+  } catch {
+    return undefined;
+  }
 }
