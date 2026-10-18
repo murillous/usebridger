@@ -63,13 +63,13 @@ describe('validateLocal', () => {
     }),
   );
 
-  it('aponta os limites e o obrigatório sem esperar o 400', () => {
+  it('aponta os limites sem esperar o 400', () => {
     const errors = validateLocal(fields, { name: 'x', n: 0, i: 1.5, mode: 'c' });
     expect(errors['name']).toEqual(['Mínimo de 2 caracteres']);
     expect(errors['n']).toEqual(['Deve ser maior ou igual a 64']);
     expect(errors['i']).toEqual(['Informe um inteiro']);
     expect(errors['mode']).toEqual(['Valor fora das opções']);
-    expect(validateLocal(fields, {})['name']).toEqual(['Obrigatório']);
+    expect(validateLocal(fields, {})).toEqual({});
   });
 
   it('valor válido, opcional vazio e texto não numérico', () => {

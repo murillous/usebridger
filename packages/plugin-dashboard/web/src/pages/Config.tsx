@@ -420,11 +420,12 @@ export function Config() {
   const fields = useMemo(() => (loaded ? leaves(loaded.nodes) : []), [loaded]);
   const dirty = loaded ? isDirty(loaded.initial, values) : false;
   const grouped = groupIssues([...(loaded?.loadIssues ?? []), ...issues], fields);
-  // Erro local (limites do schema) antes do 400; mensagem repetida do servidor não duplica.
+  // Erro local (limites do schema) antes do 400; o do servidor, quando existe, tem prioridade.
   const errorsByPath = useMemo(() => {
     const merged: Record<string, string[]> = { ...grouped.byPath };
     for (const [path, msgs] of Object.entries(validateLocal(fields, values))) {
-      merged[path] = [...new Set([...(merged[path] ?? []), ...msgs])];
+      // Só sem erro do servidor: não mistura o inglês do Zod com o texto local.
+      merged[path] = merged[path] ?? msgs;
     }
     return merged;
   }, [grouped.byPath, fields, values]);

@@ -31,7 +31,7 @@ export function secretOrigin(opts: {
 }
 
 /**
- * Validação local mínima, só com o que o JSON Schema deixa ver (obrigatório, enum, limites):
+ * Validação local mínima, só com o que o JSON Schema deixa ver (enum e limites):
  * mostra o erro sem esperar o 400. O servidor segue sendo a autoridade (refinamentos do Zod).
  */
 export function validateLocal(fields: Field[], values: FlatValues): Record<string, string[]> {
@@ -41,9 +41,9 @@ export function validateLocal(fields: Field[], values: FlatValues): Record<strin
     const v = values[f.path];
     const empty = v === undefined || v === null || v === '';
     let msg: string | undefined;
-    if (empty) {
-      if (f.required && f.default === undefined && f.control !== 'boolean') msg = 'Obrigatório';
-    } else if (f.control === 'number' || f.control === 'integer') {
+    // Campo vazio no form não é campo sem valor: o valor pode vir do arquivo, do env ou do default.
+    if (empty) continue;
+    if (f.control === 'number' || f.control === 'integer') {
       if (typeof v !== 'number' || Number.isNaN(v)) msg = 'Informe um número';
       else if (f.control === 'integer' && !Number.isInteger(v)) msg = 'Informe um inteiro';
       else if (f.min !== undefined && v < f.min) msg = `Deve ser maior ou igual a ${f.min}`;
