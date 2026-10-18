@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { botChip, logOrigin, recentLogs } from './overview.ts';
+import { botChip, isFatal, logOrigin, recentLogs, stateLabel } from './overview.ts';
 import type { LogEntry, StatusView } from './types.ts';
 
 const st = (over: Partial<StatusView>): StatusView => ({
@@ -19,7 +19,18 @@ const log = (message: string, fields?: unknown): LogEntry => ({
 describe('botChip', () => {
   it('mapeia os estados do transport', () => {
     expect(botChip(st({ status: 'open' })).label).toBe('Conectado');
-    expect(botChip(st({ status: 'closed' }))).toEqual({ label: 'Erro fatal', tone: 'danger' });
+    expect(botChip(st({ status: 'closed', reason: 'fatal' }))).toEqual({
+      label: 'Erro fatal',
+      tone: 'danger',
+    });
+    expect(botChip(st({ status: 'closed', reason: 'replaced' })).label).toBe('Erro fatal');
+    expect(botChip(st({ status: 'closed', reason: 'connection-lost' }))).toEqual({
+      label: 'Reconectando',
+      tone: 'warn',
+    });
+    expect(isFatal(st({ status: 'closed', reason: 'connection-lost' }))).toBe(false);
+    expect(stateLabel(st({ status: 'open' }))).toBe('Em execução');
+    expect(stateLabel(st({ status: 'closed', reason: 'fatal' }))).toBe('Parado');
     expect(botChip(st({ qr: 'x' })).label).toBe('Aguardando pareamento');
     expect(botChip(st({ pairingCode: 'ABCD' })).label).toBe('Aguardando pareamento');
     expect(botChip(st({})).label).toBe('Conectando');

@@ -2,7 +2,7 @@ import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
 import type { LiveState } from '#web/lib/live.ts';
 import { fmtInt, fmtMs, KERNEL, percentile, rowsOf, total } from '#web/lib/metrics.ts';
-import { botChip, logOrigin, recentLogs } from '#web/lib/overview.ts';
+import { botChip, isFatal, logOrigin, recentLogs, stateLabel } from '#web/lib/overview.ts';
 import type { StatusView } from '#web/lib/types.ts';
 import { Stat } from './Stat.tsx';
 import { useMetrics } from './useMetrics.ts';
@@ -37,8 +37,6 @@ function Kpis() {
         <Stat label="Usuários ativos" value={fmtInt(total(rowsOf(data, KERNEL.users)))} />
         <Stat label="Grupos ativos" value={fmtInt(total(rowsOf(data, KERNEL.groups)))} />
         <Stat label="Latência p95" value={fmtMs(percentile(rowsOf(data, KERNEL.duration), 0.95))} />
-        {/* O core não mede a profundidade da fila de saída (só `outbound.sent`, um total): sem dado, sem número. */}
-        <Stat label="Fila de saída" value="-" />
       </div>
     </section>
   );
@@ -53,7 +51,7 @@ function RecentLogs({ live }: { live: LiveState }) {
         <a href="#/logs">Abrir logs</a>
       </div>
       {rows.length === 0 && <p className="muted">Nenhuma linha ainda.</p>}
-      <ul className="recent-logs">
+      <ul className="ov-recent-logs">
         {rows.map((entry, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: lista curta recalculada a cada log; sem estado por item.
           <li key={i}>
@@ -69,7 +67,7 @@ function RecentLogs({ live }: { live: LiveState }) {
 }
 
 function BotCard({ status }: { status: StatusView }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<boolean | 'erro'>(false);
   const chip = botChip(status);
 
   const copy = async (text: string) => {
@@ -79,12 +77,12 @@ function BotCard({ status }: { status: StatusView }) {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Sem permissão de área de transferência: o código segue visível para copiar à mão.
-      setCopied(false);
+      setCopied('erro');
     }
   };
 
   return (
-    <article className="card bot" aria-label={`Bot ${status.transport}`}>
+    <article className="card ov-bot" aria-label={`Bot ${status.transport}`}>
       <div className="row spread">
         <div>
           <h3>{status.transport}</h3>
@@ -95,13 +93,13 @@ function BotCard({ status }: { status: StatusView }) {
         <span className={`chip ${chip.tone}`}>{chip.label}</span>
       </div>
       {/* O core só expõe o estado da conexão; "No ar desde", reconexões e fila de saída não saem dele. */}
-      <dl className="facts">
+      <dl className="ov-facts">
         <dt>Estado</dt>
-        <dd>{status.status === 'open' ? 'running' : status.status}</dd>
+        <dd>{stateLabel(status)}</dd>
         <dt>Atualizado</dt>
         <dd>{new Date(status.updatedAt).toLocaleTimeString()}</dd>
       </dl>
-      {status.status === 'closed' && (
+      {isFatal(status) && (
         <div className="notice danger" role="status">
           <strong>Erro fatal</strong>
           <p>
@@ -111,16 +109,16 @@ function BotCard({ status }: { status: StatusView }) {
           <a href="#/config">Abrir config</a>
         </div>
       )}
-      {status.qr && (
-        <div className="pair">
+      {status.status === 'connecting' && status.qr && (
+        <div className="bot-pair">
           <Qr value={status.qr} />
         </div>
       )}
-      {status.pairingCode && (
-        <div className="pair">
-          <span className="pair-code mono">{status.pairingCode}</span>
+      {status.status === 'connecting' && status.pairingCode && (
+        <div className="bot-pair">
+          <span className="bot-pair-code mono">{status.pairingCode}</span>
           <button type="button" className="btn" onClick={() => copy(status.pairingCode ?? '')}>
-            {copied ? 'Copiado' : 'Copiar'}
+            {copied === 'erro' ? 'Não foi possível copiar' : copied ? 'Copiado' : 'Copiar'}
           </button>
         </div>
       )}

@@ -6,13 +6,34 @@ export interface BotChip {
   tone: 'ok' | 'warn' | 'danger';
 }
 
+// Só estes `reason` fazem o core parar de reconectar (reconnection.ts, ADR 0068); nos outros o
+// kernel reconecta sozinho. `auth-failed` conta como fatal: sem pareamento o core para.
+const FATAL = new Set(['fatal', 'replaced', 'auth-failed']);
+
+export const isFatal = (status: StatusView): boolean =>
+  status.status === 'closed' && FATAL.has(status.reason ?? '');
+
 /** Chip do card do bot: QR ou código de pareamento pendente vira "Aguardando pareamento". */
 export function botChip(status: StatusView): BotChip {
   if (status.status === 'open') return { label: 'Conectado', tone: 'ok' };
-  if (status.status === 'closed') return { label: 'Erro fatal', tone: 'danger' };
+  if (status.status === 'closed') {
+    return isFatal(status)
+      ? { label: 'Erro fatal', tone: 'danger' }
+      : { label: 'Reconectando', tone: 'warn' };
+  }
   if (status.qr || status.pairingCode) return { label: 'Aguardando pareamento', tone: 'warn' };
   return { label: 'Conectando', tone: 'warn' };
 }
+
+/** Rótulo PT-BR do estado do transport, no lugar do valor cru. */
+export const stateLabel = (status: StatusView): string =>
+  status.status === 'open'
+    ? 'Em execução'
+    : status.status === 'connecting'
+      ? 'Conectando'
+      : isFatal(status)
+        ? 'Parado'
+        : 'Reconectando';
 
 /** Origem da linha de log: o campo `plugin` quando o logger filho o põe; senão `core`. */
 export function logOrigin(entry: LogEntry): string {

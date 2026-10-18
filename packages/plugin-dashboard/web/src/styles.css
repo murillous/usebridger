@@ -1142,59 +1142,59 @@ h3 {
 }
 
 /* Visão geral: card do bot e logs recentes */
-.bot h3 {
+.ov-bot h3 {
   margin: 0;
   font-size: 17px;
 }
-.facts {
+.ov-facts {
   display: grid;
   grid-template-columns: max-content 1fr;
   gap: 4px 16px;
   margin: 12px 0 0;
 }
-.facts dt {
+.ov-facts dt {
   color: var(--muted);
 }
-.facts dd {
+.ov-facts dd {
   margin: 0;
 }
-.bot .notice {
+.ov-bot .notice {
   margin: 12px 0 0;
 }
-.bot .notice p {
+.ov-bot .notice p {
   margin: 4px 0;
 }
-.pair {
+.bot-pair {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12px;
   margin-top: 16px;
 }
-.pair-code {
+.bot-pair-code {
   font-size: 28px;
   letter-spacing: 0.08em;
 }
-.recent-logs {
+.ov-recent-logs {
   list-style: none;
   margin: 0;
   padding: 0;
 }
-.recent-logs li {
+.ov-recent-logs li {
   display: grid;
   grid-template-columns: 5.5rem 3.5rem 5rem 1fr;
   gap: 8px;
   padding: 6px 0;
   border-top: 1px solid var(--line);
 }
-.recent-logs .msg {
+.ov-recent-logs .msg {
   word-break: break-word;
 }
 @media (max-width: 767px) {
-  .recent-logs li {
+  .ov-recent-logs li {
     grid-template-columns: 5rem 1fr;
   }
-  .recent-logs .msg {
+  .ov-recent-logs .msg {
     grid-column: 1 / -1;
   }
 }

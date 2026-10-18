@@ -177,4 +177,4 @@ Conferidas na M5-4.8 (#180). O canvas é ilustrativo; o que o contrato ou o core
 
 O card do bot mostra só o que o status de conexão traz (transport, sessão, estado, QR, código de
 pareamento, motivo do erro). "No ar desde", reconexões, validade do QR ("Expira em") e fila de saída
-não saem do core hoje; o KPI "Fila de saída" fica em `-` até existir essa métrica.
+não saem do core hoje. O canvas tem 5 KPIs em "Hoje"; o app mostra 4, sem "Fila de saída", até o core expor a fila.
