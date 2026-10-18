@@ -345,7 +345,7 @@ describe('Plugins: erros', () => {
   });
 
   // Bug #204: o load() do finally limpa o erro da ação. Vira it quando for corrigido.
-  it.fails('409 na ação mantém o alerta "409: <mensagem>" visível depois de recarregar a lista', async () => {
+  it('409 na ação mantém o alerta "409: <mensagem>" visível depois de recarregar a lista', async () => {
     show();
     routes['POST plugins/ok-plugin/reload'] = () => ({ status: 409, body: 'em andamento' });
     await screen.findByRole('table');

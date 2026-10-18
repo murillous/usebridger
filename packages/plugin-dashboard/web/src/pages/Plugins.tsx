@@ -51,6 +51,8 @@ export function Plugins() {
   const notice = useRef<HTMLDivElement>(null);
   const [rows, setRows] = useState<PluginRow[]>();
   const [error, setError] = useState<string>();
+  // Separado do erro da lista: o `load()` que segue a ação limparia o motivo da falha (409/500).
+  const [actionError, setActionError] = useState<string>();
   const [busy, setBusy] = useState<string>();
   const [result, setResult] = useState<{ action: Action; data: ChangeResult }>();
   const [confirm, setConfirm] = useState<PluginRow>();
@@ -98,14 +100,14 @@ export function Plugins() {
     close();
     setBusy(name);
     setResult(undefined);
+    setActionError(undefined);
     try {
       const data = await api<ChangeResult>(`plugins/${encodeURIComponent(name)}/${action}`, {
         method: 'POST',
       });
       setResult({ action, data });
-      setError(undefined);
     } catch (e) {
-      setError(errorText(e));
+      setActionError(errorText(e));
     } finally {
       setBusy(undefined);
       await load();
@@ -193,6 +195,11 @@ export function Plugins() {
           />
         </label>
       </div>
+      {actionError && (
+        <p className="notice danger" role="alert">
+          {actionError}
+        </p>
+      )}
       {error && (
         <p className="notice danger" role="alert">
           {error}
