@@ -190,9 +190,9 @@ describe('Overview: pareamento', () => {
     );
     expect(screen.getByText('Aguardando pareamento')).toBeTruthy();
     expect(await screen.findByRole('img', { name: 'QR code para parear o WhatsApp' })).toBeTruthy();
-    expect(screen.getByText('Expira em').nextElementSibling?.textContent).toBe('1m 05s');
+    expect(screen.getByText('Expira em').nextElementSibling?.textContent).toBe('1:05');
     await vi.advanceTimersByTimeAsync(5000);
-    expect(screen.getByText('Expira em').nextElementSibling?.textContent).toBe('1m 00s');
+    expect(screen.getByText('Expira em').nextElementSibling?.textContent).toBe('1:00');
   });
 
   it('QR vencido esconde "Expira em"', () => {

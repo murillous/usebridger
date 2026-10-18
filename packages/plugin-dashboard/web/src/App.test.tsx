@@ -162,6 +162,8 @@ describe('App: abas de plugins', () => {
     await boot();
     const link = await within(side()).findByRole('link', { name: 'Lembretes' });
     expect(link.getAttribute('href')).toBe('#/ext/reminders/lembretes');
+    expect(link.getAttribute('data-plugin')).toBe('reminders');
+    expect(within(side()).getByText('de plugins')).toBeTruthy();
     goto('#/ext/reminders/lembretes');
     expect(await screen.findByRole('heading', { level: 1, name: 'Lembretes' })).toBeTruthy();
     expect(current(side())).toBe('Lembretes');

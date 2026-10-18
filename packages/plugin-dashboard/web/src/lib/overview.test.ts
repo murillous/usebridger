@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   botChip,
   botName,
+  fmtCountdown,
   fmtRemaining,
   fmtSince,
   isFatal,
@@ -66,6 +67,14 @@ describe('botName', () => {
   it('usa o nome do bot e cai no transport sem ele', () => {
     expect(botName(st({ name: 'luma' }))).toBe('luma');
     expect(botName(st({}))).toBe('whatsapp');
+  });
+});
+
+describe('fmtCountdown', () => {
+  it('formata m:ss e some quando vence', () => {
+    expect(fmtCountdown(42_000)).toBe('0:42');
+    expect(fmtCountdown(65_000)).toBe('1:05');
+    expect(fmtCountdown(0)).toBeUndefined();
   });
 });
 

@@ -33,6 +33,11 @@ describe('Logs', () => {
     expect(within(log()).getByText('Nenhuma linha neste nível.')).toBeTruthy();
   });
 
+  it('não repete o selo "Ao vivo" do cabeçalho do app', () => {
+    render(<Logs live={live(LOGS)} />);
+    expect(screen.queryByText(/Ao vivo/)).toBeNull();
+  });
+
   it('Pausar congela a lista; Retomar mostra as linhas novas', async () => {
     const user = userEvent.setup();
     const { rerender } = render(<Logs live={live(LOGS)} />);
