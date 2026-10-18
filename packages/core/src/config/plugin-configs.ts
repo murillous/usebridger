@@ -257,6 +257,17 @@ function markSecrets(node: unknown): void {
   for (const value of Object.values(record)) markSecrets(value);
 }
 
+/**
+ * JSON Schema de entrada de um schema Zod, já com os secretos marcados e o `default` deles trocado
+ * pela máscara. É o que o dashboard usa em formulários de config e de aba (ADR 0108).
+ * Transform não tem JSON Schema; vira `{}` em vez de lançar.
+ */
+export function maskedJsonSchema(schema: z.ZodType): PluginConfigJsonSchema {
+  const json = schema.toJSONSchema({ io: 'input', unrepresentable: 'any' });
+  markSecrets(json);
+  return json as PluginConfigJsonSchema;
+}
+
 interface Layer {
   readonly source: Exclude<ConfigSource, 'default' | 'env'>;
   readonly fields: PlainObject;
@@ -623,11 +634,8 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
     jsonSchema(name: string): PluginConfigJsonSchema | undefined {
       const schema = definitionOf(name).config;
       if (!schema) return undefined;
-      // `input`: o formulário preenche a entrada (campos com default são opcionais). Transform
-      // não tem JSON Schema; vira `{}` em vez de lançar.
-      const json = schema.toJSONSchema({ io: 'input', unrepresentable: 'any' });
-      markSecrets(json);
-      return json as PluginConfigJsonSchema;
+      // `input`: o formulário preenche a entrada (campos com default são opcionais).
+      return maskedJsonSchema(schema);
     },
   };
 }

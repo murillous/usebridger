@@ -276,7 +276,7 @@ function Form({
   const initial = useMemo(
     () =>
       Object.fromEntries(
-        fields.filter((f) => f.default !== undefined).map((f) => [f.path, f.default]),
+        fields.filter((f) => f.default !== undefined && !f.secret).map((f) => [f.path, f.default]),
       ),
     [fields],
   );
@@ -291,10 +291,8 @@ function Form({
     setSending(true);
     setIssues([]);
     setMessage(undefined);
-    // Secret é só leitura no dashboard (mesma regra da Config): nunca vai no corpo.
     const flat: FlatValues = {};
-    for (const f of fields)
-      if (!f.secret && values[f.path] !== undefined) flat[f.path] = values[f.path];
+    for (const f of fields) if (values[f.path] !== undefined) flat[f.path] = values[f.path];
     try {
       await api(`${path(tab, widget)}/submit`, { method: 'POST', body: unflatten(flat) });
       setMessage({ ok: true, text: 'Enviado.' });
@@ -341,6 +339,7 @@ function Form({
           value={values[f.path]}
           masked={undefined}
           source={undefined}
+          secretEditable
           errors={grouped.byPath[f.path] ?? []}
           onChange={(value) => setValues((v) => ({ ...v, [f.path]: value }))}
         />

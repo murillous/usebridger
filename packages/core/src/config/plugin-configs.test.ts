@@ -9,7 +9,7 @@ import { kernelStorage } from '#storage/namespace.ts';
 import type { JsonObject, StoragePort } from '#storage/types.ts';
 import type { ConfigEnv } from './env.ts';
 import { PluginConfigError } from './errors.ts';
-import { createPluginConfigs, type PluginConfigFile } from './plugin-configs.ts';
+import { createPluginConfigs, maskedJsonSchema, type PluginConfigFile } from './plugin-configs.ts';
 import { SECRET_MASK, secret } from './schema.ts';
 
 function plugin(
@@ -265,6 +265,14 @@ describe('createPluginConfigs: secrets', () => {
     log.info('config', { config });
     log.error('falhou sk-secreta-123', { err: new Error('token tok-abc recusado') });
     expect(raw.join('')).not.toMatch(/sk-secreta-123|tok-abc/);
+  });
+
+  it('maskedJsonSchema troca o default secreto pela máscara em qualquer Zod', () => {
+    const json = JSON.stringify(
+      maskedJsonSchema(z.object({ key: secret(z.string()).default('padrão-secreto') })),
+    );
+    expect(json).not.toContain('padrão-secreto');
+    expect(json).toContain(SECRET_MASK);
   });
 
   it('JSON Schema marca secretos e não expõe default secreto', async () => {

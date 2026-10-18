@@ -175,9 +175,9 @@ export const reminders = definePlugin({
 | -------- | ------------------------------------------------------- | ---------------------------------------------------------------- |
 | `stats`  | `load(): StatItem[]` (`label`, `value`, `hint?`)        | Cartões; até 3 por linha no celular                              |
 | `table`  | `columns`, `load({ cursor })`, `actions?`               | Tabela; no celular vira lista (1ª coluna em cima, o resto em mono) |
-| `series` | `load({ days })`: `SeriesPoint[]` (`label`, `value`)    | Gráfico de linha com `role="img"` e rótulo; seletor 7/30/90 dias |
-| `form`   | `schema` Zod e `submit(input)`                          | Formulário do mesmo gerador da Config; secret só como máscara    |
-| `text`   | `markdown`                                              | Texto (por ora sem formatação Markdown)                          |
+| `series` | `load({ days })`: `SeriesPoint[]` (`label`, `value`); `title?` ([ADR 0113](../../../docs/adr/0113-contrato-das-abas-do-dashboard-complemento.md)) | Gráfico de linha com `role="img"` e rótulo; seletor 7/30/90 dias |
+| `form`   | `schema` Zod e `submit(input)`                          | Formulário do mesmo gerador da Config; campo `secret` é entrada de senha, vazia, enviada no corpo    |
+| `text`   | `markdown`                                              | Texto puro: hoje o `markdown` não é renderizado (sem negrito, links ou listas) |
 
 Rotas (sessão e `Origin` do mesmo host nos `POST`, como no resto):
 
@@ -198,6 +198,12 @@ Rotas (sessão e `Origin` do mesmo host nos `POST`, como no resto):
 - **Erro por widget:** `load`, `run` ou `submit` que lança responde 500 `erro no widget` (o erro vai
   para o log com o plugin e a chave) e só aquele widget mostra a falha. O `submit` inválido mostra as
   issues do Zod junto dos campos.
+- **Manifesto e secret:** o JSON Schema do `form` sai mascarado como o da Config (o `default` de campo
+  `secret` vira a máscara). Diferente da Config, o secret do form de aba é digitado e vai no
+  `submit`. Um widget cujo manifesto não pode ser montado sai com `warn`; o resto da aba fica.
+- **Forma do `load`:** item fora do contrato (`stats` sem `label` string ou `value` string/número;
+  linha sem `id` string; ponto sem `label` string ou `value` número) é descartado com `warn`. `order`
+  que não é número finito vale 0.
 - **Limites:** corpo até 64 KiB (413); resposta cortada em 500 linhas, 1000 pontos e 50 `stats`, com
   `warn`. Não há prazo próprio: trabalho longo é de quem contribui.
 - **Navegação:** grupo **Extensões** na sidebar. No celular as abas ficam em **Mais**, e a aba

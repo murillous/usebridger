@@ -58,6 +58,7 @@ const entries: Record<string, { file: string; load: () => Promise<object> } & En
       'ignoreSelf',
       'italic',
       'link',
+      'maskedJsonSchema',
       'mention',
       'plainText',
       'rateLimit',

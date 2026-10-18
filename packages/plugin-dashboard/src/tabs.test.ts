@@ -1,4 +1,4 @@
-import { createHttp, definePlugin } from '@usebridger/core';
+import { createHttp, definePlugin, secret } from '@usebridger/core';
 import { z } from '@usebridger/core/zod';
 import { createTestBot } from '@usebridger/testing';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -226,5 +226,129 @@ describe('abas de plugins (dashboard.tabs)', () => {
     expect((await get(`${W}/resumo`)).status).toBe(200);
     expect((await post('/api/plugins/reminders/reload')).status).toBe(200);
     expect((await get(`${W}/resumo`)).status).toBe(200);
+  });
+});
+
+// Contribuições mal formadas ou grandes: o dashboard se protege sem derrubar o resto.
+const many = <T>(n: number, make: (i: number) => T): T[] =>
+  Array.from({ length: n }, (_, i) => make(i));
+
+const rude = definePlugin({
+  name: 'rude',
+  version: '1.0.0',
+  engine: '<1.0.0',
+  after: ['dashboard'],
+  setup(ctx) {
+    ctx.services.contribute('dashboard.tabs', {
+      id: 'rude',
+      title: 'Rude',
+      order: Number.NaN,
+      widgets: [
+        {
+          kind: 'form',
+          id: 'chave',
+          schema: z.object({ token: secret(z.string()).default('valor-secreto-real') }),
+          submit: async () => undefined,
+        },
+        {
+          // Schema cujo JSON Schema lança: o widget sai do manifesto, o resto fica.
+          kind: 'form',
+          id: 'quebra',
+          schema: {
+            toJSONSchema: () => {
+              throw new Error('sem schema');
+            },
+          } as never,
+          submit: async () => undefined,
+        },
+        {
+          kind: 'stats',
+          id: 'stats',
+          load: async () =>
+            [{ label: 'ok', value: 1 }, { label: 'obj', value: { a: 1 } }, { value: 2 }] as never,
+        },
+        {
+          kind: 'table',
+          id: 'linhas',
+          columns: [{ key: 'a', label: 'A' }],
+          load: async () => ({ rows: [{ id: 'x', a: 1 }, { a: 2 }] as never }),
+        },
+        {
+          kind: 'stats',
+          id: 'muitos',
+          load: async () => many(60, (i) => ({ label: `s${i}`, value: i })),
+        },
+        {
+          kind: 'table',
+          id: 'grande',
+          columns: [{ key: 'a', label: 'A' }],
+          load: async () => ({ rows: many(600, (i) => ({ id: String(i), a: i })) }),
+        },
+        {
+          kind: 'series',
+          id: 'pontos',
+          load: async ({ days }) => many(1100, (i) => ({ label: `${days}`, value: i })),
+        },
+      ],
+    });
+  },
+});
+
+describe('abas de plugins: contrato defensivo', () => {
+  async function startRude() {
+    const http = createHttp({ port: 0, hostname: '127.0.0.1' });
+    const bot = await createTestBot({
+      plugins: [dashboard, rude],
+      http,
+      logLevel: 'info',
+      pluginConfig: { dashboard: { token: TOKEN } },
+    });
+    bots.push(bot);
+    const url = `http://127.0.0.1:${http.port}/plugins/dashboard`;
+    const login = await fetch(`${url}/api/login`, {
+      method: 'POST',
+      body: JSON.stringify({ token: TOKEN }),
+    });
+    const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    const get = (path: string) => fetch(`${url}${path}`, { headers: { cookie } });
+    const warns = async () =>
+      ((await (await get('/api/logs?level=warn')).json()) as { message: string }[]).map(
+        (l) => l.message,
+      );
+    return { get, warns };
+  }
+  const R = '/api/tabs/rude/rude';
+
+  it('manifesto: default secret mascarado, widget sem schema sai, order inválido vira 0', async () => {
+    const { get, warns } = await startRude();
+    const raw = await (await get('/api/tabs')).text();
+    expect(raw).not.toContain('valor-secreto-real');
+    const [tab] = JSON.parse(raw) as { order: number; widgets: { id: string }[] }[];
+    expect(tab?.order).toBe(0);
+    expect(tab?.widgets.map((w) => w.id)).not.toContain('quebra');
+    expect(tab?.widgets.map((w) => w.id)).toContain('chave');
+    expect((await warns()).some((m) => m.includes('widget "quebra" ignorado'))).toBe(true);
+  });
+
+  it('descarta itens fora do contrato do load, com warn', async () => {
+    const { get, warns } = await startRude();
+    expect(await (await get(`${R}/stats`)).json()).toEqual([{ label: 'ok', value: 1 }]);
+    expect(await (await get(`${R}/linhas`)).json()).toEqual({ rows: [{ id: 'x', a: 1 }] });
+    expect((await warns()).filter((m) => m.includes('fora do contrato'))).toHaveLength(2);
+  });
+
+  it('corta em 50 stats, 500 linhas e 1000 pontos, com warn; days fora da faixa é limitado', async () => {
+    const { get, warns } = await startRude();
+    expect(((await (await get(`${R}/muitos`)).json()) as unknown[]).length).toBe(50);
+    const table = (await (await get(`${R}/grande`)).json()) as { rows: unknown[] };
+    expect(table.rows.length).toBe(500);
+    expect(((await (await get(`${R}/pontos`)).json()) as unknown[]).length).toBe(1000);
+    expect((await warns()).filter((m) => m.includes('cortado em'))).toHaveLength(3);
+    const label = async (q: string) =>
+      ((await (await get(`${R}/pontos${q}`)).json()) as { label: string }[])[0]?.label;
+    expect(await label('?days=99999')).toBe('365');
+    expect(await label('?days=0')).toBe('30');
+    expect(await label('?days=-5')).toBe('30');
+    expect(await label('?days=2.5')).toBe('30');
   });
 });

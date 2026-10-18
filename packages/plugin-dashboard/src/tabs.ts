@@ -1,4 +1,9 @@
-import type { ExtensionPoint, HttpHandler, Logger } from '@usebridger/core';
+import {
+  type ExtensionPoint,
+  type HttpHandler,
+  type Logger,
+  maskedJsonSchema,
+} from '@usebridger/core';
 import type { z } from '@usebridger/core/zod';
 import { sameOrigin } from '#auth.ts';
 import { readLimited } from '#body.ts';
@@ -79,6 +84,14 @@ const MAX_POINTS = 1000;
 const MAX_STATS = 50;
 const DEFAULT_DAYS = 30;
 const MAX_DAYS = 365;
+
+const validStat = (s: unknown): boolean =>
+  isRecord(s) &&
+  typeof s['label'] === 'string' &&
+  (typeof s['value'] === 'string' || Number.isFinite(s['value']));
+const validPoint = (p: unknown): boolean =>
+  isRecord(p) && typeof p['label'] === 'string' && Number.isFinite(p['value']);
+const validRow = (r: unknown): boolean => isRecord(r) && typeof r['id'] === 'string';
 
 const text = (body: string, status: number): Response => new Response(body, { status });
 const gone = (): Response => text('aba não está mais disponível', 404);
@@ -189,7 +202,9 @@ export function registerTabRoutes(
         ids.add((w as { id: string }).id);
         return true;
       });
-      out.push({ plugin, tab: { ...tab, widgets } });
+      // `order` vem de plugin de terceiros: NaN ou texto quebraria a ordenação.
+      const order = typeof tab.order === 'number' && Number.isFinite(tab.order) ? tab.order : 0;
+      out.push({ plugin, tab: { ...tab, order, widgets } });
     }
     // sort estável: o empate fica pela ordem de carga.
     return out.sort((a, b) => (a.tab.order ?? 0) - (b.tab.order ?? 0));
@@ -212,7 +227,8 @@ export function registerTabRoutes(
         return {
           kind: w.kind,
           id: w.id,
-          schema: w.schema.toJSONSchema({ io: 'input', unrepresentable: 'any' }),
+          // Mascarado como na Config: o `default` de campo secret não sai no manifesto.
+          schema: maskedJsonSchema(w.schema),
         };
       case 'text':
         return { kind: w.kind, id: w.id, markdown: w.markdown };
@@ -235,11 +251,21 @@ export function registerTabRoutes(
             id: tab.id,
             title: tab.title,
             order: tab.order ?? 0,
-            widgets: tab.widgets.map(manifestWidget),
+            // Um widget que não vira manifesto (ex.: `toJSONSchema` lança) sai sozinho; o resto fica.
+            widgets: tab.widgets.flatMap((w) => {
+              try {
+                return [manifestWidget(w)];
+              } catch (error) {
+                warnOnce(
+                  `${plugin}/${tab.id}`,
+                  `widget "${w.id}" ignorado: ${String(error)}`.slice(0, 300),
+                );
+                return [];
+              }
+            }),
           })),
         );
       } catch (error) {
-        // Ex.: `toJSONSchema` de um schema que o Zod não representa.
         log.error('dashboard: falha ao montar o manifesto de abas', { error });
         return text('erro interno', 500);
       }
@@ -269,8 +295,20 @@ export function registerTabRoutes(
     return value !== null && Number.isInteger(n) && n >= 1 ? Math.min(n, max) : fallback;
   };
 
-  const cut = <T>(items: unknown, max: number, ctx: { key: string }): T[] => {
-    const list = Array.isArray(items) ? (items as T[]) : [];
+  // Item fora do contrato sai com `warn`: o app renderiza o que recebe, e objeto como texto o derrubaria.
+  const cut = <T>(
+    items: unknown,
+    max: number,
+    ctx: { key: string },
+    valid: (item: unknown) => boolean,
+  ): T[] => {
+    const all = Array.isArray(items) ? items : [];
+    const list = all.filter(valid) as T[];
+    if (list.length < all.length) {
+      log.warn(
+        `dashboard: widget "${ctx.key}" devolveu ${all.length - list.length} itens fora do contrato; descartados`,
+      );
+    }
     if (list.length <= max) return list;
     log.warn(`dashboard: widget "${ctx.key}" devolveu ${list.length} itens; cortado em ${max}`);
     return list.slice(0, max);
@@ -287,20 +325,21 @@ export function registerTabRoutes(
       try {
         switch (widget.kind) {
           case 'stats':
-            return Response.json(cut(await widget.load(), MAX_STATS, hit));
+            return Response.json(cut(await widget.load(), MAX_STATS, hit, validStat));
           case 'series':
             return Response.json(
               cut(
                 await widget.load({ days: num(query.get('days'), DEFAULT_DAYS, MAX_DAYS) }),
                 MAX_POINTS,
                 hit,
+                validPoint,
               ),
             );
           case 'table': {
             const cursor = query.get('cursor') ?? undefined;
             const page = await widget.load(cursor === undefined ? {} : { cursor });
             return Response.json({
-              rows: cut(page?.rows, MAX_ROWS, hit),
+              rows: cut(page?.rows, MAX_ROWS, hit, validRow),
               ...(typeof page?.cursor === 'string' ? { cursor: page.cursor } : {}),
             });
           }
