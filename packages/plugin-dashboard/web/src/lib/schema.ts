@@ -26,6 +26,8 @@ export interface Field {
   /** Tipo dos itens de `list` e dos valores de `record`. */
   item?: 'text' | 'number';
   default?: unknown;
+  /** Tipo Zod aproximado a partir do JSON Schema (`z.number().min(0)`), para a dica do campo. */
+  hint: string;
 }
 
 export interface Group {
@@ -89,6 +91,34 @@ function control(schema: Json): Pick<Field, 'control' | 'options' | 'item'> {
   }
 }
 
+const ZOD: Record<string, string> = {
+  string: 'z.string()',
+  number: 'z.number()',
+  integer: 'z.int()',
+  boolean: 'z.boolean()',
+  array: 'z.array()',
+  object: 'z.record()',
+};
+
+/** Só o que o JSON Schema deixa ver: tipo e limites. Não tenta reconstruir refinamentos. */
+export function hintOf(schema: Json): string {
+  if (Array.isArray(schema['enum']) || schema['const'] !== undefined) return 'z.enum';
+  let hint = ZOD[typeOf(schema) ?? ''] ?? 'z.json()';
+  const [min, max] =
+    typeOf(schema) === 'string' ? ['minLength', 'maxLength'] : ['minimum', 'maximum'];
+  // `z.int()` vira `±MAX_SAFE_INTEGER` no JSON Schema: limite que ninguém escreveu não é dica.
+  for (const [key, call] of [
+    [min, 'min'],
+    [max, 'max'],
+  ] as const) {
+    const bound = schema[key as string];
+    if (typeof bound === 'number' && Math.abs(bound) < Number.MAX_SAFE_INTEGER) {
+      hint += `.${call}(${bound})`;
+    }
+  }
+  return hint;
+}
+
 /** Gera os campos do formulário a partir do JSON Schema (objeto) da config do plugin. */
 export function buildFields(schema: Json | null, prefix = ''): Node[] {
   if (!schema) return [];
@@ -113,6 +143,7 @@ export function buildFields(schema: Json | null, prefix = ''): Node[] {
       required: required.includes(key),
       secret: prop['secret'] === true,
       default: prop['default'],
+      hint: hintOf(prop),
       ...control(prop),
     });
   }
@@ -253,4 +284,34 @@ export function rowsToRecord(rows: [string, string][], kind: 'text' | 'number'):
     .filter(([key]) => key.trim() !== '')
     .map(([key, value]) => [key, kind === 'number' ? parseNumber(value) : value] as const);
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+/** Espelha `toEnvSegment` do core (`apiKey` -> `API_KEY`): o web não importa o core. */
+const envSegment = (name: string): string =>
+  name
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1_$2')
+    .replace(/-/g, '_')
+    .toUpperCase();
+
+/** Variável de ambiente de um campo: `BRIDGER_<PLUGIN>__<CAMPO>[__<SUBCAMPO>]` (`envName` do core). */
+export const envName = (plugin: string, path: string): string =>
+  [`BRIDGER_${envSegment(plugin)}`, ...path.split('.').map(envSegment)].join('__');
+
+/** Plugins que recarregam junto com `name` no reload em cascata: dependentes diretos e indiretos. */
+export function dependentsOf(
+  rows: { name: string; dependsOn?: Record<string, string> }[],
+  name: string,
+): string[] {
+  const out = new Set<string>();
+  const queue = [name];
+  for (let cur = queue.shift(); cur !== undefined; cur = queue.shift()) {
+    for (const row of rows) {
+      if (row.dependsOn && cur in row.dependsOn && !out.has(row.name) && row.name !== name) {
+        out.add(row.name);
+        queue.push(row.name);
+      }
+    }
+  }
+  return [...out];
 }

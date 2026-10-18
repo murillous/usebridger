@@ -452,13 +452,64 @@ td {
   align-self: flex-start;
 }
 
+/* Dentro do card; o `.help` (aviso da cascata) fica à esquerda e os botões à direita. */
 .savebar {
-  position: sticky;
-  bottom: 0;
   display: flex;
+  align-items: center;
   gap: 12px;
-  padding: 12px 0;
-  background: var(--bg);
+  padding: 16px 0 0;
+  border-top: 1px solid var(--line);
+}
+.savebar .help {
+  flex: 1;
+  color: var(--muted);
+  font-size: 12px;
+}
+.cfg-nav button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cfg-nav .chip {
+  font-size: 11px;
+  padding: 1px 8px;
+}
+.field .help.mono {
+  font-family: var(--mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.cfg-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-bottom: 16px;
+}
+.cfg-head h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.cfg-head .muted {
+  font-size: 12px;
+}
+.field label .chip {
+  margin-left: 8px;
+  font-size: 11px;
+  padding: 1px 8px;
+  font-weight: 400;
+}
+/* Campos numéricos consecutivos lado a lado (ver `render` em Config.tsx). */
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+  align-items: start;
+}
+.pair .field .input {
+  max-width: none;
 }
 
 @media (max-width: 767px) {
@@ -523,10 +574,24 @@ td {
   .cfg-select {
     display: flex;
   }
+  .pair {
+    display: block;
+  }
+  /* Fixa acima da TabBar, dentro do card: só o botão primário cresce. */
   .savebar {
+    position: sticky;
     bottom: calc(56px + env(safe-area-inset-bottom));
+    flex-wrap: wrap;
+    margin: 0 -16px -16px;
     padding: 12px 16px;
-    margin: 0 -16px;
+    background: var(--raised);
+    border-radius: 0 0 14px 14px;
+  }
+  .savebar .help {
+    flex-basis: 100%;
+  }
+  .savebar .btn.primary {
+    flex: 1;
   }
 }
 .kpis {
