@@ -176,7 +176,7 @@ textarea {
   box-shadow: var(--e1), var(--top);
   font: 700 15px var(--display);
 }
-.side .foot {
+.side .side-foot {
   margin-top: auto;
   padding-top: 12px;
 }

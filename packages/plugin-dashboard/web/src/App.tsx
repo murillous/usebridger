@@ -253,7 +253,7 @@ export function App() {
             ))}
           </>
         )}
-        <div className="foot">
+        <div className="side-foot">
           {live.status?.versions && (
             <p className="mono muted versions">
               core {live.status.versions.core} · dashboard {live.status.versions.dashboard}
