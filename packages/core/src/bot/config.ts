@@ -162,7 +162,10 @@ export interface BotConfig {
 }
 
 /** Config de plugin em runtime, para o dashboard: overrides, visão mascarada e schema. */
-export type BotPluginConfigs = Pick<PluginConfigs, 'setOverrides' | 'describe' | 'jsonSchema'>;
+export type BotPluginConfigs = Pick<
+  PluginConfigs,
+  'setOverrides' | 'setSecret' | 'clearSecret' | 'secretsWritable' | 'describe' | 'jsonSchema'
+>;
 
 /**
  * Controle dos plugins que `ctx.admin` dá aos listados em `adminPlugins` (ADR 0111): delega às

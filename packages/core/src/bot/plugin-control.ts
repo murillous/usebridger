@@ -86,6 +86,11 @@ export function createPluginControl(deps: PluginControlDeps): PluginControl {
   const config: BotPluginConfigs = {
     setOverrides: (plugin, overrides) =>
       requireConfigs('setOverrides').setOverrides(plugin, overrides),
+    setSecret: (plugin, path, value) => requireConfigs('setSecret').setSecret(plugin, path, value),
+    clearSecret: (plugin, path) => requireConfigs('clearSecret').clearSecret(plugin, path),
+    get secretsWritable() {
+      return requireConfigs('secretsWritable').secretsWritable;
+    },
     describe: (plugin) => requireConfigs('describe').describe(plugin),
     jsonSchema: (plugin) => requireConfigs('jsonSchema').jsonSchema(plugin),
   };

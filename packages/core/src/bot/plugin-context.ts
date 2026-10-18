@@ -469,6 +469,23 @@ function liveAdmin(
             : admin.config.setOverrides(target, overrides),
         ),
       ),
+      setSecret: masked(
+        live('admin.config.setSecret', (target: string, path: string, value) =>
+          target === self
+            ? refuse('admin.config.setSecret')
+            : admin.config.setSecret(target, path, value),
+        ),
+      ),
+      clearSecret: masked(
+        live('admin.config.clearSecret', (target: string, path: string) =>
+          target === self
+            ? refuse('admin.config.clearSecret')
+            : admin.config.clearSecret(target, path),
+        ),
+      ),
+      get secretsWritable() {
+        return admin.config.secretsWritable;
+      },
       describe: masked((target: string) => admin.config.describe(target)),
       jsonSchema: (target: string) => redact(admin.config.jsonSchema(target)),
     },

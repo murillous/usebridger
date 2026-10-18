@@ -1,14 +1,16 @@
 /** De onde veio o valor de um campo, em ordem crescente de precedência. */
-export type ConfigSource = 'default' | 'override' | 'file' | 'env';
+export type ConfigSource = 'default' | 'override' | 'secret' | 'file' | 'env';
 
 export interface PluginConfigIssue {
   /** Caminho do campo (`quality`, `openai.apiKey`, `messages.needMedia`); vazio = o objeto todo. */
   readonly path: string;
   /**
    * `secret`: o override tentou definir um campo secreto (recusado antes de validar); `invalid`:
-   * qualquer outro problema. Serve a quem precisa distinguir sem ler a mensagem.
+   * qualquer outro problema. `shadowed`: `setSecret` num campo que o env ou o arquivo definem;
+   * `undecryptable`: envelope salvo que não decifra (ADR 0121). Serve a quem precisa distinguir
+   * sem ler a mensagem.
    */
-  readonly kind: 'secret' | 'invalid';
+  readonly kind: 'secret' | 'shadowed' | 'undecryptable' | 'invalid';
   /** O que está errado. Nunca contém o valor recebido (pode ser secreto). */
   readonly message: string;
   /** Camada que forneceu o valor rejeitado; `default` = nenhuma (valor ausente). */
@@ -27,6 +29,8 @@ const describeSource = (plugin: string, issue: PluginConfigIssue): string => {
     }
     case 'override':
       return 'override salvo no storage';
+    case 'secret':
+      return 'segredo cifrado no storage';
     case 'default':
       return 'ausente, sem default no schema';
   }

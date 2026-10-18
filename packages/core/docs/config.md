@@ -44,13 +44,14 @@ recebe `ctx.config === undefined`, e qualquer campo dado a ele é erro.
 
 ## Camadas e precedência
 
-**env > arquivo > overrides (storage) > default do schema**, campo a campo; objetos aninhados se
+**env > arquivo > secret (storage, cifrado) > overrides (storage) > default do schema**, campo a campo; objetos aninhados se
 mesclam entre camadas, arrays e valores simples substituem.
 
 | Camada | De onde vem |
 | --- | --- |
 | env | `BRIDGER_<PLUGIN>__<CAMPO>[__<SUBCAMPO>…]` |
 | arquivo | `file[plugin]` — o `pluginConfig` que o app passa na config do bot |
+| secret | `kernelStorage(storage, 'secrets').kv`, cifrado com `BRIDGER_SECRET_KEY` (só campos `secret()`; [abaixo](#segredos-cifrados-no-storage)) |
 | overrides | `kernelStorage(storage, 'config').kv`, chave = nome do plugin (dashboard); nunca segredos |
 | default | `.default(...)` do schema |
 
@@ -109,8 +110,11 @@ const configs = createPluginConfigs({
 | --- | --- |
 | `resolve(name)` | `{ config, messages }` atuais e validados; registra os segredos no `SecretSet`. Lança `PluginConfigError` |
 | `setOverrides(name, overrides)` | Recusa campo `secret`; valida a config resultante; se válida, salva (substitui; `{}` remove) e chama `reload`. Inválida rejeita sem salvar. Campo sombreado gera `warn` (abaixo) |
+| `setSecret(name, path, value)` | Salva o segredo `path` (pontilhado) cifrado no storage e chama `reload`. Rejeita sem chave mestra, fora de campo `secret()`, com `kind: 'shadowed'` se env/arquivo definem o campo, ou com config inválida |
+| `clearSecret(name, path)` | Remove o segredo salvo, valida e chama `reload`. Funciona sem chave mestra (limpa envelope ilegível) |
+| `secretsWritable` | `true` se há `BRIDGER_SECRET_KEY` |
 | `describe(name)` | `{ config, messages, sources }`: config atual com segredos trocados por `'********'` e a fonte de cada campo |
-| `jsonSchema(name)` | JSON Schema (entrada) para gerar formulário; segredos com `x-bridger-override: false`; `undefined` sem `config` |
+| `jsonSchema(name)` | JSON Schema (entrada) para gerar formulário; segredos com `x-bridger-override: false` (e `x-bridger-set-secret: true` se `secretsWritable`); `undefined` sem `config` |
 
 `pluginConfig` citando plugin que não existe gera `warn` (provável erro de digitação).
 
@@ -122,7 +126,7 @@ Para o dashboard não mostrar "salvo" em silêncio:
 
 - `setOverrides` loga um `warn` com plugin e os campos sombreados (`fields: [{ path, source }]`),
   sem os valores;
-- `describe` devolve `sources`, o mapa caminho → fonte (`'default' | 'override' | 'file' | 'env'`)
+- `describe` devolve `sources`, o mapa caminho → fonte (`'default' | 'override' | 'secret' | 'file' | 'env'`)
   de cada folha da config e de cada mensagem:
 
 ```ts
@@ -148,7 +152,7 @@ const createContext: PluginContextFactory = async (plugin) => {
 ## Erros
 
 `PluginConfigError` lista **todos** os problemas, cada um com `path`, `kind`, `message` e `source`
-(`env` — com `env` = nome da variável —, `file`, `override` ou `default` = valor ausente sem
+(`env` — com `env` = nome da variável —, `file`, `secret`, `override` ou `default` = valor ausente sem
 default):
 
 ```
@@ -160,8 +164,9 @@ config inválida do plugin "sticker":
 A mensagem nunca traz o valor recebido (pode ser secreto).
 
 `kind` é `'secret'` quando o `setOverrides` recusou um campo `secret()` (o storage guarda o override
-em texto puro) e `'invalid'` em qualquer outro problema, para o consumidor distinguir sem ler o
-texto.
+em texto puro), `'shadowed'` quando o `setSecret` esbarrou em env ou arquivo que definem o campo,
+`'undecryptable'` quando um segredo salvo não decifra (fonte `secret`, com plugin e caminho, sem o
+valor) e `'invalid'` em qualquer outro problema, para o consumidor distinguir sem ler o texto.
 
 - **No boot**: a fábrica que lança **derruba o boot** com `PluginBootError` (`setup-failed`, fase
   `context`), com o plugin e o motivo ([ADR 0102](../../../docs/adr/0102-plugin-falho-derruba-o-boot.md)).
@@ -191,8 +196,8 @@ censura, sem máscara e aceito por override. Para uma lista secreta, marque o ca
 
 ### Segredo não entra por override
 
-O override fica em texto puro no storage (banco, backups), então segredo vem **só de env ou do
-arquivo** ([ADR 0032](../../../docs/adr/0032-camadas-da-config-de-plugin.md)):
+O override fica em texto puro no storage (banco, backups), então segredo vem **de env, do
+arquivo ou do `setSecret`** ([ADR 0032](../../../docs/adr/0032-camadas-da-config-de-plugin.md)):
 
 ```ts
 await configs.setOverrides('ai', { model: 'pro', openai: { token: 'x' } });
@@ -208,7 +213,54 @@ segredo (gravado antes desta regra ou escrito direto no banco) não derruba o pl
 uma vez por campo; o resto do override vale. Para limpar, grave o override de novo sem o campo.
 `describe` mascara o valor; `sources` diz só de onde ele veio (`env` ou `file`).
 
-Cifrar segredos no storage, para o dashboard editá-los, fica para o M5 com ADR próprio.
+### Segredos cifrados no storage
+
+Para o dashboard editar segredos, o core guarda-os **cifrados** em
+`kernelStorage(storage, 'secrets').kv` ([ADR 0121](../../../docs/adr/0121-segredos-cifrados-editaveis-pelo-dashboard.md)):
+chave = plugin, valor = `{ [caminho]: envelope }`. O envelope é AES-256-GCM
+(`{ v: 1, kid, iv, tag, data }` em base64), com `<plugin>:<caminho>` como AAD, então um envelope
+copiado para outro campo não decifra. A precedência é `env > arquivo > secret > override > default`:
+se env ou arquivo definem o campo, `setSecret` rejeita com `kind: 'shadowed'`. O valor decifrado
+entra no `SecretSet` (o logger o censura), `describe` o mascara e `sources` mostra `'secret'`.
+Cada escrita ou remoção registra `info` com plugin, campo e fonte, nunca o valor.
+
+**Chave mestra.** `BRIDGER_SECRET_KEY` traz 32 bytes em base64. Gere uma:
+
+```sh
+openssl rand -base64 32
+```
+
+Formato inválido falha o boot. Sem a variável, `secretsWritable` é `false` e `setSecret` rejeita;
+o resto segue como antes. Segredo salvo que não decifra (chave trocada ou perdida, dado adulterado)
+vira `PluginConfigError` `undecryptable`, com plugin e caminho. **No boot isso aborta o `start()`
+com `PluginBootError`**, como qualquer config inválida ([ADR 0102](../../../docs/adr/0102-plugin-falho-derruba-o-boot.md));
+num reload, o plugin fica `setup-failed` e o bot segue. Recuperação:
+
+1. Restaure a chave certa em `BRIDGER_SECRET_KEY` (e a antiga em `BRIDGER_SECRET_KEY_PREVIOUS`, se
+   foi uma rotação), ou
+2. desligue o plugin (`disabledPlugins`), suba o bot e chame `clearSecret(plugin, caminho)` em cada
+   campo ilegível (um ilegível não bloqueia a remoção de outro). Com o plugin desligado,
+   `setSecret` e `clearSecret` gravam e **pulam o reload** (devolvem `undefined`, sem erro);
+   depois chame `plugins.enable`, e o plugin sobe com o valor novo. Salve o segredo de novo com
+   `setSecret`, se for o caso.
+
+> **Guarde a chave fora do banco e do backup dele.** Quem tem o banco e a chave tem os segredos, e
+> perder a chave perde os segredos salvos pelo dashboard (env e arquivo não são afetados). A chave
+> protege contra vazamento do banco, não contra quem lê o env do processo.
+
+**Rotação**, passo a passo:
+
+1. Gere a nova chave (`openssl rand -base64 32`).
+2. Suba o bot com `BRIDGER_SECRET_KEY=<nova>` e `BRIDGER_SECRET_KEY_PREVIOUS=<antiga>`.
+3. No boot, o core decifra cada envelope da antiga, cifra com a nova e regrava; o log `info`
+   informa quantos migrou. Envelope com `kid` que não é de nenhuma das duas fica como está e segue
+   o caminho de `undecryptable`.
+4. Com o log confirmando, remova `BRIDGER_SECRET_KEY_PREVIOUS`. Só uma chave anterior por vez:
+   rotações seguidas pedem um boot entre elas.
+
+Só migram os envelopes de plugins presentes no bot daquele boot. Os de plugin fora dele (removido
+ou não carregado) continuam com a chave antiga e ficam ilegíveis quando o `PREVIOUS` sai; quando o
+plugin voltar, chame `clearSecret` e salve de novo. Chaves atual e anterior iguais falham o boot.
 
 ## `messages` sobrescrevível
 
