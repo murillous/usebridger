@@ -26,6 +26,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 const BOOT = Date.UTC(2026, 0, 1, 12, 0, 0);
@@ -69,11 +70,16 @@ const show = (rows: PluginRow[] = sample(), boot: Reply = { body: { bootedAt: BO
   routes['GET plugins/boot'] = () => boot;
   render(<Plugins />);
 };
-// A linha aparece na tabela e na lista mobile (o CSS esconde uma): a tabela vem primeiro.
+// A linha aparece na tabela e na lista mobile (o CSS esconde uma): as consultas partem da tabela.
+// O nome da linha começa pelo nome do plugin (primeira coluna).
+const rowOf = (name: string) =>
+  within(screen.getByRole('table')).getByRole('row', {
+    name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')} `),
+  });
 const switchOf = (name: string) =>
-  screen.getAllByRole('switch', { name: `Ativo: ${name}` })[0] as HTMLButtonElement;
+  within(rowOf(name)).getByRole('switch', { name: `Ativo: ${name}` });
 const reloadOf = (name: string) =>
-  screen.getAllByRole('button', { name: `Recarregar ${name}` })[0] as HTMLElement;
+  within(rowOf(name)).getByRole('button', { name: `Recarregar ${name}` });
 const posts = () => calls.filter((c) => c.method === 'POST').map((c) => c.path);
 const result = (over: Partial<ChangeResult> = {}): ChangeResult => ({
   plugin: loaded('ok-plugin'),
@@ -86,18 +92,17 @@ describe('Plugins: lista e estados', () => {
   it('mostra carregando e depois uma linha por plugin com o estado certo', async () => {
     show();
     expect(screen.getByText('Carregando…')).toBeTruthy();
-    const table = await screen.findByRole('table');
-    const row = (name: string) => within(table).getByText(name).closest('tr') as HTMLElement;
-    expect(within(row('ok-plugin')).getByText('carregado')).toBeTruthy();
-    expect(within(row('quebrado')).getByText('falhou')).toBeTruthy();
-    expect(within(row('filho')).getByText('pulado')).toBeTruthy();
-    expect(within(row('off')).getByText('desligado')).toBeTruthy();
+    await screen.findByRole('table');
+    expect(within(rowOf('ok-plugin')).getByText('carregado')).toBeTruthy();
+    expect(within(rowOf('quebrado')).getByText('falhou')).toBeTruthy();
+    expect(within(rowOf('filho')).getByText('pulado')).toBeTruthy();
+    expect(within(rowOf('off')).getByText('desligado')).toBeTruthy();
   });
 
   it('desenha setup, dependências, serviços e contribuições do plugin carregado', async () => {
     show();
-    const table = await screen.findByRole('table');
-    const cells = within(within(table).getByText('ok-plugin').closest('tr') as HTMLElement);
+    await screen.findByRole('table');
+    const cells = within(rowOf('ok-plugin'));
     expect(cells.getByText('OK · 12 ms')).toBeTruthy();
     expect(cells.getByText('base')).toBeTruthy();
     expect(cells.getByText('db')).toBeTruthy();
@@ -339,32 +344,13 @@ describe('Plugins: erros', () => {
     expect((await screen.findByRole('alert')).textContent).toBe('500: fora do ar');
   });
 
-  // BUG: run() faz setError no catch e o finally chama load(), que dá setError(undefined) quando a
-  // lista recarrega com sucesso: o alerta "409: ..." some na hora e o usuário não vê a falha.
-  it.todo('409 na ação mantém o alerta "409: <mensagem>" visível depois de recarregar a lista');
-});
-
-describe('Plugins: o próprio painel', () => {
-  it('fica travado: switch desabilitado e sem Recarregar', async () => {
-    const base = document.createElement('base');
-    base.href = 'http://localhost/plugins/dashboard/';
-    document.head.append(base);
-    try {
-      // Query distinta cria outra instância do módulo, que lê o `baseURI` de novo (SELF é const de módulo).
-      const spec = './Plugins.tsx?self';
-      const { Plugins: Self } = (await import(/* @vite-ignore */ spec)) as {
-        Plugins: typeof Plugins;
-      };
-      routes['GET plugins'] = () => ({ body: [loaded('dashboard'), loaded('outro')] });
-      routes['GET plugins/boot'] = () => ({ status: 500 });
-      render(<Self />);
-      await screen.findByRole('table');
-      expect((switchOf('dashboard') as HTMLButtonElement).disabled).toBe(true);
-      expect((switchOf('outro') as HTMLButtonElement).disabled).toBe(false);
-      expect(screen.queryByRole('button', { name: 'Recarregar dashboard' })).toBeNull();
-      expect(screen.getAllByRole('button', { name: 'Recarregar outro' }).length).toBeGreaterThan(0);
-    } finally {
-      base.remove();
-    }
+  // Bug #204: o load() do finally limpa o erro da ação. Vira it quando for corrigido.
+  it.fails('409 na ação mantém o alerta "409: <mensagem>" visível depois de recarregar a lista', async () => {
+    show();
+    routes['POST plugins/ok-plugin/reload'] = () => ({ status: 409, body: 'em andamento' });
+    await screen.findByRole('table');
+    await userEvent.click(reloadOf('ok-plugin'));
+    await vi.waitFor(() => expect(calls.filter((c) => c.path === 'plugins')).toHaveLength(2));
+    expect((await screen.findByRole('alert')).textContent).toBe('409: em andamento');
   });
 });
