@@ -2,7 +2,7 @@
 
 **Status:** Aceito (2026-10-17) · Complementa **D112**
 ([ADR 0112](0112-tabela-de-plugins-com-dependencias-servicos-e-contribuicoes.md)) · Usa **D111**
-([ADR 0111](0111-acesso-admin-para-plugins.md)) e **D99** ([ADR 0099](0099-dependencias-opcionais-e-servicos-por-comando.md))
+([ADR 0111](0111-acesso-admin-para-plugins.md)) e **D99** ([ADR 0099](0099-comando-que-exige-servico.md))
 
 ## Contexto
 
