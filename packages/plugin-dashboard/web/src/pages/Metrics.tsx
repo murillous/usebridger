@@ -17,7 +17,10 @@ import { useMetrics } from './useMetrics.ts';
 
 const PERIODS = [7, 30] as const;
 
-/** Barras por dia. Dia e valor saem no `aria-label`, no `<title>` de cada barra (dica ao passar o mouse) e no eixo em texto: a cor não carrega o dado. */
+/**
+ * Barras por dia. Dia e valor saem no `aria-label`, no `<title>` de cada barra (dica ao passar o
+ * mouse) e no eixo em texto: a cor não carrega o dado.
+ */
 function BarChart({ title, points }: { title: string; points: { day: string; value: number }[] }) {
   const max = Math.max(1, ...points.map((p) => p.value));
   const W = 100;
