@@ -68,7 +68,6 @@ export function createPluginControl(deps: PluginControlDeps): PluginControl {
       reload: (name: string) => change('reload', name),
       disable: (name: string) => change('disable', name),
       enable: (name: string) => change('enable', name),
-      setupDurations: (): Record<string, number> => deps.host()?.setupDurations() ?? {},
     }),
     { bootedAt: { get: () => deps.host()?.bootedAt, enumerable: true } },
   ) as BotPlugins;

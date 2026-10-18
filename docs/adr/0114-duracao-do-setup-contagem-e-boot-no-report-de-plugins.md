@@ -14,14 +14,12 @@ X e N dependentes" da Config contava a menos.
 ## Decisão
 
 - `PluginReportEntry` ganha `optionalDependsOn` (manifesto, só quando há) e, nas linhas
-  `loaded`, `contributionCounts` (ponto → nº de contribuições do plugin), junto de `contributions`.
-- A duração do contexto + `setup` e o horário do boot **não** entram na linha: a linha do plugin
-  sem nada a dizer é comparada por igualdade em testes e por quem consome a tabela, e um número que
-  varia a cada execução a quebraria. Vão em `bot.plugins` (e, igual, em `ctx.admin.plugins`):
-  `setupDurations()` (nome → ms, só de plugin carregado; a do boot ou a do último reload) e
-  `bootedAt` (epoch ms do fim do boot dos plugins; `undefined` antes do `start()`; reload não o
-  muda). O host mede com `performance.now()`.
-- O dashboard junta `setupMs` à linha de `GET /api/plugins`. `GET /api/plugins/boot` fica: a lista
+  `loaded`, `setupMs` (duração do contexto + `setup` em ms, a do boot ou a do último reload;
+  medida com `performance.now()`) e `contributionCounts` (ponto → nº de contribuições do plugin),
+  junto de `contributions`. `setupMs` é opcional no tipo: linhas montadas à mão (testes) não o têm.
+- `bot.plugins.bootedAt` (e, igual, `ctx.admin.plugins.bootedAt`) é o epoch ms do fim do boot dos
+  plugins; `undefined` antes do `start()`; reload não o muda.
+- O dashboard lê `setupMs` direto da linha. `GET /api/plugins/boot` fica: a lista
   é um array puro, sem lugar para o horário; a rota agora só repassa o valor do core, em vez do
   horário do `setup` do dashboard (que reiniciava no reload em cascata).
 - `dependentsOf` do web segue `dependsOn` e `optionalDependsOn`, como o core.

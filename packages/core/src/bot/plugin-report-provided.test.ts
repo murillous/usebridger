@@ -56,7 +56,13 @@ describe('PluginReportEntry: dependsOn, services e contributions', () => {
       dependsOn: { base: '^1.0.0' },
       contributions: ['relatorio.etapas'],
     });
-    expect(Object.keys(rows['quieto'] ?? {})).toEqual(['name', 'version', 'origin', 'status']);
+    expect(Object.keys(rows['quieto'] ?? {})).toEqual([
+      'name',
+      'version',
+      'origin',
+      'status',
+      'setupMs',
+    ]);
 
     await b.plugins.disable('base');
     const base = b.plugins().find((row) => row.name === 'base');

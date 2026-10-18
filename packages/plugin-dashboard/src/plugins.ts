@@ -74,16 +74,7 @@ export function registerPluginRoutes(
   http.route(
     'GET',
     '/api/plugins',
-    guarded(() => {
-      if (!plugins) return unavailable();
-      const durations = plugins.setupDurations();
-      return Response.json(
-        plugins().map((entry) => {
-          const setupMs = durations[entry.name];
-          return { ...serializeEntry(entry), ...(setupMs !== undefined && { setupMs }) };
-        }),
-      );
-    }),
+    guarded(() => (plugins ? Response.json(plugins().map(serializeEntry)) : unavailable())),
   );
 
   for (const action of ACTIONS) {

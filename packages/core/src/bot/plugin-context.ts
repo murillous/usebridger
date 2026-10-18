@@ -417,7 +417,6 @@ function liveAdmin(
       }
     };
   const plugins = Object.assign(() => redact(admin.plugins()), {
-    setupDurations: () => admin.plugins.setupDurations(),
     reload: masked(
       live('admin.plugins.reload', (target: string) =>
         target === self ? refuse('admin.plugins.reload') : admin.plugins.reload(target),

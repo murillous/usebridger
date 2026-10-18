@@ -61,16 +61,16 @@ describe('report de plugins: duração, contagem e boot', () => {
     });
     expect(rows['rapido']).not.toHaveProperty('optionalDependsOn');
     expect(rows['rapido']).not.toHaveProperty('contributionCounts');
-    const durations = b.plugins.setupDurations();
-    expect(durations['lento']).toBeGreaterThanOrEqual(25);
-    expect(durations['rapido']).toBeLessThan(25);
+    expect(rows['lento']).toMatchObject({ setupMs: expect.any(Number) });
+    expect((rows['lento'] as { setupMs: number }).setupMs).toBeGreaterThanOrEqual(25);
+    expect((rows['rapido'] as { setupMs: number }).setupMs).toBeLessThan(25);
   });
 
   it('plugin desligado não tem duração', async () => {
     const b = make();
     await b.start();
     await b.plugins.disable('rapido');
-    expect(b.plugins.setupDurations()).not.toHaveProperty('rapido');
+    expect(b.plugins().find((row) => row.name === 'rapido')).not.toHaveProperty('setupMs');
   });
 
   it('horário do boot: undefined antes do start, fixo depois, e igual por ctx.admin', async () => {
@@ -85,6 +85,8 @@ describe('report de plugins: duração, contagem e boot', () => {
     await b.plugins.reload('rapido');
     expect(b.plugins.bootedAt).toBe(bootedAt);
     expect(admin.current?.plugins.bootedAt).toBe(bootedAt);
-    expect(admin.current?.plugins.setupDurations()['lento']).toBeGreaterThanOrEqual(25);
+    expect(admin.current?.plugins().find((row) => row.name === 'lento')).toMatchObject({
+      setupMs: expect.any(Number),
+    });
   });
 });

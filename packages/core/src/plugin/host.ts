@@ -132,11 +132,6 @@ export interface PluginHost {
   enable(name: string): Promise<PluginChangeResult>;
   /** Tabela atual, na ordem de carga (reflete reloads). */
   report(): PluginReportEntry[];
-  /**
-   * Duração em ms do contexto + `setup` de cada plugin carregado (a do boot, ou a do último
-   * reload). Fora da linha da tabela para não mudar `PluginReportEntry` (ADR 0114).
-   */
-  setupDurations(): Record<string, number>;
 }
 
 /** Dois plugins com o mesmo `name` (ADR 0007). Erro no boot. */
@@ -307,11 +302,13 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
 
   /** Linha com o que o plugin provê agora: um `provide` depois do `setup` também aparece. */
   function current(slot: Slot): PluginReportEntry {
-    const { report, handle } = slot;
-    if (report.status !== 'loaded' || !handle?.provided) return report;
+    const { report, handle, setupMs } = slot;
+    if (report.status !== 'loaded') return report;
+    const withTime = setupMs === undefined ? report : { ...report, setupMs };
+    if (!handle?.provided) return withTime;
     const { services, contributions, contributionCounts } = handle.provided();
     return {
-      ...report,
+      ...withTime,
       ...(services.length > 0 && { services }),
       ...(contributions.length > 0 && { contributions, contributionCounts }),
     };
@@ -647,15 +644,6 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
 
     report(): PluginReportEntry[] {
       return slots.map(current);
-    },
-
-    setupDurations(): Record<string, number> {
-      const out: Record<string, number> = {};
-      for (const { entry, report, setupMs } of slots) {
-        if (report.status === 'loaded' && setupMs !== undefined)
-          out[entry.definition.name] = setupMs;
-      }
-      return out;
     },
   };
 }
