@@ -3,6 +3,7 @@ import { ApiError, api } from '#web/lib/api.ts';
 import {
   contributes,
   countFilter,
+  dependsText,
   list,
   type PluginFilter,
   setupText,
@@ -314,7 +315,7 @@ export function Plugins() {
                     </td>
                     <td>{chip(row)}</td>
                     <td className="mono">{setupText(row)}</td>
-                    <td className="mono">{list(row.dependsOn && Object.keys(row.dependsOn))}</td>
+                    <td className="mono">{dependsText(row)}</td>
                     <td className="mono">{list(row.services)}</td>
                     <td className="mono">{contributes(row)}</td>
                     <td>

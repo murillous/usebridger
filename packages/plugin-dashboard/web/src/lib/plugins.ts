@@ -51,6 +51,13 @@ export function summary(rows: PluginRow[]): string {
 export const list = (items: string[] | undefined): string =>
   items?.length ? items.join(', ') : '—';
 
+/** "Depende de": obrigatórias e depois opcionais, estas com sufixo `?`; `—` se não há nenhuma. */
+export const dependsText = (row: PluginRow): string =>
+  list([
+    ...Object.keys(row.dependsOn ?? {}),
+    ...Object.keys(row.optionalDependsOn ?? {}).map((n) => `${n}?`),
+  ]);
+
 /** Resultado do `setup`: falhou, carregou com comando de fora, carregou inteiro; `—` se nem rodou. */
 export function setupText(row: PluginRow): string {
   if (row.status === 'loaded') {

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { countFilter, skippedDependents, stateOf, summary, visible } from './plugins.ts';
+import {
+  countFilter,
+  dependsText,
+  skippedDependents,
+  stateOf,
+  summary,
+  visible,
+} from './plugins.ts';
 import type { PluginRow } from './types.ts';
 
 const row = (name: string, extra: Partial<PluginRow> = {}): PluginRow => ({
@@ -35,5 +42,15 @@ describe('tela de plugins', () => {
   it('acha os dependentes pulados e resume o boot', () => {
     expect(skippedDependents(rows, 'social')).toEqual(['digest']);
     expect(summary(rows)).toBe('1 carregado, 1 falhou, 1 pulado');
+  });
+});
+
+describe('dependsText', () => {
+  it('lista obrigatórias e depois opcionais com "?"', () => {
+    expect(
+      dependsText(row('x', { dependsOn: { a: '*' }, optionalDependsOn: { metrics: '*' } })),
+    ).toBe('a, metrics?');
+    expect(dependsText(row('x', { optionalDependsOn: { metrics: '*' } }))).toBe('metrics?');
+    expect(dependsText(row('x'))).toBe('—');
   });
 });
