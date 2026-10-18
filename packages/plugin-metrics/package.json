@@ -1,0 +1,40 @@
+{
+  "name": "@usebridger/plugin-metrics",
+  "version": "0.0.0",
+  "description": "Plugin oficial do Bridger: serviço de métricas (contadores e histogramas) agregado em memória e persistido por dia.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/murillous/usebridger.git",
+    "directory": "packages/plugin-metrics"
+  },
+  "homepage": "https://github.com/murillous/usebridger/tree/develop/packages/plugin-metrics/docs#readme",
+  "bugs": "https://github.com/murillous/usebridger/issues",
+  "type": "module",
+  "imports": {
+    "#*": "./src/*"
+  },
+  "exports": {
+    ".": {
+      "@usebridger/source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "files": [
+    "dist",
+    "docs"
+  ],
+  "scripts": {
+    "build": "tsdown"
+  },
+  "dependencies": {
+    "@usebridger/core": "workspace:^"
+  },
+  "devDependencies": {
+    "@usebridger/testing": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -18,6 +18,8 @@
     { "path": "packages/transport-web" },
     { "path": "packages/storage-sqlite" },
     { "path": "packages/storage-postgres" },
+    { "path": "packages/plugin-metrics" },
+    { "path": "packages/plugin-dashboard" },
     { "path": "packages/testing" },
     { "path": "packages/create-plugin" },
     { "path": "bench" },

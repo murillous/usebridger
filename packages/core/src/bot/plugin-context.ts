@@ -37,8 +37,11 @@ import type { BotEventName, EventSubscriber, PluginErrorEvent } from '#events/ty
 import type { Groups } from '#groups/groups.ts';
 import type { SessionHttp } from '#http/server.ts';
 import type { HttpRoutes } from '#http/types.ts';
+import { createRedactor } from '#logger/redact.ts';
+import type { SecretSource } from '#logger/secrets.ts';
 import type { Logger } from '#logger/types.ts';
 import type { Contact, Message } from '#message/types.ts';
+import type { Observers } from '#observers/observers.ts';
 import type { Outbound } from '#outbound/types.ts';
 import { type PluginContextFactory, PluginHostStateError } from '#plugin/host.ts';
 import { formatMessage } from '#plugin/messages.ts';
@@ -61,8 +64,9 @@ import type {
 import type { TenantScope } from '#tenant/scope.ts';
 import { isFormatted } from '#text/format.ts';
 import { type Capability, missingCapabilities } from '#transport/capabilities.ts';
-import type { Unsubscribe } from '#transport/types.ts';
+import type { ConnectionStatus, Unsubscribe } from '#transport/types.ts';
 import type { UnsafeAccess } from '#unsafe/access.ts';
+import type { BotStats, PluginAdmin } from './config.ts';
 import {
   type CommandViews,
   commandViewFactory,
@@ -103,7 +107,20 @@ export interface PluginContextDeps {
     readonly capabilities: ReadonlySet<Capability>;
     readonly self: Contact | null;
   };
+  /** Nome da sessão do bot. */
+  readonly session: string;
+  /** Último status de conexão visto pelo core (ADR 0110). */
+  readonly connectionStatus: () => ConnectionStatus | undefined;
+  /** Contadores das filas deste bot, os mesmos de `bot.stats()` (ADR 0106). */
+  readonly stats: () => BotStats;
+  /** Observadores do bot; os do plugin saem no `dispose` (ADR 0106). */
+  readonly observers: Observers;
   readonly unsafe: UnsafeAccess;
+  /** Plugins que recebem `ctx.admin` (ADR 0111) e o controle que ele entrega. */
+  readonly adminPlugins: ReadonlySet<string>;
+  readonly admin: PluginAdmin;
+  /** Segredos do bot, para mascarar o que sai pelo `ctx.admin` (ADR 0111). */
+  readonly secrets: SecretSource;
   /** Prazo do `run` e do `onReject` de cada comando, em ms (ADR 0005). */
   readonly commandTimeoutMs: number;
   /** Destino da rejeição de um `run` que chegou depois do prazo (já reportado como timeout). */
@@ -143,6 +160,8 @@ export function isMessageEvent(event: BotEventName): boolean {
 }
 
 export function createPluginContextFactory(deps: PluginContextDeps): PluginContextFactory {
+  // Um por bot: o cache de segredos é relido só quando o conjunto muda.
+  const redact = createRedactor(deps.secrets);
   return async (plugin) => {
     const { name } = plugin;
     // Lança `PluginConfigError` com config inválida: o host ignora o plugin (ADR 0032).
@@ -332,16 +351,25 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
       } satisfies Groups,
       http: pluginHttp(name, deps, guard),
       transportName: deps.transport.name,
+      session: deps.session,
+      connectionStatus: deps.connectionStatus,
       capabilities: deps.transport.capabilities,
       get self(): Contact | null {
         return deps.transport.self;
       },
+      stats: deps.stats,
+      observe(signal, observer) {
+        guard('observe');
+        return deps.observers.add(name, signal, observer);
+      },
       unsafe: deps.unsafe.forPlugin(plugin),
+      admin: deps.adminPlugins.has(name) ? liveAdmin(name, deps.admin, live, redact) : undefined,
     };
 
     return {
       context,
       unregisteredCommands: () => unregistered,
+      provided: () => deps.services.describe(name),
       dispose(reason?: unknown): void {
         lifetime.expire(
           reason ?? new PluginHostStateError(`plugin "${name}": contexto descartado`),
@@ -352,9 +380,68 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         deps.bus.removePlugin(name);
         deps.services.removePlugin(name);
         deps.scheduler.removePlugin(name);
+        deps.observers.removePlugin(name);
         deps.http?.removeOwner(name);
       },
     };
+  };
+}
+
+/**
+ * `ctx.admin` do plugin `self`: delega às instâncias de `bot.plugins`/`bot.config`. As únicas
+ * diferenças: recusa o que derrubaria o próprio plugin no meio da chamada (reload/disable dele,
+ * ou `setOverrides`, que recarrega) e, como as demais ações do contexto, as que mudam estado
+ * rejeitam depois do `dispose` (`live`, ADR 0033). As leituras ficam livres.
+ */
+function liveAdmin(
+  self: string,
+  admin: PluginAdmin,
+  live: Live,
+  redact: <T>(value: T) => T,
+): PluginAdmin {
+  const refuse = (action: string): Promise<never> =>
+    Promise.reject(
+      new PluginHostStateError(
+        `plugin "${self}": ${action} em si mesmo não é permitido (o plugin desceria no meio da própria chamada)`,
+      ),
+    );
+  // Tudo o que sai pelo admin passa pela máscara de segredos do bot: erro de `setup` e de config
+  // carrega texto de terceiros (ex.: "invalid key sk-…") que o log já censura (ADR 0111).
+  const masked =
+    <A extends unknown[], R>(fn: (...args: A) => Promise<R>) =>
+    async (...args: A): Promise<R> => {
+      try {
+        return redact(await fn(...args));
+      } catch (error) {
+        throw redact(error);
+      }
+    };
+  const plugins = Object.assign(() => redact(admin.plugins()), {
+    reload: masked(
+      live('admin.plugins.reload', (target: string) =>
+        target === self ? refuse('admin.plugins.reload') : admin.plugins.reload(target),
+      ),
+    ),
+    disable: masked(
+      live('admin.plugins.disable', (target: string) =>
+        target === self ? refuse('admin.plugins.disable') : admin.plugins.disable(target),
+      ),
+    ),
+    enable: masked(live('admin.plugins.enable', (target: string) => admin.plugins.enable(target))),
+  });
+  return {
+    plugins,
+    config: {
+      setOverrides: masked(
+        live('admin.config.setOverrides', (target: string, overrides) =>
+          target === self
+            ? refuse('admin.config.setOverrides')
+            : admin.config.setOverrides(target, overrides),
+        ),
+      ),
+      describe: masked((target: string) => admin.config.describe(target)),
+      jsonSchema: (target: string) => redact(admin.config.jsonSchema(target)),
+    },
   };
 }
 

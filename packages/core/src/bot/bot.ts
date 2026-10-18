@@ -13,8 +13,10 @@ import { sessionHttp } from '#http/server.ts';
 import { createDeferredLogger } from '#logger/deferred.ts';
 import { createLogger, createNoopLogger } from '#logger/logger.ts';
 import { createSecretSet } from '#logger/secrets.ts';
+import { createLogSignalTap } from '#logger/signal.ts';
 import type { Logger } from '#logger/types.ts';
 import { chatAllowed } from '#middleware/chat-filter.ts';
+import { Observers } from '#observers/observers.ts';
 import { createOutbound, enqueueAction } from '#outbound/actions.ts';
 import { OutboundQueue } from '#outbound/queue.ts';
 import { createPluginHost, type PluginHost } from '#plugin/host.ts';
@@ -32,7 +34,7 @@ import {
 } from '#storage/namespace.ts';
 import { TenantScope } from '#tenant/scope.ts';
 import { type Capability, hasCapability } from '#transport/capabilities.ts';
-import type { Transport } from '#transport/types.ts';
+import type { ConnectionStatus, Transport } from '#transport/types.ts';
 import { createUnsafeAccess } from '#unsafe/access.ts';
 import { BackgroundTasks } from './background-tasks.ts';
 import {
@@ -173,6 +175,14 @@ export function createBot(config: BotConfig): Bot {
     onError: (event) => logPluginError(log, event),
   });
   const pluginErrors = createPluginErrorReporter({ log: getLog, bus });
+  // Sinais por unidade de trabalho, para métricas (ADR 0106).
+  // O erro de um observador de `log` é logado: sem o `quiet`, ele voltaria ao próprio sinal.
+  const observers = new Observers((event) =>
+    event.event === 'log'
+      ? logTap.quiet(() => pluginErrors.report(event))
+      : pluginErrors.report(event),
+  );
+  const logTap = createLogSignalTap(observers, secrets);
   // Ordem dos pontos de extensão: a tabela do host, já na ordem de carga (ADR 0096).
   const services = createServiceRegistry({
     loadOrder: () => host?.report().map((entry) => entry.name) ?? [],
@@ -228,7 +238,9 @@ export function createBot(config: BotConfig): Bot {
       log.debug('falha ao enviar "digitando"', { chatId, err: error }),
     ...config.outbound,
     transport,
+    observers,
   });
+  const stats = (): BotStats => ({ inbound: inbound.stats(), outbound: outbound.stats() });
   // O plugin vê o envio e as ações (ADR 0040): a fila (close, stats) fica com o kernel.
   const send = createOutbound(outbound, transport);
   const groups = createGroups(transport, enqueueAction(outbound, transport));
@@ -262,6 +274,7 @@ export function createBot(config: BotConfig): Bot {
     ready: () => gate.ready || gate.promise,
     reportPluginError: pluginErrors.report,
     background,
+    observers,
   });
   const reconnector: Reconnector | undefined =
     config.reconnection === false
@@ -283,13 +296,19 @@ export function createBot(config: BotConfig): Bot {
             bot.stop().catch((error: unknown) => log.error('falha ao parar o bot', { err: error }));
           },
         });
+  // Snapshot do último status para plugin que sobe depois do evento (ADR 0110).
+  let lastConnection: ConnectionStatus | undefined;
   const entry = createTransportEntry({
+    recordStatus: (status) => {
+      lastConnection = status;
+    },
     transport,
     inbound,
     outbound,
     tenants,
     flow,
     bus,
+    observers,
     conversations,
     reconnector,
     gate,
@@ -425,6 +444,13 @@ export function createBot(config: BotConfig): Bot {
           return transport.self;
         },
       },
+      session,
+      connectionStatus: () => lastConnection,
+      stats,
+      observers,
+      adminPlugins: new Set(config.adminPlugins ?? []),
+      admin: control,
+      secrets,
       unsafe: createUnsafeAccess({
         transport,
         log,
@@ -449,6 +475,7 @@ export function createBot(config: BotConfig): Bot {
       createContext,
       log,
       disabledPlugins: config.disabledPlugins,
+      adminPlugins: config.adminPlugins,
       setupTimeoutMs: timeouts.setupMs,
       teardownTimeoutMs: timeouts.teardownMs,
     });
@@ -473,13 +500,14 @@ export function createBot(config: BotConfig): Bot {
 
   async function runStart(): Promise<void> {
     try {
-      log =
+      log = logTap.wrap(
         config.logger ??
-        createLogger({
-          level: config.logLevel ?? 'info',
-          ...(config.logFormat && { format: config.logFormat }),
-          secrets,
-        });
+          createLogger({
+            level: config.logLevel ?? 'info',
+            ...(config.logFormat && { format: config.logFormat }),
+            secrets,
+          }),
+      );
       transportLog = log.child({ transport: transport.name });
       // Antes de `booted`: um bot recusado aqui não fecha o storage do bot que usa a sessão.
       releaseSession = claimSession(storage, session);
@@ -659,9 +687,7 @@ export function createBot(config: BotConfig): Bot {
 
     plugins: control.plugins,
 
-    stats(): BotStats {
-      return { inbound: inbound.stats(), outbound: outbound.stats() };
-    },
+    stats,
 
     settled,
 

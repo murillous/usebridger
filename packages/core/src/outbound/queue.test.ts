@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type Capability, UnsupportedError } from '#transport/capabilities.ts';
 import type { MessageKey, OutgoingContent, SendOptions, TypingKind } from '#transport/types.ts';
@@ -906,5 +907,24 @@ describe('OutboundQueue: retryAfterMs e ritmo do transport (#281)', () => {
     expect(
       () => new OutboundQueue({ transport: { ...transport, pacing: { chatIntervalMs: -1 } } }),
     ).toThrow(/transport\.pacing\.chatIntervalMs/);
+  });
+});
+
+describe('OutboundQueue: contexto assíncrono (#163)', () => {
+  it('o job roda no contexto de quem enfileirou, não no de quem disparou o pump', async () => {
+    const als = new AsyncLocalStorage<string>();
+    const { queue, failWith } = newQueue();
+    const seen: (string | undefined)[] = [];
+    failWith(() => {
+      seen.push(als.getStore());
+      return undefined;
+    });
+
+    queue.pause();
+    const sent = als.run('dono', () => queue.send('c1', text('a')));
+    // O `resume` despacha o job de c1 de dentro de outro contexto.
+    als.run('outro', () => queue.resume());
+    await sent;
+    expect(seen).toEqual(['dono']);
   });
 });

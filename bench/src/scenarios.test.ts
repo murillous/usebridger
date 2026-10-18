@@ -8,6 +8,7 @@ describe('cenários', () => {
   it('cobrem as 5 metas do plano §7', () => {
     expect(SCENARIOS.map((scenario) => scenario.name)).toEqual([
       'overhead',
+      'overhead-observed',
       'throughput',
       'idle-memory',
       'memory-growth',

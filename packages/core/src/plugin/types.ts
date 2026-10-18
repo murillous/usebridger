@@ -3,6 +3,7 @@
 // (M1-16). Os campos do contexto vêm dos contratos de cada módulo.
 
 import type { z } from 'zod';
+import type { BotStats, PluginAdmin } from '#bot/config.ts';
 import type {
   AcceptSpec,
   CommandContextFor,
@@ -19,11 +20,13 @@ import type { Groups } from '#groups/groups.ts';
 import type { HttpRoutes } from '#http/types.ts';
 import type { Logger } from '#logger/types.ts';
 import type { Contact, Message } from '#message/types.ts';
+import type { Observer, ObserverSignalName } from '#observers/observers.ts';
 import type { Outbound } from '#outbound/types.ts';
 import type { Scheduler } from '#scheduler/types.ts';
 import type { ServiceAccess } from '#services/types.ts';
 import type { PluginContextStorage } from '#storage/tenant.ts';
 import type { Capability } from '#transport/capabilities.ts';
+import type { ConnectionStatus, Unsubscribe } from '#transport/types.ts';
 import type { Unsafe } from '#unsafe/types.ts';
 
 /** Textos ao usuário, sobrescrevíveis pela config (ADR 0025). */
@@ -137,8 +140,35 @@ export interface PluginContext<
    * de um transport: no `ctx.storage.shared`, componha com ele a chave que vier de um ID.
    */
   readonly transportName: string;
+  /** Nome da sessão do bot (`default` quando a config não o define); vários bots no processo se distinguem por ele. */
+  readonly session: string;
+  /**
+   * Último `ConnectionStatus` que o transport emitiu, o mesmo do `connection.status` no
+   * barramento (ADR 0110). `undefined` antes do primeiro evento. Serve a quem sobe depois do
+   * boot (ou num reload) e não pode esperar o próximo evento.
+   */
+  connectionStatus(): ConnectionStatus | undefined;
   /** Contato da própria sessão; `null` até a primeira conexão aberta. */
   readonly self: Contact | null;
+  /**
+   * Contadores das filas de entrada e de saída deste bot, os mesmos de `bot.stats()` (ADR 0106).
+   * Leitura O(1) e instantânea, para amostrar sob demanda: guarde a série no plugin. Devolve uma
+   * cópia.
+   */
+  stats(): BotStats;
+  /**
+   * Controle dos plugins (`bot.plugins` e `bot.config`), só para quem está em `adminPlugins` do
+   * `createBot`; os demais recebem `undefined` (ADR 0111). `disable`/`reload` do próprio plugin e
+   * `setOverrides` nele rejeitam.
+   */
+  readonly admin: PluginAdmin | undefined;
+  /**
+   * Observa um sinal do core (ADR 0106): `message.handled` quando o bot termina de tratar uma
+   * mensagem, `outbound.sent` quando um envio sai da fila de saída. O observador é síncrono e
+   * nunca aguardado: não segura o chat. A exceção dele vira `plugin.error` com
+   * `phase: 'observer'`. A assinatura sai sozinha no dispose do plugin.
+   */
+  observe<S extends ObserverSignalName>(signal: S, observer: Observer<S>): Unsubscribe;
   readonly unsafe: Unsafe;
 }
 

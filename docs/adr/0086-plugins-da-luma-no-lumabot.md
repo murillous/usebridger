@@ -1,6 +1,7 @@
 # ADR 0086 — Plugins da Luma no LumaBot
 
-**Status:** Aceito (2026-10-11) · Substitui os plugins oficiais do **D84**
+**Status:** Aceito (2026-10-11), métricas e dashboard substituídos pelo **D107**
+([ADR 0107](0107-plugins-oficiais-de-metricas-e-dashboard.md)) · Substitui os plugins oficiais do **D84**
 ([ADR 0084](0084-repositorios-separados.md)) e o `plugins/*` do **D01**
 ([ADR 0001](0001-monorepo-pnpm-workspaces.md)) · Mantém o **D06**
 ([ADR 0006](0006-luma-e-um-plugin.md)) e o **D21** ([ADR 0021](0021-dashboard-vira-plugin.md))

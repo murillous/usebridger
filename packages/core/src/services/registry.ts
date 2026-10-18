@@ -1,5 +1,6 @@
 import type {
   ExtensionPoint,
+  ExtensionPointEntry,
   ExtensionPointName,
   ExtensionPoints,
   ServiceAccess,
@@ -59,6 +60,8 @@ export interface ServiceRegistry {
   /** Remove os serviços e as contribuições do plugin (teardown, reload e disable). */
   removePlugin(plugin: string): void;
   list(): ProvidedService[];
+  /** Nomes dos serviços providos e dos pontos de extensão com contribuição do plugin (tabela de plugins). */
+  describe(plugin: string): { services: string[]; contributions: string[] };
 }
 
 export interface ServiceRegistryOptions {
@@ -90,14 +93,17 @@ export function createServiceRegistry(options: ServiceRegistryOptions = {}): Ser
     return index >= 0 ? index : order.length + (firstSeen.get(plugin) ?? firstSeen.size);
   };
 
-  function listContributions(point: string): unknown[] {
+  function listContributions(point: string): { plugin: string; value: unknown }[] {
     const entries = contributions.get(point);
     if (!entries) return [];
     const order = options.loadOrder?.() ?? [];
     // `sort` é estável: dentro do mesmo plugin fica a ordem do `contribute`.
-    return [...entries]
-      .sort((a, b) => rankOf(order, a.plugin) - rankOf(order, b.plugin))
-      .map((entry) => entry.value);
+    return (
+      [...entries]
+        .sort((a, b) => rankOf(order, a.plugin) - rankOf(order, b.plugin))
+        // Objeto novo: não expõe a entrada interna ao chamador.
+        .map((entry) => ({ plugin: entry.plugin, value: entry.value }))
+    );
   }
 
   return {
@@ -131,7 +137,10 @@ export function createServiceRegistry(options: ServiceRegistryOptions = {}): Ser
 
         extensionPoint<K extends ExtensionPointName>(name: K): ExtensionPoint<ExtensionPoints[K]> {
           // O tipo foi garantido no `contribute`, que só aceita `ExtensionPoints[K]` para K.
-          return { list: () => listContributions(name) as ExtensionPoints[K][] };
+          return {
+            list: () => listContributions(name).map((entry) => entry.value as ExtensionPoints[K]),
+            entries: () => listContributions(name) as ExtensionPointEntry<ExtensionPoints[K]>[],
+          };
         },
       };
     },
@@ -149,6 +158,15 @@ export function createServiceRegistry(options: ServiceRegistryOptions = {}): Ser
 
     list() {
       return [...byName.values()];
+    },
+
+    describe(plugin) {
+      return {
+        services: [...byName.values()].filter((e) => e.plugin === plugin).map((e) => e.name),
+        contributions: [...contributions]
+          .filter(([, entries]) => entries.some((entry) => entry.plugin === plugin))
+          .map(([point]) => point),
+      };
     },
   };
 }

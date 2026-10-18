@@ -1,6 +1,6 @@
 // Tipagem dos pontos de extensão (#83) por declaration merging contra `@usebridger/core`, o
 // mesmo especificador que um plugin usa.
-import type { ExtensionPoint, ServiceAccess } from '@usebridger/core';
+import type { ExtensionPoint, ExtensionPointEntry, ServiceAccess } from '@usebridger/core';
 import { describe, expectTypeOf, it } from 'vitest';
 
 type StickerStep = (image: Uint8Array) => Promise<Uint8Array>;
@@ -20,6 +20,12 @@ describe('ExtensionPoints por declaration merging', () => {
     >();
     expectTypeOf(services.extensionPoint('sticker.steps').list()).toEqualTypeOf<
       readonly StickerStep[]
+    >();
+  });
+
+  it('entries devolve o plugin dono e o valor tipado', () => {
+    expectTypeOf(services.extensionPoint('sticker.steps').entries()).toEqualTypeOf<
+      readonly ExtensionPointEntry<StickerStep>[]
     >();
   });
 

@@ -4,7 +4,13 @@
 
 import { setImmediate as nextTick } from 'node:timers/promises';
 import { collectGarbage, MB, median, percentile } from './stats.ts';
-import { createWorkload, messageAt, repliesOf, type Workload } from './workload.ts';
+import {
+  createWorkload,
+  messageAt,
+  repliesOf,
+  type Workload,
+  type WorkloadOptions,
+} from './workload.ts';
 
 export interface Scenario {
   readonly name: ScenarioName;
@@ -25,9 +31,15 @@ export interface Scenario {
   readonly run: () => Promise<number>;
 }
 
-export type ScenarioName = 'overhead' | 'throughput' | 'idle-memory' | 'memory-growth' | 'boot';
+export type ScenarioName =
+  | 'overhead'
+  | 'overhead-observed'
+  | 'throughput'
+  | 'idle-memory'
+  | 'memory-growth'
+  | 'boot';
 
-export interface OverheadOptions {
+export interface OverheadOptions extends WorkloadOptions {
   readonly warmup?: number;
   readonly messages?: number;
 }
@@ -39,7 +51,7 @@ export interface OverheadOptions {
  */
 export async function overhead(options: OverheadOptions = {}): Promise<number> {
   const { warmup = 5_000, messages = 20_000 } = options;
-  const workload = await createWorkload();
+  const workload = await createWorkload(options);
   const { bot } = workload;
   const latencies: number[] = [];
   let replies = 0;
@@ -173,6 +185,17 @@ export const SCENARIOS: readonly Scenario[] = [
     runs: 9,
     checksRegression: true,
     run: () => overhead(),
+  },
+  {
+    // O mesmo `overhead` com um observador vazio em cada sinal: o custo do `ctx.observe` no
+    // caminho quente (ADR 0106). Sem observador, o `overhead` mede o guarda.
+    name: 'overhead-observed',
+    description: 'Overhead do kernel por mensagem com observadores (p99)',
+    unit: 'ms',
+    target: { max: 1 },
+    runs: 9,
+    checksRegression: true,
+    run: () => overhead({ observed: true }),
   },
   {
     name: 'throughput',

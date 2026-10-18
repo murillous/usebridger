@@ -14,6 +14,7 @@ export type {
   BotState,
   BotStats,
   BotTimeouts,
+  PluginAdmin,
 } from '#bot/config.ts';
 export { BotStateError } from '#bot/config.ts';
 export { GroupAdminTimeoutError } from '#bot/group-admin.ts';
@@ -50,6 +51,7 @@ export type {
   PluginConfigJsonSchema,
   PluginConfigView,
 } from '#config/plugin-configs.ts';
+export { maskedJsonSchema } from '#config/plugin-configs.ts';
 export { secret } from '#config/schema.ts';
 export type { BotMessageContext, MessageContext } from '#context.ts';
 export type {
@@ -139,6 +141,14 @@ export {
   type SanitizeOptions,
   sanitize,
 } from '#middleware/sanitize.ts';
+export type {
+  LogSignal,
+  MessageHandledSignal,
+  Observer,
+  ObserverSignalName,
+  ObserverSignals,
+  OutboundSentSignal,
+} from '#observers/observers.ts';
 export { OutboundQueueError, type OutboundQueueStats } from '#outbound/queue.ts';
 export type {
   ActionOptions,
@@ -156,7 +166,11 @@ export type {
   SendPriority,
 } from '#outbound/types.ts';
 export { definePlugin, PluginManifestError } from '#plugin/define.ts';
-export { type PluginChangeResult, PluginConflictError } from '#plugin/host.ts';
+export {
+  type PluginChangeResult,
+  PluginConflictError,
+  PluginHostStateError,
+} from '#plugin/host.ts';
 export { PluginCycleError } from '#plugin/order.ts';
 export {
   PluginBootError,
@@ -184,6 +198,7 @@ export type { JobContext, JobHandler, Scheduler } from '#scheduler/types.ts';
 export { ServiceConflictError, ServiceNotFoundError } from '#services/registry.ts';
 export type {
   ExtensionPoint,
+  ExtensionPointEntry,
   ExtensionPointName,
   ExtensionPoints,
   ServiceAccess,

@@ -87,3 +87,40 @@ describe('Bot: stats()', () => {
     expect(second.outbound.pending).not.toBe(first.outbound.pending);
   });
 });
+
+// ADR 0106 (#147): o plugin lê os mesmos contadores pelo `ctx.stats()`.
+describe('PluginContext: stats()', () => {
+  it('devolve os contadores do próprio bot, como bot.stats()', async () => {
+    const reads = new Map<string, () => ReturnType<Bot['stats']>>();
+    const leitor = (id: string) =>
+      definePlugin({
+        name: `leitor-${id}`,
+        version: '1.0.0',
+        engine: '>=0.0.0',
+        setup(ctx) {
+          reads.set(id, () => ctx.stats());
+          ctx.events.on('message', (e) => e.reply('ok'));
+        },
+      });
+    const transportA = new RecordingTransport();
+    const a = bot({
+      transport: transportA,
+      plugins: [leitor('a')],
+      outbound: { chatIntervalMs: 0, globalIntervalMs: 0 },
+    });
+    const b = bot({ transport: new RecordingTransport(), plugins: [leitor('b')] });
+    await a.start();
+    await b.start();
+
+    transportA.emit('message', message('oi'));
+    await a.settled();
+
+    const readA = reads.get('a');
+    const readB = reads.get('b');
+    expect(readA?.()).toEqual(a.stats());
+    expect(readA?.().outbound.sent).toBe(1);
+    // Com dois bots no processo, cada plugin vê o seu.
+    expect(readB?.()).toEqual(b.stats());
+    expect(readB?.().outbound.sent).toBe(0);
+  });
+});

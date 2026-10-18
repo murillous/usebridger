@@ -32,6 +32,12 @@ export interface ExtensionPoints {}
 /** Nomes declarados em `ExtensionPoints`. */
 export type ExtensionPointName = Extract<keyof ExtensionPoints, string>;
 
+/** Contribuição a um ponto de extensão com o plugin que a fez. */
+export interface ExtensionPointEntry<T> {
+  plugin: string;
+  value: T;
+}
+
 /** Visão viva de um ponto de extensão, devolvida por `ctx.services.extensionPoint`. */
 export interface ExtensionPoint<T> {
   /**
@@ -39,6 +45,8 @@ export interface ExtensionPoint<T> {
    * do `contribute`). Cópia: lida a cada chamada, já reflete reload e disable de quem contribuiu.
    */
   list(): readonly T[];
+  /** Como `list()` (mesma ordem e cópia), com o plugin dono de cada contribuição. */
+  entries(): readonly ExtensionPointEntry<T>[];
 }
 
 /**

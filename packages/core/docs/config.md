@@ -147,7 +147,7 @@ const createContext: PluginContextFactory = async (plugin) => {
 
 ## Erros
 
-`PluginConfigError` lista **todos** os problemas, cada um com `path`, `message` e `source`
+`PluginConfigError` lista **todos** os problemas, cada um com `path`, `kind`, `message` e `source`
 (`env` — com `env` = nome da variável —, `file`, `override` ou `default` = valor ausente sem
 default):
 
@@ -158,6 +158,10 @@ config inválida do plugin "sticker":
 ```
 
 A mensagem nunca traz o valor recebido (pode ser secreto).
+
+`kind` é `'secret'` quando o `setOverrides` recusou um campo `secret()` (o storage guarda o override
+em texto puro) e `'invalid'` em qualquer outro problema, para o consumidor distinguir sem ler o
+texto.
 
 - **No boot**: a fábrica que lança **derruba o boot** com `PluginBootError` (`setup-failed`, fase
   `context`), com o plugin e o motivo ([ADR 0102](../../../docs/adr/0102-plugin-falho-derruba-o-boot.md)).
