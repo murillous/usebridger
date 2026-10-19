@@ -512,6 +512,32 @@ td {
 .editor > .btn {
   align-self: flex-start;
 }
+/* Item de lista de objetos (ex.: cadeia de fallback): bloco rebaixado, campos em grade que quebra no celular. */
+.obj-item {
+  background: var(--sunken);
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px var(--line);
+  padding: 8px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.obj-n {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+.obj-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px 12px;
+}
+.obj-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
 
 /* Dentro do card; o `.help` (aviso da cascata) fica à esquerda e os botões à direita. */
 .savebar {

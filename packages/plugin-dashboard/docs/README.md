@@ -87,6 +87,14 @@ vira um seletor de data e hora, enviado como ISO em UTC. `#/config/<plugin>` abr
 no plugin (é o destino de "Abrir config" na lista de Plugins).
 Plugin que não declara `config` (`schema: null`) não aparece na lista da Config.
 
+**Listas de objetos.** Um `z.array(z.object({...}))` cujos campos são texto, número, inteiro,
+booleano ou enum vira um editor com um bloco por item: cada campo do item tem o seu input, e os
+botões Subir, Descer, Remover e Adicionar item mudam a lista. A ordem do editor é a ordem salva,
+o que cobre cadeias ordenadas, como a de fallback de modelos de IA. Campo vazio fica ausente
+(vale o default do schema), e um item sem nenhum texto é descartado. Erro do servidor num item
+(`models.1.model`) aparece junto da lista como "Item 2, Modelo: ...". Item com objeto aninhado,
+lista, data ou `secret()` segue no editor JSON cru. O `form` das abas usa o mesmo gerador.
+
 **Secrets são só leitura no dashboard.** O `GET` os devolve mascarados (o valor real nunca sai) e o
 `PUT` recusa qualquer campo `secret`: o valor vem do arquivo (`pluginConfig`) ou do env. A
 `view.sources` diz de onde vem cada campo.
