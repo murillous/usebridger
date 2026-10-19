@@ -15,9 +15,12 @@ import {
   listToRows,
   localToIso,
   type Node,
+  type ObjectRow,
+  objectsToRows,
   parseNumber,
   recordToRows,
   rowsToList,
+  rowsToObjects,
   rowsToRecord,
 } from '#web/lib/schema.ts';
 import type { ChangeResult, ConfigIssue, ConfigResponse, PluginRow } from '#web/lib/types.ts';
@@ -205,7 +208,155 @@ function RecordControl(props: {
   );
 }
 
-/** Ações do secret cifrado (ADR 0121): o valor só vive no input até o PUT e nunca é exibido. */
+/**
+ * Lista ordenada de objetos (ex.: cadeia de fallback de modelos): um bloco por item com os campos
+ * do schema, e botões para subir, descer, remover e adicionar. A ordem do editor é a ordem salva.
+ */
+function ObjectListControl(props: {
+  id: string;
+  field: Field;
+  value: unknown;
+  describedBy?: string;
+  invalid: boolean;
+  onChange: (value: unknown) => void;
+}) {
+  const fields = props.field.itemFields ?? [];
+  // Chave estável por item: ao subir/descer, o React move o bloco e o foco vai junto do botão.
+  const nextKey = useRef(0);
+  const keyed = (row: ObjectRow) => ({ key: nextKey.current++, row });
+  const [items, setItems] = useState(() => objectsToRows(props.value, fields).map(keyed));
+  const update = (next: { key: number; row: ObjectRow }[]) => {
+    setItems(next);
+    props.onChange(
+      rowsToObjects(
+        next.map((i) => i.row),
+        fields,
+      ),
+    );
+  };
+  const set = (index: number, path: string, v: string | boolean) =>
+    update(items.map((it, j) => (j === index ? { ...it, row: { ...it.row, [path]: v } } : it)));
+  const move = (index: number, by: -1 | 1) => {
+    const next = [...items];
+    const [moved] = next.splice(index, 1);
+    if (moved) next.splice(index + by, 0, moved);
+    update(next);
+  };
+  const name = props.field.label;
+  return (
+    <fieldset
+      className="editor"
+      id={props.id}
+      aria-labelledby={`${props.id}-lbl`}
+      aria-describedby={props.describedBy}
+    >
+      {items.map(({ key, row }, i) => (
+        <div className="obj-item" key={key}>
+          <div className="row spread">
+            <span className="obj-n">{i + 1}</span>
+            <div className="row">
+              <button
+                type="button"
+                className="btn sm"
+                aria-label={`Subir item ${i + 1} de ${name}`}
+                disabled={i === 0}
+                onClick={() => move(i, -1)}
+              >
+                Subir
+              </button>
+              <button
+                type="button"
+                className="btn sm"
+                aria-label={`Descer item ${i + 1} de ${name}`}
+                disabled={i === items.length - 1}
+                onClick={() => move(i, 1)}
+              >
+                Descer
+              </button>
+              <button
+                type="button"
+                className="btn sm"
+                aria-label={`Remover item ${i + 1} de ${name}`}
+                onClick={() => update(items.filter((_, j) => j !== i))}
+              >
+                Remover
+              </button>
+            </div>
+          </div>
+          <div className="obj-fields">
+            {fields.map((f) => {
+              const label = `${name}, item ${i + 1}, ${f.label}`;
+              const v = row[f.path];
+              const common = {
+                'aria-label': label,
+                'aria-invalid': props.invalid || undefined,
+              };
+              let input: ReactNode;
+              if (f.control === 'boolean') {
+                input = (
+                  <input
+                    {...common}
+                    type="checkbox"
+                    style={{ width: 24, height: 24, accentColor: 'var(--ink)' }}
+                    checked={v === true}
+                    onChange={(e) => set(i, f.path, e.target.checked)}
+                  />
+                );
+              } else if (f.control === 'enum') {
+                input = (
+                  <select
+                    {...common}
+                    className="input"
+                    value={typeof v === 'string' ? v : ''}
+                    onChange={(e) => set(i, f.path, e.target.value)}
+                  >
+                    {!f.required && <option value="">—</option>}
+                    {f.options?.map((o) => (
+                      <option key={o}>{o}</option>
+                    ))}
+                  </select>
+                );
+              } else {
+                const numeric = f.control === 'number' || f.control === 'integer';
+                input = (
+                  <input
+                    {...common}
+                    className={numeric ? 'input' : 'input mono'}
+                    type="text"
+                    inputMode={
+                      f.control === 'integer' ? 'numeric' : numeric ? 'decimal' : undefined
+                    }
+                    placeholder={f.placeholder}
+                    value={typeof v === 'string' ? v : ''}
+                    onChange={(e) => set(i, f.path, e.target.value)}
+                  />
+                );
+              }
+              return (
+                // `aria-hidden` no texto visível: o nome acessível completo vem do `aria-label`.
+                <div className="obj-field" key={f.path}>
+                  <span className="lbl" aria-hidden="true">
+                    {f.label}
+                  </span>
+                  {input}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="btn"
+        onClick={() => update([...items, keyed(objectsToRows([{}], fields)[0] ?? {})])}
+      >
+        Adicionar item
+      </button>
+    </fieldset>
+  );
+}
+
+/** Ações do secret cifrado (ADR 0117): o valor só vive no input até o PUT e nunca é exibido. */
 function SecretActions(props: {
   id: string;
   field: Field;
@@ -349,7 +500,7 @@ export function FieldView(props: {
   configKnown?: boolean;
   /** Dica do tipo do schema: só na Config, não no form das abas. */
   showHint?: boolean;
-  /** Só na Config: habilita as ações do secret cifrado (ADR 0121). */
+  /** Só na Config: habilita as ações do secret cifrado (ADR 0117). */
   secretActions?: Omit<Parameters<typeof SecretActions>[0], 'id' | 'field' | 'source'>;
   onChange: (value: unknown) => void;
 }) {
@@ -380,7 +531,9 @@ export function FieldView(props: {
       .filter(Boolean)
       .join(' ') || undefined;
 
-  const editor = !field.secret && (field.control === 'list' || field.control === 'record');
+  const editor =
+    !field.secret &&
+    (field.control === 'list' || field.control === 'record' || field.control === 'objects');
   let control: ReactNode;
   if (field.secret && props.secretEditable) {
     control = (
@@ -433,7 +586,12 @@ export function FieldView(props: {
       </select>
     );
   } else if (editor) {
-    const Editor = field.control === 'list' ? ListControl : RecordControl;
+    const Editor =
+      field.control === 'list'
+        ? ListControl
+        : field.control === 'objects'
+          ? ObjectListControl
+          : RecordControl;
     control = (
       <Editor
         id={id}
@@ -506,7 +664,12 @@ export function Config({ selected }: { selected?: string }) {
   const [rows, setRows] = useState<PluginRow[]>([]);
   // Erros da config atual por plugin (GET de cada um): alimenta os badges antes de abrir o plugin.
   const [issueCounts, setIssueCounts] = useState<Record<string, number>>({});
-  const names = useMemo(() => rows.map((r) => r.name), [rows]);
+  // Plugins sem schema (`schema: null`) saem da lista: não há o que configurar. GET falho mantém o plugin.
+  const [noConfig, setNoConfig] = useState<ReadonlySet<string>>(new Set());
+  const names = useMemo(
+    () => rows.map((r) => r.name).filter((n) => !noConfig.has(n)),
+    [rows, noConfig],
+  );
   // O hash (`#/config/<plugin>`) é a única fonte da seleção; ausente ou desconhecido cai no primeiro.
   const plugin = selected && names.includes(selected) ? selected : names[0];
   const select = (name: string) => {
@@ -528,7 +691,10 @@ export function Config({ selected }: { selected?: string }) {
         // Plugin sem config legível (ex.: não carregou) fica sem badge de erro: o GET falho é o fallback.
         for (const r of list) {
           api<ConfigResponse>(`config/${encodeURIComponent(r.name)}`).then(
-            (d) => setIssueCounts((c) => ({ [r.name]: d.issues?.length ?? 0, ...c })),
+            (d) => {
+              setIssueCounts((c) => ({ [r.name]: d.issues?.length ?? 0, ...c }));
+              if (d.schema === null) setNoConfig((s) => new Set(s).add(r.name));
+            },
             () => undefined,
           );
         }
@@ -628,7 +794,7 @@ export function Config({ selected }: { selected?: string }) {
     }
   };
 
-  // Secret cifrado grava na hora, fora do form: PUT/DELETE em `secrets/:path` (ADR 0121).
+  // Secret cifrado grava na hora, fora do form: PUT/DELETE em `secrets/:path` (ADR 0117).
   const saveSecret = async (path: string, value: string | null): Promise<string | undefined> => {
     if (!plugin) return undefined;
     setResult(undefined);
@@ -766,6 +932,9 @@ export function Config({ selected }: { selected?: string }) {
           </select>
         </div>
         <div className="cfg-body">
+          {rows.length > 0 && names.length === 0 && (
+            <p className="muted">Nenhum plugin declara config.</p>
+          )}
           {error && (
             <p className="notice danger" role="alert">
               {error}

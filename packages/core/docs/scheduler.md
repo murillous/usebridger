@@ -24,7 +24,7 @@ setup(ctx) {
 | Método | O que faz |
 | --- | --- |
 | `at(when, job, payload?)` | Persiste o job e devolve o id. `when` é `Date` ou epoch ms |
-| `every(rule, job, payload?)` | Persiste uma série recorrente e devolve o id dela. `rule` é `{ everyMs }` (mín. 60 s) ou `{ time: 'HH:mm', days?, timeZone }` ([ADR 0104](../../../docs/adr/0104-jobs-recorrentes.md)) |
+| `every(rule, job, payload?)` | Persiste uma série recorrente e devolve o id dela. `rule` é `{ everyMs }` (mín. 60 s) ou `{ time: 'HH:mm', days?, timeZone }` ([ADR 0100](../../../docs/adr/0100-jobs-recorrentes.md)) |
 | `on(job, handler)` | Registra o handler do job; devolve a função que o remove. O handler recebe `(payload, { signal, scheduledAt, seriesId? })` |
 | `next(id)` | Próxima ocorrência pendente do job ou da série; `undefined` se não existe |
 | `cancel(id)` | `true` se o job existia e ainda não tinha disparado; numa série, encerra as próximas mesmo com o handler rodando |
@@ -40,7 +40,7 @@ setup(ctx) {
   `Infinity`) ou se o nome do job é vazio. Data no passado é válida: o job dispara logo.
 - **Tenant de origem.** O job agendado numa mensagem ou num evento de chat com `tenantId` guarda
   o tenant, e o handler roda no escopo dele: o `ctx.storage` lê os dados daquele tenant
-  ([ADR 0072](../../../docs/adr/0072-isolamento-por-tenant.md)). O job agendado fora dele (no
+  ([ADR 0068](../../../docs/adr/0068-isolamento-por-tenant.md)). O job agendado fora dele (no
   `setup`) roda sem tenant, mesmo que o loop do scheduler tenha sido acordado num handler.
 - **Registre o `on` no `setup`.** Os jobs são do plugin, não do `setup`: continuam no storage
   quando o plugin é desabilitado ou recarregado e disparam quando ele registrar o handler.
@@ -72,7 +72,7 @@ handler estoura o prazo (`timeouts.jobMs`, padrão 30 s), com `reason` = `JobTim
 do descarte.
 Handlers de um parâmetro só continuam valendo. Repasse o `signal` a `fetch`/SDKs e confira
 `signal.aborted` antes de efeitos que não o recebem: o `ctx.send`/`ctx.storage` do `setup` são do
-plugin e não sabem do prazo do job ([ADR 0033](../../../docs/adr/0033-cancelamento-cooperativo.md)).
+plugin e não sabem do prazo do job ([ADR 0029](../../../docs/adr/0029-cancelamento-cooperativo.md)).
 
 ```ts
 ctx.scheduler.on('relatorio', async (payload, { signal }) => {
@@ -87,7 +87,7 @@ Depois do descarte do plugin (teardown, reload), `ctx.scheduler.at`/`cancel` rej
 
 ## Para o kernel
 
-Peça interno do kernel, não exportado ([ADR 0034](../../../docs/adr/0034-biblioteca-sem-runner.md)).
+Peça interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md)).
 
 ```ts
 import { createSchedulerService } from '#scheduler/service.ts';
@@ -97,7 +97,7 @@ const scheduler = createSchedulerService({
   onError: (event) => { /* plugin.error: log + barramento */ },
   onLateError: (event) => { /* opcional: rejeição depois do prazo, só log */ },
   onStorageError: (error) => { /* log */ },
-  tenants, // opcional: TenantScope do bot (ADR 0072)
+  tenants, // opcional: TenantScope do bot (ADR 0068)
   jobTimeoutMs: 30_000, // opcional
   storageRetryMs: 5000, // opcional
   maxConcurrentJobs: 10, // opcional

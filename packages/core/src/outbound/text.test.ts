@@ -1,4 +1,4 @@
-// #273 (ADR 0061): texto formatado e limites de tamanho na fila de saída e no `ctx.reply`.
+// #273 (ADR 0057): texto formatado e limites de tamanho na fila de saída e no `ctx.reply`.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bold, fmt, type MessageText, mention, plainText } from '#text/format.ts';
@@ -152,7 +152,7 @@ describe('limites de tamanho', () => {
     expect(calls.map((c) => c.options)).toEqual([{ mentions: ['u1'] }, { mentions: ['u1'] }]);
   });
 
-  it('os botões vão só na última parte (ADR 0062)', async () => {
+  it('os botões vão só na última parte (ADR 0058)', async () => {
     const { queue, calls } = setup({ text: 4 }, [...ALL, 'actions']);
     const actions = [{ id: 'a1', label: 'Notas' }];
     const sending = queue.send('c', 'aaaa bbbb cccc', { quoted: textMessage('q'), actions });

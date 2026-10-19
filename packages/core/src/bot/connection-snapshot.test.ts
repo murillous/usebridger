@@ -1,4 +1,4 @@
-// ADR 0110: `ctx.session` e o último `ConnectionStatus` no contexto do plugin.
+// ADR 0106: `ctx.session` e o último `ConnectionStatus` no contexto do plugin.
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { definePlugin } from '#plugin/define.ts';

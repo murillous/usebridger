@@ -1,5 +1,5 @@
-// Evento de voto em enquete (#312, ADR 0071): chega aos plugins pelo mesmo caminho da reação, com
-// o `chatFilter`, o `ignoreSelf` e o `ignoreBots` dos eventos que não são mensagem (ADR 0038).
+// Evento de voto em enquete (#312, ADR 0067): chega aos plugins pelo mesmo caminho da reação, com
+// o `chatFilter`, o `ignoreSelf` e o `ignoreBots` dos eventos que não são mensagem (ADR 0034).
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Contact } from '#message/types.ts';
@@ -55,7 +55,7 @@ function vote(
   };
 }
 
-describe('Bot: evento poll.vote (#312, ADR 0071)', () => {
+describe('Bot: evento poll.vote (#312, ADR 0067)', () => {
   it('repassa o voto ao plugin, inclusive o retirado (lista vazia)', async () => {
     const transport = new RecordingTransport();
     const got: string[] = [];

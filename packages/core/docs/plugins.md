@@ -1,11 +1,11 @@
 # Plugins: manifesto, loader e lifecycle
 
-Toda feature do bot é um plugin ([ADR 0006](../../../docs/adr/0006-luma-e-um-plugin.md)); o core
+Toda feature do bot é um plugin ([ADR 0011](../../../docs/adr/0011-escopo-do-core.md)); o core
 não importa nenhuma. O loader junta os plugins da config e das pastas, valida o manifesto,
 decide quem carrega, ordena e roda `setup`/`teardown` com prazo
-([ADRs 0005](../../../docs/adr/0005-plugins-no-mesmo-processo.md),
-[0007](../../../docs/adr/0007-plugins-via-npm-e-pasta.md),
-[0016](../../../docs/adr/0016-manifesto-do-plugin.md)).
+([ADRs 0004](../../../docs/adr/0004-plugins-no-mesmo-processo.md),
+[0005](../../../docs/adr/0005-plugins-via-npm-e-pasta.md),
+[0014](../../../docs/adr/0014-manifesto-do-plugin.md)).
 
 ## Declarar um plugin
 
@@ -72,7 +72,7 @@ aceitas.
 ## Forma curta: `commands` e `on`
 
 Comandos e listeners fixos vão direto no manifesto
-([ADR 0079](../../../docs/adr/0079-acucar-no-manifesto-do-plugin.md)):
+([ADR 0075](../../../docs/adr/0075-acucar-no-manifesto-do-plugin.md)):
 
 ```ts
 export const saldo = definePlugin({
@@ -147,7 +147,7 @@ parâmetro bivariante). Dentro do plugin a config segue tipada. Quem o recebe s�
 
 ## Fontes: config e `pluginDirs`
 
-O `Bot` faz isto no `start()` com `plugins` e `pluginDirs` da config. Por dentro (interno do kernel, não exportado ([ADR 0034](../../../docs/adr/0034-biblioteca-sem-runner.md))):
+O `Bot` faz isto no `start()` com `plugins` e `pluginDirs` da config. Por dentro (interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md))):
 
 ```ts
 import { collectPlugins } from '#plugin/sources.ts';
@@ -177,7 +177,7 @@ pasta na ordem dada. Convenção de pasta (`discoverPlugins(dir)`):
 ## Subir e derrubar: `createPluginHost`
 
 O `Bot` faz tudo isto no `start()`/`stop()` ([Bot → Plugins](bot.md#plugins)), com a fábrica de
-contexto ligada aos serviços da instância. Por dentro (interno do kernel, não exportado ([ADR 0034](../../../docs/adr/0034-biblioteca-sem-runner.md))):
+contexto ligada aos serviços da instância. Por dentro (interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md))):
 
 ```ts
 import { createPluginHost } from '#plugin/host.ts';
@@ -231,7 +231,7 @@ const errors = await host.stop();           // PluginLifecycleError[]
    `setupTimeoutMs`. Se falhar, o loader chama `dispose()` (sem `teardown`, que só pareia com
    setup concluído), loga em `error` e marca o plugin — e quem depende dele — como ignorado. Os
    outros `setup`s rodam mesmo assim, para o erro listar todas as falhas de uma vez.
-5. **Falha derruba o boot** ([ADR 0102](../../../docs/adr/0102-plugin-falho-derruba-o-boot.md)):
+5. **Falha derruba o boot** ([ADR 0098](../../../docs/adr/0098-plugin-falho-derruba-o-boot.md)):
    se algum plugin ficou ignorado por motivo diferente de `disabled`, o host desce quem subiu
    (`teardown` + `dispose`, ordem inversa), fica em `stopped` e rejeita com `PluginBootError`. No
    `Bot`, o transport não conecta e `bot.start()` rejeita com o mesmo erro (o conflito de nome de
@@ -276,12 +276,12 @@ o plugin subiu, mas eles não respondem ([Capability por comando](commands.md#ca
 Ainda na entrada, quando há algo a dizer: `dependsOn` (o do manifesto, nome → faixa; também nas
 linhas ignoradas), e nas carregadas `services` (nomes providos no `setup`) e `contributions`
 (pontos de extensão a que o plugin contribuiu), lidos do registry na hora em que a tabela é
-montada, então um `provide` posterior ao `setup` também aparece (ADR 0112). Também `optionalDependsOn`
+montada, então um `provide` posterior ao `setup` também aparece (ADR 0108). Também `optionalDependsOn`
 (como o `dependsOn`) e, junto de `contributions`, `contributionCounts` (ponto → quantas contribuições
 o plugin fez nele), e nas carregadas `setupMs` (ms do contexto + `setup`, o do boot ou o do último
-reload; ADR 0114).
+reload; ADR 0110).
 
-`bot.plugins.bootedAt` (e `ctx.admin.plugins.bootedAt`, ADR 0111) é o epoch ms em que o boot dos
+`bot.plugins.bootedAt` (e `ctx.admin.plugins.bootedAt`, ADR 0107) é o epoch ms em que o boot dos
 plugins terminou (`undefined` antes do `start()`; reload não o muda).
 
 `host.report()` devolve a tabela atual (reflete reloads).
@@ -312,12 +312,12 @@ O resultado (`PluginChangeResult`) é o mesmo para `reload`, `disable` e `enable
 | `teardownErrors` | Falhas de `teardown`/`dispose` das instâncias que desceram, do plugin e dos dependentes. Falha do `setup` novo fica no `reason` da linha (`setup-failed`) |
 
 `teardown` → `dispose` → contexto novo → `setup`. É a primitiva do reload por mudança de config
-([ADR 0017](../../../docs/adr/0017-config-por-plugin-zod.md)): a fábrica lê a config já
+([ADR 0015](../../../docs/adr/0015-config-por-plugin-zod.md)): a fábrica lê a config já
 atualizada. Vale para plugin carregado ou cujo `setup` falhou (para tentar de novo); os ignorados
 por incompatibilidade recusam com `PluginHostStateError`. Não há reload de **código**
-([ADR 0008](../../../docs/adr/0008-sem-hot-reload.md)).
+([ADR 0006](../../../docs/adr/0006-sem-hot-reload.md)).
 
-**Em cascata** ([ADR 0041](../../../docs/adr/0041-reload-em-cascata.md)): quem depende do plugin
+**Em cascata** ([ADR 0037](../../../docs/adr/0037-reload-em-cascata.md)): quem depende do plugin
 por `dependsOn`, direta ou transitivamente, recarrega junto, para não ficar com um serviço do
 contexto descartado. Com `resumo` dependendo de `ai` e `digest` de `resumo`:
 
@@ -330,7 +330,7 @@ desligada, ele não sobe). Se o `setup` novo do plugin falhar, os dependentes fi
 `dependency-skipped`; um reload seguinte que o suba traz todos de volta. Um dependente ignorado
 por motivo próprio (ex.: desabilitado) continua ignorado. `after` não entra na cascata, porque só
 ordena a carga. `optionalDependsOn` entra: o dependente opcional desce e sobe junto, e sobe mesmo
-que o plugin não suba ([ADR 0099](../../../docs/adr/0099-comando-que-exige-servico.md)). O mesmo
+que o plugin não suba ([ADR 0095](../../../docs/adr/0095-comando-que-exige-servico.md)). O mesmo
 vale para `disable` e `enable`.
 
 ### Desligar e ligar (`disable` / `enable`)
@@ -365,7 +365,7 @@ usa como `reason` do `ctx.signal`, que aborta no `dispose`.
 ### Cancelamento cooperativo para autores de plugin
 
 O código do plugin não é interrompido à força: o kernel avisa pelo `signal` e recusa o que o
-contexto expirado tentar fazer ([ADR 0033](../../../docs/adr/0033-cancelamento-cooperativo.md),
+contexto expirado tentar fazer ([ADR 0029](../../../docs/adr/0029-cancelamento-cooperativo.md),
 detalhes em [Bot](bot.md#prazos-e-cancelamento-ctxsignal)).
 
 - `ctx.signal` (no `setup`) aborta quando o contexto é descartado: repasse ao trabalho de fundo
@@ -381,7 +381,7 @@ detalhes em [Bot](bot.md#prazos-e-cancelamento-ctxsignal)).
 ## Agir no canal: ações e leituras
 
 Tudo o que o transport sabe fazer chega ao plugin pela API pública, sem `ctx.unsafe.native`
-([ADR 0040](../../../docs/adr/0040-acoes-do-transport-no-plugin.md)):
+([ADR 0036](../../../docs/adr/0036-acoes-do-transport-no-plugin.md)):
 
 ```ts
 setup(ctx) {
@@ -412,9 +412,9 @@ setup(ctx) {
 | `ctx.commands.list({ for: message })` | só os que o remetente passa no papel ([commands.md](commands.md#comandos-que-o-remetente-pode-rodar)); `Promise` | — | — |
 | `ctx.self` | contato da sessão; `null` até a primeira conexão | — | — |
 | `ctx.session` | nome da sessão do bot (`default` se a config não define) | — | — |
-| `ctx.connectionStatus()` | último `ConnectionStatus` do transport, `undefined` antes do primeiro evento ([ADR 0110](../../../docs/adr/0110-sessao-e-status-de-conexao-no-contexto.md)) | — | — |
-| `ctx.connectionInfo()` | `{ connectedSince, reconnections, qrExpiresAt }`: desde quando a conexão está no ar, reaberturas depois da primeira e expiração do QR atual (ms epoch; `undefined` quando não se aplica; [ADR 0115](../../../docs/adr/0115-status-do-bot-no-contexto.md)) | — | — |
-| `ctx.botName` | `createBot({ name })`, ou o `name` do transport sem config (ADR 0115) | — | — |
+| `ctx.connectionStatus()` | último `ConnectionStatus` do transport, `undefined` antes do primeiro evento ([ADR 0106](../../../docs/adr/0106-sessao-e-status-de-conexao-no-contexto.md)) | — | — |
+| `ctx.connectionInfo()` | `{ connectedSince, reconnections, qrExpiresAt }`: desde quando a conexão está no ar, reaberturas depois da primeira e expiração do QR atual (ms epoch; `undefined` quando não se aplica; [ADR 0111](../../../docs/adr/0111-status-do-bot-no-contexto.md)) | — | — |
+| `ctx.botName` | `createBot({ name })`, ou o `name` do transport sem config (ADR 0111) | — | — |
 | `ctx.transportName` | `name` do transport (`baileys`, `web`...), para compor chaves de ID no [`ctx.storage.shared`](storage.md#dados-comuns-a-vários-bots) | — | — |
 | `ctx.capabilities` | `ReadonlySet` do que o transport suporta | — | — |
 | `ctx.http.route(method, path, handler)` / `ctx.http.ws(path, accept)` | rota HTTP ou WebSocket sob `/plugins/<nome>` ([HTTP](http.md)) | — | — |
@@ -430,7 +430,7 @@ setup(ctx) {
 - A exceção é o atalho `c.react(emoji)`: reação no contexto quase sempre é enfeite (⏳ ✅ ❌), então
   sem `reactions` ele resolve sem reagir e registra em `debug`. Quem precisa saber que a reação
   não saiu usa `ctx.send.react(c.message.key, emoji)`, que rejeita com `UnsupportedError`
-  ([ADR 0093](../../../docs/adr/0093-react-do-contexto-tolerante.md)).
+  ([ADR 0089](../../../docs/adr/0089-react-do-contexto-tolerante.md)).
 - O kernel não restringe `edit`/`delete` às mensagens do bot: o transport decide o que o canal
   permite.
 - `ctx.groups.metadata` não tem cache nem prazo próprio: o prazo da execução (comando, listener,
@@ -439,16 +439,16 @@ setup(ctx) {
 ## Acesso admin
 
 `ctx.admin` é `{ plugins, config }`: delega às instâncias de `bot.plugins` (tabela de boot,
-`reload`/`disable`/`enable`) e `bot.config` (`describe`, `jsonSchema`, `setOverrides`, `setSecret`, `clearSecret` e `secretsWritable`, ADR 0121). Só os
+`reload`/`disable`/`enable`) e `bot.config` (`describe`, `jsonSchema`, `setOverrides`, `setSecret`, `clearSecret` e `secretsWritable`, ADR 0117). Só os
 plugins listados em `createBot({ adminPlugins: ['dashboard'] })` o recebem; os demais veem
 `undefined`. A lista fica no app, e não no manifesto, para o plugin não se autoconceder o poder
-([ADR 0111](../../../docs/adr/0111-acesso-admin-para-plugins.md)). Nome em `adminPlugins` que
+([ADR 0107](../../../docs/adr/0107-acesso-admin-para-plugins.md)). Nome em `adminPlugins` que
 não existe gera `warn` no boot.
 
 Sobre o **próprio** plugin, `admin.plugins.reload`, `admin.plugins.disable` e
 `admin.config.setOverrides`, `admin.config.setSecret` e `admin.config.clearSecret` (que recarregam) rejeitam com `PluginHostStateError`: o plugin
 desceria no meio da própria chamada. A outra diferença: `reload`/`disable`/`enable` e
-`setOverrides`/`setSecret`/`clearSecret` rejeitam com `ContextExpiredError` depois do `dispose` do plugin (ADR 0033); as
+`setOverrides`/`setSecret`/`clearSecret` rejeitam com `ContextExpiredError` depois do `dispose` do plugin (ADR 0029); as
 leituras ficam livres. No mais, o comportamento é o de `bot.plugins` e `bot.config`.
 
 Tudo o que sai pelo `ctx.admin` passa pela máscara de segredos do bot (os mesmos valores que o

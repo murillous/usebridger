@@ -14,7 +14,7 @@
     "moduleDetection": "force",
     "verbatimModuleSyntax": true,
 
-    // Em dev o Node executa o .ts direto (type stripping, D26): só sintaxe apagável
+    // Em dev o Node executa o .ts direto (type stripping, D23): só sintaxe apagável
     // (sem enum/namespace/parameter properties) e imports com extensão `.ts`.
     "erasableSyntaxOnly": true,
     "allowImportingTsExtensions": true,

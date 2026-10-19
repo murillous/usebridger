@@ -2,7 +2,7 @@
 // percorrer campos de objeto e saber se um campo é secreto. Olha `_zod.def.type` (string) em vez
 // de `instanceof`, para funcionar mesmo se o plugin trouxer outra cópia do Zod. O core importa
 // o Zod só como tipo: carregar o módulo cria globais (`__zod_globalRegistry`), e importar o core
-// não pode ter side effect (ADR 0004). Por isso tudo passa por métodos do próprio schema
+// não pode ter side effect (ADR 0003). Por isso tudo passa por métodos do próprio schema
 // (`meta()`, `toJSONSchema()`), que já vêm do Zod que o plugin carregou.
 
 import type { z } from 'zod';

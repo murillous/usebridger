@@ -1,6 +1,6 @@
-// Aceite do #287 do lado do Baileys (ADR 0055, 0077): o mesmo plugin que roda no transport-web
+// Aceite do #287 do lado do Baileys (ADR 0051, 0073): o mesmo plugin que roda no transport-web
 // (ver `transport-web/src/bot.test.ts`) roda aqui sem mudança. Sem `actions`, o menu vira texto
-// numerado, e a resposta com o número roda o comando do botão (ADR 0062).
+// numerado, e a resposta com o número roda o comando do botão (ADR 0058).
 
 import {
   type Bot,

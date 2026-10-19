@@ -1,4 +1,4 @@
-// Testes de tipo do contrato de capabilities (ADR 0070), verificados pelo `pnpm typecheck` (ver
+// Testes de tipo do contrato de capabilities (ADR 0066), verificados pelo `pnpm typecheck` (ver
 // message/types.test-d.ts).
 import { describe, expectTypeOf, it } from 'vitest';
 import type { Outbound, ReplyPollOptions } from '#outbound/types.ts';

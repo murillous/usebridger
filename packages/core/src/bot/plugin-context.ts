@@ -86,19 +86,19 @@ export interface PluginContextDeps {
   readonly log: Logger;
   readonly router: CommandRouter;
   readonly prefixes: Prefixes;
-  /** Passos e esperas de conversa (ADR 0060). */
+  /** Passos e esperas de conversa (ADR 0056). */
   readonly conversations: ConversationRegistry<KernelMessageContext, ExpireOrigin>;
   readonly bus: EventBus;
   readonly services: ServiceRegistry;
   readonly storage: StoragePort;
-  /** Storage comum às sessões (ADR 0075), de onde sai o `ctx.storage.shared`. */
+  /** Storage comum às sessões (ADR 0071), de onde sai o `ctx.storage.shared`. */
   readonly shared: StoragePort;
-  /** Tenant corrente (ADR 0072): o `ctx.storage` do plugin grava no namespace dele. */
+  /** Tenant corrente (ADR 0068): o `ctx.storage` do plugin grava no namespace dele. */
   readonly tenants: TenantScope;
   readonly scheduler: SchedulerService;
   readonly send: Outbound;
   readonly groups: Groups;
-  /** Rotas da sessão no servidor HTTP; ausente sem `http` na config do bot (ADR 0076). */
+  /** Rotas da sessão no servidor HTTP; ausente sem `http` na config do bot (ADR 0072). */
   readonly http: SessionHttp | undefined;
   /** Falha de uma rota ou WebSocket do plugin (`phase: 'http'`). */
   readonly onHttpError: (event: PluginErrorEvent) => void;
@@ -110,23 +110,23 @@ export interface PluginContextDeps {
   };
   /** Nome da sessão do bot. */
   readonly session: string;
-  /** Último status de conexão visto pelo core (ADR 0110). */
+  /** Último status de conexão visto pelo core (ADR 0106). */
   readonly connectionStatus: () => ConnectionStatus | undefined;
-  /** Horário de conexão, reconexões e expiração do QR (ADR 0115). */
+  /** Horário de conexão, reconexões e expiração do QR (ADR 0111). */
   readonly connectionInfo: () => ConnectionInfo;
   /** Nome do bot (`BotConfig.name`, senão o nome do transport). */
   readonly botName: string;
-  /** Contadores das filas deste bot, os mesmos de `bot.stats()` (ADR 0106). */
+  /** Contadores das filas deste bot, os mesmos de `bot.stats()` (ADR 0102). */
   readonly stats: () => BotStats;
-  /** Observadores do bot; os do plugin saem no `dispose` (ADR 0106). */
+  /** Observadores do bot; os do plugin saem no `dispose` (ADR 0102). */
   readonly observers: Observers;
   readonly unsafe: UnsafeAccess;
-  /** Plugins que recebem `ctx.admin` (ADR 0111) e o controle que ele entrega. */
+  /** Plugins que recebem `ctx.admin` (ADR 0107) e o controle que ele entrega. */
   readonly adminPlugins: ReadonlySet<string>;
   readonly admin: PluginAdmin;
-  /** Segredos do bot, para mascarar o que sai pelo `ctx.admin` (ADR 0111). */
+  /** Segredos do bot, para mascarar o que sai pelo `ctx.admin` (ADR 0107). */
   readonly secrets: SecretSource;
-  /** Prazo do `run` e do `onReject` de cada comando, em ms (ADR 0005). */
+  /** Prazo do `run` e do `onReject` de cada comando, em ms (ADR 0004). */
   readonly commandTimeoutMs: number;
   /** Destino da rejeição de um `run` que chegou depois do prazo (já reportado como timeout). */
   readonly onLateCommandError: (plugin: string, command: string, error: unknown) => void;
@@ -169,14 +169,14 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
   const redact = createRedactor(deps.secrets);
   return async (plugin) => {
     const { name } = plugin;
-    // Lança `PluginConfigError` com config inválida: o host ignora o plugin (ADR 0032).
+    // Lança `PluginConfigError` com config inválida: o host ignora o plugin (ADR 0028).
     const { config, messages } = await deps.configs.resolve(name);
     const log = deps.log.child({ plugin: name });
 
     // Um `setup` que estourou o prazo segue rodando em segundo plano (não há como abortá-lo).
     // Depois do `dispose`, tudo o que ele registrar ficaria órfão e todo efeito (envio,
     // storage, agendamento) viria de um plugin que já desceu: o contexto recusa, e o `signal`
-    // dele aborta (ADR 0033). Comandos, papéis, listeners e jobs ainda em andamento têm
+    // dele aborta (ADR 0029). Comandos, papéis, listeners e jobs ainda em andamento têm
     // `Deadline` filho deste: o `dispose` os expira junto (#200).
     const lifetime = new Deadline();
     // Comandos que o `add` deixou de fora; o host os põe na linha do plugin na tabela de boot.
@@ -234,7 +234,7 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         add(definition: CommandDefinition): void {
           guard('commands.add');
           // Comando que o transport não sustenta nem entra no registro: anunciá-lo no menu e
-          // no `list()` para recusar depois seria pior que não tê-lo (ADR 0090). A definição
+          // no `list()` para recusar depois seria pior que não tê-lo (ADR 0086). A definição
           // inválida lança mesmo assim, para o erro não depender do transport.
           assertCommandDefinition(definition);
           const missing = missingCapabilities(deps.transport, definition.requires ?? []);
@@ -250,7 +250,7 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
           }
           // Serviço que ninguém provê agora: o comando fica de fora como o sem capability, em vez
           // de aparecer na ajuda e recusar no `run`. Conferido só aqui: quem volta a registrá-lo
-          // quando o provedor sobe é o reload em cascata do `optionalDependsOn` (ADR 0099).
+          // quando o provedor sobe é o reload em cascata do `optionalDependsOn` (ADR 0095).
           const absent = (definition.services ?? []).filter((service) => !services.has(service));
           if (absent.length > 0) {
             log.warn(`comando "${definition.name}" não registrado: serviço não provido`, {
@@ -416,7 +416,7 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
  * `ctx.admin` do plugin `self`: delega às instâncias de `bot.plugins`/`bot.config`. As únicas
  * diferenças: recusa o que derrubaria o próprio plugin no meio da chamada (reload/disable dele,
  * ou `setOverrides`, que recarrega) e, como as demais ações do contexto, as que mudam estado
- * rejeitam depois do `dispose` (`live`, ADR 0033). As leituras ficam livres.
+ * rejeitam depois do `dispose` (`live`, ADR 0029). As leituras ficam livres.
  */
 function liveAdmin(
   self: string,
@@ -431,7 +431,7 @@ function liveAdmin(
       ),
     );
   // Tudo o que sai pelo admin passa pela máscara de segredos do bot: erro de `setup` e de config
-  // carrega texto de terceiros (ex.: "invalid key sk-…") que o log já censura (ADR 0111).
+  // carrega texto de terceiros (ex.: "invalid key sk-…") que o log já censura (ADR 0107).
   const masked =
     <A extends unknown[], R>(fn: (...args: A) => Promise<R>) =>
     async (...args: A): Promise<R> => {
@@ -612,8 +612,8 @@ type AnySubscribe = (event: BotEventName, first: unknown, second: unknown) => Un
 
 /**
  * Comando com o `log` do plugin dono no contexto de `run` e `onReject`, e os dois com prazo: um
- * deles preso seguraria o chat na fila de entrada para sempre (ADR 0005). Cada um tem o próprio
- * `Deadline`, filho do de vida do plugin, que dá o `signal` e prende o `reply` (ADR 0033).
+ * deles preso seguraria o chat na fila de entrada para sempre (ADR 0004). Cada um tem o próprio
+ * `Deadline`, filho do de vida do plugin, que dá o `signal` e prende o `reply` (ADR 0029).
  */
 function wrapCommand(
   plugin: string,
@@ -669,7 +669,7 @@ function wrapCommand(
 }
 
 /**
- * `run` que devolve texto (string ou `fmt`) responde com ele, como o `onReject` (ADR 0079): o
+ * `run` que devolve texto (string ou `fmt`) responde com ele, como o `onReject` (ADR 0075): o
  * mesmo que terminar com `await ctx.reply(texto)`, dentro do prazo do comando. Outro valor, como
  * a chave de um `c.reply(...)` devolvido, é ignorado.
  */
@@ -680,7 +680,7 @@ function replyWithResult(ctx: CommandContext, result: unknown): unknown {
 }
 
 /**
- * Checagem de papel com prazo e fail-closed (ADR 0035): lançar, rejeitar ou estourar o prazo
+ * Checagem de papel com prazo e fail-closed (ADR 0031): lançar, rejeitar ou estourar o prazo
  * recusa o comando e vira `plugin.error` do plugin dono do papel, não do dono do comando. Nunca
  * lança. Checagem síncrona passa direto, sem timer.
  */
@@ -729,7 +729,7 @@ function wrapRoleCheck(
 
 /**
  * Passo de conversa com a visão do plugin e o prazo do comando (`commandMs`): o passo roda dentro
- * da tarefa da fila do chat, e um preso seguraria o chat como um comando preso (ADR 0042). Tem o
+ * da tarefa da fila do chat, e um preso seguraria o chat como um comando preso (ADR 0038). Tem o
  * próprio `Deadline`, filho do de vida do plugin, como o comando.
  */
 function wrapStep(
@@ -753,7 +753,7 @@ function wrapStep(
         return error;
       },
       (error) => {
-        // A recusa de um contexto expirado já foi logada quando aconteceu (ADR 0033).
+        // A recusa de um contexto expirado já foi logada quando aconteceu (ADR 0029).
         if (error instanceof ContextExpiredError) return;
         log.error(`passo "${step}" rejeitou depois do prazo`, { step, err: error });
       },
@@ -764,7 +764,7 @@ function wrapStep(
 }
 
 /**
- * `onExpire` de um passo com a visão do plugin e o prazo do comando, como o passo (ADR 0097): roda
+ * `onExpire` de um passo com a visão do plugin e o prazo do comando, como o passo (ADR 0093): roda
  * na fila do chat, e um preso seguraria o chat. O `Deadline` é filho do de vida do plugin, então
  * o reload aborta o `signal` e recusa o `reply` de um `onExpire` ainda rodando.
  */
@@ -789,7 +789,7 @@ function wrapExpire(
         return error;
       },
       (error) => {
-        // A recusa de um contexto expirado já foi logada quando aconteceu (ADR 0033).
+        // A recusa de um contexto expirado já foi logada quando aconteceu (ADR 0029).
         if (error instanceof ContextExpiredError) return;
         log.error(`onExpire do passo "${step}" rejeitou depois do prazo`, { step, err: error });
       },

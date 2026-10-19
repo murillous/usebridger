@@ -10,15 +10,15 @@ registradas; para mudar uma, proponha um ADR novo que a substitua.
   pacote, imports e regras do Biome estão no `README.md` — leia antes de criar ou mexer num
   pacote.
 - O LumaBot (app de referência, plugins da Luma e `legacy/`) vive em `murillous/LumaBot` e usa
-  os pacotes do npm ([ADR 0084](docs/adr/0084-repositorios-separados.md),
-  [ADR 0086](docs/adr/0086-plugins-da-luma-no-lumabot.md)). O kernel publica só os plugins
-  oficiais `plugin-metrics` e `plugin-dashboard` ([ADR 0107](docs/adr/0107-plugins-oficiais-de-metricas-e-dashboard.md)).
+  os pacotes do npm ([ADR 0080](docs/adr/0080-repositorios-separados.md),
+  [ADR 0082](docs/adr/0082-plugins-da-luma-no-lumabot.md)). O kernel publica só os plugins
+  oficiais `plugin-metrics` e `plugin-dashboard` ([ADR 0103](docs/adr/0103-plugins-oficiais-de-metricas-e-dashboard.md)).
 
 ## Git
 
 Branch a partir de `develop` e PR com `--base develop`, a branch de integração. A `main` é a
 padrão do GitHub e a do release: só recebe a `develop` e o PR de versão
-([ADR 0085](docs/adr/0085-release-a-partir-da-main.md)).
+([ADR 0081](docs/adr/0081-release-a-partir-da-main.md)).
 Commits em Conventional Commits, descrição em PT-BR, com o ID do roadmap:
 `feat(core): roteador de comandos (M1-2.1)`. `Closes #N` no commit ou PR de cada issue.
 
@@ -30,7 +30,7 @@ O Biome barra default export, `../`, `process.env` fora da config e `catch` vazi
 - Erro sempre tem destino: tratado, relançado ou registrado com fallback explícito.
 - A menor solução que resolve: abstração e configuração só quando a tarefa atual exige.
 - Plugins conversam com o core pela API pública (`@usebridger/*`). Se faltar algo, a lacuna é
-  do core — resolva lá ([ADR 0029](docs/adr/0029-open-core-repo-privado.md)).
+  do core — resolva lá ([ADR 0026](docs/adr/0026-open-core-repo-privado.md)).
 
 ## Definição de pronto
 

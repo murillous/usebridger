@@ -249,7 +249,7 @@ describe('createBot', () => {
     expect(() => bot.onStop(vi.fn())).toThrow(BotStateError);
   });
 
-  it('duas instâncias no mesmo processo não compartilham estado (ADR 0004)', async () => {
+  it('duas instâncias no mesmo processo não compartilham estado (ADR 0003)', async () => {
     const transportA = fakeTransport();
     const transportB = fakeTransport();
     const a: Bot = createBot({ transport: transportA });

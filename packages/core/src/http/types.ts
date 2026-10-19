@@ -1,4 +1,4 @@
-// Contrato do HTTP do core (ADR 0020, 0076): Request/Response da Web API, sem tipo do Hono, que
+// Contrato do HTTP do core (ADR 0018, 0072): Request/Response da Web API, sem tipo do Hono, que
 // fica como detalhe interno do servidor.
 
 /** Métodos aceitos numa rota. `HEAD` sai do `GET`. */

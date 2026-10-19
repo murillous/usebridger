@@ -389,7 +389,7 @@ describe('falhas', () => {
     ]);
   });
 
-  it('recusa de contexto expirado depois do prazo não vai ao onLateError (ADR 0033)', async () => {
+  it('recusa de contexto expirado depois do prazo não vai ao onLateError (ADR 0029)', async () => {
     const late: PluginErrorEvent[] = [];
     const service = create({ jobTimeoutMs: 500, onLateError: (e) => late.push(e) });
     const expired = new ContextExpiredError('p', 'send', 'job "j"', new Error('prazo'));

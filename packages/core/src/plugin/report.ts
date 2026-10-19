@@ -56,8 +56,8 @@ interface ReportBase {
 }
 
 /**
- * Comando que o plugin pediu e o kernel deixou de fora por capability ausente (ADR 0090) ou por
- * serviço não provido (ADR 0099).
+ * Comando que o plugin pediu e o kernel deixou de fora por capability ausente (ADR 0086) ou por
+ * serviço não provido (ADR 0095).
  */
 export interface UnregisteredCommand {
   readonly command: string;
@@ -123,7 +123,7 @@ export type SkippedPluginEntry = Extract<PluginReportEntry, { status: 'skipped' 
 
 /**
  * Boot abortado porque um ou mais plugins não carregaram por motivo diferente de `disabled`
- * (ADR 0102). `plugin`, `version` e `reason` são da primeira falha na ordem de carga — a raiz,
+ * (ADR 0098). `plugin`, `version` e `reason` são da primeira falha na ordem de carga — a raiz,
  * já que dependentes vêm depois; `failures` traz todas, para corrigir de uma vez. Em
  * `setup-failed`, `cause` é o `PluginLifecycleError` (com o erro original no `cause` dele).
  */

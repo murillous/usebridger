@@ -1,4 +1,4 @@
-// Os 5 cenários do plano §7 (D30). Cada um sobe o bot de referência e devolve uma medida. O
+// Os 5 cenários do plano §7 (D27). Cada um sobe o bot de referência e devolve uma medida. O
 // runner (`main.ts`) roda cada execução num processo novo: memória e boot dependem de o processo
 // não ter carregado nada antes.
 
@@ -20,12 +20,12 @@ export interface Scenario {
   readonly target: { readonly max: number } | { readonly min: number };
   /**
    * Execuções, cada uma num processo. A meta vale para a mediana; a comparação com o baseline usa
-   * o quartil bom (ADR 0089). Mais execuções onde cada uma é barata.
+   * o quartil bom (ADR 0085). Mais execuções onde cada uma é barata.
    */
   readonly runs: number;
   /**
    * Se o CI barra piora > 10% sobre o baseline. Desligado onde a medida fica perto de zero e a
-   * piora relativa seria só ruído; aí vale só a meta (ADR 0054).
+   * piora relativa seria só ruído; aí vale só a meta (ADR 0050).
    */
   readonly checksRegression: boolean;
   readonly run: () => Promise<number>;
@@ -188,7 +188,7 @@ export const SCENARIOS: readonly Scenario[] = [
   },
   {
     // O mesmo `overhead` com um observador vazio em cada sinal: o custo do `ctx.observe` no
-    // caminho quente (ADR 0106). Sem observador, o `overhead` mede o guarda.
+    // caminho quente (ADR 0102). Sem observador, o `overhead` mede o guarda.
     name: 'overhead-observed',
     description: 'Overhead do kernel por mensagem com observadores (p99)',
     unit: 'ms',

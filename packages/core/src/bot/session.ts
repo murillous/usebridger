@@ -1,6 +1,6 @@
-// Sessões vivas por storage (ADR 0036): a mesma sessão não roda em dois bots que dividem um
+// Sessões vivas por storage (ADR 0032): a mesma sessão não roda em dois bots que dividem um
 // storage. O registro fica pendurado no próprio objeto do storage, e não num mapa do módulo,
-// para não haver estado global (ADR 0004); `Symbol.for` faz duas cópias do core se enxergarem.
+// para não haver estado global (ADR 0003); `Symbol.for` faz duas cópias do core se enxergarem.
 
 import { BotConfigError } from '#config/owners.ts';
 import type { StoragePort } from '#storage/types.ts';

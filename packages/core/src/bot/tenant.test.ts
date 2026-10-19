@@ -1,4 +1,4 @@
-// Aceite do #278 (ADR 0072): um bot atende vários tenants e o mesmo plugin não lê os dados de um
+// Aceite do #278 (ADR 0068): um bot atende vários tenants e o mesmo plugin não lê os dados de um
 // no outro, sem filtrar nada. O plugin usa o `ctx.storage` do `setup` por closure, como faria
 // de verdade, e o service de outro plugin e o job agendado também ficam no tenant da mensagem.
 
@@ -103,7 +103,7 @@ const notas = definePlugin({
   },
 });
 
-describe('Bot: isolamento por tenant (#278, ADR 0072)', () => {
+describe('Bot: isolamento por tenant (#278, ADR 0068)', () => {
   it('dois tenants, o mesmo plugin: nenhuma leitura cruzada', async () => {
     const transport = new RecordingTransport();
     const storage = createMemoryStorage();

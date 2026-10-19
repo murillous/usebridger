@@ -1,5 +1,5 @@
 // Report de plugins: duração do setup, contagem por ponto, optionalDependsOn e horário do boot
-// (M5-4.8, ADR 0114).
+// (M5-4.8, ADR 0110).
 
 import { afterEach, describe, expect, it } from 'vitest';
 import type { PluginAdmin } from '#bot/config.ts';

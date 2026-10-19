@@ -33,14 +33,14 @@ O passo a passo está em [Seu primeiro bot](/usebridger/comecando/primeiro-bot/)
 O transport entra como **fábrica** (`baileys({ ... })` devolve uma), não como objeto pronto: o
 bot a chama com o que só ele tem, como as credenciais da sessão no storage e um logger com o nome
 do transport. Assim o app não costura o auth state à mão, e o kernel consegue limpá-lo quando a
-plataforma desconecta a sessão ([ADR 0037](../adr/0037-transport-por-fabrica.md)).
+plataforma desconecta a sessão ([ADR 0033](../adr/0033-transport-por-fabrica.md)).
 
 ## Sessão
 
 A **sessão** é o número (ou a conta) que um bot opera, e o nome dela (`session`, padrão
 `'default'`) é o escopo de tudo o que o bot persiste: dados dos plugins, jobs, overrides de config
 e credenciais. Dois bots com sessões diferentes no mesmo banco não se enxergam
-([ADR 0036](../adr/0036-escopo-de-sessao.md)).
+([ADR 0032](../adr/0032-escopo-de-sessao.md)).
 
 ## Pareamento: QR ou código
 
@@ -55,14 +55,14 @@ transport chama os dois de **pareamento**:
 
 Os dois chegam como evento, e não como callback do transport, para o mesmo plugin de pareamento
 servir aos dois e o kernel contá-los igual na política de reconexão
-([ADR 0050](../adr/0050-codigo-de-pareamento.md)).
+([ADR 0046](../adr/0046-codigo-de-pareamento.md)).
 
 ## Quando a sessão cai
 
 A regra é: **queda de rede nunca apaga credenciais**. Perder a conexão, um erro do servidor ou um
 motivo desconhecido levam a reconectar sem limite de tentativas, com espera crescente (5 s, 10 s,
 até 15 s entre tentativas). Um bot que apagasse a sessão depois de N falhas pediria um pareamento
-manual a cada instabilidade de rede ([ADR 0045](../adr/0045-queda-de-rede-nao-limpa-sessao.md)).
+manual a cada instabilidade de rede ([ADR 0041](../adr/0041-queda-de-rede-nao-limpa-sessao.md)).
 
 As credenciais só são apagadas quando a própria plataforma diz que elas não valem mais:
 
@@ -76,7 +76,7 @@ As credenciais só são apagadas quando a própria plataforma diz que elas não 
 
 Enquanto a conexão está caída, a fila de saída pausa e segura as respostas por até 60 s; depois
 disso elas rejeitam, e o bot segue tentando reconectar
-([ADR 0039](../adr/0039-fila-de-saida-e-conexao.md), [ADR 0068](../adr/0068-desconexao-fatal-e-transport-sem-pareamento.md)).
+([ADR 0035](../adr/0035-fila-de-saida-e-conexao.md), [ADR 0064](../adr/0064-desconexao-fatal-e-transport-sem-pareamento.md)).
 O que fazer em produção está em [Rodar em produção → Re-pareamento](/usebridger/comecando/producao/#re-pareamento).
 
 ## Vários bots e vários processos
@@ -85,7 +85,7 @@ O que fazer em produção está em [Rodar em produção → Re-pareamento](/useb
 filas, scheduler e logger próprios. Vários bots podem dividir a **mesma instância** de storage e de
 HTTP, uma sessão cada. É também o caminho para atender várias plataformas: um bot por transport,
 porque capabilities, fila de saída e reconexão são de um transport só
-([ADR 0075](../adr/0075-varios-bots-e-escopo-compartilhado.md)).
+([ADR 0071](../adr/0071-varios-bots-e-escopo-compartilhado.md)).
 
 ```ts
 const storage = sqlite({ path: 'data/bot.db' });
@@ -102,7 +102,7 @@ Os dados de cada bot ficam na própria sessão. O plugin que quer um dado comum 
 (o Discord aceita o mesmo token em vários gateways; o web não derruba a conexão antiga). No
 `start()`, o bot trava a sessão no storage por 30 s e renova a trava a cada 10 s. Um segundo
 processo espera até 30 s e falha sem conectar; um restart logo depois de um crash sobe sozinho,
-quando a trava velha vence ([ADR 0074](../adr/0074-trava-de-sessao-entre-processos.md)).
+quando a trava velha vence ([ADR 0070](../adr/0070-trava-de-sessao-entre-processos.md)).
 
 Isso limita a escala de **um** número a um processo, de propósito: a fila de entrada que mantém a
 ordem das mensagens de um chat e a fila de saída que controla o ritmo anti-ban vivem em memória.
@@ -112,17 +112,17 @@ processo resolve com folga (veja as [metas de performance](operacao.md#métricas
 ## SQLite ou Postgres
 
 Os dois implementam o mesmo `StoragePort` e passam pela mesma suíte de contrato, então trocar de
-um para o outro não muda nenhum plugin ([ADR 0014](../adr/0014-storage-port-sqlite-postgres.md)).
+um para o outro não muda nenhum plugin ([ADR 0012](../adr/0012-storage-port-sqlite-postgres.md)).
 
 - **SQLite** é o padrão: um arquivo, nenhum serviço para operar, backup é copiar o arquivo. Usa o
   `node:sqlite` embutido no Node 24, sem dependência nativa
-  ([ADR 0051](../adr/0051-sqlite-via-node-sqlite.md)). Serve à grande maioria dos bots, inclusive
+  ([ADR 0047](../adr/0047-sqlite-via-node-sqlite.md)). Serve à grande maioria dos bots, inclusive
   com vários números no mesmo processo.
 - **Postgres** entra quando o banco precisa viver fora da máquina do bot: processos em máquinas
   diferentes (um por número) dividindo um banco, backup e réplica gerenciados, ou outros sistemas
   lendo os dados. As tabelas ficam num schema próprio (`bridger`), os documentos em `jsonb`, e as
   migrations rodam no boot sob um advisory lock
-  ([ADR 0078](../adr/0078-postgres-via-pg.md)).
+  ([ADR 0074](../adr/0074-postgres-via-pg.md)).
 
 Não há migração automática de dados de um para o outro.
 
@@ -133,7 +133,7 @@ os bots, como o storage. A porta só abre se alguém registrar uma rota. Os cami
 dono: `/plugins/<nome>/...` para os plugins, `/transports/<nome>/...` para os transports (o chat
 do transport web, webhooks), e `/sessions/<sessão>/...` na frente nas sessões que não são a
 `default`. Há também `/health`, que responde 200 com todas as sessões rodando e 503 senão
-([ADR 0020](../adr/0020-http-unico-hono.md), [ADR 0076](../adr/0076-http-do-core.md)).
+([ADR 0018](../adr/0018-http-unico-hono.md), [ADR 0072](../adr/0072-http-do-core.md)).
 
 Um plugin registra rota com `ctx.http.route(method, path, handler)`, com `Request` e `Response`
 da Web API; o Hono por baixo é detalhe interno. Detalhes em [HTTP](../../packages/core/docs/http.md).
@@ -156,4 +156,4 @@ Na prática:
   supervisor.
 
 O transport web é o exemplo: ele aceita a conexão do chat só com um JWT assinado pelo seu sistema
-([ADR 0077](../adr/0077-transport-web.md)).
+([ADR 0073](../adr/0073-transport-web.md)).

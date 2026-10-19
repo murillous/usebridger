@@ -1,6 +1,6 @@
 // Transport do WhatsApp sobre o Baileys (M2-1). Este módulo cuida da conexão: socket, QR ou
 // código de pareamento, credenciais no storage do bot e o motivo de cada queda. Quem decide
-// reconectar é o `Bot`, pela `ReconnectionPolicy` (ADR 0048). As mensagens recebidas passam
+// reconectar é o `Bot`, pela `ReconnectionPolicy` (ADR 0044). As mensagens recebidas passam
 // pela normalização (`normalize.ts`) antes de virar o evento `message`, e os demais eventos do
 // Baileys (reação, edição, apagamento, grupos) são convertidos em `events.ts`; o envio e as
 // demais ações traduzem o formato do core em `outgoing.ts`.
@@ -127,7 +127,7 @@ export class BaileysTransport implements Transport {
   readonly name = 'baileys';
   /**
    * Todas as capabilities do core, menos `actions`: o WhatsApp pelo Baileys não tem botões
-   * confiáveis, e o kernel envia o menu em texto numerado (ADR 0062).
+   * confiáveis, e o kernel envia o menu em texto numerado (ADR 0058).
    */
   readonly capabilities: ReadonlySet<Capability> = new Set<Capability>([
     'groups',
@@ -149,7 +149,7 @@ export class BaileysTransport implements Transport {
     'message.delete',
     'polls',
     'quoted',
-    // Pareia por QR ou código: credencial rejeitada limpa a sessão e pareia de novo (ADR 0068).
+    // Pareia por QR ou código: credencial rejeitada limpa a sessão e pareia de novo (ADR 0064).
     'pairing',
   ]);
 
@@ -165,13 +165,13 @@ export class BaileysTransport implements Transport {
   /** Sobe a cada `connect()`/`disconnect()`: invalida a tentativa que ainda estava começando. */
   #attempt = 0;
   /**
-   * Metadados por grupo (ADR 0046): o kernel os pede a cada comando `group-admin`. Invalidado
+   * Metadados por grupo (ADR 0042): o kernel os pede a cada comando `group-admin`. Invalidado
    * pelos eventos de grupo do Baileys e a cada conexão, porque a queda pode ter perdido algum.
    */
   readonly #groups = new Map<string, Promise<BaileysGroupMetadata>>();
   /** Contatos já vistos, entre conexões: o `contact.updated` sai só no que é novo. */
   readonly #contacts: ContactBook;
-  /** Enquetes vistas, para decifrar os votos (ADR 0071); o `disconnect()` as esquece. */
+  /** Enquetes vistas, para decifrar os votos (ADR 0067); o `disconnect()` as esquece. */
   readonly #polls = new PollBook();
 
   constructor(options: BaileysTransportOptions, deps: TransportDeps) {
@@ -179,7 +179,7 @@ export class BaileysTransport implements Transport {
     this.#driver = options.driver;
     this.#logLevel = options.logLevel;
     this.#deps = deps;
-    // Os nomes persistem no auth state da sessão, que o logout apaga (ADR 0101).
+    // Os nomes persistem no auth state da sessão, que o logout apaga (ADR 0097).
     this.#contacts = new ContactBook({ store: deps.auth, log: deps.log });
     this.#events = new TypedEmitter<TransportEvents>((error, event) =>
       this.#log.error('handler de evento do transport falhou', { err: error, event }),
@@ -196,7 +196,7 @@ export class BaileysTransport implements Transport {
   }
 
   /**
-   * O `WAMessage` de onde a mensagem saiu (ADR 0066), o mesmo que o envio usa para citar. A citada
+   * O `WAMessage` de onde a mensagem saiu (ADR 0062), o mesmo que o envio usa para citar. A citada
    * devolve o proto montado do `contextInfo`, sem `pushName` nem horário. O Baileys não emite
    * `interaction`: para ela, e para mensagem que não veio daqui, `undefined`.
    */
@@ -299,7 +299,7 @@ export class BaileysTransport implements Transport {
       }
     });
 
-    // Nomes sincronizados pelo Baileys alimentam as menções (e o `contact.updated`, ADR 0040).
+    // Nomes sincronizados pelo Baileys alimentam as menções (e o `contact.updated`, ADR 0036).
     const learn = (list: readonly Partial<BaileysContact>[]) => {
       if (!current()) return;
       enqueue(async () => {
@@ -391,7 +391,7 @@ export class BaileysTransport implements Transport {
       if (qr !== undefined) {
         pairing = true;
         if (this.#pairing === 'qr') {
-          // O Baileys gira o QR em 60 s e depois em 20 s (`qrTimeout` padrão, não configurado aqui); a validade segue isso (ADR 0115).
+          // O Baileys gira o QR em 60 s e depois em 20 s (`qrTimeout` padrão, não configurado aqui); a validade segue isso (ADR 0111).
           const expiresAt = Date.now() + (qrCount++ === 0 ? 60_000 : 20_000);
           this.#events.emit('connection.qr', { qr, expiresAt });
         } else if (!codeRequested && !state.creds.registered) {
@@ -462,7 +462,7 @@ export class BaileysTransport implements Transport {
 
   #pnForLid(socket: BaileysSocket, lid: string): Promise<string | null> {
     return socket.signalRepository.lidMapping.getPNForLID(lid).catch((error: unknown) => {
-      // Sem o par, o contato segue com `phone: null`: os papéis falham fechados (ADR 0046).
+      // Sem o par, o contato segue com `phone: null`: os papéis falham fechados (ADR 0042).
       this.#log.warn('falha ao resolver o telefone de um LID', { err: error, lid });
       return null;
     });

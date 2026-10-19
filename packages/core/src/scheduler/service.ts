@@ -36,7 +36,7 @@ type JobDocument = {
   /** Epoch ms. Indexado: é por ele que o loop consulta. */
   fireAt: number;
   payload: JsonValue;
-  /** Tenant de quem agendou (ADR 0072); o handler roda no escopo dele. Ausente: sem tenant. */
+  /** Tenant de quem agendou (ADR 0068); o handler roda no escopo dele. Ausente: sem tenant. */
   tenant?: string;
   /** Presente só em série (`every`): o documento é a série e `fireAt` a ocorrência pendente. */
   rule?: RecurrenceRule;
@@ -70,7 +70,7 @@ export interface SchedulerServiceOptions {
    */
   readonly onStorageError: (error: unknown) => void;
   /**
-   * Escopo de tenant do bot (ADR 0072): `at` guarda o tenant corrente no job, e o handler roda
+   * Escopo de tenant do bot (ADR 0068): `at` guarda o tenant corrente no job, e o handler roda
    * no escopo dele. Padrão: um escopo próprio, sem tenant.
    */
   readonly tenants?: TenantScope;
@@ -211,7 +211,7 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
   const abandons = new Map<string, (reason: unknown) => void>();
 
   // Contexto assíncrono de quem criou o serviço. O loop roda nele, e não no de quem o acordou: um
-  // `schedule` feito dentro de um observador de `log` (ADR 0109) não pode emprestar o silêncio
+  // `schedule` feito dentro de um observador de `log` (ADR 0105) não pode emprestar o silêncio
   // aos handlers de outros plugins (#163).
   const detached = AsyncLocalStorage.snapshot();
   let started = false;
@@ -406,7 +406,7 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
   /**
    * Roda o handler contra o prazo e resolve `false` só se ele foi abandonado no `stop`. Nunca
    * rejeita: toda falha já foi entregue ao `onError`. Estourado o prazo (ou abandonado), o
-   * `signal` do job aborta (ADR 0033).
+   * `signal` do job aborta (ADR 0029).
    */
   function run(doc: StoredJob, { handler, lifetime }: RegisteredHandler): Promise<boolean> {
     const deadline = new Deadline(lifetime);
@@ -455,7 +455,7 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
             return;
           }
           // Rejeição depois do prazo: já reportado como timeout; o erro tardio vai só ao
-          // `onLateError`. A recusa de um contexto expirado já foi logada (ADR 0033).
+          // `onLateError`. A recusa de um contexto expirado já foi logada (ADR 0029).
           if (error instanceof ContextExpiredError) return;
           onLateError({
             plugin: doc.plugin,

@@ -1,5 +1,5 @@
-// O perfil `web` do kit de testes promete as capabilities e os limites deste transport (ADR 0073,
-// 0077). Se um dos dois mudar sem o outro, o plugin testado no perfil passa e falha no web real.
+// O perfil `web` do kit de testes promete as capabilities e os limites deste transport (ADR 0069,
+// 0073). Se um dos dois mudar sem o outro, o plugin testado no perfil passa e falha no web real.
 
 import { createLogger, type Transport } from '@usebridger/core';
 import { PROFILES } from '@usebridger/testing/bot';

@@ -112,7 +112,7 @@ describe('createTestBot', () => {
     expect(bot.sent).toContainText('ok');
   });
 
-  it('remetente sem telefone, com username e claims, chega ao plugin (ADR 0057)', async () => {
+  it('remetente sem telefone, com username e claims, chega ao plugin (ADR 0053)', async () => {
     const plugin = definePlugin({
       name: 'perfil',
       version: '1.0.0',
@@ -139,7 +139,7 @@ describe('createTestBot', () => {
     expect(bot.sent).toContainText('@ana diretora');
   });
 
-  it('chat de thread, com espaço e título, chega ao plugin e a resposta vai ao chat.id (ADR 0058)', async () => {
+  it('chat de thread, com espaço e título, chega ao plugin e a resposta vai ao chat.id (ADR 0054)', async () => {
     const plugin = definePlugin({
       name: 'onde',
       version: '1.0.0',
@@ -244,7 +244,7 @@ describe('createTestBot', () => {
   });
 });
 
-describe('createTestBot: conversa com resposta esperada (ADR 0060)', () => {
+describe('createTestBot: conversa com resposta esperada (ADR 0056)', () => {
   it('cada receive assenta: a pergunta sai antes da resposta, e a resposta vai ao passo', async () => {
     const notas = definePlugin({
       name: 'notas',
@@ -273,7 +273,7 @@ describe('createTestBot: conversa com resposta esperada (ADR 0060)', () => {
   });
 });
 
-describe('createTestBot: texto formatado e limites (ADR 0061)', () => {
+describe('createTestBot: texto formatado e limites (ADR 0057)', () => {
   const notas = () =>
     definePlugin({
       name: 'notas',
@@ -310,7 +310,7 @@ describe('createTestBot: texto formatado e limites (ADR 0061)', () => {
   });
 });
 
-describe('createTestBot: botões (ADR 0062)', () => {
+describe('createTestBot: botões (ADR 0058)', () => {
   const escola = () =>
     definePlugin({
       name: 'escola',
@@ -367,7 +367,7 @@ describe('createTestBot: botões (ADR 0062)', () => {
   });
 });
 
-describe('createTestBot: objeto bruto no ctx.unsafe.raw() (ADR 0066)', () => {
+describe('createTestBot: objeto bruto no ctx.unsafe.raw() (ADR 0062)', () => {
   interface Seen {
     readonly raw: unknown;
     readonly quoted: unknown;

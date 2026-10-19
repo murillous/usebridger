@@ -1,4 +1,4 @@
-// Aceite do #279 (ADR 0075): vários bots no mesmo processo e no mesmo storage, um por transport.
+// Aceite do #279 (ADR 0071): vários bots no mesmo processo e no mesmo storage, um por transport.
 // O `ctx.storage` de cada um fica na sua sessão; só o `ctx.storage.shared`, que o plugin pede, é
 // comum a todos, e segue o tenant como o da sessão.
 
@@ -82,7 +82,7 @@ const rank = definePlugin({
   },
 });
 
-describe('Bot: vários bots num storage com escopo compartilhado (#279, ADR 0075)', () => {
+describe('Bot: vários bots num storage com escopo compartilhado (#279, ADR 0071)', () => {
   it('dois bots, um storage: nenhuma leitura cruzada fora do escopo compartilhado', async () => {
     const storage = createMemoryStorage();
     const zap = transportNamed('baileys');

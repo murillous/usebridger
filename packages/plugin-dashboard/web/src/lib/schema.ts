@@ -12,6 +12,7 @@ export type Control =
   | 'datetime'
   | 'list'
   | 'record'
+  | 'objects'
   | 'json';
 
 export interface Field {
@@ -23,13 +24,15 @@ export interface Field {
   required: boolean;
   /** Campo `secret`: só máscara, nunca entra no PUT. */
   secret: boolean;
-  /** `x-bridger-set-secret` (ADR 0121): o core aceita `setSecret` neste campo (há chave mestra). */
+  /** `x-bridger-set-secret` (ADR 0117): o core aceita `setSecret` neste campo (há chave mestra). */
   settable: boolean;
   options?: string[];
   /** Exemplo do schema (`examples[0]`), usado como placeholder. */
   placeholder?: string;
   /** Tipo dos itens de `list` e dos valores de `record`. */
   item?: 'text' | 'number';
+  /** Campos de cada item de `objects` (array de objetos com campos simples). */
+  itemFields?: Field[];
   default?: unknown;
   /** Tipo Zod aproximado a partir do JSON Schema (`z.number().min(0)`), para a dica do campo. */
   hint: string;
@@ -68,7 +71,24 @@ function unwrap(schema: Json): Json {
     : schema;
 }
 
-function control(schema: Json): Pick<Field, 'control' | 'options' | 'item'> {
+// Campos que o editor de `objects` desenha dentro de cada item; o resto do item cai no JSON cru.
+const ITEM_CONTROLS = new Set<Control>(['text', 'number', 'integer', 'boolean', 'enum']);
+
+/** Campos do item de um array de objetos, ou `undefined` se algum não cabe no editor de itens. */
+function itemFieldsOf(items: unknown): Field[] | undefined {
+  if (!isObject(items)) return undefined;
+  const item = unwrap(items);
+  if (typeOf(item) !== 'object' || !isObject(item['properties'])) return undefined;
+  const nodes = buildFields(item);
+  const fields = nodes.filter((n) => n.node === 'field');
+  const simple =
+    fields.length > 0 &&
+    fields.length === nodes.length &&
+    fields.every((f) => !f.secret && ITEM_CONTROLS.has(f.control));
+  return simple ? fields.map(({ node: _, ...f }) => f) : undefined;
+}
+
+function control(schema: Json): Pick<Field, 'control' | 'options' | 'item' | 'itemFields'> {
   const options = schema['enum'];
   if (Array.isArray(options)) return { control: 'enum', options: options.map(String) };
   if (schema['const'] !== undefined) return { control: 'enum', options: [String(schema['const'])] };
@@ -85,7 +105,8 @@ function control(schema: Json): Pick<Field, 'control' | 'options' | 'item'> {
       const items = isObject(schema['items']) ? typeOf(unwrap(schema['items'])) : undefined;
       if (items === 'string') return { control: 'list', item: 'text' };
       if (items === 'number' || items === 'integer') return { control: 'list', item: 'number' };
-      return { control: 'json' };
+      const itemFields = itemFieldsOf(schema['items']);
+      return itemFields ? { control: 'objects', itemFields } : { control: 'json' };
     }
     case 'object': {
       const values = schema['additionalProperties'];
@@ -280,7 +301,10 @@ export function parseList(text: string, item: 'text' | 'number'): unknown[] {
   return item === 'number' ? lines.map((line) => parseNumber(line)) : lines;
 }
 
-/** Issues do servidor por campo; as que não casam com nenhum campo vão em `orphans`. */
+/**
+ * Issues do servidor por campo; as que não casam com nenhum campo vão em `orphans`. Issue de item
+ * de `objects` (`models.0.model`) vai para a lista, com o item e o campo na mensagem.
+ */
 export function groupIssues(
   issues: ConfigIssue[],
   fields: Field[],
@@ -288,11 +312,65 @@ export function groupIssues(
   const known = new Set(fields.map((f) => f.path));
   const byPath: Record<string, string[]> = {};
   const orphans: ConfigIssue[] = [];
+  const add = (path: string, message: string) => {
+    byPath[path] = [...(byPath[path] ?? []), message];
+  };
   for (const issue of issues) {
-    if (known.has(issue.path)) byPath[issue.path] = [...(byPath[issue.path] ?? []), issue.message];
-    else orphans.push(issue);
+    if (known.has(issue.path)) {
+      add(issue.path, issue.message);
+      continue;
+    }
+    const list = fields.find((f) => f.control === 'objects' && issue.path.startsWith(`${f.path}.`));
+    if (!list) {
+      orphans.push(issue);
+      continue;
+    }
+    const [index, key] = issue.path.slice(list.path.length + 1).split('.');
+    const label = list.itemFields?.find((f) => f.path === key)?.label ?? key;
+    const where = [`Item ${Number(index) + 1}`, label].filter(Boolean).join(', ');
+    add(list.path, `${where}: ${issue.message}`);
   }
   return { byPath, orphans };
+}
+
+/** Item do editor de `objects`: texto cru por campo (número pela metade não some) e checkbox. */
+export type ObjectRow = Record<string, string | boolean | undefined>;
+
+/** Lista de objetos -> linhas do editor; campo ausente vira vazio. */
+export function objectsToRows(value: unknown, fields: Field[]): ObjectRow[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => {
+    const row: ObjectRow = {};
+    for (const f of fields) {
+      const v = isObject(item) ? item[f.path] : undefined;
+      row[f.path] = f.control === 'boolean' ? v === true : v === undefined ? '' : String(v);
+    }
+    return row;
+  });
+}
+
+/**
+ * Linhas -> lista de objetos, na ordem do editor. Campo vazio fica ausente (vale o default do
+ * schema); item sem nenhum texto some, como a linha em branco da `list`; lista vazia vira ausente.
+ */
+export function rowsToObjects(rows: ObjectRow[], fields: Field[]): Json[] | undefined {
+  const out: Json[] = [];
+  for (const row of rows) {
+    const item: Json = {};
+    let filled = false;
+    for (const f of fields) {
+      const v = row[f.path];
+      if (f.control === 'boolean') {
+        item[f.path] = v === true;
+        continue;
+      }
+      if (typeof v !== 'string' || v.trim() === '') continue;
+      filled = true;
+      item[f.path] = f.control === 'number' || f.control === 'integer' ? parseNumber(v) : v;
+    }
+    if (filled) out.push(item);
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 /** Itens da lista -> linhas de texto do editor (uma por item). */

@@ -1,8 +1,8 @@
 # HTTP e WebSocket
 
 O core tem **um** servidor HTTP por processo, dividido por todos os bots, para webhooks, o
-dashboard e o chat web ([ADR 0020](../../../docs/adr/0020-http-unico-hono.md),
-[ADR 0076](../../../docs/adr/0076-http-do-core.md)). Plugins registram rotas em `ctx.http`, o
+dashboard e o chat web ([ADR 0018](../../../docs/adr/0018-http-unico-hono.md),
+[ADR 0072](../../../docs/adr/0072-http-do-core.md)). Plugins registram rotas em `ctx.http`, o
 transport em `deps.http`. A porta só abre se houver rota.
 
 ## Ligar o servidor
@@ -57,7 +57,7 @@ para montar uma URL pública.
 503 { "status": "degraded", "sessions": { "default": "running", "erp": "starting" } }
 ```
 
-200 só com todas as sessões em `running`. Uma sessão em `failed` (a reconexão desistiu, [ADR 0120](../../../docs/adr/0120-giveup-da-reconexao-leva-ao-estado-failed.md)) mantém o HTTP no ar, mas faz o `/health` responder 503. Serve de liveness e readiness para Docker e PM2, mas em `failed` o 503 indica só que a sessão não está pronta (readiness): para manter o painel de pé, não reinicie o processo por esse sinal ([ADR 0120](../../../docs/adr/0120-giveup-da-reconexao-leva-ao-estado-failed.md)). O
+200 só com todas as sessões em `running`. Uma sessão em `failed` (a reconexão desistiu, [ADR 0116](../../../docs/adr/0116-giveup-da-reconexao-leva-ao-estado-failed.md)) mantém o HTTP no ar, mas faz o `/health` responder 503. Serve de liveness e readiness para Docker e PM2, mas em `failed` o 503 indica só que a sessão não está pronta (readiness): para manter o painel de pé, não reinicie o processo por esse sinal ([ADR 0116](../../../docs/adr/0116-giveup-da-reconexao-leva-ao-estado-failed.md)). O
 corpo mostra os nomes das sessões: se isso não pode ser público, não exponha o `/health` no
 proxy.
 

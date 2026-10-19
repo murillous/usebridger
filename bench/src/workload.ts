@@ -22,11 +22,11 @@ export interface Workload {
 }
 
 export interface WorkloadOptions {
-  /** Um observador vazio em cada sinal do core, para medir o custo deles (ADR 0106). */
+  /** Um observador vazio em cada sinal do core, para medir o custo deles (ADR 0102). */
   readonly observed?: boolean;
 }
 
-/** Sobe o bot de referência sobre o `FakeTransport`, com a fila de saída sem intervalo (D47). */
+/** Sobe o bot de referência sobre o `FakeTransport`, com a fila de saída sem intervalo (D43). */
 export async function createWorkload(options: WorkloadOptions = {}): Promise<Workload> {
   let pluginErrors = 0;
   const plugins = Array.from({ length: PLUGIN_COUNT }, (_, i) => benchPlugin(i));
@@ -68,7 +68,7 @@ export async function createWorkload(options: WorkloadOptions = {}): Promise<Wor
 /**
  * Plugin genérico com config Zod, mensagens, comandos e listeners. O `bench-0` é o que responde:
  * `!ping` e `oi` geram uma resposta cada, e um listener espera um ciclo do event loop, como um
- * plugin que faz I/O (ADR 0042). Os demais `dependsOn` dele, para o boot ordenar o grafo.
+ * plugin que faz I/O (ADR 0038). Os demais `dependsOn` dele, para o boot ordenar o grafo.
  */
 function benchPlugin(index: number): PluginDefinition {
   const name = `bench-${index}`;

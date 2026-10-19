@@ -1,4 +1,4 @@
-// Aceite do #287 (ADR 0077), de ponta a ponta: bot real, HTTP do core numa porta livre e o cliente
+// Aceite do #287 (ADR 0073), de ponta a ponta: bot real, HTTP do core numa porta livre e o cliente
 // de referência pelo WebSocket e pelo `fetch` globais do Node.
 
 import { request } from 'node:http';

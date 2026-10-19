@@ -43,7 +43,7 @@ describe('Bot: ordem de boot', () => {
     expect(transport.calls).not.toContain('connect');
   });
 
-  it('conflito de papel rejeita o start() sem chamar connect (ADR 0035)', async () => {
+  it('conflito de papel rejeita o start() sem chamar connect (ADR 0031)', async () => {
     const transport = new RecordingTransport();
     const plugin = (name: string) =>
       definePlugin({
@@ -64,7 +64,7 @@ describe('Bot: ordem de boot', () => {
     expect(transport.calls).not.toContain('connect');
   });
 
-  it('conflito de serviço rejeita o start() sem chamar connect (ADR 0035)', async () => {
+  it('conflito de serviço rejeita o start() sem chamar connect (ADR 0031)', async () => {
     const transport = new RecordingTransport();
     const plugin = (name: string) =>
       definePlugin({

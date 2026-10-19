@@ -1,4 +1,4 @@
-// Tabela de plugins traz dependsOn, serviços providos e contribuições (M5-4.7, ADR 0112).
+// Tabela de plugins traz dependsOn, serviços providos e contribuições (M5-4.7, ADR 0108).
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { definePlugin } from '#plugin/define.ts';

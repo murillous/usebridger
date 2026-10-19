@@ -1,4 +1,4 @@
-// Sinal `log` dos observadores (ADR 0109): envolve o Logger raiz do bot, e não o destino do
+// Sinal `log` dos observadores (ADR 0105): envolve o Logger raiz do bot, e não o destino do
 // pino, para cobrir também o `config.logger` do app. Sem observador de `log`, a linha passa
 // direto: nada é montado.
 

@@ -1,14 +1,14 @@
 # Distribuindo plugins
 
-O kernel não publica plugins ([ADR 0086](../adr/0086-plugins-da-luma-no-lumabot.md)): todo plugin,
+O kernel não publica plugins ([ADR 0082](../adr/0082-plugins-da-luma-no-lumabot.md)): todo plugin,
 inclusive os do LumaBot, é código de quem o escreve, num repositório próprio ou dentro do app. Há
 dois caminhos para um plugin chegar ao bot, e os dois produzem o mesmo objeto
-([ADR 0007](../adr/0007-plugins-via-npm-e-pasta.md)).
+([ADR 0005](../adr/0005-plugins-via-npm-e-pasta.md)).
 
 ## Num repositório próprio, publicado no npm
 
 O scaffold cria o projeto pronto para publicar
-([ADR 0081](../adr/0081-create-bridger-plugin.md)):
+([ADR 0077](../adr/0077-create-bridger-plugin.md)):
 
 ```sh
 npm create bridger-plugin@latest bridger-plugin-ola
@@ -25,7 +25,7 @@ Para publicar:
 - **privado:** um pacote com escopo numa organização paga do npm, ou num registry privado
   (GitHub Packages, Verdaccio). O bot instala com o `.npmrc` apontando o escopo para o registry.
   É assim que os plugins e transports comerciais do projeto são distribuídos
-  ([ADR 0029](../adr/0029-open-core-repo-privado.md)).
+  ([ADR 0026](../adr/0026-open-core-repo-privado.md)).
 
 ## Plugar no bot
 
@@ -54,7 +54,7 @@ npm install ../bridger-plugin-ola
 
 O npm cria um link para a pasta, e o pnpm faz o mesmo com `"bridger-plugin-ola": "link:../bridger-plugin-ola"`
 no `package.json`. Depois de mudar o plugin, rode o `build` de novo e reinicie o bot: não há
-hot-reload de código ([ADR 0008](../adr/0008-sem-hot-reload.md)).
+hot-reload de código ([ADR 0006](../adr/0006-sem-hot-reload.md)).
 
 Num link, o plugin importa o `@usebridger/core` da pasta **dele** (a dev dependency), e o bot, o da
 pasta do bot. Quase tudo funciona assim, porque o plugin é um objeto comum. O que compara
@@ -70,7 +70,7 @@ O plugin declara o core em dois lugares, e cada um protege um momento diferente:
   dependência, porque o bot precisa de uma cópia só do kernel, a que ele mesmo instalou.
 - **`engine` no manifesto**: confere na **execução**, contra a versão do core que de fato carregou.
   Fora da faixa, o boot para e diz qual plugin e por quê
-  ([ADR 0016](../adr/0016-manifesto-do-plugin.md)).
+  ([ADR 0014](../adr/0014-manifesto-do-plugin.md)).
 
 Mantenha as duas faixas iguais. No `0.x`, a regra do `^` do npm trava no minor: `^0.3.0` aceita só
 `0.3.x`. O template começa com `<1.0.0`, que aceita qualquer `0.x`; um plugin que quer se proteger

@@ -1,4 +1,4 @@
-// Aceite do #120 (ADR 0076): um servidor HTTP por processo, dividido pelos bots. Só abre a porta
+// Aceite do #120 (ADR 0072): um servidor HTTP por processo, dividido pelos bots. Só abre a porta
 // se houver rota; `/health` responde pelo estado das sessões; rotas de plugin sob
 // `/plugins/<nome>`, de transport sob `/transports/<nome>`, e as de outra sessão sob
 // `/sessions/<sessão>`; WebSocket para os dois.
@@ -110,7 +110,7 @@ async function until(check: () => boolean): Promise<void> {
   expect(check()).toBe(true);
 }
 
-describe('HTTP do core (ADR 0076)', () => {
+describe('HTTP do core (ADR 0072)', () => {
   it('sem rota registrada a porta não abre', async () => {
     const http = server();
     await bot({ http, plugins: [semRota] }).start();
@@ -133,7 +133,7 @@ describe('HTTP do core (ADR 0076)', () => {
     expect(await health.json()).toEqual({ status: 'ok', sessions: { default: 'running' } });
   });
 
-  it('em failed o HTTP segue no ar com /health 503; o stop() fecha a porta (ADR 0120)', async () => {
+  it('em failed o HTTP segue no ar com /health 503; o stop() fecha a porta (ADR 0116)', async () => {
     const http = server();
     const transport = new RecordingTransport();
     const b = bot({ http, plugins: [api], transport });

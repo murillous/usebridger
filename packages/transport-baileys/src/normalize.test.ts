@@ -194,7 +194,7 @@ describe('toMessage: tipos', () => {
     expect(live).toMatchObject({ type: 'location', text: 'indo', location: { name: null } });
   });
 
-  it('endereço da localização no campo próprio (ADR 0069)', async () => {
+  it('endereço da localização no campo próprio (ADR 0065)', async () => {
     const venue = await toMessage(
       raw({
         locationMessage: {

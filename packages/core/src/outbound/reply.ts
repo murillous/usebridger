@@ -6,7 +6,7 @@ import { type QueueSendOptions, REPLY_ORIGIN, type ReplyOriginInfo } from './que
 import { captionFields, textContent } from './text.ts';
 import type { Reply, ReplyOptions, ReplyTextOptions, Sender } from './types.ts';
 
-/** Texto e botões que vão ao transport, depois de o kernel resolver as ações (ADR 0062). */
+/** Texto e botões que vão ao transport, depois de o kernel resolver as ações (ADR 0058). */
 export interface PreparedActions {
   /** O texto, com o menu numerado no fim quando o transport não leva os botões. */
   readonly text: MessageText;
@@ -31,7 +31,7 @@ export interface CreateReplyOptions {
 
 /**
  * Chat e remetente de uma resposta sem mensagem a citar: o `onExpire` de um passo responde a
- * quem não respondeu (ADR 0097).
+ * quem não respondeu (ADR 0093).
  */
 export type ReplyOrigin = Pick<Message, 'chat' | 'sender'>;
 
@@ -47,7 +47,7 @@ export function createReply(
 ): Reply {
   const chatId = message.chat.id;
   const quoted = options.quote === false || !('key' in message) ? undefined : message;
-  // Para o sinal `outbound.sent` (ADR 0106): o `ctx.send` direto não sabe o tipo do chat.
+  // Para o sinal `outbound.sent` (ADR 0102): o `ctx.send` direto não sabe o tipo do chat.
   const origin: ReplyOriginInfo = {
     chatType: message.chat.isGroup ? 'group' : 'private',
     ...('key' in message && { messageId: message.id }),

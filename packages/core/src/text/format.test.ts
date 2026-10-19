@@ -1,4 +1,4 @@
-// #273 (ADR 0061): helpers do texto formatado neutro.
+// #273 (ADR 0057): helpers do texto formatado neutro.
 
 import { describe, expect, it } from 'vitest';
 import { bold, code, fmt, isFormatted, italic, link, mention, plainText } from './format.ts';

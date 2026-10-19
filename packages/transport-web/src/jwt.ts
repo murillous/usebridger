@@ -1,4 +1,4 @@
-// Verificação do JWT do sistema do dono (ADR 0077). O `jose` cuida de assinatura, algoritmo, JWKS
+// Verificação do JWT do sistema do dono (ADR 0073). O `jose` cuida de assinatura, algoritmo, JWKS
 // e prazos; aqui fica só a escolha da chave e o que o transport exige do payload.
 
 import type { JsonValue } from '@usebridger/core';

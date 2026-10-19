@@ -1,4 +1,4 @@
-// O verificador do JWT (ADR 0077): algoritmos por tipo de chave, claims obrigatórios e JWKS.
+// O verificador do JWT (ADR 0073): algoritmos por tipo de chave, claims obrigatórios e JWKS.
 
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';

@@ -1,7 +1,7 @@
 # @usebridger/plugin-metrics — documentação
 
 Plugin oficial que provê o serviço `metrics`, mede o kernel sozinho e expõe o `GET /metrics`
-Prometheus ([ADR 0107](../../../docs/adr/0107-plugins-oficiais-de-metricas-e-dashboard.md)).
+Prometheus ([ADR 0103](../../../docs/adr/0103-plugins-oficiais-de-metricas-e-dashboard.md)).
 
 ## Usar
 
@@ -27,7 +27,7 @@ série. O gauge vai ao snapshot dos exportadores e ao `GET /metrics` (valor `las
 `bridger.outbound.pending`, que já sai ao vivo como `bridger_outbound_pending` e fica fora dos dois.
 
 `ownerOf(nome)` devolve o plugin que gravou a métrica primeiro. O serviço `metrics` tem escopo por
-quem chama (ADR 0116): cada plugin recebe uma instância que grava o nome dele como dono na primeira
+quem chama (ADR 0112): cada plugin recebe uma instância que grava o nome dele como dono na primeira
 escrita, sem declaração. O que o próprio plugin-metrics grava é `core`. Quando o plugin dono sai
 (reload ou disable), a métrica fica sem dono (`undefined`) até alguém gravá-la de novo.
 
@@ -71,7 +71,7 @@ ou reload do plugin. Rótulo de cardinalidade alta (ids, textos livres) esgota o
 
 `counter`/`observe` só mexem na memória. A cada `flushIntervalMs` (e uma última vez no
 `teardown`) o agregado é gravado com `Collection.increment`
-([ADR 0105](../../../docs/adr/0105-incremento-atomico-na-colecao.md)) na coleção `daily` do
+([ADR 0101](../../../docs/adr/0101-incremento-atomico-na-colecao.md)) na coleção `daily` do
 plugin: um documento por métrica, dia (UTC), série e campo. Nunca há gravação por chamada, e o
 intervalo é parado pelo `ctx.signal`. Gravação que falha volta ao agregado e é tentada no flush
 seguinte (com `error` no log). Dois bots no mesmo storage somam nos mesmos documentos.
@@ -102,14 +102,14 @@ Pela config do plugin (`pluginConfig.metrics`):
 ## Métricas do kernel
 
 O plugin assina `message.handled` e `outbound.sent` com `ctx.observe`
-([ADR 0106](../../../docs/adr/0106-observadores-do-core.md)) e grava no próprio agregado, com
+([ADR 0102](../../../docs/adr/0102-observadores-do-core.md)) e grava no próprio agregado, com
 rótulos de baixa cardinalidade e nunca id de chat ou de usuário:
 
 | Métrica | Tipo | Rótulos |
 | --- | --- | --- |
 | `bridger.messages.handled` | contador | `chatType`, `route`, `status`, `command` (se houver) |
 | `bridger.messages.handle_duration_ms` | histograma | `route`, `status` |
-| `bridger.outbound.pending` | gauge | nenhum; itens pendentes na fila de saída (todas as prioridades), amostrados de `ctx.stats()` a cada flush (ADR 0117) |
+| `bridger.outbound.pending` | gauge | nenhum; itens pendentes na fila de saída (todas as prioridades), amostrados de `ctx.stats()` a cada flush (ADR 0113) |
 | `bridger.outbound.sent` | contador | `kind`, `status`, `chatType` (só em `ctx.reply`) |
 | `bridger.active.users` / `bridger.active.groups` | contador (por dia) | nenhum |
 
@@ -126,7 +126,7 @@ conta de novo.
 
 ## `GET /metrics`
 
-Registrado no HTTP do core ([ADR 0020](../../../docs/adr/0020-http-unico-hono.md),
+Registrado no HTTP do core ([ADR 0018](../../../docs/adr/0018-http-unico-hono.md),
 [HTTP](../../core/docs/http.md)), sob a base do plugin: `/plugins/metrics/metrics` na sessão
 `default` e `/sessions/<sessão>/plugins/metrics/metrics` nas outras. Responde no formato de
 exposição de texto do Prometheus (0.0.4). Sem `http` no bot a rota não existe (um `info` no log)

@@ -2,7 +2,7 @@
 
 A resposta pode levar botões. O clique roda um comando ou um passo de conversa do plugin, e o
 transport sem botões recebe o menu em texto numerado
-([ADR 0062](../../../docs/adr/0062-acoes-e-botoes.md)).
+([ADR 0058](../../../docs/adr/0058-acoes-e-botoes.md)).
 
 ## Uso
 

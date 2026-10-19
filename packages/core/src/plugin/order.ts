@@ -22,7 +22,7 @@ export class PluginCycleError extends Error {
 }
 
 /**
- * Ordem de carga (ADR 0007): toposort em que `dependsOn`, `optionalDependsOn` (ADR 0099) e
+ * Ordem de carga (ADR 0005): toposort em que `dependsOn`, `optionalDependsOn` (ADR 0095) e
  * `after` são arestas (a dependência
  * vem antes) e, entre os prontos, desempata `priority` maior e depois a ordem recebida. Nomes
  * citados que não estão na lista não criam aresta — dependência ausente é motivo de "ignorado",

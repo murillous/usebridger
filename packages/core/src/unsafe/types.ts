@@ -1,4 +1,4 @@
-// Contrato do escape hatch (M1-15, ADR 0011; `raw` no ADR 0066).
+// Contrato do escape hatch (M1-15, ADR 0009; `raw` no ADR 0062).
 
 import type { Message } from '#message/types.ts';
 
@@ -10,7 +10,7 @@ export interface Unsafe {
    * Objeto bruto de onde a mensagem saiu (ex.: o `WAMessage` do Baileys), ou `undefined` se o
    * transport não o expõe ou a mensagem não veio dele (montada em teste ou pelo próprio plugin).
    * Na mensagem de um clique ou de um comando nativo, é o objeto bruto da interação. Chamar loga
-   * um aviso, uma vez por plugin, como o `native` (ADR 0066).
+   * um aviso, uma vez por plugin, como o `native` (ADR 0062).
    */
   raw(message: Message): unknown;
 }

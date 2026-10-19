@@ -1,6 +1,6 @@
-// Normalização (M2-1.2): `WAMessage` do Baileys → `Message` do core (ADR 0009). Desembrulha os
+// Normalização (M2-1.2): `WAMessage` do Baileys → `Message` do core (ADR 0007). Desembrulha os
 // envelopes (ephemeral, viewOnce, documentWithCaption), resolve o telefone de cada contato,
-// inclusive com LID (M1-16.4, ADR 0046), e monta a citada como `Message` também.
+// inclusive com LID (M1-16.4, ADR 0042), e monta a citada como `Message` também.
 
 import type { Contact, Mention, Message } from '@usebridger/core';
 import { createMessage, type MediaSource, type MessageInit } from '@usebridger/core/adapter';

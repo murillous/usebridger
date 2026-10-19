@@ -1,4 +1,4 @@
-// Comandos nativos (ADR 0064, #277): o transport lê a lista de comandos e recebe um aviso em lote
+// Comandos nativos (ADR 0060, #277): o transport lê a lista de comandos e recebe um aviso em lote
 // quando ela muda; o comando nativo chega pelo `interaction` e roda como o digitado.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -56,7 +56,7 @@ const tick = (): Promise<void> => new Promise((resolve) => setImmediate(resolve)
 
 const names = (commands: TransportCommands): string[] => commands.list().map((c) => c.name);
 
-describe('TransportDeps.commands (ADR 0064)', () => {
+describe('TransportDeps.commands (ADR 0060)', () => {
   it('no connect, a lista já tem os comandos de todos os plugins, sem aviso do boot', async () => {
     let atConnect: string[] = [];
     const escola = plugin('escola', (ctx) => {
@@ -231,7 +231,7 @@ async function started(extra: Partial<BotConfig> = {}) {
   return { bot, transport, commandEvents, lines };
 }
 
-describe('comando nativo pelo interaction (ADR 0064)', () => {
+describe('comando nativo pelo interaction (ADR 0060)', () => {
   it('roda o comando pelo nome ou alias, sem prefixo, com o texto livre como args', async () => {
     const { bot, transport, commandEvents } = await started();
     const interaction = slash('N', '"Maria Clara" 2026');

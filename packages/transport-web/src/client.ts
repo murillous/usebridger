@@ -1,4 +1,4 @@
-// Cliente de referência do protocolo v1 (ADR 0077), sobre o `WebSocket` e o `fetch` globais: roda
+// Cliente de referência do protocolo v1 (ADR 0073), sobre o `WebSocket` e o `fetch` globais: roda
 // no navegador e no Node 24. Serve de exemplo para o widget do sistema do dono e aos testes de ponta
 // a ponta. Só importa tipos e constantes do protocolo, sem o core nem o `jose`.
 

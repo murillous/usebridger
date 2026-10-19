@@ -1,4 +1,4 @@
-// Pontos de extensão no `Bot` (#83, ADR 0096): o caso sticker/sticker-text do LumaBot. A etapa
+// Pontos de extensão no `Bot` (#83, ADR 0092): o caso sticker/sticker-text do LumaBot. A etapa
 // que o `sticker-text` contribui sai no teardown, reload e disable dele, sem `ctx.signal` no
 // serviço do `sticker`.
 

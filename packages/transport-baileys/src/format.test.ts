@@ -1,4 +1,4 @@
-// #273 (ADR 0061): a árvore neutra do core na marcação do WhatsApp.
+// #273 (ADR 0057): a árvore neutra do core na marcação do WhatsApp.
 
 import { bold, code, fmt, italic, link, mention } from '@usebridger/core';
 import { describe, expect, it } from 'vitest';

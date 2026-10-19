@@ -30,7 +30,7 @@ const bot = createBot({
 await bot.start();
 ```
 
-`baileys()` devolve uma fábrica ([ADR 0037](../../../docs/adr/0037-transport-por-fabrica.md)): o
+`baileys()` devolve uma fábrica ([ADR 0033](../../../docs/adr/0033-transport-por-fabrica.md)): o
 bot entrega a ela o auth state da sessão e o logger. Nada abre antes do `bot.start()`.
 
 ## Opções
@@ -61,7 +61,7 @@ Só acontece quando a sessão não tem credenciais (primeiro uso ou depois de um
 - **Código**: no primeiro QR da tentativa, o transport pede o código para `pairing.phone` e emite
   `connection.pairing-code` (`{ code }`, 8 caracteres). O usuário digita o código no aparelho em
   *Aparelhos conectados → Conectar com número de telefone*. Um código por tentativa; quando ela
-  expira, o bot reconecta e vem um código novo ([ADR 0050](../../../docs/adr/0050-codigo-de-pareamento.md)).
+  expira, o bot reconecta e vem um código novo ([ADR 0046](../../../docs/adr/0046-codigo-de-pareamento.md)).
 
 Os dois contam para o `maxQrCount` da reconexão do bot. Logo depois do pareamento o servidor fecha
 a conexão pedindo restart (515); o bot reconecta sozinho, já com as credenciais novas.
@@ -117,7 +117,7 @@ o link expirou.
 
 `sender.id` e os ids de `mentions` são o JID nativo sem o aparelho, de telefone
 (`…@s.whatsapp.net`) ou LID (`…@lid`), como o WhatsApp mandou. `phone` é preenchido assim
-([ADR 0046](../../../docs/adr/0046-ids-de-contato-e-metadata-de-grupo.md)):
+([ADR 0042](../../../docs/adr/0042-ids-de-contato-e-metadata-de-grupo.md)):
 
 1. JID de telefone: o número do próprio id;
 2. LID com o JID alternativo que o Baileys manda junto (`participantAlt`, `remoteJidAlt`): o
@@ -154,7 +154,7 @@ pushName nem na memória nem no storage.
 Os nomes persistem por sessão no auth state (`deps.auth`), no tipo `bridger-contact-name`: o id é
 o JID normalizado e o valor, o nome. O par LID ↔ telefone vira uma entrada própria com o mesmo
 nome. Sobrevivem ao restart e o logout os apaga junto com as credenciais
-([ADR 0101](../../../docs/adr/0101-nomes-de-contatos-no-auth-state.md)).
+([ADR 0097](../../../docs/adr/0097-nomes-de-contatos-no-auth-state.md)).
 
 - **Leitura lazy:** a memória responde primeiro. Só quando ela não sabe o nome (nem pelo telefone
   par) o transport consulta o storage, uma vez por id, num único `getKeys` com o id e o par. A
@@ -233,7 +233,7 @@ remetente (o `trackUsers` do legacy) faz upsert a cada `contact.updated`.
 O WhatsApp cifra o voto com o segredo da enquete, que só vem na mensagem que a criou, e o Baileys 7
 não o decifra sozinho. O transport guarda em memória as enquetes que envia e as que recebe, até
 1000 (a mais antiga sai primeiro), e decifra cada voto antes de emitir `poll.vote`
-([ADR 0071](../../../docs/adr/0071-voto-em-enquete.md)):
+([ADR 0067](../../../docs/adr/0067-voto-em-enquete.md)):
 
 - `options` são os índices das opções marcadas, a escolha inteira de quem votou; `[]` é o voto
   retirado. Opção que a enquete não tem fica de fora.
@@ -260,7 +260,7 @@ O transport declara todas as capabilities do core (plano §6.10): `groups`, `gro
 `send.voice`, `send.sticker`, `send.document`, `media.download`, `message.edit`,
 `message.delete`, `polls`, `quoted` e `pairing`. Todo plugin que declara `requires` com elas carrega.
 `pairing` diz ao bot que a sessão se pareia por QR ou código: com ela, credencial rejeitada
-(`auth-failed`) limpa a sessão e pareia de novo, em vez de parar o bot (ADR 0068).
+(`auth-failed`) limpa a sessão e pareia de novo, em vez de parar o bot (ADR 0064).
 
 ## Envio e ações
 
@@ -281,7 +281,7 @@ fora.
 
 A mídia vai como `Buffer` ou `{ url }`, que o Baileys baixa. `mentions` entra em qualquer tipo.
 
-- **Texto formatado** ([ADR 0061](../../../docs/adr/0061-texto-formatado-neutro.md)): com
+- **Texto formatado** ([ADR 0057](../../../docs/adr/0057-texto-formatado-neutro.md)): com
   `formatted` (ou `formattedCaption`), o texto sai na marcação do WhatsApp: `*negrito*`,
   `_itálico_`, `` `código` `` e `rótulo (url)` no link. O espaço das pontas fica fora do
   marcador, porque o WhatsApp ignora `* a *`. Uma menção vira `@<usuário do JID>` (o número, ou o
@@ -309,10 +309,10 @@ A mídia vai como `Buffer` ou `{ url }`, que o Baileys baixa. `mentions` entra e
 completa de participantes com `isAdmin`/`isSuperAdmin` e o `phone` resolvido como nas mensagens
 (o `phoneNumber` que o WhatsApp manda junto com um LID ou o mapeamento da sessão). O transport não
 implementa `isChatAdmin`, então é esta lista que o kernel consulta no `role: 'group-admin'`
-([ADR 0059](../../../docs/adr/0059-grupos-multiplataforma.md)).
+([ADR 0055](../../../docs/adr/0055-grupos-multiplataforma.md)).
 
 Os metadados ficam em cache por grupo, porque o kernel os pede a cada comando de admin
-([ADR 0046](../../../docs/adr/0046-ids-de-contato-e-metadata-de-grupo.md)). O cache cai:
+([ADR 0042](../../../docs/adr/0042-ids-de-contato-e-metadata-de-grupo.md)). O cache cai:
 
 - nos eventos `groups.update` e `group-participants.update` do Baileys;
 - depois de `updateGroupParticipants`, sem esperar o evento;
@@ -337,7 +337,7 @@ As chaves de criptografia passam por um cache em memória (o `makeCacheableSigna
 Baileys, 5 minutos por chave): o Signal lê a sessão do remetente a cada mensagem, e o cache poupa
 essas leituras do storage. Toda gravação vai ao storage na hora. O cache é de cada tentativa de
 conexão: depois que o bot limpa a sessão, a próxima tentativa começa sem ele. Ele não vê o que
-outro processo grava na mesma sessão, o que o bot já impede ([ADR 0036](../../../docs/adr/0036-escopo-de-sessao.md)).
+outro processo grava na mesma sessão, o que o bot já impede ([ADR 0032](../../../docs/adr/0032-escopo-de-sessao.md)).
 
 O transport nunca apaga credenciais: quem limpa a sessão é o bot, na decisão `clean-session` da
 política de reconexão.
@@ -359,7 +359,7 @@ O transport não reconecta: emite `connection.status` `closed` com o motivo, e o
 
 O 500 não apaga a sessão: o Baileys o usa também para todo stream error sem motivo conhecido, e
 uma queda qualquer não pode custar o pareamento
-([ADR 0045](../../../docs/adr/0045-queda-de-rede-nao-limpa-sessao.md)). Pelo mesmo motivo o 405,
+([ADR 0041](../../../docs/adr/0041-queda-de-rede-nao-limpa-sessao.md)). Pelo mesmo motivo o 405,
 que o servidor manda quando recusa a versão do cliente, é `server-error`.
 
 ## `self` e `native`

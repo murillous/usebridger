@@ -1,9 +1,9 @@
-// Config por plugin (M1-13, ADRs 0017 e 0025). Junta as camadas — default do schema < override
+// Config por plugin (M1-13, ADRs 0015 e 0022). Junta as camadas — default do schema < override
 // salvo no storage (dashboard) < arquivo (config do app) < env —, valida com o schema Zod do
 // plugin, mescla os `messages` sobrescritos e mantém os valores secretos no `SecretSet` que o
 // logger consulta. Quem monta o `PluginContext` (M1-16) chama `resolve` a cada setup; uma
 // mudança de override é validada antes de salvar e dispara o reload do plugin. Campo `secret` não
-// entra por override: o storage guarda em texto puro (ADR 0032).
+// entra por override: o storage guarda em texto puro (ADR 0028).
 
 import type { z } from 'zod';
 import { createNoopLogger, MIN_SECRET_LENGTH } from '#logger/logger.ts';
@@ -29,7 +29,7 @@ import { decrypt, encrypt, isEnvelope, keyId } from './secret-cipher.ts';
 
 /**
  * Config de um plugin vinda do app ou do storage: os campos do schema e, opcionalmente,
- * `messages` com textos a sobrescrever (ADR 0025). `messages` é chave reservada.
+ * `messages` com textos a sobrescrever (ADR 0022). `messages` é chave reservada.
  */
 export type PluginConfigEntry = Readonly<Record<string, unknown>>;
 
@@ -58,7 +58,7 @@ export interface PluginConfigView {
 /**
  * JSON Schema (draft 2020-12) da entrada da config; campos secretos com `secret: true`,
  * `writeOnly: true` e `x-bridger-override: false` (não editáveis por override). Com chave mestra
- * (`secretsWritable`), também `x-bridger-set-secret: true`: editável por `setSecret` (ADR 0121).
+ * (`secretsWritable`), também `x-bridger-set-secret: true`: editável por `setSecret` (ADR 0117).
  */
 export type PluginConfigJsonSchema = Readonly<Record<string, unknown>>;
 
@@ -90,7 +90,7 @@ export interface PluginConfigs {
    * alguma camada tiver valor inválido. Registra os segredos no `SecretSet`.
    */
   resolve(plugin: string): Promise<ResolvedPluginConfig>;
-  /** `true` se há `BRIDGER_SECRET_KEY`: sem ela `setSecret` rejeita (ADR 0121). */
+  /** `true` se há `BRIDGER_SECRET_KEY`: sem ela `setSecret` rejeita (ADR 0117). */
   readonly secretsWritable: boolean;
   /**
    * Salva o segredo `path` (pontilhado, ex.: `openai.apiKey`) do plugin, cifrado no storage.
@@ -110,7 +110,7 @@ export interface PluginConfigs {
    */
   clearSecret(plugin: string, path: string): Promise<PluginChangeResult | undefined>;
   /**
-   * Rotação da chave mestra (ADR 0121): migra para a chave atual os envelopes com o `kid` de
+   * Rotação da chave mestra (ADR 0117): migra para a chave atual os envelopes com o `kid` de
    * `BRIDGER_SECRET_KEY_PREVIOUS`. Devolve quantos migrou. Chamado no boot.
    */
   rotateSecrets(): Promise<number>;
@@ -270,7 +270,7 @@ function secretStrings(value: unknown, into: string[]): void {
 
 /** Anotação do JSON Schema que diz ao dashboard que o campo não aceita override. */
 const OVERRIDE_ANNOTATION = 'x-bridger-override';
-/** Anotação que diz ao dashboard que o campo secreto é editável por `setSecret` (ADR 0121). */
+/** Anotação que diz ao dashboard que o campo secreto é editável por `setSecret` (ADR 0117). */
 const SET_SECRET_ANNOTATION = 'x-bridger-set-secret';
 
 /**
@@ -295,7 +295,7 @@ function markSecrets(node: unknown, writable: boolean): void {
 
 /**
  * JSON Schema de entrada de um schema Zod, já com os secretos marcados e o `default` deles trocado
- * pela máscara. É o que o dashboard usa em formulários de config e de aba (ADR 0108).
+ * pela máscara. É o que o dashboard usa em formulários de config e de aba (ADR 0104).
  * Transform não tem JSON Schema; vira `{}` em vez de lançar.
  */
 export function maskedJsonSchema(
@@ -327,7 +327,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
   const env = options.env ?? processEnv();
   const kv = kernelStorage(options.storage, 'config').kv;
   const secretKv = kernelStorage(options.storage, 'secrets').kv;
-  // Chave inválida lança aqui (`BotConfigError`) e derruba o boot (ADR 0121).
+  // Chave inválida lança aqui (`BotConfigError`) e derruba o boot (ADR 0117).
   const keys = readSecretKeys(env);
   const decryptKeys = [keys.current, keys.previous].filter((key) => key !== undefined);
   const log = options.log ?? createNoopLogger();
@@ -394,7 +394,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
     }
     if (shape && MESSAGES_KEY in shape) {
       throw new TypeError(
-        `plugin "${name}": "${MESSAGES_KEY}" é reservado para sobrescrever textos (ADR 0025) ` +
+        `plugin "${name}": "${MESSAGES_KEY}" é reservado para sobrescrever textos (ADR 0022) ` +
           'e não pode ser campo do schema de config',
       );
     }
@@ -402,7 +402,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
     if (misplaced.length > 0) {
       throw new TypeError(
         `plugin "${name}": secret() só vale em campo de z.object (em qualquer nível de objetos); ` +
-          `dentro de array, record ou union ele não seria censurado nem protegido (ADR 0032): ` +
+          `dentro de array, record ou union ele não seria censurado nem protegido (ADR 0028): ` +
           misplaced.map((path) => `"${path}"`).join(', '),
       );
     }
@@ -508,7 +508,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
           issues.push({ ...at, message: 'deve ser texto' });
         } else {
           // O plugin só passa os valores do texto padrão: um placeholder a mais na sobrescrita
-          // faria o `ctx.t` lançar na hora de usar, longe da config (ADR 0092).
+          // faria o `ctx.t` lançar na hora de usar, longe da config (ADR 0088).
           const problem = placeholderIssue(text, base[key] as string);
           if (problem !== null) {
             issues.push({ ...at, message: problem });
@@ -654,7 +654,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
 
   /**
    * O dashboard diria "salvo" para um campo que o arquivo ou o env decidem (precedência do
-   * ADR 0017/0032). Avisa com caminho e fonte; o valor fica de fora (pode ser sensível).
+   * ADR 0015/0028). Avisa com caminho e fonte; o valor fica de fora (pode ser sensível).
    */
   function warnShadowed(
     name: string,
@@ -684,7 +684,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
     overrides: JsonObject,
   ): Promise<PluginChangeResult | undefined> {
     const definition = definitionOf(name);
-    // O storage guarda o override em texto puro (banco, backups): segredo não entra (ADR 0032).
+    // O storage guarda o override em texto puro (banco, backups): segredo não entra (ADR 0028).
     const secretIssues: PluginConfigIssue[] = definition.config
       ? secretPaths(definition.config, overrides).map((path) => ({
           path: path.join('.'),

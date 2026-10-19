@@ -151,7 +151,7 @@ experimental; o TypeDoc 0.28 depende da API do 6 e aceita no máximo o 6.0 (peer
 isso o `site/` fixa `typescript@6.0.3` só para ele; a checagem de tipos e o build dos pacotes
 seguem no 7. Quando o TypeDoc suportar o 7, basta remover a dependência.
 
-Decisões em [ADR 0103](docs/adr/0103-site-de-documentacao.md).
+Decisões em [ADR 0099](docs/adr/0099-site-de-documentacao.md).
 
 ### CI
 
@@ -161,8 +161,8 @@ em cache. O job `Scaffold` gera um plugin com o `create-bridger-plugin` e confer
 instala, testa e builda ([e2e](packages/create-plugin/docs/README.md#e2e)). O job `Testes` sobe
 um Postgres em container para o `@usebridger/storage-postgres`. O job `Benchmark` mede as metas
 de performance e falha com piora > 10% sobre o baseline do commit-base, medido no mesmo runner
-e intercalado com o commit testado ([ADR 0054](docs/adr/0054-baseline-do-benchmark.md),
-[ADR 0089](docs/adr/0089-benchmark-intercalado.md)). O job `Docs` builda o site e falha com link quebrado ou warning do TypeDoc; o
+e intercalado com o commit testado ([ADR 0050](docs/adr/0050-baseline-do-benchmark.md),
+[ADR 0085](docs/adr/0085-benchmark-intercalado.md)). O job `Docs` builda o site e falha com link quebrado ou warning do TypeDoc; o
 [`docs.yml`](.github/workflows/docs.yml) o publica no GitHub Pages a cada push na `main`. O job `Pacotes` builda e roda o
 `pnpm check:packages`, para um pacote que não publicaria quebrar no PR e não no release.
 
@@ -171,8 +171,8 @@ fica em [`.github/actions/setup`](.github/actions/setup/action.yml).
 
 O push na `main` também roda o [`release.yml`](.github/workflows/release.yml), que abre o PR de
 versão ou publica os pacotes ([`docs/release.md`](docs/release.md),
-[ADR 0085](docs/adr/0085-release-a-partir-da-main.md)).
+[ADR 0081](docs/adr/0081-release-a-partir-da-main.md)).
 
 ## Licença
 
-[Apache-2.0](LICENSE) ([ADR 0028](docs/adr/0028-licenca-apache-2.md)).
+[Apache-2.0](LICENSE) ([ADR 0025](docs/adr/0025-licenca-apache-2.md)).

@@ -19,7 +19,7 @@ export {
 // Um runtime por contexto: o mesmo objeto de plugin serve a vários bots e a reloads.
 const runtimes = new WeakMap<object, { flush: () => Promise<void>; timer: NodeJS.Timeout }>();
 
-/** Plugin oficial `metrics` (ADR 0107): provê o serviço `metrics`. */
+/** Plugin oficial `metrics` (ADR 0103): provê o serviço `metrics`. */
 export const metrics: PluginDefinition = definePlugin({
   name: 'metrics',
   version: '0.1.0',
@@ -41,7 +41,7 @@ export const metrics: PluginDefinition = definePlugin({
       maxSeriesPerMetric: ctx.config.maxSeriesPerMetric,
       retentionDays: ctx.config.retentionDays,
     });
-    // Serviço com escopo (ADR 0116): cada plugin recebe uma instância que grava o nome dele como dono.
+    // Serviço com escopo (ADR 0112): cada plugin recebe uma instância que grava o nome dele como dono.
     ctx.services.provideScoped(
       'metrics',
       (caller) => runtime.scoped(caller),

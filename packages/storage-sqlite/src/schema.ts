@@ -1,5 +1,5 @@
 // Abertura do banco e migrations internas do adapter. O schema é do adapter, não dos plugins
-// (ADR 0015): plugin nenhum cria tabela, então a versão do schema é uma só, guardada no
+// (ADR 0013): plugin nenhum cria tabela, então a versão do schema é uma só, guardada no
 // `PRAGMA user_version`, e cada migration roda uma vez, numa transação, no boot.
 
 import { mkdirSync } from 'node:fs';
@@ -40,7 +40,7 @@ const MIGRATIONS: readonly string[] = [
     PRIMARY KEY (session, type, id)
   ) WITHOUT ROWID;
   `,
-  // Travas com validade (ADR 0074). `expires_at` em ms desde a época, pelo relógio do processo:
+  // Travas com validade (ADR 0070). `expires_at` em ms desde a época, pelo relógio do processo:
   // quem divide um arquivo SQLite está na mesma máquina.
   `
   CREATE TABLE leases (

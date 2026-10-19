@@ -7,10 +7,12 @@ import {
   isDirty,
   leaves,
   listToRows,
+  objectsToRows,
   parseList,
   parseNumber,
   recordToRows,
   rowsToList,
+  rowsToObjects,
   rowsToRecord,
   unflatten,
 } from './schema.ts';
@@ -219,5 +221,81 @@ describe('controles de lista e record', () => {
     expect(byPath['segredo']?.secret).toBe(true);
     const out = buildOverrides(fields, {}, { segredo: 'novo', textos: { a: 'b' } }, {});
     expect(out).toEqual({ textos: { a: 'b' } });
+  });
+});
+
+describe('lista de objetos', () => {
+  const chain = {
+    type: 'object',
+    properties: {
+      models: {
+        type: 'array',
+        title: 'Modelos',
+        items: {
+          type: 'object',
+          required: ['model'],
+          properties: {
+            model: { type: 'string', title: 'Modelo' },
+            temperature: { type: 'number', maximum: 2 },
+            stream: { type: 'boolean' },
+          },
+        },
+      },
+      deep: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { tags: { type: 'array', items: { type: 'string' } } },
+        },
+      },
+      hidden: {
+        type: 'array',
+        items: { type: 'object', properties: { key: { type: 'string', secret: true } } },
+      },
+    },
+  };
+  const byPath = Object.fromEntries(leaves(buildFields(chain)).map((f) => [f.path, f]));
+  const fields = byPath['models']?.itemFields ?? [];
+
+  it('array de objetos simples vira objects com os campos do item; o resto segue json', () => {
+    expect(byPath['models']?.control).toBe('objects');
+    expect(fields.map((f) => [f.path, f.control, f.required])).toEqual([
+      ['model', 'text', true],
+      ['temperature', 'number', false],
+      ['stream', 'boolean', false],
+    ]);
+    expect(byPath['deep']?.control).toBe('json');
+    expect(byPath['hidden']?.control).toBe('json');
+  });
+
+  it('itens viram linhas e voltam na mesma ordem; vazio fica ausente e item em branco some', () => {
+    const rows = objectsToRows(
+      [{ model: 'google:a', temperature: 1 }, { model: 'openai:b' }],
+      fields,
+    );
+    expect(rows).toEqual([
+      { model: 'google:a', temperature: '1', stream: false },
+      { model: 'openai:b', temperature: '', stream: false },
+    ]);
+    expect(
+      rowsToObjects([rows[1] ?? {}, { model: '', temperature: '' }, rows[0] ?? {}], fields),
+    ).toEqual([
+      { model: 'openai:b', stream: false },
+      { model: 'google:a', temperature: 1, stream: false },
+    ]);
+    expect(rowsToObjects([], fields)).toBeUndefined();
+    expect(objectsToRows(undefined, fields)).toEqual([]);
+  });
+
+  it('issue de item vai para a lista com o item e o campo', () => {
+    const { byPath: issues, orphans } = groupIssues(
+      [
+        { path: 'models.1.model', message: 'use provider:modelo' },
+        { path: 'models.0', message: 'ruim' },
+      ],
+      leaves(buildFields(chain)),
+    );
+    expect(issues['models']).toEqual(['Item 2, Modelo: use provider:modelo', 'Item 1: ruim']);
+    expect(orphans).toEqual([]);
   });
 });

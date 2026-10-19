@@ -105,7 +105,7 @@ describe('Bot: reconexão', () => {
     expect(logger.lines.find((line) => line.level === 'error')?.message).toMatch(/pareada de novo/);
   });
 
-  it("'replaced' não reconecta nem limpa a sessão: loga e para o bot (ADR 0036)", async () => {
+  it("'replaced' não reconecta nem limpa a sessão: loga e para o bot (ADR 0032)", async () => {
     const transport = new RecordingTransport();
     const logger = recordingLogger();
     const clearSession = vi.fn(async () => undefined);
@@ -159,7 +159,7 @@ describe('Bot: reconexão', () => {
     expect(connects(transport)).toBe(1);
   });
 
-  // #253: o `connect()` resolve ao iniciar a tentativa (ADR 0048), então a queda pode chegar antes
+  // #253: o `connect()` resolve ao iniciar a tentativa (ADR 0044), então a queda pode chegar antes
   // de ele terminar, sem `open` depois. Ela não pode se perder.
   class DropsBeforeOpen extends RecordingTransport {
     /** Quantos dos próximos `connect()` fecham a conexão e resolvem sem `open`. */
@@ -342,7 +342,7 @@ describe('Bot: reconexão', () => {
     expect(notice).toBeDefined();
   });
 
-  it('código de pareamento vai para o barramento e conta para o limite de QRs (ADR 0050)', async () => {
+  it('código de pareamento vai para o barramento e conta para o limite de QRs (ADR 0046)', async () => {
     const transport = new RecordingTransport();
     const codes: string[] = [];
     const clearSession = vi.fn(async () => undefined);

@@ -166,7 +166,7 @@ async function startBotSendingOnSetup(
   return { bot, sent };
 }
 
-// #253 (ADR 0048): a fila nasce pausada e só despacha no primeiro `open`.
+// #253 (ADR 0044): a fila nasce pausada e só despacha no primeiro `open`.
 describe('Bot: fila de saída até o primeiro open', () => {
   it('envio do setup espera o open em vez de ir para o socket fechado', async () => {
     const transport = new LateOpenTransport();

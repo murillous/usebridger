@@ -1,4 +1,4 @@
-// Açúcar para o autor de transport (ADR 0080). O adapter descreve só o que é dele (conectar,
+// Açúcar para o autor de transport (ADR 0076). O adapter descreve só o que é dele (conectar,
 // enviar, os métodos das capabilities que declara), e `defineTransport` monta o `Transport`
 // completo: emissor, `on()`, `self`, a checagem de capability e o `UnsupportedError` do resto.
 
@@ -66,7 +66,7 @@ export function transportSpecIssues(value: unknown): string[] {
 }
 
 /**
- * Monta a fábrica do transport (ADR 0037) a partir da descrição que `build` devolve. A descrição
+ * Monta a fábrica do transport (ADR 0033) a partir da descrição que `build` devolve. A descrição
  * inválida lança `TypeError` com todos os problemas, e o `createBot` a converte em
  * `BotConfigError`. Cada método confere a capability antes de chamar o do adapter; o que ele não
  * implementa rejeita com `UnsupportedError`.

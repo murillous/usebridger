@@ -7,7 +7,7 @@ export interface PluginConfigIssue {
   /**
    * `secret`: o override tentou definir um campo secreto (recusado antes de validar); `invalid`:
    * qualquer outro problema. `shadowed`: `setSecret` num campo que o env ou o arquivo definem;
-   * `undecryptable`: envelope salvo que não decifra (ADR 0121). Serve a quem precisa distinguir
+   * `undecryptable`: envelope salvo que não decifra (ADR 0117). Serve a quem precisa distinguir
    * sem ler a mensagem.
    */
   readonly kind: 'secret' | 'shadowed' | 'undecryptable' | 'invalid';

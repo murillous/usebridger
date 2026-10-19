@@ -1,4 +1,4 @@
-// StoragePort sobre um banco SQLite (`node:sqlite`, ADR 0051). A validação da entrada vem do
+// StoragePort sobre um banco SQLite (`node:sqlite`, ADR 0047). A validação da entrada vem do
 // core (`normalize*`), então os erros saem iguais aos do adapter em memória; aqui fica só a
 // tradução para SQL. O driver é síncrono: cada método roda a consulta inteira dentro do
 // `async`, e qualquer erro (inclusive o `StorageClosedError`) chega como rejeição.

@@ -1,4 +1,4 @@
-// O perfil `whatsapp` do kit de testes promete as capabilities e os limites do Baileys (ADR 0073).
+// O perfil `whatsapp` do kit de testes promete as capabilities e os limites do Baileys (ADR 0069).
 // Se um dos dois mudar sem o outro, o plugin testado no perfil passa e falha no transport real.
 
 import { createLogger, createMemoryStorage, type Transport } from '@usebridger/core';

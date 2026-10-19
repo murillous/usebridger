@@ -377,7 +377,7 @@ function Widget({ tab, widget, onGone }: { tab: TabView; widget: TabWidget; onGo
   }
 }
 
-/** Aba contribuída por plugin (ADR 0108): só widgets; o erro de cada um fica nele. */
+/** Aba contribuída por plugin (ADR 0104): só widgets; o erro de cada um fica nele. */
 export function Tab({
   tabs,
   tabKey,

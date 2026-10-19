@@ -1,4 +1,4 @@
-// Papéis custom nomeados (ADR 0035): um plugin define o papel, qualquer plugin o exige no comando
+// Papéis custom nomeados (ADR 0031): um plugin define o papel, qualquer plugin o exige no comando
 // e o roteador o avalia, como faz com os embutidos.
 
 import { ExecutionTimeoutError } from '#deadline.ts';
@@ -34,7 +34,7 @@ export interface RoleContext {
   readonly log: Logger;
   /**
    * Aborta quando a checagem estoura o prazo (`timeouts.commandMs`), com `reason` =
-   * `RoleTimeoutError`. Repasse a consultas externas (ADR 0033).
+   * `RoleTimeoutError`. Repasse a consultas externas (ADR 0029).
    */
   readonly signal: AbortSignal;
 }

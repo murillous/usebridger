@@ -1,4 +1,4 @@
-// Cancelamento cooperativo (ADR 0033): `signal` em comando, listener, job e contexto do plugin,
+// Cancelamento cooperativo (ADR 0029): `signal` em comando, listener, job e contexto do plugin,
 // e recusa das operações de um contexto expirado.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

@@ -1,4 +1,4 @@
-// Votos de enquete (#312, ADR 0071). O WhatsApp cifra o voto com o segredo da enquete
+// Votos de enquete (#312, ADR 0067). O WhatsApp cifra o voto com o segredo da enquete
 // (`messageSecret`), que só vem na mensagem que a criou, e o Baileys 7 não decifra mais sozinho (o
 // trecho do `process-message` está comentado). Por isso o transport guarda as enquetes que vê e
 // decifra o voto com `decryptPollVote`.

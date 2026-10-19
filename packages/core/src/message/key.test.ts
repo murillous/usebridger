@@ -1,4 +1,4 @@
-// #224 (ADR 0040): toda `Message` traz a chave para o plugin reagir, editar ou apagar.
+// #224 (ADR 0036): toda `Message` traz a chave para o plugin reagir, editar ou apagar.
 
 import { describe, expect, it } from 'vitest';
 import { createMessage } from '#message/create.ts';

@@ -1,4 +1,4 @@
-// Persistência dos nomes de contatos no auth state (#111, ADR 0101): escrita em lote com
+// Persistência dos nomes de contatos no auth state (#111, ADR 0097): escrita em lote com
 // debounce, leitura lazy com cache negativo e descarte no logout.
 
 import { createMemoryStorage, type Logger } from '@usebridger/core';
@@ -156,7 +156,7 @@ describe('ContactBook: leitura lazy', () => {
     expect(await new ContactBook({ store }).nameFor(BOB, env)).toBe('Bob');
   });
 
-  it('nome lido do store não gera contact.updated: a primeira vez ainda conta (ADR 0049)', async () => {
+  it('nome lido do store não gera contact.updated: a primeira vez ainda conta (ADR 0045)', async () => {
     const { store } = spyStore();
     const first = new ContactBook({ store });
     first.observe({ id: ALICE, name: 'Alice', phone: null });

@@ -142,6 +142,11 @@ textarea {
   min-height: 100vh;
 }
 .side {
+  /* Fica parada enquanto a página rola; a própria sidebar rola se não couber na altura. */
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
   padding: 24px 16px;
   border-right: 1px solid var(--line);
   display: flex;
@@ -225,6 +230,7 @@ textarea {
   padding: 32px;
   max-width: 1100px;
   width: 100%;
+  margin: 0 auto;
   /* Item de grid: sem isto o conteúdo largo (tabela) alarga a coluna 1fr e estoura o viewport. */
   min-width: 0;
 }
@@ -505,6 +511,32 @@ td {
 }
 .editor > .btn {
   align-self: flex-start;
+}
+/* Item de lista de objetos (ex.: cadeia de fallback): bloco rebaixado, campos em grade que quebra no celular. */
+.obj-item {
+  background: var(--sunken);
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px var(--line);
+  padding: 8px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.obj-n {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+.obj-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px 12px;
+}
+.obj-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
 /* Dentro do card; o `.help` (aviso da cascata) fica à esquerda e os botões à direita. */
@@ -895,7 +927,7 @@ th.num {
 }
 /* Sem transição nem animação no app: prefers-reduced-motion já é respeitado. */
 
-/* Abas de plugins (ADR 0108) */
+/* Abas de plugins (ADR 0104) */
 .stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -971,15 +1003,28 @@ h3 {
 .plist .pl-name {
   font-weight: 600;
 }
+/* A tabela rola dentro do card (nos dois eixos), não a página; o cabeçalho fica visível. */
 .card:has(> .ptable) {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: calc(100vh - 160px);
+  padding-top: 0;
+}
+.ptable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--raised);
+  padding-top: 16px;
+}
+.ptable td:first-child {
+  min-width: 220px;
 }
 .ptable .mono {
   overflow-wrap: anywhere;
 }
-/* Células de dados não quebram no meio da palavra; só a origem (1ª coluna) pode. */
+/* Células de dados não quebram no meio da palavra; só a origem (1ª coluna) pode. Quebrar entre
+   itens da lista é o que mantém a coluna Ativo dentro do card. */
 .ptable td.mono {
-  white-space: nowrap;
   overflow-wrap: normal;
 }
 .btn.sm {

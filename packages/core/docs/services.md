@@ -2,7 +2,7 @@
 
 Um plugin publica um serviço com `ctx.services.provide(name, impl)` e outro o consome com
 `ctx.services.get(name)`, sem importar um ao outro. É assim que a IA fica fora do core
-([ADR 0018](../../../docs/adr/0018-service-registry.md), [ADR 0006](../../../docs/adr/0006-luma-e-um-plugin.md)).
+([ADR 0016](../../../docs/adr/0016-service-registry.md)).
 
 ## Prover
 
@@ -43,7 +43,7 @@ provedor usa `ctx.services.provideScoped(name, factory, release?)` no lugar de `
 `factory(caller)` roda no primeiro `get` de cada plugin e a instância fica guardada por
 `(name, caller)`; quem consome continua com `get(name)` e o mesmo tipo. `release(caller)` roda,
 quando o caller sai (teardown, reload ou disable) e para cada instância quando o
-provedor sai; se lançar, a limpeza termina e o erro sobe como `AggregateError`. Detalhes no [ADR 0116](../../../docs/adr/0116-servico-com-escopo-por-chamador.md).
+provedor sai; se lançar, a limpeza termina e o erro sobe como `AggregateError`. Detalhes no [ADR 0112](../../../docs/adr/0112-servico-com-escopo-por-chamador.md).
 
 ## Consumir
 
@@ -77,7 +77,7 @@ O tipo vem de importar o pacote do provedor (ou só o tipo dele): é esse import
 
 Quando o plugin funciona sem o provedor e só parte dele usa o serviço, `dependsOn` derrubaria o
 plugin inteiro. Declare o provedor em `optionalDependsOn`
-([ADR 0099](../../../docs/adr/0099-comando-que-exige-servico.md)):
+([ADR 0095](../../../docs/adr/0095-comando-que-exige-servico.md)):
 
 - o formato é o do `dependsOn` (nome do plugin → faixa semver, faixa inválida é erro de
   manifesto);
@@ -108,26 +108,26 @@ export const download = definePlugin({
 - **Um provedor por nome.** Se outro plugin já provê o nome, `provide` lança
   `ServiceConflictError` citando os dois plugins (campos `service`, `existing`, `incoming`).
   No `Bot`, esse erro no `setup` derruba o boot, como conflito de comando
-  ([ADR 0035](../../../docs/adr/0035-papeis-nomeados-por-plugin.md)); num reload, o plugin
+  ([ADR 0031](../../../docs/adr/0031-papeis-nomeados-por-plugin.md)); num reload, o plugin
   recarregado fica ignorado e o primeiro continua valendo.
 - **Sem re-prover.** O mesmo plugin chamar `provide` duas vezes para o mesmo nome também é
   `ServiceConflictError`: quem já fez `get` ficaria com a instância antiga sem saber. Trocar a
   implementação é recarregar o plugin.
 - **Teardown e reload** removem o que o plugin proveu; no novo `setup` ele provê de novo. O
   reload do provedor recarrega em cascata quem declara `dependsOn` nele
-  ([ADR 0041](../../../docs/adr/0041-reload-em-cascata.md)), então guardar a instância no `setup`
+  ([ADR 0037](../../../docs/adr/0037-reload-em-cascata.md)), então guardar a instância no `setup`
   é seguro; `optionalDependsOn` também entra na cascata. Quem usa o serviço sem nenhum dos dois não
   recarrega junto e fica com a instância antiga.
 - **Tenant.** Chamado no handler de uma mensagem com `chat.tenantId`, o serviço roda no escopo
   daquele tenant: o `ctx.storage` do provedor grava no tenant certo sem receber nada
-  ([ADR 0072](../../../docs/adr/0072-isolamento-por-tenant.md)). Estado em memória (um `Map` no
+  ([ADR 0068](../../../docs/adr/0068-isolamento-por-tenant.md)). Estado em memória (um `Map` no
   plugin) não ganha escopo. Guarde no `ctx.storage` o que é de um cliente.
 
 ## Pontos de extensão
 
 Um serviço que outros plugins estendem (o `sticker` que aceita etapas, como a legenda do
 `sticker-text`) não guarda as contribuições nem cuida de tirá-las: o registry faz isso
-([ADR 0096](../../../docs/adr/0096-pontos-de-extensao-em-servicos.md)). Quem oferece declara o
+([ADR 0092](../../../docs/adr/0092-pontos-de-extensao-em-servicos.md)). Quem oferece declara o
 tipo da contribuição em `ExtensionPoints` e lê com `extensionPoint`; quem estende chama
 `contribute`:
 
@@ -180,7 +180,7 @@ setup(ctx) {
 
 O `Bot` cria um registry por instância (sem estado global) e entrega a cada plugin o acesso
 atribuído a ele (`ctx.services`); no teardown/reload remove o que o plugin proveu. Por dentro
-(interno do kernel, não exportado ([ADR 0034](../../../docs/adr/0034-biblioteca-sem-runner.md))):
+(interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md))):
 
 ```ts
 import { createServiceRegistry } from '#services/registry.ts';

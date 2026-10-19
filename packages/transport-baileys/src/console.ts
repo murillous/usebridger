@@ -1,7 +1,7 @@
 // O libsignal, que o Baileys usa para a criptografia, escreve direto no `console`
 // (`Closing session: SessionEntry {...}`), sem logger para configurar. Enquanto um socket está
 // aberto, as chamadas cujo chamador direto é um arquivo do libsignal vão para o logger do
-// Baileys, com o mesmo piso de nível; o resto do `console` passa intacto (ADR 0091).
+// Baileys, com o mesmo piso de nível; o resto do `console` passa intacto (ADR 0087).
 
 import type { ILogger } from './logger.ts';
 

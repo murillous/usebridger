@@ -1,4 +1,4 @@
-// `defineTransport` e a coerência capability ↔ método no `createBot` (ADR 0080).
+// `defineTransport` e a coerência capability ↔ método no `createBot` (ADR 0076).
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type Bot, createBot } from '#bot/bot.ts';

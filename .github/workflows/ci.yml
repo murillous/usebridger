@@ -85,7 +85,7 @@ jobs:
       - run: pnpm build
       - run: pnpm run docs
 
-  # Aceite do create-bridger-plugin (ADR 0081): o projeto gerado instala, passa no typecheck e no
+  # Aceite do create-bridger-plugin (ADR 0077): o projeto gerado instala, passa no typecheck e no
   # teste e builda, sobre os tarballs do core, do kit e do scaffold.
   scaffold:
     name: Scaffold
@@ -96,8 +96,8 @@ jobs:
       - run: pnpm build
       - run: pnpm --filter create-bridger-plugin e2e
 
-  # Metas do plano §7 e piora > 10% sobre o baseline (ADR 0054). O baseline é medido neste mesmo
-  # runner, intercalado com o commit testado (ADR 0089): entre máquinas diferentes, ou mesmo entre
+  # Metas do plano §7 e piora > 10% sobre o baseline (ADR 0050). O baseline é medido neste mesmo
+  # runner, intercalado com o commit testado (ADR 0085): entre máquinas diferentes, ou mesmo entre
   # dois momentos do runner, a variação passa dos 10%.
   benchmark:
     name: Benchmark

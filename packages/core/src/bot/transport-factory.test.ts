@@ -1,4 +1,4 @@
-// Aceite do M1-21 (#208, ADR 0037): o transport pode vir de uma fábrica que recebe a sessão, o
+// Aceite do M1-21 (#208, ADR 0033): o transport pode vir de uma fábrica que recebe a sessão, o
 // auth state dela e o logger do bot; com ela, `clean-session` limpa o auth sem configuração.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

@@ -22,9 +22,9 @@ import { DASHBOARD_VERSION } from '#version.ts';
 
 export interface StatusView {
   transport: string;
-  /** Nome do bot (`createBot({ name })`, senão o transport; ADR 0115). */
+  /** Nome do bot (`createBot({ name })`, senão o transport; ADR 0111). */
   name: string;
-  /** Sessão do bot (ADR 0110): `/plugins/dashboard` é a `default`; as outras ficam sob `/sessions/<sessão>`. */
+  /** Sessão do bot (ADR 0106): `/plugins/dashboard` é a `default`; as outras ficam sob `/sessions/<sessão>`. */
   session: string;
   status: 'connecting' | 'open' | 'closed';
   reason?: string;
@@ -34,7 +34,7 @@ export interface StatusView {
   /** O transport pareia por QR/código: um `auth-failed` limpa a sessão e reconecta, não é terminal. */
   pairing: boolean;
   updatedAt: number;
-  /** Desde quando a conexão está no ar (ms epoch); ausente fora do ar (ADR 0115). */
+  /** Desde quando a conexão está no ar (ms epoch); ausente fora do ar (ADR 0111). */
   connectedSince?: number;
   reconnections: number;
   /** Quando o QR atual expira (ms epoch); ausente sem QR ou sem expiração. */
@@ -69,7 +69,7 @@ const WEB_DIR = fileURLToPath(
 
 const unauthorized = (): Response => new Response('não autorizado', { status: 401 });
 
-/** Plugin oficial `dashboard` (ADR 0107, 0108): autenticação, status, QR, logs e WebSocket. */
+/** Plugin oficial `dashboard` (ADR 0103, 0104): autenticação, status, QR, logs e WebSocket. */
 export const dashboard: PluginDefinition = definePlugin({
   name: 'dashboard',
   version: DASHBOARD_VERSION,

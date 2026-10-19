@@ -1,8 +1,8 @@
 # Escape hatch `ctx.unsafe`
 
 Saída explícita para quando a API normalizada ainda não cobre o que o plugin precisa
-([ADR 0011](../../../docs/adr/0011-escape-hatch-unsafe-native.md),
-[ADR 0066](../../../docs/adr/0066-objeto-bruto-da-mensagem.md)). Dá acesso ao objeto nativo do
+([ADR 0009](../../../docs/adr/0009-escape-hatch-unsafe-native.md),
+[ADR 0062](../../../docs/adr/0062-objeto-bruto-da-mensagem.md)). Dá acesso ao objeto nativo do
 transport em `native` (o socket do Baileys, o `Client` do discord.js, o `Bot` do grammY), e ao
 objeto bruto de cada mensagem em `raw()`.
 
@@ -102,7 +102,7 @@ oficial.
 
 ## Para quem monta o contexto (kernel)
 
-Peça interno do kernel, não exportado ([ADR 0034](../../../docs/adr/0034-biblioteca-sem-runner.md)).
+Peça interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md)).
 
 ```ts
 import { createUnsafeAccess } from '#unsafe/access.ts';

@@ -26,7 +26,7 @@ it('as ferramentas do template são as do workspace', () => {
 });
 
 it('a faixa do core no template aceita a versão atual dele', () => {
-  // `<1.0.0` vale enquanto o core for 0.x (D27). Na 1.0, a faixa do template (peer, dev,
+  // `<1.0.0` vale enquanto o core for 0.x (D24). Na 1.0, a faixa do template (peer, dev,
   // `@usebridger/testing` e o `engine` do manifesto) passa a ser `^1.0.0`.
   const { version } = manifest(join(repo, 'packages', 'core', 'package.json'));
   expect(version.startsWith('0.')).toBe(true);

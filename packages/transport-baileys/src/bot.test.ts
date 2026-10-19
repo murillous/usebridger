@@ -1,5 +1,5 @@
 // O transport dentro do `Bot`: o kernel executa a política de reconexão em cima dos motivos que
-// o adapter dá (ADR 0045/0048) e roteia as mensagens que ele normaliza.
+// o adapter dá (ADR 0041/0044) e roteia as mensagens que ele normaliza.
 
 import {
   type Bot,
@@ -67,7 +67,7 @@ describe('BaileysTransport no Bot', () => {
     expect(driver.last.config.auth.creds.registered).toBe(false);
   });
 
-  it('credencial rejeitada (403) limpa a sessão e volta a parear: o Baileys tem pairing (ADR 0068)', async () => {
+  it('credencial rejeitada (403) limpa a sessão e volta a parear: o Baileys tem pairing (ADR 0064)', async () => {
     const { driver, bot, auth } = start();
     await bot.start();
     driver.last.updateCreds({ registered: true });
@@ -84,7 +84,7 @@ describe('BaileysTransport no Bot', () => {
     expect(bot.state).toBe('running');
   });
 
-  it('queda de rede reconecta sem apagar as credenciais (ADR 0045)', async () => {
+  it('queda de rede reconecta sem apagar as credenciais (ADR 0041)', async () => {
     const { driver, bot, auth } = start();
     await bot.start();
     driver.last.updateCreds({ registered: true });

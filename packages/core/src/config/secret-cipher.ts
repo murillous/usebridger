@@ -1,4 +1,4 @@
-// Cifra dos segredos salvos no storage (ADR 0121): AES-256-GCM do `node:crypto`. O envelope leva
+// Cifra dos segredos salvos no storage (ADR 0117): AES-256-GCM do `node:crypto`. O envelope leva
 // o `kid` da chave mestra (para saber qual chave decifra, inclusive na rotação) e o AAD
 // `<plugin>:<caminho>` autentica o lugar do segredo: um envelope copiado para outro campo ou
 // plugin não decifra. Nenhuma mensagem de erro daqui carrega chave, texto claro ou envelope.

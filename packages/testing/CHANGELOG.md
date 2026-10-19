@@ -50,7 +50,7 @@
 
 ### Minor Changes
 
-- 1f67b49: Plugin incompatível ou com `setup` falho derruba o boot (ADR 0102, #117). **Breaking:**
+- 1f67b49: Plugin incompatível ou com `setup` falho derruba o boot (ADR 0098, #117). **Breaking:**
   `bot.start()` (e `createTestBot`) rejeita com `PluginBootError` quando um plugin não carrega por
   `engine`, `transport`, `capabilities`, `dependency-missing`, `dependency-version`,
   `dependency-skipped` ou `setup-failed` (inclusive config inválida e timeout), em vez de subir sem
@@ -132,7 +132,7 @@
 
 ### Minor Changes
 
-- e190d3e: Release de teste do fluxo `develop` → `main` com Trusted Publishing (ADR 0085), sem mudança de API em relação à 0.1.0.
+- e190d3e: Release de teste do fluxo `develop` → `main` com Trusted Publishing (ADR 0081), sem mudança de API em relação à 0.1.0.
 
 ### Patch Changes
 
@@ -143,7 +143,7 @@
 
 ### Minor Changes
 
-- 5eb7203: Botões no kit (ADR 0062): o `FakeTransport` declara a capability `actions` por padrão e registra
+- 5eb7203: Botões no kit (ADR 0058): o `FakeTransport` declara a capability `actions` por padrão e registra
   os botões em `SentMessage.actions`, e o `TestBot` ganha `click(sent, label, options?)`, que clica
   num botão pelo rótulo e espera o bot assentar.
 - ad2d61a: Entry `@usebridger/testing/bot` (#117): exporta o mesmo kit (`createTestBot`, `FakeTransport`,
@@ -153,7 +153,7 @@
   `document()` devolvem `{ data, mimetype }` com uma mídia pequena e válida de cada tipo, pronta
   para o `bot.receive()`. Um plugin que decodifica a mídia (sharp, ffmpeg) agora pode ser testado
   sem arquivos próprios.
-- 39e7242: O `FakeTransport` segue o contrato de grupos multiplataforma do core (ADR 0059): o
+- 39e7242: O `FakeTransport` segue o contrato de grupos multiplataforma do core (ADR 0055): o
   `updateGroupParticipants` cobra `groups.add`, `groups.remove` ou `groups.promote` conforme a ação,
   e não mais `groups.admin`. O grupo registrado com `setGroup` ou `groups` usa `title` no lugar de
   `subject`.
@@ -164,12 +164,12 @@
   `toContainImage` e `toHaveReplied`.
 - 2db7d00: O `FakeTransport` implementa `raw()` e ganha `setRaw(source, raw)`, e o `receive()` (também na
   citada descrita) e o `click()` aceitam `raw`, para testar plugin que lê o objeto bruto com
-  `ctx.unsafe.raw()` (ADR 0066). Sem `raw`, o `ctx.unsafe.raw()` devolve `undefined`.
-- dc81875: O perfil `web` passa a declarar o que o `@usebridger/transport-web` declara (ADR 0077): ganha
+  `ctx.unsafe.raw()` (ADR 0062). Sem `raw`, o `ctx.unsafe.raw()` devolve `undefined`.
+- dc81875: O perfil `web` passa a declarar o que o `@usebridger/transport-web` declara (ADR 0073): ganha
   `send.video`, `send.audio`, `quoted`, `message.edit` e `message.delete`. Um teste no transport
   confere os dois. Um teste de plugin no perfil `web` que contava com a resposta sem citação passa a
   vê-la citando a mensagem.
-- 1438c41: Perfis de plataforma no kit (ADR 0073): `new FakeTransport({ profile })` e
+- 1438c41: Perfis de plataforma no kit (ADR 0069): `new FakeTransport({ profile })` e
   `createTestBot({ profile })` com `whatsapp`, `telegram`, `discord` e `web`. Cada perfil declara as
   capabilities, os limites de tamanho e os contatos (`self` e remetente padrão do `receive()` e do
   `click()`) da plataforma: sem telefone no Telegram, no Discord e no web. `PROFILES` e
@@ -177,17 +177,17 @@
   nada muda. Os IDs gerados pelo `receive()` passam a recomeçar em cada `TestBot`, sem contador de
   módulo.
 - e557209: `FakeTransport` aceita `limits`, para testar a divisão de texto longo, e registra em `edits` a
-  árvore (`formatted`) da edição com texto formatado (ADR 0061).
-- 7b8ab13: O `FakeTransport` segue o contrato de capabilities do core (ADR 0070): `sendTyping(chatId, kind)`
+  árvore (`formatted`) da edição com texto formatado (ADR 0057).
+- 7b8ab13: O `FakeTransport` segue o contrato de capabilities do core (ADR 0066): `sendTyping(chatId, kind)`
   no lugar de `sendPresence`, com as chamadas gravadas em `typing` (`{ chatId, kind }`) no lugar de
   `presences`, e cobra a capability `typing`.
 - 55bda98: O `receive()` aceita `attachments` depois da mídia principal, com o tipo novo `IncomingAttachment`
   (os bytes, ou os bytes com `mimetype` e `fileName`), para testar mensagens com vários anexos
-  (ADR 0065).
+  (ADR 0061).
 
 ### Patch Changes
 
-- 5c864c2: O projeto se chama Bridger, com os pacotes no escopo `@usebridger/*` e o scaffold `create-bridger-plugin` (ADR 0083). A config de plugin lê variáveis com prefixo `BRIDGER_`, a anotação de campo não editável por override é `x-bridger-override`, plugins seguem o prefixo `bridger-plugin-` e o schema Postgres padrão é `bridger`. O repositório passa a ser `murillous/usebridger`.
+- 5c864c2: O projeto se chama Bridger, com os pacotes no escopo `@usebridger/*` e o scaffold `create-bridger-plugin` (ADR 0079). A config de plugin lê variáveis com prefixo `BRIDGER_`, a anotação de campo não editável por override é `x-bridger-override`, plugins seguem o prefixo `bridger-plugin-` e o schema Postgres padrão é `bridger`. O repositório passa a ser `murillous/usebridger`.
 - a8482ee: Metadados de publicação no `package.json`: `repository` (com a pasta do pacote), `homepage`, `bugs` e acesso público. As dependências entre pacotes `@usebridger/*` passam a sair como `^<versão>` em vez da versão exata.
 - Updated dependencies [b7eb3a7]
 - Updated dependencies [70220de]

@@ -21,7 +21,7 @@ A decisão tem duas etapas, e a ordem importa:
 Qualquer motivo que não seja `disabled` **para o boot**: o bot desce o que subiu, não conecta ao
 transport, e o `start()` rejeita com `PluginBootError`, que lista cada plugin com o motivo. Se o
 problema já aparece na etapa 1, nenhum `setup` roda; senão, todos os `setup`s rodam, para o erro
-listar todas as falhas de uma vez ([ADR 0102](../adr/0102-plugin-falho-derruba-o-boot.md)).
+listar todas as falhas de uma vez ([ADR 0098](../adr/0098-plugin-falho-derruba-o-boot.md)).
 
 Parar é a escolha do lado seguro. Um bot que sobe sem metade dos plugins parece saudável: o
 `/health` diz 200, e o problema só aparece quando alguém manda o comando que não responde.
@@ -40,7 +40,7 @@ Os motivos, e o que fazer com cada um:
 
 Duas situações não param o boot. `carregado; sem ...` lista os comandos que ficaram de fora porque
 exigem uma capability ou um service que falta: o plugin degrada por comando, de propósito
-([ADR 0090](../adr/0090-requires-por-comando.md), [ADR 0099](../adr/0099-comando-que-exige-servico.md)).
+([ADR 0086](../adr/0086-requires-por-comando.md), [ADR 0095](../adr/0095-comando-que-exige-servico.md)).
 E com o bot já no ar, um `reload`, `disable` ou `enable` que falha deixa só aquele plugin fora,
 com o motivo na tabela, sem derrubar o processo.
 
@@ -68,7 +68,7 @@ pausa) sem custo no caminho da mensagem. Detalhes em [Fila de saída](../../pack
 Um plugin lê os mesmos contadores com `ctx.stats()`, de entrada e de saída, sempre do próprio bot.
 É um retrato do instante (gauge), não uma série: quem quer histórico amostra no próprio ritmo, num
 job do scheduler ou a cada scrape, e guarda os valores
-([ADR 0106](../adr/0106-observadores-do-core.md)).
+([ADR 0102](../adr/0102-observadores-do-core.md)).
 
 Para medir latência e desfecho de cada unidade de trabalho, o plugin assina os sinais do core com
 `ctx.observe`:
@@ -104,7 +104,7 @@ ctx.observe('log', (s) => {
 - O `log` leva toda linha do logger do bot (core, transport e plugins, inclusive o `config.logger`
   do app) que passa do nível dele, com os secrets já mascarados em `message` e `fields` (um
   `Error` vira objeto simples). Log feito dentro de um observador de `log`, e o `plugin.error` dele,
-  não volta ao sinal, nem depois de um `await` ([ADR 0109](../adr/0109-sinal-de-log-nos-observadores.md)).
+  não volta ao sinal, nem depois de um `await` ([ADR 0105](../adr/0105-sinal-de-log-nos-observadores.md)).
   O silêncio vale para o que o observador agenda (um timer, o próprio `ctx.send`), mas não passa
   aos envios de outros chats nem aos jobs do scheduler: eles rodam no contexto de quem os criou.
 - `chatId`, `senderId` e `messageId` existem só em memória. Não os persista nem exporte.
@@ -112,7 +112,7 @@ ctx.observe('log', (s) => {
 ## Métricas de performance
 
 O projeto mede, no CI e sem rede, o custo do kernel em si
-([ADR 0030](../adr/0030-metas-de-performance.md)):
+([ADR 0027](../adr/0027-metas-de-performance.md)):
 
 | Métrica | Meta |
 | --- | --- |
@@ -124,7 +124,7 @@ O projeto mede, no CI e sem rede, o custo do kernel em si
 
 Um PR que piora alguma métrica em mais de 10% falha. O benchmark roda base e commit testado no
 mesmo runner, alternando a ordem, para o ruído da máquina não decidir
-([ADR 0089](../adr/0089-benchmark-intercalado.md)).
+([ADR 0085](../adr/0085-benchmark-intercalado.md)).
 
 Os números são do kernel: a vazão roda com a taxa anti-ban zerada, porque ela dominaria a medição.
 O teto real de um bot de WhatsApp é o ritmo da fila de saída e o tempo dos plugins, não o kernel.
@@ -133,7 +133,7 @@ O teto real de um bot de WhatsApp é o ritmo da fila de saída e o tempo dos plu
 
 O Bridger nasceu de uma migração assim: o LumaBot seguiu em produção enquanto os plugins eram
 portados um a um, do mais simples ao mais complexo, e a virada aconteceu quando um checklist de
-paridade fechou ([ADR 0023](../adr/0023-migracao-incremental-legacy.md)). O mesmo caminho serve para
+paridade fechou. O mesmo caminho serve para
 outros bots:
 
 1. **Liste o que o bot faz** e transforme a lista no checklist de paridade. É o critério objetivo de

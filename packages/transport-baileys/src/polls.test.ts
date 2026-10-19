@@ -1,4 +1,4 @@
-// Voto de enquete (#312, ADR 0071): o teste cifra o voto como o aparelho de quem vota, com o
+// Voto de enquete (#312, ADR 0067): o teste cifra o voto como o aparelho de quem vota, com o
 // segredo da enquete, e confere que o transport o decifra e emite `poll.vote` com os índices.
 
 import { createCipheriv, createHash, createHmac, randomBytes } from 'node:crypto';

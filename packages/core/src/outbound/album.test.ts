@@ -1,4 +1,4 @@
-// #271 (ADR 0065): álbum na fila de saída e no `ctx.reply`, com e sem a capability `send.album`.
+// #271 (ADR 0061): álbum na fila de saída e no `ctx.reply`, com e sem a capability `send.album`.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bold, fmt } from '#text/format.ts';

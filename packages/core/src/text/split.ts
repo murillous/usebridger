@@ -1,4 +1,4 @@
-// Divisão de texto longo em partes que cabem no limite do transport (ADR 0061). Corta num
+// Divisão de texto longo em partes que cabem no limite do transport (ADR 0057). Corta num
 // parágrafo, depois numa linha, num espaço e, por último, num caractere; um nó partido continua
 // formatado nas duas partes.
 

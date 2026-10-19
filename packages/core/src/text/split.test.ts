@@ -1,4 +1,4 @@
-// #273 (ADR 0061): divisão de texto longo sem quebrar a formatação.
+// #273 (ADR 0057): divisão de texto longo sem quebrar a formatação.
 
 import { describe, expect, it } from 'vitest';
 import { bold, code, fmt, formatted, type MessageText, mention, plainText } from './format.ts';

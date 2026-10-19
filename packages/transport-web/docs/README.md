@@ -2,7 +2,7 @@
 
 Transport do Bridger para o chatbot dentro de um sistema web próprio (ERP, gestão escolar). O
 sistema emite um JWT para o widget, e o widget conversa com o bot por WebSocket. As decisões estão
-no [ADR 0077](../../../docs/adr/0077-transport-web.md).
+no [ADR 0073](../../../docs/adr/0073-transport-web.md).
 
 ## Uso
 
@@ -66,7 +66,7 @@ command({
 - **Contato:** `id` é o `sub` (com o tenant na frente, `<tenant>:<sub>`), `name` vem do claim `name`
   e `phone` é `null`.
 - **Tenant:** com `tenantClaim`, o valor do claim vira `chat.tenantId`, e o `ctx.storage` dos
-  plugins fica no escopo dele ([ADR 0072](../../../docs/adr/0072-isolamento-por-tenant.md)). O mesmo
+  plugins fica no escopo dele ([ADR 0068](../../../docs/adr/0068-isolamento-por-tenant.md)). O mesmo
   `sub` em dois tenants são duas pessoas.
 - **Validade:** o token é validado uma vez por conexão. No `exp`, a conexão fecha com 4401, e o
   widget reconecta com um token novo. O que o bot enviar no meio-tempo espera no buffer.
