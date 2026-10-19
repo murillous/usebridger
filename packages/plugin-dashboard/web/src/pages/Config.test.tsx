@@ -420,3 +420,76 @@ describe('Config: carregando e erro', () => {
     expect((await screen.findByRole('alert')).textContent).toBe('Falha de rede.');
   });
 });
+
+describe('Config: lista de objetos', () => {
+  const chain = (): ConfigResponse => ({
+    schema: {
+      type: 'object',
+      properties: {
+        models: {
+          type: 'array',
+          title: 'Modelos',
+          items: {
+            type: 'object',
+            required: ['model'],
+            properties: {
+              model: { type: 'string', title: 'Modelo' },
+              temperature: { type: 'number', title: 'Temperatura' },
+            },
+          },
+        },
+      },
+    },
+    view: {
+      config: { models: [{ model: 'google:a', temperature: 1 }, { model: 'openai:b' }] },
+      messages: {},
+      sources: { models: 'override' },
+    },
+    secretsWritable: false,
+  });
+
+  it('reordena, edita, adiciona e remove itens; o PUT leva a ordem do editor', async () => {
+    const user = userEvent.setup();
+    setup([row('ai')], { ai: chain() });
+    await form();
+    routes['PUT config/ai'] = () => ({ body: null });
+    expect((screen.getByLabelText('Modelos, item 1, Modelo') as HTMLInputElement).value).toBe(
+      'google:a',
+    );
+    expect(
+      (screen.getByRole('button', { name: 'Subir item 1 de Modelos' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Descer item 1 de Modelos' }));
+    expect((screen.getByLabelText('Modelos, item 1, Modelo') as HTMLInputElement).value).toBe(
+      'openai:b',
+    );
+    await user.type(screen.getByLabelText('Modelos, item 1, Temperatura'), '0.5');
+    await user.click(screen.getByRole('button', { name: 'Adicionar item' }));
+    await user.type(screen.getByLabelText('Modelos, item 3, Modelo'), 'anthropic:c');
+    await user.click(screen.getByRole('button', { name: 'Remover item 2 de Modelos' }));
+    await user.click(saveButton());
+    await waitFor(() => expect(puts().length).toBe(1));
+    expect(puts()[0]?.body).toEqual({
+      models: [{ model: 'openai:b', temperature: 0.5 }, { model: 'anthropic:c' }],
+    });
+  });
+
+  it('issue do servidor num item aparece junto da lista', async () => {
+    const user = userEvent.setup();
+    setup([row('ai')], { ai: chain() });
+    await form();
+    routes['PUT config/ai'] = () => ({
+      status: 400,
+      body: {
+        error: 'invalid',
+        issues: [{ path: 'models.0.model', message: 'use provider:modelo' }],
+      },
+    });
+    await user.click(screen.getByRole('button', { name: 'Remover item 2 de Modelos' }));
+    await user.click(saveButton());
+    expect(
+      (await screen.findByText('Item 1, Modelo: use provider:modelo')).getAttribute('role'),
+    ).toBe('alert');
+  });
+});
