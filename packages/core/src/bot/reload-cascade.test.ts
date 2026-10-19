@@ -1,4 +1,4 @@
-// Reload em cascata (#226, ADR 0041): recarregar um plugin que provê serviço recarrega quem
+// Reload em cascata (#226, ADR 0037): recarregar um plugin que provê serviço recarrega quem
 // depende dele, para nenhum dependente ficar com a instância do contexto descartado.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';

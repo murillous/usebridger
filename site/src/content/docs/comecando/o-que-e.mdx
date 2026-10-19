@@ -18,11 +18,11 @@ Bridger é um **kernel** para bots de mensageria, escrito em TypeScript para Nod
 
 ## SDK, framework ou kernel?
 
-O Bridger é uma **biblioteca com inversão de controle**: não há um programa `bridger` para rodar. Seu app importa `createBot`, passa transport, storage e plugins, e chama `start()`. A partir daí **o kernel chama os seus plugins**, não o contrário: um plugin declara seus comandos e listeners e o kernel decide quando rodá-los. Importar o core não conecta nem agenda nada até o `start()` ([ADR 0034](/usebridger/decisoes/0034-biblioteca-sem-runner/)).
+O Bridger é uma **biblioteca com inversão de controle**: não há um programa `bridger` para rodar. Seu app importa `createBot`, passa transport, storage e plugins, e chama `start()`. A partir daí **o kernel chama os seus plugins**, não o contrário: um plugin declara seus comandos e listeners e o kernel decide quando rodá-los. Importar o core não conecta nem agenda nada até o `start()` ([ADR 0030](/usebridger/decisoes/0030-biblioteca-sem-runner/)).
 
 ## O que é core e o que é plugin
 
-O core tem um escopo fechado: conexão, filas de entrada e saída, middlewares, comandos, eventos, ciclo de vida dos plugins, storage, scheduler, logger, config, papéis, HTTP e mídia. **Todo o resto é plugin**: ajuda, lembretes, ranking, IA, painel. Entrar algo novo no core exige um ADR ([ADR 0013](/usebridger/decisoes/0013-escopo-do-core/)). O motivo é que, sem essa fronteira, o kernel acumula funcionalidades "porque todo bot precisa" e passa a obrigar todo mundo a carregá-las.
+O core tem um escopo fechado: conexão, filas de entrada e saída, middlewares, comandos, eventos, ciclo de vida dos plugins, storage, scheduler, logger, config, papéis, HTTP e mídia. **Todo o resto é plugin**: ajuda, lembretes, ranking, IA, painel. Entrar algo novo no core exige um ADR ([ADR 0011](/usebridger/decisoes/0011-escopo-do-core/)). O motivo é que, sem essa fronteira, o kernel acumula funcionalidades "porque todo bot precisa" e passa a obrigar todo mundo a carregá-las.
 
 O core também não conhece nenhuma plataforma: ele só conhece o contrato do `Transport`. Um plugin que usa só o que o contrato descreve roda em qualquer transport.
 
@@ -73,7 +73,7 @@ Os prazos e erros de cada etapa estão em [Bot → Fluxo de uma mensagem](/usebr
 ## Quando não usar
 
 - **Para uma chamada avulsa à API de uma plataforma.** Se você só quer mandar uma mensagem de um script, a biblioteca da plataforma (por exemplo, o próprio Baileys) é menos código.
-- **Para rodar vários processos com a mesma sessão.** Uma trava no storage impede dois processos na mesma sessão ([ADR 0004](/usebridger/decisoes/0004-uma-sessao-por-processo/)).
+- **Para rodar vários processos com a mesma sessão.** Uma trava no storage impede dois processos na mesma sessão ([ADR 0003](/usebridger/decisoes/0003-uma-sessao-por-processo/)).
 - **Se você precisa de Telegram ou Discord agora.** Os transports ainda não existem.
 - **Se você não quer escrever código.** O Bridger não traz um construtor visual nem um bot pronto: ele é a base sobre a qual você escreve o seu.
 

@@ -1,4 +1,4 @@
-// Ações e botões (ADR 0062, #275): o clique roda o comando ou o passo da ação, pelo mesmo caminho
+// Ações e botões (ADR 0058, #275): o clique roda o comando ou o passo da ação, pelo mesmo caminho
 // da mensagem; sem a capability `actions`, o menu sai em texto numerado e o número roda a ação.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -118,7 +118,7 @@ const MENU: readonly MessageAction[] = [
   { label: '1º bimestre', step: 'periodo', data: { bimestre: 1 } },
 ];
 
-describe('Bot: ações com botões (ADR 0062)', () => {
+describe('Bot: ações com botões (ADR 0058)', () => {
   it('a resposta leva os botões ao transport, com ID opaco e rótulo, e o texto como veio', async () => {
     const transport = new ButtonTransport();
     const bot = await startBot(transport, [escola(MENU)]);
@@ -319,7 +319,7 @@ describe('Bot: ações com botões (ADR 0062)', () => {
   });
 });
 
-describe('Bot: validação das ações (ADR 0062)', () => {
+describe('Bot: validação das ações (ADR 0058)', () => {
   async function replyWith(actions: readonly MessageAction[]): Promise<unknown> {
     const transport = new ButtonTransport();
     let failure: unknown;
@@ -386,7 +386,7 @@ describe('Bot: validação das ações (ADR 0062)', () => {
   });
 });
 
-describe('Bot: menu em texto numerado (ADR 0062)', () => {
+describe('Bot: menu em texto numerado (ADR 0058)', () => {
   it('sem a capability, o texto ganha o menu, e o número do remetente roda a ação', async () => {
     const transport = new RecordingTransport();
     const bot = await startBot(transport, [escola(MENU)]);

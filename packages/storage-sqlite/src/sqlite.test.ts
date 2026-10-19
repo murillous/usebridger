@@ -117,7 +117,7 @@ describe('sqlite: auth state', () => {
   });
 });
 
-describe('sqlite: trava da sessão (ADR 0074)', () => {
+describe('sqlite: trava da sessão (ADR 0070)', () => {
   it('duas conexões no mesmo arquivo disputam a mesma trava', async () => {
     // Cada `sqlite()` abre a própria conexão: é o que dois processos sobre o arquivo fazem.
     const a = sqlite({ path: file });

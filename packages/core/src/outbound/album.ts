@@ -1,5 +1,5 @@
-// Álbum do envio (ADR 0065): com a capability `send.album`, vai em lotes de até `limits.album`
-// itens; sem ela, item a item. Roda antes da divisão da legenda (ADR 0061), na entrada da fila.
+// Álbum do envio (ADR 0061): com a capability `send.album`, vai em lotes de até `limits.album`
+// itens; sem ela, item a item. Roda antes da divisão da legenda (ADR 0057), na entrada da fila.
 
 import type { OutgoingContent, SendOptions, Transport } from '#transport/types.ts';
 import { positiveLimit, type SendPart } from './text.ts';

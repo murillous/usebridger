@@ -7,8 +7,8 @@ import { type Capability, isCapability } from '#transport/capabilities.ts';
 import type { RoleName } from './roles.ts';
 
 /**
- * Quem pode rodar o comando: os embutidos (ADR 0024) ou um papel custom que um plugin define com
- * `ctx.roles.define` e declara em `Roles` (ADR 0035).
+ * Quem pode rodar o comando: os embutidos (ADR 0021) ou um papel custom que um plugin define com
+ * `ctx.roles.define` e declara em `Roles` (ADR 0031).
  */
 export type CommandRole = 'owner' | 'group-admin' | 'everyone' | RoleName;
 
@@ -91,20 +91,20 @@ export interface CommandContext<TKey extends string = string> extends BotMessage
   /**
    * Aborta quando o `run` (ou o `onReject`) estoura o prazo (`timeoutMs` do comando ou
    * `timeouts.commandMs`), com
-   * `reason` = `CommandTimeoutError`. Repasse a `fetch`/SDKs para parar o trabalho a tempo (ADR 0033);
+   * `reason` = `CommandTimeoutError`. Repasse a `fetch`/SDKs para parar o trabalho a tempo (ADR 0029);
    * depois do prazo, o `reply` deste contexto rejeita com `ContextExpiredError`. Montado pelo
    * `Bot`: quem usa o roteador solto o fornece no contexto passado a `dispatch`.
    */
   readonly signal: AbortSignal;
   /**
    * Faz a próxima mensagem do remetente, neste chat, ir para um passo de conversa do plugin
-   * (ADR 0060). O `run` pergunta, registra a espera e termina, sem segurar o chat. Montado pelo
+   * (ADR 0056). O `run` pergunta, registra a espera e termina, sem segurar o chat. Montado pelo
    * `Bot`, como o `signal`.
    */
   readonly expectReply: ExpectReply;
   /**
    * Texto de `messages` do plugin com os placeholders preenchidos: `{prefix}` com o prefixo
-   * deste chat, os outros com `values` (ADR 0092). Montado pelo `Bot`, como o `signal`.
+   * deste chat, os outros com `values` (ADR 0088). Montado pelo `Bot`, como o `signal`.
    */
   readonly t: MessageText<TKey>;
   /** Entrada de `accepts` que casou; `null` se o comando não declara `accepts`. */
@@ -169,38 +169,38 @@ export interface CommandDefinition<A extends readonly AcceptSpec[] = readonly Ac
   ) => string | null | undefined | Promise<string | null | undefined>;
   /**
    * No bot, devolver texto (string ou `fmt`) responde citando a mensagem, como terminar com
-   * `await ctx.reply(texto)` (ADR 0079). Outro valor é ignorado. O tipo segue `unknown` para
+   * `await ctx.reply(texto)` (ADR 0075). Outro valor é ignorado. O tipo segue `unknown` para
    * `run: (c) => c.reply('x')` continuar valendo.
    */
   readonly run: (ctx: CommandContextFor<A>) => unknown;
   /**
    * Prazo do `run` e do `onReject` no bot, em ms. Padrão: `timeouts.commandMs` do bot. Para o
    * comando que legitimamente demora (download, conversão): enquanto roda, ele segura o chat
-   * (ADR 0042), então o prazo maior vale só para ele.
+   * (ADR 0038), então o prazo maior vale só para ele.
    */
   readonly timeoutMs?: number;
   /**
-   * O `run` roda fora da fila do chat (ADR 0087): a próxima mensagem do chat não espera por ele.
+   * O `run` roda fora da fila do chat (ADR 0083): a próxima mensagem do chat não espera por ele.
    * Papel, `accepts` e `onReject` seguem na fila. O `run` mantém o contexto inteiro (`reply`,
    * `signal` com o `timeoutMs`, `log`), e a falha vai para `plugin.error` quando ele termina.
    * Duas execuções do mesmo chat podem terminar fora de ordem.
    */
   readonly background?: boolean;
   /**
-   * Máximo de `run` simultâneos deste comando no bot, somando todos os chats (ADR 0088). A
+   * Máximo de `run` simultâneos deste comando no bot, somando todos os chats (ADR 0084). A
    * execução excedente espera a vez em ordem de chegada, e a espera conta no prazo
    * (`timeoutMs`). A vaga volta quando o `run` termina de fato, mesmo depois do prazo. Inteiro
    * >= 1; padrão: sem limite.
    */
   readonly concurrency?: number;
   /**
-   * Capabilities que o comando exige do transport (ADR 0090). No bot, sem alguma delas, o
+   * Capabilities que o comando exige do transport (ADR 0086). No bot, sem alguma delas, o
    * comando não é registrado: fica fora do roteador, do `ctx.commands.list()` e do menu nativo,
    * como um plugin pulado pelo `requires` dele. O roteador solto ignora o campo.
    */
   readonly requires?: readonly Capability[];
   /**
-   * Serviços que o comando exige (ADR 0099). No bot, se algum não estiver provido quando o
+   * Serviços que o comando exige (ADR 0095). No bot, se algum não estiver provido quando o
    * comando é registrado, ele fica de fora como no `requires`. Para o comando voltar quando o
    * provedor sobe, cai ou recarrega, o plugin declara o provedor em `optionalDependsOn` (ou
    * `dependsOn`): o reload em cascata registra os comandos de novo. O roteador solto ignora o
@@ -209,7 +209,7 @@ export interface CommandDefinition<A extends readonly AcceptSpec[] = readonly Ac
   readonly services?: readonly ServiceName[];
 }
 
-/** Comando como os plugins o veem em `ctx.commands.list()` (ADR 0040): sem `run` nem `onReject`. */
+/** Comando como os plugins o veem em `ctx.commands.list()` (ADR 0036): sem `run` nem `onReject`. */
 export interface CommandInfo {
   /** Plugin que registrou o comando. */
   readonly plugin: string;

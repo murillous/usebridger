@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
 
-// Aceite do M1-8 (ADR 0007): o core não importa nenhuma feature. Features são plugins e entram
+// Aceite do M1-8 (ADR 0005): o core não importa nenhuma feature. Features são plugins e entram
 // pela config ou por `pluginDirs`; um import de `@usebridger/plugin-*` (ou de qualquer outro
 // pacote do workspace) aqui dentro recriaria o registro hardcoded do legacy.
 const src = fileURLToPath(new URL('..', import.meta.url));

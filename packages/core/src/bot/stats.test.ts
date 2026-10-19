@@ -88,7 +88,7 @@ describe('Bot: stats()', () => {
   });
 });
 
-// ADR 0106 (#147): o plugin lê os mesmos contadores pelo `ctx.stats()`.
+// ADR 0102 (#147): o plugin lê os mesmos contadores pelo `ctx.stats()`.
 describe('PluginContext: stats()', () => {
   it('devolve os contadores do próprio bot, como bot.stats()', async () => {
     const reads = new Map<string, () => ReturnType<Bot['stats']>>();

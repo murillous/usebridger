@@ -1,4 +1,4 @@
-// `concurrency` no comando (ADR 0088): teto de `run` simultâneos no bot, somando os chats.
+// `concurrency` no comando (ADR 0084): teto de `run` simultâneos no bot, somando os chats.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type CommandContext, command } from '#commands/command.ts';
@@ -65,7 +65,7 @@ async function startBot({ run, background }: Setup) {
   return { transport, errors, logger };
 }
 
-describe('Bot: limite de concorrência por comando (ADR 0088)', () => {
+describe('Bot: limite de concorrência por comando (ADR 0084)', () => {
   it('a execução excedente de outro chat espera a vaga', async () => {
     const ffmpeg = deferred();
     const started: string[] = [];

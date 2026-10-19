@@ -12,7 +12,7 @@ function clock(start = 1_000_000) {
 }
 
 describe('ReconnectionPolicy', () => {
-  it("'replaced' não reconecta: decide parar, sem mexer nos contadores (ADR 0036)", () => {
+  it("'replaced' não reconecta: decide parar, sem mexer nos contadores (ADR 0032)", () => {
     const policy = new ReconnectionPolicy();
     policy.decide('connection-lost');
     expect(policy.decide('replaced')).toEqual({ action: 'stop', cause: 'replaced' });
@@ -31,7 +31,7 @@ describe('ReconnectionPolicy', () => {
     expect(policy.state.reconnectAttempts).toBe(4);
   });
 
-  it('queda de rede nunca limpa a sessão, por mais tentativas que leve (ADR 0045)', () => {
+  it('queda de rede nunca limpa a sessão, por mais tentativas que leve (ADR 0041)', () => {
     const policy = new ReconnectionPolicy();
     for (let i = 0; i < 100; i++) {
       expect(policy.decide(i % 2 === 0 ? 'connection-lost' : 'unknown')).toMatchObject({
@@ -141,7 +141,7 @@ describe('ReconnectionPolicy', () => {
   });
 });
 
-// MP-15 (#280, ADR 0068): erro de configuração e credencial rejeitada sem pareamento param, em
+// MP-15 (#280, ADR 0064): erro de configuração e credencial rejeitada sem pareamento param, em
 // vez de reconectar ou limpar uma sessão que não se recupera sozinha.
 describe('ReconnectionPolicy: desconexão fatal e transport sem pareamento', () => {
   it("'fatal' decide parar, com a causa, sem mexer nos contadores", () => {

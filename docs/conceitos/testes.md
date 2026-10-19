@@ -2,7 +2,7 @@
 
 O kit de testes faz parte do contrato público, no mesmo nível dos tipos: um plugin que só se testa
 com um WhatsApp de verdade não é um plugin que um terceiro consegue manter
-([ADR 0022](../adr/0022-kit-de-autor.md)). O como-fazer está no guia [Testes](../guias/testes.md) e
+([ADR 0020](../adr/0020-kit-de-autor.md)). O como-fazer está no guia [Testes](../guias/testes.md) e
 na [referência do kit](../../packages/testing/docs/README.md).
 
 ## Sem rede: o bot inteiro, com um transport falso
@@ -12,11 +12,11 @@ na [referência do kit](../../packages/testing/docs/README.md).
 mesmas filas, pelo mesmo roteador e pela mesma fila de saída de produção. O que muda são os
 padrões, escolhidos para o teste ser rápido e determinístico: log em silêncio, storage em memória,
 fila de saída sem intervalo, sem reconexão e sem nenhuma variável `BRIDGER_*` da máquina
-([ADR 0052](../adr/0052-kit-de-testes-sobre-o-vitest.md)).
+([ADR 0048](../adr/0048-kit-de-testes-sobre-o-vitest.md)).
 
 A peça que torna isso confiável é o `receive()`: ele entrega a mensagem e só resolve quando o bot
 **assentou**, isto é, quando tudo o que a mensagem causou terminou, inclusive envios feitos sem
-`await` e comandos em segundo plano ([ADR 0044](../adr/0044-espera-pelo-bot-assentar.md)). Sem
+`await` e comandos em segundo plano ([ADR 0040](../adr/0040-espera-pelo-bot-assentar.md)). Sem
 isso, todo teste precisaria de um `sleep` e seria intermitente. Depois do `receive()`, `bot.sent`
 já tem as respostas, e os matchers (`toContainText`, `toHaveReplied`) comparam o texto visível.
 
@@ -28,7 +28,7 @@ papel errado, `accepts` que recusa, comando que outro plugin já registrou, capa
 O kit tem perfis de plataforma: `whatsapp`, `telegram`, `discord` e `web`, cada um com as
 capabilities, os limites de tamanho e o formato de contato daquela plataforma. O do `whatsapp` é
 conferido contra o que o transport Baileys declara, num teste do próprio transport
-([ADR 0073](../adr/0073-kit-de-testes-multiplataforma.md)).
+([ADR 0069](../adr/0069-kit-de-testes-multiplataforma.md)).
 
 O plugin portátil roda o mesmo teste em todos:
 
@@ -73,4 +73,4 @@ o mesmo sem os matchers e sem carregar o Vitest.
 
 O próprio core não se testa com o kit: o kit depende do core, e o contrário faria um ciclo. O kit,
 por sua vez, é testado contra o core real, passando pelo pipeline inteiro
-([ADR 0053](../adr/0053-core-testa-sem-o-kit.md)).
+([ADR 0049](../adr/0049-core-testa-sem-o-kit.md)).

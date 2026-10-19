@@ -1,6 +1,6 @@
-// Fila de saída anti-ban (ADR 0019). Todo envio do bot passa por aqui: intervalo mínimo global
+// Fila de saída anti-ban (ADR 0017). Todo envio do bot passa por aqui: intervalo mínimo global
 // e por chat, prioridade (comando > broadcast), retry com backoff (ou na janela que a plataforma
-// informou, ADR 0067) e humanização opcional.
+// informou, ADR 0063) e humanização opcional.
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Observers, OutboundSentSignal } from '#observers/observers.ts';
@@ -34,7 +34,7 @@ export interface RetryOptions {
   readonly baseDelayMs?: number;
   /**
    * Teto da espera, em ms. Padrão: 30000. Um erro com `retryAfterMs` acima dele não re-tenta: a
-   * resposta já sairia fora de contexto (ADR 0067).
+   * resposta já sairia fora de contexto (ADR 0063).
    */
   readonly maxDelayMs?: number;
   /**
@@ -96,12 +96,12 @@ export interface OutboundQueueOptions {
   readonly clock?: () => number;
   /** Fonte do jitter do backoff, em [0, 1). Padrão: `Math.random`. */
   readonly random?: () => number;
-  /** Destino do sinal `outbound.sent` de cada `send` (ADR 0106). */
+  /** Destino do sinal `outbound.sent` de cada `send` (ADR 0102). */
   readonly observers?: Pick<Observers, 'has' | 'emit'>;
 }
 
 /**
- * Origem da resposta do `ctx.reply`, para o sinal `outbound.sent` (ADR 0106). Chave `Symbol` fora
+ * Origem da resposta do `ctx.reply`, para o sinal `outbound.sent` (ADR 0102). Chave `Symbol` fora
  * do `index.ts`: um plugin não a forja pelo `ctx.send`, e a fila a retira antes do transport.
  */
 export const REPLY_ORIGIN: unique symbol = Symbol('replyOrigin');
@@ -160,7 +160,7 @@ interface JobPart {
 
 interface Job extends JobPart {
   /**
-   * Partes seguintes de um texto dividido (ADR 0061). Cada uma sai logo depois da anterior, na
+   * Partes seguintes de um texto dividido (ADR 0057). Cada uma sai logo depois da anterior, na
    * frente do chat, para outro envio não se intrometer.
    */
   readonly rest: readonly JobPart[];
@@ -177,7 +177,7 @@ interface Job extends JobPart {
   readonly reject: (error: unknown) => void;
   /**
    * Contexto assíncrono de quem enfileirou. O job roda nele, e não no de quem disparou o pump: um
-   * `send` feito num observador de `log` (ADR 0109) despacha jobs de outros chats e não pode
+   * `send` feito num observador de `log` (ADR 0105) despacha jobs de outros chats e não pode
    * emprestar o silêncio a eles (#163).
    */
   readonly context: ReturnType<typeof AsyncLocalStorage.snapshot>;
@@ -268,7 +268,7 @@ export class OutboundQueue implements Sender {
   /**
    * Enfileira o envio. Resolve com a chave da mensagem criada ou rejeita com o erro final
    * (capability ausente, fila cheia/fechada ou falha do transport após as re-tentativas). Um
-   * texto acima do limite do transport sai em partes, e a chave é a da primeira (ADR 0061).
+   * texto acima do limite do transport sai em partes, e a chave é a da primeira (ADR 0057).
    */
   send(
     chatId: string,
@@ -345,7 +345,7 @@ export class OutboundQueue implements Sender {
 
   /**
    * Enfileira uma ação que gera tráfego sem ser envio (reação, edição, "digitando", participantes de
-   * grupo; ADR 0040), com as mesmas regras do envio: intervalos, prioridade, retry, pausa e prazo.
+   * grupo; ADR 0036), com as mesmas regras do envio: intervalos, prioridade, retry, pausa e prazo.
    * Sem humanização. Quem chama confere a capability antes: a fila não conhece a ação.
    */
   enqueue<T>(chatId: string, action: () => Promise<T>, options?: ActionOptions): Promise<T> {

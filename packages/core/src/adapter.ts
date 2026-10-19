@@ -1,4 +1,4 @@
-// Entry `@usebridger/core/adapter` (ADR 0034): o que autores de transport e de storage usam além
+// Entry `@usebridger/core/adapter` (ADR 0030): o que autores de transport e de storage usam além
 // do modelo compartilhado (`Message`, `MessageKey`, `OutgoingContent`, tipos de storage), que
 // importam de `@usebridger/core`. `Transport` e `StoragePort` saem nas duas entradas: aqui como
 // contrato a implementar, lá como tipo da config do bot. A lista é fixada em `entries.test.ts`.

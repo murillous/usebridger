@@ -1,4 +1,4 @@
-// Storage do plugin com escopo de tenant (ADR 0072): cada operação vai ao namespace do tenant
+// Storage do plugin com escopo de tenant (ADR 0068): cada operação vai ao namespace do tenant
 // corrente (`<plugin>@<tenant>`) ou, sem tenant, ao do plugin, como antes. A escolha é feita na
 // chamada, não na criação: uma coleção obtida no `setup` grava no tenant do handler que a usa.
 
@@ -24,7 +24,7 @@ export interface TenantStorage extends PluginStorage {
 
 /**
  * `ctx.storage`: o da sessão do bot e, em `shared`, o comum a todas as sessões que dividem o
- * storage (ADR 0075). Os dois seguem o tenant corrente.
+ * storage (ADR 0071). Os dois seguem o tenant corrente.
  */
 export interface PluginContextStorage extends TenantStorage {
   /**

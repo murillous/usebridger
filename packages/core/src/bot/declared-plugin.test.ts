@@ -1,4 +1,4 @@
-// Açúcar do manifesto (ADR 0079): `commands` e `on` viram `ctx.commands.add` e `ctx.events.on`
+// Açúcar do manifesto (ADR 0075): `commands` e `on` viram `ctx.commands.add` e `ctx.events.on`
 // antes do `setup`, e o `run` que devolve texto responde. Os testes comparam com a forma longa.
 
 import { afterEach, describe, expect, it } from 'vitest';

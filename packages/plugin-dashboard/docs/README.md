@@ -1,6 +1,6 @@
 # @usebridger/plugin-dashboard — documentação
 
-Base do dashboard ([ADR 0107](../../../docs/adr/0107-plugins-oficiais-de-metricas-e-dashboard.md)):
+Base do dashboard ([ADR 0103](../../../docs/adr/0103-plugins-oficiais-de-metricas-e-dashboard.md)):
 autenticação, status, QR, logs e WebSocket sobre o HTTP do core. O app web (telas Login, Visão geral, Métricas, Logs, Plugins e Config)
 vem junto; o desenho está em [design.md](./design.md). Abas de plugins: veja abaixo.
 
@@ -31,10 +31,10 @@ Todas sob `/plugins/dashboard` (ou `/sessions/<sessão>/plugins/dashboard` fora 
 `status` é `connecting`, `open` ou `closed`. `qr` e `pairingCode` somem quando a conexão abre.
 `closed` traz `reason` e `message` (texto do erro, truncado); o objeto de erro cru nunca sai.
 `session` é o nome da sessão do bot. Depois de um reload do plugin, o status parte do último
-`ConnectionStatus` guardado pelo core (`ctx.connectionStatus()`, ADR 0110).
+`ConnectionStatus` guardado pelo core (`ctx.connectionStatus()`, ADR 0106).
 `name` é o nome do bot (`createBot({ name })`, senão o nome do transport) e aparece no cabeçalho
 como `name · sessão X`. `connectedSince`, `reconnections` e `qrExpiresAt` (ms epoch) vêm de
-`ctx.connectionInfo()` (ADR 0115) e alimentam o card do bot; `qrExpiresAt` só existe se o
+`ctx.connectionInfo()` (ADR 0111) e alimentam o card do bot; `qrExpiresAt` só existe se o
 transport informar `expiresAt` no `connection.qr` (o Baileys informa).
 
 ## Métricas
@@ -62,13 +62,13 @@ mostra os KPIs de hoje (dia UTC; mensagens, p95, usuários e grupos ativos) quan
 ## Config dos plugins
 
 Base dos formulários gerados dos schemas Zod. Exige `createBot({ adminPlugins: ['dashboard'] })`
-(`ctx.admin`, ADR 0111); sem isso as duas rotas respondem 503 e o resto do dashboard segue.
+(`ctx.admin`, ADR 0107); sem isso as duas rotas respondem 503 e o resto do dashboard segue.
 
 | Rota                       | Resposta                                                                 |
 | -------------------------- | ------------------------------------------------------------------------ |
 | `GET /api/config/:plugin`  | `{ view: { config, messages, sources }, schema, secretsWritable }` (`secretsWritable`: há `BRIDGER_SECRET_KEY`, o core aceita gravar segredo). `schema` é o JSON Schema da config (`null` se o plugin não declara `config`). Se a config atual está inválida, 200 com `{ view: null, schema, secretsWritable, issues: [{ path, message, kind }] }` para o admin corrigir pelo formulário. Plugin desconhecido 404. |
 | `PUT /api/config/:plugin`  | Corpo (objeto JSON de overrides, até 64 KiB, senão 413); recusa (403) `Origin` de outro host; sem `Origin`, passa. 200 com o resultado do reload (`{ plugin, dependents, teardownErrors }`); erros de lifecycle saem só como `{ plugin, phase, timedOut, message }` (mensagem truncada em 300), sem stack nem cause. |
-| `PUT /api/config/:plugin/secrets/:path` | Grava o segredo cifrado (ADR 0121). `:path` é o caminho pontilhado do campo. Corpo `{ "value": ... }` (até 64 KiB, senão 413). 200 com o resultado do reload; o valor nunca volta. 400: JSON inválido, sem `value`, valor inválido ou sem chave mestra (`{ error, issues }`); 403: `Origin` de outro host; 404: plugin desconhecido; 409: `{ error: "shadowed" }` (env ou arquivo definem o campo), ação no próprio dashboard, ou reload que falhou depois de gravar. |
+| `PUT /api/config/:plugin/secrets/:path` | Grava o segredo cifrado (ADR 0117). `:path` é o caminho pontilhado do campo. Corpo `{ "value": ... }` (até 64 KiB, senão 413). 200 com o resultado do reload; o valor nunca volta. 400: JSON inválido, sem `value`, valor inválido ou sem chave mestra (`{ error, issues }`); 403: `Origin` de outro host; 404: plugin desconhecido; 409: `{ error: "shadowed" }` (env ou arquivo definem o campo), ação no próprio dashboard, ou reload que falhou depois de gravar. |
 | `DELETE /api/config/:plugin/secrets/:path` | Remove o segredo (funciona sem chave mestra, também para envelope ilegível). Mesmas respostas, sem corpo. |
 
 Erros do `PUT`: config inválida ou campo `secret` 400 com
@@ -117,7 +117,7 @@ pedido (proteção contra CSWSH). Ao reconectar, o cliente recebe um novo snapsh
 
 ## Plugins (enable, disable, reload)
 
-Exige o acesso admin do core (ADR 0111): ponha `dashboard` em `adminPlugins`, senão as rotas abaixo
+Exige o acesso admin do core (ADR 0107): ponha `dashboard` em `adminPlugins`, senão as rotas abaixo
 respondem 503 e o setup loga um `warn`. Status e logs seguem funcionando.
 
 ```ts
@@ -136,7 +136,7 @@ host parado) 409 com a mensagem; outro erro é logado e responde 500.
 
 ## Abas de plugins (`dashboard.tabs`)
 
-Outro plugin ganha uma tela no painel sem mexer no dashboard ([ADR 0108](../../../docs/adr/0108-abas-do-dashboard-por-ponto-de-extensao.md)):
+Outro plugin ganha uma tela no painel sem mexer no dashboard ([ADR 0104](../../../docs/adr/0104-abas-do-dashboard-por-ponto-de-extensao.md)):
 contribui uma `DashboardTab` ao ponto `dashboard.tabs` e o dashboard desenha os widgets. O plugin só
 devolve dados; nunca manda HTML, CSS ou script. Os tipos saem de `@usebridger/plugin-dashboard`.
 
@@ -206,7 +206,7 @@ export const reminders = definePlugin({
 
 Todo widget aceita `title?`: o dashboard desenha o título sobre o widget e o usa como rótulo da
 seção; a `series` o põe dentro do cartão, com "Série" quando falta
-([ADR 0118](../../../docs/adr/0118-titulo-tom-e-rotulo-nos-widgets-das-abas.md)).
+([ADR 0114](../../../docs/adr/0114-titulo-tom-e-rotulo-nos-widgets-das-abas.md)).
 
 Rotas (sessão e `Origin` do mesmo host nos `POST`, como no resto):
 
@@ -279,7 +279,7 @@ dashboard a partir do fonte.
 
 Lógica pura do app fica em `web/src/lib` e é testada em Node, como o resto do pacote. Componente
 (`web/src/pages/*.test.tsx`) roda no happy-dom com a Testing Library
-([ADR 0119](../../../docs/adr/0119-testes-de-componente-do-dashboard-no-happy-dom.md)):
+([ADR 0115](../../../docs/adr/0115-testes-de-componente-do-dashboard-no-happy-dom.md)):
 
 - A primeira linha do arquivo é `// @vitest-environment happy-dom`; os outros testes seguem em Node.
 - `afterEach` com `cleanup()`, `vi.unstubAllGlobals()` e `vi.restoreAllMocks()`: o Vitest roda sem

@@ -1,4 +1,4 @@
-// Servidor HTTP do processo (ADR 0020, 0076). Um por processo, dividido pelos bots como o
+// Servidor HTTP do processo (ADR 0018, 0072). Um por processo, dividido pelos bots como o
 // storage: cada bot publica a própria tabela de rotas (`SessionHttp`) ao subir e a retira ao
 // parar. O router do Hono não remove rota, então o app é remontado da tabela a cada mudança,
 // que só acontece no boot, no reload e no stop. Hono, adapter do Node e `ws` carregam só ao

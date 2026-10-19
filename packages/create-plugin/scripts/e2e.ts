@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
 /**
- * Aceite do #121 (ADR 0081): o projeto gerado instala, builda e passa no teste sem edição. Roda
+ * Aceite do #121 (ADR 0077): o projeto gerado instala, builda e passa no teste sem edição. Roda
  * o que um autor rodaria, sobre os pacotes como sairiam no npm: empacota o core, o kit de testes
  * e o próprio scaffold (`pnpm pack`, que troca o `workspace:*` pela versão), gera o projeto pelo
  * binário do tarball e instala com o core e o kit apontando para os tarballs. Exige o `pnpm build`

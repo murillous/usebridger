@@ -1,4 +1,4 @@
-// ADR 0115: horário de conexão, reconexões e expiração do QR no contexto do plugin.
+// ADR 0111: horário de conexão, reconexões e expiração do QR no contexto do plugin.
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { definePlugin } from '#plugin/define.ts';

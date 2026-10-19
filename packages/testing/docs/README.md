@@ -2,7 +2,7 @@
 
 Kit para testar plugins sem rede. Ele sobe um `Bot` de verdade (plugins, filas, middlewares,
 roteador) sobre o `FakeTransport`, que guarda o que o bot envia. O porquê das escolhas está no
-[ADR 0052](../../../docs/adr/0052-kit-de-testes-sobre-o-vitest.md).
+[ADR 0048](../../../docs/adr/0048-kit-de-testes-sobre-o-vitest.md).
 
 ## Instalação
 
@@ -165,7 +165,7 @@ await bot.receive({
 
 Sem perfil, o `FakeTransport` declara todas as capabilities, e o plugin nunca é testado num
 transport sem grupo, sem citação ou sem figurinha. Com `profile`, o transport declara o que a
-plataforma declararia ([ADR 0073](../../../docs/adr/0073-kit-de-testes-multiplataforma.md)):
+plataforma declararia ([ADR 0069](../../../docs/adr/0069-kit-de-testes-multiplataforma.md)):
 
 ```ts
 const bot = await createTestBot({ profile: 'telegram', plugins: [meuPlugin()] });

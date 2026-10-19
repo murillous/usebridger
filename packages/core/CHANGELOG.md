@@ -6,23 +6,23 @@
 
 - f707794: Exporta `envName` e `toEnvSegment` na API pública: o nome da variável de ambiente de um campo de config de plugin, para ferramentas (como o dashboard) mostrarem o mesmo nome que o core lê.
 - c26a895: Erro fatal não derruba mais o painel (#194): o giveUp da reconexão (`fatal`, `auth-failed` sem pareamento, `replaced`, sessão a parear sem `clearSession`) leva o bot ao novo `BotState` `failed` (transport e filas parados; plugins e HTTP no ar) em vez de chamar `stop()`. `stop()` a partir de `failed` chega a `stopped`; `start()` rejeita.
-- 201c06a: Report de plugins completo para o dashboard (M5-4.8, ADR 0114): `optionalDependsOn`, `contributionCounts` e `setupMs` (duração do setup) na linha de `bot.plugins()`, e `bot.plugins.bootedAt` (também em `ctx.admin.plugins`) com o horário do boot.
-- c095ec7: Segredos cifrados no storage, editáveis em runtime (ADR 0121). Nova camada `secret` (`env > arquivo > secret > override > default`), cifrada com AES-256-GCM pela chave `BRIDGER_SECRET_KEY` (32 bytes em base64; `BRIDGER_SECRET_KEY_PREVIOUS` migra os envelopes no boot, na rotação). `bot.config` e `ctx.admin.config` ganham `setSecret(plugin, path, value)`, `clearSecret(plugin, path)` e `secretsWritable`. `ConfigSource` ganha `'secret'`, `PluginConfigIssue.kind` ganha `'shadowed'` e `'undecryptable'`, e o JSON Schema marca o campo secreto com `x-bridger-set-secret: true` quando há chave mestra. `maskedJsonSchema` aceita `secretsWritable` como 2º argumento. `setSecret` e `clearSecret` sobre plugin desligado gravam e pulam o reload (devolvem `undefined`); o plugin lê o valor ao ser ligado.
-- 5ef42f6: `ctx.services.provideScoped(nome, factory, release?)`: serviço com instância por plugin que chama (ADR 0116). A fábrica recebe o nome do caller, a instância é guardada por `(nome, caller)` e é descartada, com `release`, quando o caller ou o provedor saem. Um `release` que lança não interrompe a limpeza: o registry e o `dispose` terminam tudo e relançam `AggregateError`. Quebra de tipo: `provideScoped` é método obrigatório em `ServiceAccess`, então quem implementa essa interface (fakes e wrappers de teste) precisa acrescentá-lo.
+- 201c06a: Report de plugins completo para o dashboard (M5-4.8, ADR 0110): `optionalDependsOn`, `contributionCounts` e `setupMs` (duração do setup) na linha de `bot.plugins()`, e `bot.plugins.bootedAt` (também em `ctx.admin.plugins`) com o horário do boot.
+- c095ec7: Segredos cifrados no storage, editáveis em runtime (ADR 0117). Nova camada `secret` (`env > arquivo > secret > override > default`), cifrada com AES-256-GCM pela chave `BRIDGER_SECRET_KEY` (32 bytes em base64; `BRIDGER_SECRET_KEY_PREVIOUS` migra os envelopes no boot, na rotação). `bot.config` e `ctx.admin.config` ganham `setSecret(plugin, path, value)`, `clearSecret(plugin, path)` e `secretsWritable`. `ConfigSource` ganha `'secret'`, `PluginConfigIssue.kind` ganha `'shadowed'` e `'undecryptable'`, e o JSON Schema marca o campo secreto com `x-bridger-set-secret: true` quando há chave mestra. `maskedJsonSchema` aceita `secretsWritable` como 2º argumento. `setSecret` e `clearSecret` sobre plugin desligado gravam e pulam o reload (devolvem `undefined`); o plugin lê o valor ao ser ligado.
+- 5ef42f6: `ctx.services.provideScoped(nome, factory, release?)`: serviço com instância por plugin que chama (ADR 0112). A fábrica recebe o nome do caller, a instância é guardada por `(nome, caller)` e é descartada, com `release`, quando o caller ou o provedor saem. Um `release` que lança não interrompe a limpeza: o registry e o `dispose` terminam tudo e relançam `AggregateError`. Quebra de tipo: `provideScoped` é método obrigatório em `ServiceAccess`, então quem implementa essa interface (fakes e wrappers de teste) precisa acrescentá-lo.
 - a784db1: Status do bot no contexto (M5-4.8): `ctx.connectionInfo()`, `ctx.botName`, `BotConfig.name` e `expiresAt` opcional em `connection.qr` (preenchido pelo Baileys). O card do bot na Visão geral mostra "No ar desde", Reconexões e "Expira em", o cabeçalho mostra o nome do bot, e o botão Copiar volta ao normal depois de uma falha.
 
 ## 0.8.0
 
 ### Minor Changes
 
-- d79e8af: Contexto do plugin ganha `ctx.session` (nome da sessão do bot) e `ctx.connectionStatus()` (último `ConnectionStatus` visto, `undefined` antes do primeiro evento), ADR 0110.
+- d79e8af: Contexto do plugin ganha `ctx.session` (nome da sessão do bot) e `ctx.connectionStatus()` (último `ConnectionStatus` visto, `undefined` antes do primeiro evento), ADR 0106.
 - bf58cef: `maskedJsonSchema(schema)`: JSON Schema de entrada de um `ZodType` com os campos `secret()` marcados e o `default` deles trocado pela máscara (o mesmo caminho da config de plugin).
-- 59f6646: `ctx.admin` (`{ plugins, config }`) no contexto dos plugins listados em `createBot({ adminPlugins })`; os demais recebem `undefined`. Reload, disable e `setOverrides` sobre o próprio plugin rejeitam (ADR 0111). `PluginConfigIssue` ganha `kind: 'secret' | 'invalid'`. O que sai pelo `ctx.admin` (retornos e erros) tem os segredos do bot mascarados. Exporta `PluginHostStateError`, o erro de estado do host (ex.: plugin desconhecido, ação sobre si mesmo), para quem precisa distingui-lo.
-- 9ad8550: `ctx.observe` no contexto do plugin: observadores síncronos, por bot, dos sinais `message.handled` (rota, desfecho, espera na fila de entrada e duração do handler) e `outbound.sent` (desfecho, espera na fila de saída, re-tentativas e `replyTo`). A exceção de um observador vira `plugin.error` com `phase: 'observer'` (ADR 0106).
-- 740fed1: `ctx.stats()` no contexto do plugin: os contadores das filas de entrada e de saída do bot, os mesmos de `bot.stats()` (ADR 0106).
-- f65c4fa: `PluginReportEntry` (tabela de `bot.plugins()` e `ctx.admin.plugins()`) ganha `dependsOn`, `services` e `contributions`, opcionais e só presentes quando há algo (ADR 0112).
-- 97642b6: `ExtensionPoint<T>.entries()` devolve as contribuições com o plugin dono (`{ plugin, value }`), na mesma ordem do `list()`; tipo `ExtensionPointEntry<T>` exportado (#160, ADR 0108).
-- 8232a57: `ctx.observe('log', fn)`: sinal com cada linha do logger do bot (`level`, `time`, `message`, `fields` com os bindings dos filhos), dentro do nível do logger e com os secrets mascarados. Log feito dentro de um observador de `log` não reentra no sinal (ADR 0109).
+- 59f6646: `ctx.admin` (`{ plugins, config }`) no contexto dos plugins listados em `createBot({ adminPlugins })`; os demais recebem `undefined`. Reload, disable e `setOverrides` sobre o próprio plugin rejeitam (ADR 0107). `PluginConfigIssue` ganha `kind: 'secret' | 'invalid'`. O que sai pelo `ctx.admin` (retornos e erros) tem os segredos do bot mascarados. Exporta `PluginHostStateError`, o erro de estado do host (ex.: plugin desconhecido, ação sobre si mesmo), para quem precisa distingui-lo.
+- 9ad8550: `ctx.observe` no contexto do plugin: observadores síncronos, por bot, dos sinais `message.handled` (rota, desfecho, espera na fila de entrada e duração do handler) e `outbound.sent` (desfecho, espera na fila de saída, re-tentativas e `replyTo`). A exceção de um observador vira `plugin.error` com `phase: 'observer'` (ADR 0102).
+- 740fed1: `ctx.stats()` no contexto do plugin: os contadores das filas de entrada e de saída do bot, os mesmos de `bot.stats()` (ADR 0102).
+- f65c4fa: `PluginReportEntry` (tabela de `bot.plugins()` e `ctx.admin.plugins()`) ganha `dependsOn`, `services` e `contributions`, opcionais e só presentes quando há algo (ADR 0108).
+- 97642b6: `ExtensionPoint<T>.entries()` devolve as contribuições com o plugin dono (`{ plugin, value }`), na mesma ordem do `list()`; tipo `ExtensionPointEntry<T>` exportado (#160, ADR 0104).
+- 8232a57: `ctx.observe('log', fn)`: sinal com cada linha do logger do bot (`level`, `time`, `message`, `fields` com os bindings dos filhos), dentro do nível do logger e com os secrets mascarados. Log feito dentro de um observador de `log` não reentra no sinal (ADR 0105).
 
 ### Patch Changes
 
@@ -53,7 +53,7 @@
 
 ### Minor Changes
 
-- 1f67b49: Plugin incompatível ou com `setup` falho derruba o boot (ADR 0102, #117). **Breaking:**
+- 1f67b49: Plugin incompatível ou com `setup` falho derruba o boot (ADR 0098, #117). **Breaking:**
   `bot.start()` (e `createTestBot`) rejeita com `PluginBootError` quando um plugin não carrega por
   `engine`, `transport`, `capabilities`, `dependency-missing`, `dependency-version`,
   `dependency-skipped` ou `setup-failed` (inclusive config inválida e timeout), em vez de subir sem
@@ -77,10 +77,10 @@
 
 ### Minor Changes
 
-- c6d3256: `command()` e os `commands` do `definePlugin` inferem o `accepts`: quando toda entrada tem mídia, o `run` recebe `MediaCommandContext`, com `ctx.media` como `Media` e `ctx.accepted` como `AcceptedMessage`, sem `null`. Nova entrada `'args'` no `accepts`, que casa só quando há texto depois do comando: `['sticker', 'quoted:sticker', 'args']` aceita mídia ou um link, e o comando sozinho cai no `onReject` (ADR 0094).
-- 193f283: Comando que exige serviço (ADR 0099): `command({ services: ['sticker'] })` deixa o comando fora do roteador, do `ctx.commands.list()` e do menu nativo enquanto o serviço não está provido, com log `warn` e a entrada em `unregistered` (agora com `services`). O manifesto ganha `optionalDependsOn`, no formato do `dependsOn` (`{ sticker: '^0.1.0' }`): o provedor carrega antes, se existir, não impede a carga do plugin e o recarrega em cascata no `reload`, `disable` e `enable`, então o comando some e volta junto com o provedor. Provedor fora da faixa não impede a carga e gera `warn` no boot, como o `^0.0.z`.
-- 2ca908b: Comando deixado de fora por `requires` ausente no transport (ADR 0090) agora aparece para o operador: o log sobe de `info` para `warn`, e a tabela de boot mostra o comando junto do plugin (`media  1.0.0  carregado; sem figurinha (send.sticker)`), em `warn`. Em `bot.plugins()`, a entrada `loaded` ganha `unregistered` (tipo `UnregisteredCommand`), com `command` e `missing` de cada comando.
-- 81535a0: `ctx.conversations.define(step, handler, { onExpire })`: o passo reage à espera que venceu sem resposta ("Encerrei por falta de resposta", lembrar de terminar um cadastro, registrar o abandono). O `onExpire` roda na fila do chat, com o prazo do comando, e recebe `chat`, `sender`, `step`, `data`, `reply` (no chat, sem citar), `log`, `t`, `signal` e `expectReply` para encadear outra espera. Só dispara quando o TTL vence: espera respondida, substituída, cancelada por comando ou descartada (teardown, reload, `stop()`) não dispara. A falha vira `plugin.error` com a fase nova `'step-expire'`; o `StepTimeoutError` ganha `stage` (`'run'` ou `'onExpire'`). Passo sem `onExpire` continua expirando em silêncio (ADR 0097).
+- c6d3256: `command()` e os `commands` do `definePlugin` inferem o `accepts`: quando toda entrada tem mídia, o `run` recebe `MediaCommandContext`, com `ctx.media` como `Media` e `ctx.accepted` como `AcceptedMessage`, sem `null`. Nova entrada `'args'` no `accepts`, que casa só quando há texto depois do comando: `['sticker', 'quoted:sticker', 'args']` aceita mídia ou um link, e o comando sozinho cai no `onReject` (ADR 0090).
+- 193f283: Comando que exige serviço (ADR 0095): `command({ services: ['sticker'] })` deixa o comando fora do roteador, do `ctx.commands.list()` e do menu nativo enquanto o serviço não está provido, com log `warn` e a entrada em `unregistered` (agora com `services`). O manifesto ganha `optionalDependsOn`, no formato do `dependsOn` (`{ sticker: '^0.1.0' }`): o provedor carrega antes, se existir, não impede a carga do plugin e o recarrega em cascata no `reload`, `disable` e `enable`, então o comando some e volta junto com o provedor. Provedor fora da faixa não impede a carga e gera `warn` no boot, como o `^0.0.z`.
+- 2ca908b: Comando deixado de fora por `requires` ausente no transport (ADR 0086) agora aparece para o operador: o log sobe de `info` para `warn`, e a tabela de boot mostra o comando junto do plugin (`media  1.0.0  carregado; sem figurinha (send.sticker)`), em `warn`. Em `bot.plugins()`, a entrada `loaded` ganha `unregistered` (tipo `UnregisteredCommand`), com `command` e `missing` de cada comando.
+- 81535a0: `ctx.conversations.define(step, handler, { onExpire })`: o passo reage à espera que venceu sem resposta ("Encerrei por falta de resposta", lembrar de terminar um cadastro, registrar o abandono). O `onExpire` roda na fila do chat, com o prazo do comando, e recebe `chat`, `sender`, `step`, `data`, `reply` (no chat, sem citar), `log`, `t`, `signal` e `expectReply` para encadear outra espera. Só dispara quando o TTL vence: espera respondida, substituída, cancelada por comando ou descartada (teardown, reload, `stop()`) não dispara. A falha vira `plugin.error` com a fase nova `'step-expire'`; o `StepTimeoutError` ganha `stage` (`'run'` ou `'onExpire'`). Passo sem `onExpire` continua expirando em silêncio (ADR 0093).
 - f637749: `t` do contexto de comando (`CommandContext`, `MediaCommandContext`, `RejectContext`) aceita só as chaves de `messages` do plugin nos `commands` do `definePlugin`: chave que o plugin não declara vira erro de compilação, não `TypeError` na hora de responder. `command()` avulso continua com `string`, e helper tipado com o contexto genérico (`(ctx: CommandContext) => ...`) continua aceitando o contexto do plugin.
 - 0cc4cab: Esperas do `expectReply` que sobrevivem a restart: `ctx.conversations.define(step, handler, { persist: true })` grava cada espera do passo no storage do bot (coleção `waits` do namespace `$conversations`), e o boot seguinte a restaura depois do `setup` de todos os plugins. A mensagem segue lendo a espera da memória; o storage é a cópia. O vencimento gravado é absoluto: a espera que venceu durante o restart expira no boot (e roda o `onExpire` do passo, se houver), e a de passo que não existe mais é descartada com `warn`. Um reload do plugin mantém as esperas persistidas, e as de plugin cujo `setup` falhou ficam guardadas até ele subir; `disable`, plugin removido ou passo renomeado as removem. Sem `persist`, nada muda.
   
@@ -88,8 +88,8 @@
 - 5b2d55e: `bot.plugins` ganha `disable(name)` e `enable(name)`, para desligar e ligar um plugin em execução sem gravar override na config. A cascata é a do `reload`: os dependentes descem junto e sobem depois. Um plugin desligado (por `disabledPlugins` ou por `disable`) recusa `reload` até ser ligado. `bot.plugins()` segue devolvendo a tabela de boot.
   
   Mudança de nomes no resultado de `reload`, `disable` e `enable` (antes `PluginReloadResult`): o tipo agora é `PluginChangeResult`, e os campos são `plugin` (era `entry`) e `teardownErrors` (era `errors`). `dependents` não muda.
-- 175cb4a: Pontos de extensão em serviços: `ctx.services.contribute(name, contribuicao)` acrescenta uma contribuição atribuída ao plugin, que sai sozinha no teardown, reload e disable dele, e `ctx.services.extensionPoint(name).list()` devolve as contribuições de todos os plugins, na ordem de carga. O tipo vem de declaration merging na nova interface `ExtensionPoints` (tipos `ExtensionPoint`, `ExtensionPointName` e `ExtensionPoints` exportados). O serviço extensível deixa de precisar do `ctx.signal` de quem contribui (ADR 0096).
-- 5c68c87: Novo ponto de entrada `@usebridger/core/zod`, que reexporta o Zod do core (ADR 0095): `import { z } from '@usebridger/core/zod'` declara o schema da config com a mesma cópia que o `definePlugin` tipa, sem o app instalar o `zod`. O `@usebridger/core` segue sem carregar o Zod, então importá-lo continua sem side effect.
+- 175cb4a: Pontos de extensão em serviços: `ctx.services.contribute(name, contribuicao)` acrescenta uma contribuição atribuída ao plugin, que sai sozinha no teardown, reload e disable dele, e `ctx.services.extensionPoint(name).list()` devolve as contribuições de todos os plugins, na ordem de carga. O tipo vem de declaration merging na nova interface `ExtensionPoints` (tipos `ExtensionPoint`, `ExtensionPointName` e `ExtensionPoints` exportados). O serviço extensível deixa de precisar do `ctx.signal` de quem contribui (ADR 0092).
+- 5c68c87: Novo ponto de entrada `@usebridger/core/zod`, que reexporta o Zod do core (ADR 0091): `import { z } from '@usebridger/core/zod'` declara o schema da config com a mesma cópia que o `definePlugin` tipa, sem o app instalar o `zod`. O `@usebridger/core` segue sem carregar o Zod, então importá-lo continua sem side effect.
 
 ### Patch Changes
 
@@ -100,13 +100,13 @@
 ### Minor Changes
 
 - 3cd9b93: `accepts` restringe o mimetype na própria entrada: `'document:application/pdf'`, `'quoted:video:video/*'`. A comparação usa a essência do mimetype, sem diferenciar caixa, e a mídia de outro mimetype vai ao `onReject` como qualquer recusa. Entrada sem mimetype não muda.
-- f5c2517: Comando com `background: true` roda o `run` fora da fila do chat: a próxima mensagem não espera por ele, e o `run` mantém `reply`, `signal` com o `timeoutMs`, a falha em `plugin.error`, o evento `command` e o `bot.settled()` (ADR 0087).
-- 8ec8937: Comando com `concurrency: n` roda no máximo `n` execuções do `run` ao mesmo tempo no bot, somando todos os chats. A excedente espera a vez em ordem de chegada, a espera conta no `timeoutMs`, e a vaga só volta quando o `run` termina de fato (ADR 0088).
-- a4268bd: Log legível no terminal: `createLogger({ format: 'pretty' })` e `logFormat: 'pretty'` no bot escrevem hora, nível, `[plugin]`, a mensagem e os campos em `chave=valor`, com o `err` recuado nas linhas seguintes e cor no terminal. O padrão segue JSON. No `@usebridger/transport-baileys`, a opção `logLevel` (padrão `'warn'`) põe um piso nas linhas do próprio Baileys: a sincronização e o protocolo, em inglês, saem do `info`. O `console` do libsignal (`Closing session: SessionEntry {...}`) passa a ir para o mesmo logger, em `debug`, sem os objetos de sessão (ADR 0091).
-- ac67f62: Placeholders nas `messages` do plugin: `c.t('chave', { count: 2 })` no comando, no passo e no listener de mensagem preenche `{count}` e o `{prefix}` do chat. A sobrescrita pela config só pode usar os placeholders do texto padrão, mais `{prefix}`; um placeholder novo é `PluginConfigError` (ADR 0092).
+- f5c2517: Comando com `background: true` roda o `run` fora da fila do chat: a próxima mensagem não espera por ele, e o `run` mantém `reply`, `signal` com o `timeoutMs`, a falha em `plugin.error`, o evento `command` e o `bot.settled()` (ADR 0083).
+- 8ec8937: Comando com `concurrency: n` roda no máximo `n` execuções do `run` ao mesmo tempo no bot, somando todos os chats. A excedente espera a vez em ordem de chegada, a espera conta no `timeoutMs`, e a vaga só volta quando o `run` termina de fato (ADR 0084).
+- a4268bd: Log legível no terminal: `createLogger({ format: 'pretty' })` e `logFormat: 'pretty'` no bot escrevem hora, nível, `[plugin]`, a mensagem e os campos em `chave=valor`, com o `err` recuado nas linhas seguintes e cor no terminal. O padrão segue JSON. No `@usebridger/transport-baileys`, a opção `logLevel` (padrão `'warn'`) põe um piso nas linhas do próprio Baileys: a sincronização e o protocolo, em inglês, saem do `info`. O `console` do libsignal (`Closing session: SessionEntry {...}`) passa a ir para o mesmo logger, em `debug`, sem os objetos de sessão (ADR 0087).
+- ac67f62: Placeholders nas `messages` do plugin: `c.t('chave', { count: 2 })` no comando, no passo e no listener de mensagem preenche `{count}` e o `{prefix}` do chat. A sobrescrita pela config só pode usar os placeholders do texto padrão, mais `{prefix}`; um placeholder novo é `PluginConfigError` (ADR 0088).
 - 92e35c0: No comando declarado no manifesto (`commands`), o `onReject` recebe o contexto do plugin no 3º argumento, como o `run` no 2º: a recusa pode usar `plugin.plugin.messages`, que a config sobrescreve. O `CommandDefinition` solto não muda.
-- e094a23: `ctx.react` no contexto de mensagem (middleware, comando, passo e listener) não rejeita mais num transport sem a capability `reactions`: resolve sem reagir e registra em `debug`. O `ctx.send.react` continua rejeitando com `UnsupportedError` (ADR 0093).
-- b00d09a: Comando com `requires: [...]` exige as capabilities só dele. No bot, sem alguma delas, o comando não é registrado: fica fora do roteador, do `ctx.commands.list()` e do menu nativo, com um log `info`, e o resto do plugin sobe normalmente (ADR 0090).
+- e094a23: `ctx.react` no contexto de mensagem (middleware, comando, passo e listener) não rejeita mais num transport sem a capability `reactions`: resolve sem reagir e registra em `debug`. O `ctx.send.react` continua rejeitando com `UnsupportedError` (ADR 0089).
+- b00d09a: Comando com `requires: [...]` exige as capabilities só dele. No bot, sem alguma delas, o comando não é registrado: fica fora do roteador, do `ctx.commands.list()` e do menu nativo, com um log `info`, e o resto do plugin sobe normalmente (ADR 0086).
 
 ## 0.2.1
 
@@ -118,7 +118,7 @@
 
 ### Minor Changes
 
-- e190d3e: Release de teste do fluxo `develop` → `main` com Trusted Publishing (ADR 0085), sem mudança de API em relação à 0.1.0.
+- e190d3e: Release de teste do fluxo `develop` → `main` com Trusted Publishing (ADR 0081), sem mudança de API em relação à 0.1.0.
 
 ## 0.1.0
 
@@ -127,7 +127,7 @@
 - b7eb3a7: Adiciona `createBot(config)` com `start()`/`stop()`, máquina de estados (`bot.state`) e ganchos
   de parada (`onStop`) para shutdown gracioso, sem estado global nem side effect em import.
 - 70220de: O plugin passa a fazer pela API pública tudo o que o transport sabe, sem `ctx.unsafe.native`
-  (#224, ADR 0040). `ctx.send` ganha `react`, `edit`, `delete` e `presence`. Essas ações passam pela
+  (#224, ADR 0036). `ctx.send` ganha `react`, `edit`, `delete` e `presence`. Essas ações passam pela
   fila de saída com as mesmas regras do envio e aceitam `{ priority }`. `ctx.groups` traz
   `metadata(groupId)`, que lê direto no transport, e `updateParticipants(groupId, ids, action)`, que
   passa pela fila. Sem a capability, a ação rejeita na hora com `UnsupportedError`; depois do
@@ -144,7 +144,7 @@
   
   Novos tipos exportados: `Outbound`, `ActionOptions`, `Groups`, `CommandInfo`, `GroupMetadata`,
   `GroupParticipant` e `Presence`. Quem monta `Message` à mão precisa preencher `key`.
-- 5eb7203: Ações e botões: o clique dispara um comando, com fallback em texto numerado (ADR 0062).
+- 5eb7203: Ações e botões: o clique dispara um comando, com fallback em texto numerado (ADR 0058).
   
   - `ctx.reply(text, { actions })` e `ctx.reply.text` aceitam `actions`: `{ label, command, args? }`
     roda um comando registrado, e `{ label, step, data? }` roda um passo de conversa do plugin. O
@@ -159,7 +159,7 @@
   - `CommandRouter.dispatch` ganha o segundo parâmetro opcional `invocation`.
   - Novos exports: os tipos `CommandAction`, `MessageAction`, `StepAction`, `ReplyTextOptions` e
     `OutgoingAction`, e `Interaction` em `@usebridger/core/adapter`.
-- 1d16c73: Forma curta do plugin (ADR 0079). O manifesto aceita `commands` (nome → comando) e `on`
+- 1d16c73: Forma curta do plugin (ADR 0075). O manifesto aceita `commands` (nome → comando) e `on`
   (evento → listener), com o contexto do plugin no 2º argumento; o kernel os registra com
   `ctx.commands.add`/`ctx.events.on` antes do `setup`, que passa a ser opcional. Declarar `commands`
   já exige `send.text`. O manifesto valida comando sem `run`, nome inválido e evento desconhecido,
@@ -203,14 +203,14 @@
   saída estão ociosos ao mesmo tempo, repetindo a espera enquanto um realimenta o outro. Durante o
   boot, espera os plugins subirem; com a fila de saída pausada, espera a reconexão ou o
   `maxPauseMs`. Jobs do scheduler ficam de fora. Nunca rejeita. É a base do `receive()` do
-  `@usebridger/testing` e permite afirmar em teste que nada foi enviado (ADR 0044).
+  `@usebridger/testing` e permite afirmar em teste que nada foi enviado (ADR 0040).
 - 80a15c2: `bot.stats()` expõe as métricas das filas de entrada e de saída (#204). Ele devolve `{ inbound,
   outbound }` com os contadores que as filas já mantinham: mensagens processadas, descartadas e com
   erro; envios feitos, falhos, re-tentados e descartados; o backlog e se a fila de saída está pausada
   pela conexão caída. A leitura é O(1) e cada chamada devolve uma cópia. Antes do `start()`, tudo é
   zero; depois do `stop()`, ficam os valores finais. Novos tipos exportados: `BotStats`,
   `InboundQueueStats` e `OutboundQueueStats`.
-- 7b8ab13: Capabilities multiplataforma (ADR 0070). **Quebra de API antes do 1.0.**
+- 7b8ab13: Capabilities multiplataforma (ADR 0066). **Quebra de API antes do 1.0.**
   
   - A capability `presence` dá lugar a `typing`. O `Transport` troca `sendPresence(chatId, presence)`
     por `sendTyping(chatId, kind)`, com `TypingKind = 'text' | 'voice'`, e o tipo `Presence` sai. No
@@ -230,11 +230,11 @@
   O `chatFilter` passa a casar `allow` e `block` também contra o `chat.parentId`: liberar ou
   bloquear um servidor vale para todos os canais dele, e um canal bloqueado continua de fora com o
   servidor liberado. No WhatsApp não há `parentId`, então nada muda lá.
-- d0654e8: Novo evento `connection.pairing-code` (`{ code }`, ADR 0050): o transport que pareia por código o
+- d0654e8: Novo evento `connection.pairing-code` (`{ code }`, ADR 0046): o transport que pareia por código o
   emite no lugar do `connection.qr`. O bot o trata como o QR: conta para o `maxQrCount` da
   reconexão, loga o valor só em `debug` e o repassa ao barramento.
 - ec3cdc7: Comandos nativos: o transport lê a lista de comandos e recebe os comandos chamados pelo menu da
-  plataforma (ADR 0064).
+  plataforma (ADR 0060).
   
   - `TransportDeps.commands` (opcional): `list()` devolve os comandos como `CommandInfo`, e
     `onChange(listener)` avisa que a lista mudou, uma vez ao fim de cada reload e uma vez por tick
@@ -265,8 +265,8 @@
   criação. `setOverrides()` valida antes de salvar e dispara o reload do plugin (`teardown` →
   `setup`). `messages` sobrescrevível pela config, com erro para chave desconhecida.
   `normalizeOwners()`/`normalizePhone()` normalizam os telefones de `owners`.
-- 446b644: Conflito de papel (`RoleConflictError`) ou de serviço (`ServiceConflictError`) no `setup` passa a derrubar o boot, como o conflito de comando, conforme o ADR 0035. Antes, o plugin que chegava depois era só ignorado, e quem respondia pelo papel ou serviço dependia da ordem de carga. Num `reload`, o conflito continua só ignorando o plugin recarregado.
-- ae2e207: Queda durante o `connect()` não deixa mais o bot `running` sem conexão (#253, ADR 0048). O
+- 446b644: Conflito de papel (`RoleConflictError`) ou de serviço (`ServiceConflictError`) no `setup` passa a derrubar o boot, como o conflito de comando, conforme o ADR 0031. Antes, o plugin que chegava depois era só ignorado, e quem respondia pelo papel ou serviço dependia da ordem de carga. Num `reload`, o conflito continua só ignorando o plugin recarregado.
+- ae2e207: Queda durante o `connect()` não deixa mais o bot `running` sem conexão (#253, ADR 0044). O
   contrato de `Transport.connect()` agora diz que ele resolve ao iniciar a tentativa, sem esperar o
   `open`. Um `closed` que chega antes de o `connect()` terminar (o inicial ou o de uma reconexão) é
   guardado e decidido quando ele termina, a menos que um `open` venha depois. A fila de saída
@@ -284,7 +284,7 @@
 - 88a9c22: Contratos compartilhados do M1-7 ao M1-15 (só tipos): `PluginManifest`, `PluginDefinition` e
   `PluginContext`, `BotEvents` e `EventSubscriber`, `Logger`, `Services`/`ServiceAccess`,
   `StoragePort`/`PluginStorage`, `Scheduler`, `Sender` e `Unsafe`. Dependências `zod` e `pino`.
-- fe9f458: `defineTransport` em `@usebridger/core/adapter` (ADR 0080): o adapter descreve só `name`,
+- fe9f458: `defineTransport` em `@usebridger/core/adapter` (ADR 0076): o adapter descreve só `name`,
   `capabilities` (em lista), `connect`, `disconnect`, `send` e os métodos das capabilities que
   declara, e recebe um kit com `emit` e `setSelf`. O `Transport` montado traz o emissor, o `on()`,
   o `self`, a checagem de capability em cada método e o `UnsupportedError` no que falta. Novos
@@ -294,7 +294,7 @@
   com capability desconhecida, capability sem o método dela (`reactions` sem `react`) ou sem
   `connect`, `disconnect`, `on` ou `send`. Antes, o erro só aparecia quando um plugin usava o
   recurso.
-- fdee994: Desconexão fatal e transport sem pareamento (ADR 0068). Corrige o laço de `clean-session` de um
+- fdee994: Desconexão fatal e transport sem pareamento (ADR 0064). Corrige o laço de `clean-session` de um
   token inválido (#280).
   
   - `DisconnectReason` ganha `'fatal'`: erro de configuração que reconectar não resolve (token sem
@@ -311,7 +311,7 @@
   - Um transport que pareia por QR e emite `auth-failed` precisa declarar `pairing` para continuar
     limpando a sessão. Um `switch` exaustivo sobre o `DisconnectReason` ou sobre a causa do `stop`
     precisa tratar `fatal` (e `auth-failed`, na causa).
-- 4ec2ad2: API pública por público (M1-17, ADR 0034). **Breaking:** o `@usebridger/core` deixa de exportar
+- 4ec2ad2: API pública por público (M1-17, ADR 0030). **Breaking:** o `@usebridger/core` deixa de exportar
   peças do kernel e o que é de transport/storage passa para o novo subpath
   `@usebridger/core/adapter`.
   
@@ -356,12 +356,12 @@
     `pluginStorage`, `isReservedNamespace`, `ReservedNamespaceError`. O que o app configura
     dessas peças continua na config do `createBot` (`inbound`, `outbound`, `pluginDirs`,
     `owners`...).
-- 98cbf9c: Vários bots num storage (ADR 0075): `ctx.storage.shared` guarda dados do plugin comuns a todas as
+- 98cbf9c: Vários bots num storage (ADR 0071): `ctx.storage.shared` guarda dados do plugin comuns a todas as
   sessões que dividem o storage (um bot por transport: WhatsApp, Telegram, web), no namespace
   `$shared:<plugin>`, e segue o tenant como o `ctx.storage`. `ctx.transportName` traz o nome do
   transport do bot, para compor a chave do escopo comum quando ela vem de um ID. Mudança aditiva:
   `ctx.storage` passa a ser `PluginContextStorage` (`TenantStorage` com `shared`).
-- b2acde9: A espera do `reply` na fila de saída não conta mais no prazo do handler (#240, ADR 0047). Antes,
+- b2acde9: A espera do `reply` na fila de saída não conta mais no prazo do handler (#240, ADR 0043). Antes,
   uma rajada de comandos em chats diferentes estourava `timeouts.commandMs` esperando a taxa global
   da fila (300 ms entre envios), e saía `plugin.error` com `timedOut: true` para comandos que
   funcionaram. Agora o prazo de comando (`run` e `onReject`) e de listener pausa enquanto um
@@ -373,11 +373,11 @@
   compartilhado na emissão; isolamento por try/catch + timeout por listener, com falhas emitidas
   como `plugin.error` (nome do plugin, evento, `timedOut`) e entregues ao `onError` do bus;
   `forPlugin`/`removePlugin` para atribuir e remover os listeners de cada plugin.
-- 95a58e7: Novo evento `command` (#254, ADR 0049): sai depois de todo comando que casou, com
+- 95a58e7: Novo evento `command` (#254, ADR 0045): sai depois de todo comando que casou, com
   `{ plugin, name, invokedAs, status, message }` e `status` `ran`, `rejected` ou `failed`. É só de
   observação (sem `reply`) e, junto com `message`, deixa o plugin ver toda mensagem, comandos
   inclusive. Exporta o tipo `CommandEvent`.
-- 285dff9: A fila de saída espera a reconexão em vez de perder as respostas (#198, ADR 0039). Antes, numa
+- 285dff9: A fila de saída espera a reconexão em vez de perder as respostas (#198, ADR 0035). Antes, numa
   queda de conexão, cada envio esgotava o retry em ~3 s, antes da primeira reconexão (5 s). Agora o
   bot pausa a fila no `connection.status` `closed` e retoma no `open`. O que aguarda espera até
   `outbound.maxPauseMs` (padrão 60 s); estourado esse teto, rejeita com `OutboundQueueError`
@@ -389,7 +389,7 @@
   o chat. Presença sem resposta vai para `onPresenceError`, e o envio segue.
   
   `OutboundQueueError['reason']` ganha `'disconnected'` e `'timeout'`.
-- 2fca36a: `chatFilter` e `ignoreSelf` valem para os eventos que não são mensagem (#219, ADR 0038). Antes,
+- 2fca36a: `chatFilter` e `ignoreSelf` valem para os eventos que não são mensagem (#219, ADR 0034). Antes,
   `reaction`, `message.deleted` e `group.*` iam direto aos listeners: chegavam de chat bloqueado, a
   reação da própria sessão voltava para os plugins e o evento que chegava durante o boot se perdia.
   Agora o bot aplica a mesma config de middlewares a esses eventos: o `chatFilter` barra `reaction`
@@ -399,7 +399,7 @@
   
   **Breaking (adapters):** os payloads de `reaction` e `message.deleted` em `TransportEvents` ganham
   o campo obrigatório `fromMe: boolean`, que o adapter preenche.
-- 39e7242: Grupos multiplataforma (ADR 0059). **Quebra de API antes do 1.0.**
+- 39e7242: Grupos multiplataforma (ADR 0055). **Quebra de API antes do 1.0.**
   
   - O `Transport` ganha o método opcional `isChatAdmin(chat, contact)`. Com ele, o papel
     `group-admin` pergunta ao transport, com o `Chat` inteiro (inclusive o `parentId` do servidor),
@@ -415,7 +415,7 @@
   - Os eventos `group.joined`, `group.left`, `group.participants` e `group.updated` trocam `groupId`
     por `chat: Chat`, e `group.updated.subject` passa a se chamar `title`. O `chatFilter` casa
     `group.participants` e `group.updated` também pelo `chat.parentId`.
-- 54ecf98: HTTP do core (ADR 0076): `createHttp({ port })` passado em `BotConfig.http`, o mesmo servidor
+- 54ecf98: HTTP do core (ADR 0072): `createHttp({ port })` passado em `BotConfig.http`, o mesmo servidor
   para todos os bots do processo. A porta só abre se houver rota e fecha quando o último bot para.
   Plugins registram rotas e WebSocket em `ctx.http` (sob `/plugins/<nome>`) e transports em
   `TransportDeps.http` (sob `/transports/<name>`), com `Request`/`Response` da Web API; outra
@@ -425,7 +425,7 @@
 - 38de373: Adiciona `InboundQueue`, a fila de entrada por chat: serializa o mesmo chat e paraleliza chats
   distintos, com limite de backlog por chat, métricas (`stats()`) e shutdown gracioso
   (`close()`/`onIdle()`).
-- 166a1fe: Isolamento automático por tenant (ADR 0072): o transport marca o cliente verificado em
+- 166a1fe: Isolamento automático por tenant (ADR 0068): o transport marca o cliente verificado em
   `chat.tenantId`, e o mesmo `ctx.storage` do plugin passa a gravar no namespace daquele tenant em
   toda mensagem ou evento do chat. Isso inclui a closure do `setup`, o service de outro plugin
   chamado pelo handler e o job agendado nele, que guarda o tenant de origem. Sem tenant, vale o
@@ -442,7 +442,7 @@
 - b8d950d: Pipeline de middlewares em onion com prioridade (`MiddlewarePipeline`) e os middlewares
   oficiais: `ignoreSelf`, `rateLimit` (com expiração das janelas, via `RateLimiter`), `sanitize`
   e `chatFilter` (allow/blocklist de chats).
-- 2db7d00: Objeto bruto da mensagem no escape hatch (ADR 0066).
+- 2db7d00: Objeto bruto da mensagem no escape hatch (ADR 0062).
   
   - `ctx.unsafe.raw(message)` devolve o objeto de onde a mensagem saiu, no formato da plataforma,
     como `unknown`; `undefined` se o transport não o expõe ou a mensagem não veio dele. Na mensagem
@@ -462,7 +462,7 @@
   O `{ id }` é comparado com `sender.id` e torna possível ter dono em plataformas sem telefone
   (Discord, Telegram, web). Telefones continuam válidos como antes e nunca se cruzam com IDs. Um
   `{ id }` vazio, com espaço nas pontas ou que não é texto lança `BotConfigError` no `createBot`.
-- 46718de: Papéis custom nomeados (M1-19, ADR 0035). `ctx.roles.define(nome, check)` deixa um plugin definir
+- 46718de: Papéis custom nomeados (M1-19, ADR 0031). `ctx.roles.define(nome, check)` deixa um plugin definir
   um papel que qualquer plugin exige com `role: 'nome'`, tipado por declaration merging em
   `interface Roles`. O roteador avalia: owner passa sem consultar; o `check` (com `signal` e o `log`
   do plugin dono) roda com o prazo de `timeouts.commandMs` e só `true` concede; erro, rejeição ou
@@ -478,13 +478,13 @@
   `createPluginHost` com `disabledPlugins`, tabela de boot "carregado / ignorado (motivo)",
   `setup`/`teardown` com timeout e `reload` de um plugin; `CORE_VERSION`, `satisfies` e
   `isValidRange` (semver próprio, sem dependência nova).
-- 4300338: Middleware do app ganha prazo (#239, ADR 0043). Antes, um middleware que travava segurava a fila
+- 4300338: Middleware do app ganha prazo (#239, ADR 0039). Antes, um middleware que travava segurava a fila
   do chat para sempre. Agora cada um tem `timeouts.middlewareMs` (padrão 30000), contado só no tempo
   do próprio middleware: o que roda dentro do `next()` (comando e listeners) não conta. Estourado,
   a mensagem é descartada, o `MiddlewareTimeoutError` vai para o log e o chat segue. Um `next()`
   chamado depois do prazo não roda comando nem listeners. Middleware síncrono, ou que só devolve o
   `next()`, não arma timer. O `stop()` desarma o timer de um middleware preso.
-- 70489eb: Comando pode declarar o próprio prazo com `command({ timeoutMs })` (#227, ADR 0042). Ele vale para
+- 70489eb: Comando pode declarar o próprio prazo com `command({ timeoutMs })` (#227, ADR 0038). Ele vale para
   o `run` e o `onReject` daquele comando; sem ele, vale `timeouts.commandMs`. Um download de minutos
   não obriga mais a subir o prazo de todos os comandos. `timeoutMs` que não seja finito e > 0 falha
   no registro com `RangeError`.
@@ -496,25 +496,25 @@
   `timedOut: true`). Antes, um `onReject` ou um `getGroupMetadata` que nunca resolvia prendia o chat
   para sempre. `registry.add` (e `ctx.commands.add`) passa a validar nome e aliases como `command()`,
   lançando `TypeError` no boot em vez de registrar um comando que nunca casa.
-- 7c8ca66: Prefixo de comando por tipo de chat e por chat (ADR 0063). `BotConfig.prefix` aceita também
+- 7c8ca66: Prefixo de comando por tipo de chat e por chat (ADR 0059). `BotConfig.prefix` aceita também
   `{ dm, group }`, e o prefixo vazio passa a ser permitido: a primeira palavra vira o token. O novo
   `ctx.prefixes` (`get`, `set`, `reset`) troca o prefixo de um chat, gravado no storage e lido no
   boot. O roteador tira o `@usuario` da própria sessão do token, então `/start@MeuBot` de um grupo
   do Telegram roda `start`. Prefixo começado por espaço em branco agora lança `TypeError`. Tipos
   novos: `PrefixConfig` e `Prefixes`.
-- 7b76631: Queda de rede nunca apaga as credenciais (#236, ADR 0045). Antes, `connection-lost`/`unknown`
+- 7b76631: Queda de rede nunca apaga as credenciais (#236, ADR 0041). Antes, `connection-lost`/`unknown`
   reconectavam 3 vezes (5, 10, 15 s) e depois decidiam `clean-session` (`reconnect-limit`): com
   transport por fábrica, ~30 s de rede fora apagavam o `auth` e exigiam parear de novo. Agora a
   reconexão segue com o backoff sem limite de tentativas, e `clean-session` só vem de
   `logged-out`, `auth-failed` ou `qr-limit`. **Quebra:** saem a opção
   `reconnection.maxReconnectAttempts` e a causa `'reconnect-limit'` de `ReconnectionDecision`.
-- 7602730: Recarregar um plugin que provê serviço não quebra mais quem depende dele (#226, ADR 0041).
+- 7602730: Recarregar um plugin que provê serviço não quebra mais quem depende dele (#226, ADR 0037).
   `host.reload(x)` (e o reload por `config.setOverrides`) recarrega em cascata os plugins que
   declaram `dependsOn` em `x`, direta ou transitivamente. Eles descem antes de `x`, sobem depois e
   são reavaliados como no boot: se o `setup` novo de `x` falhar, ficam `dependency-skipped`.
   `PluginReloadResult` ganha `dependents`, e o `Bot` emite `plugin.error` também para o `setup`
   falho de um dependente.
-- 02a2650: Resposta esperada: conversa com estado sem segurar o chat (ADR 0060).
+- 02a2650: Resposta esperada: conversa com estado sem segurar o chat (ADR 0056).
   
   - `ctx.conversations.define(step, handler)` define um passo de conversa do plugin.
   - `expectReply(step, { data, ttlMs })`, nos contextos de comando, de listener de mensagem e do
@@ -528,7 +528,7 @@
     valor novo.
   - Novos exports: `StepTimeoutError` e os tipos `Conversations`, `ExpectReply`,
     `ExpectReplyOptions`, `StepContext` e `StepHandler`.
-- 96b55e1: A fila de saída respeita a janela que a plataforma informa e o ritmo do transport (ADR 0067).
+- 96b55e1: A fila de saída respeita a janela que a plataforma informa e o ritmo do transport (ADR 0063).
   
   - Erro do transport com `retryAfterMs` (ms, finito e ≥ 0) re-tenta depois dessa janela exata, no
     lugar do backoff. Com `retryAfterScope: 'global'`, nenhum chat envia antes de ela abrir, mesmo
@@ -552,7 +552,7 @@
   `Services`) e `removePlugin(name)` para teardown/reload. `get` de serviço ausente lança
   `ServiceNotFoundError`, e prover um nome já provido lança `ServiceConflictError` citando os
   dois plugins. `ServiceName` passa a conter só as chaves string de `Services`.
-- 9536946: Escopo de sessão (M1-20, ADR 0036). `createBot({ session })` (padrão `'default'`, kebab-case)
+- 9536946: Escopo de sessão (M1-20, ADR 0032). `createBot({ session })` (padrão `'default'`, kebab-case)
   põe no escopo da sessão tudo o que o bot persiste: storage dos plugins, jobs do scheduler e
   overrides de config. Bots de sessões diferentes dividem um storage sem interferir; a mesma
   sessão em dois bots vivos no mesmo storage faz o `start()` do segundo rejeitar com
@@ -567,7 +567,7 @@
   reservados ao kernel (`pluginStorage`/`kernelStorage`), o adapter em memória
   `createMemoryStorage()` e a suíte de contrato reutilizável em
   `@usebridger/core/storage-contract` (`defineStorageContract`).
-- e557209: Texto formatado neutro, menções portáteis e limites de tamanho (ADR 0061).
+- e557209: Texto formatado neutro, menções portáteis e limites de tamanho (ADR 0057).
   
   - `fmt`, `bold`, `italic`, `code`, `link` e `mention` montam um `FormattedText` que o transport
     traduz para a marcação da plataforma. `plainText` devolve o texto visível. Texto cru (string)
@@ -583,7 +583,7 @@
     cita, e a chave devolvida é a dela. O `edit` acima do limite rejeita com `RangeError`.
   - Novos exports: `bold`, `code`, `fmt`, `italic`, `link`, `mention`, `plainText` e os tipos
     `FormattedText`, `MentionTarget`, `MessageText`, `TextLimits`, `TextNode` e `TextPart`.
-- a821a90: Timeouts tipados e menos ruído no log (ADRs 0032 e 0033). O `signal` de listener e de job aborta
+- a821a90: Timeouts tipados e menos ruído no log (ADRs 0028 e 0029). O `signal` de listener e de job aborta
   com `ListenerTimeoutError` e `JobTimeoutError` (antes, um `Error` genérico); os dois e o
   `CommandTimeoutError` estendem o novo `ExecutionTimeoutError` (`plugin`, `timeoutMs`). Uma
   `ContextExpiredError` que escapa do plugin depois do prazo não é logada de novo como erro tardio,
@@ -595,7 +595,7 @@
   de `z.object` — dentro de array, record ou union ele passava sem censura, sem máscara e aceito por
   override — e dois campos (ou chaves de `messages`) que geram a mesma variável de ambiente, como
   `openAIKey` e `openAiKey`.
-- 106f17d: Transport por fábrica (M1-21, ADR 0037). `BotConfig.transport` aceita também
+- 106f17d: Transport por fábrica (M1-21, ADR 0033). `BotConfig.transport` aceita também
   `(deps: TransportDeps) => Transport`: o `createBot` chama a fábrica uma vez, sem I/O, com a
   `session`, o `auth` (`storage.authState(session)`) e um `log` filho do logger do bot
   (`{ transport: name }`, com a censura de segredos), que descarta as linhas até o `start()`.
@@ -605,7 +605,7 @@
 - 6a17ed4: Completa o contrato `Transport` (eventos normalizados, envio, reações, edição, grupos e
   presença), adiciona o registro de capabilities com `UnsupportedError`, o `TypedEmitter` para
   os adapters e a `ReconnectionPolicy` agnóstica de transport (M1-2).
-- d991415: Trava de sessão entre processos (ADR 0074). Dois processos com a mesma sessão sobre o mesmo banco
+- d991415: Trava de sessão entre processos (ADR 0070). Dois processos com a mesma sessão sobre o mesmo banco
   deixam de rodar juntos: o `start()` trava a sessão no storage e, com ela ocupada, espera até 30 s
   (o tempo para vencer a trava de um processo que caiu) e rejeita com `BotConfigError` antes de
   conectar. A trava é renovada a cada 10 s, liberada no `stop()`, e um bot que a perde para outro
@@ -614,14 +614,14 @@
   O `@usebridger/storage-sqlite` as implementa numa tabela nova (`leases`, schema 2), criada sozinha
   no boot.
 - 929c946: `LocationMessage.location.address`, opcional: o endereço, quando a plataforma informa (o `venue`
-  do Telegram, por exemplo). Política das uniões (ADR 0069): `MessageType` e `OutgoingContent`
+  do Telegram, por exemplo). Política das uniões (ADR 0065): `MessageType` e `OutgoingContent`
   continuam fechadas e podem ganhar membros numa minor, na saída sempre atrás de capability nova.
   Plugin e transport tratam `unknown` e usam `default` no `switch`, nunca o `never` exaustivo.
 - e54996b: Escape hatch `ctx.unsafe.native` (M1-15): `createUnsafeAccess({ transport, log })` cria, por bot,
   a fábrica de `Unsafe`; `forPlugin(manifest)` devolve um `Unsafe` cujo `native` (`unknown`) lê o
   objeto nativo atual do transport e loga um aviso `warn` uma única vez por plugin, avisando quando
   o manifesto não declara `transports`.
-- 55bda98: Vários anexos na mensagem e envio em álbum (ADR 0065).
+- 55bda98: Vários anexos na mensagem e envio em álbum (ADR 0061).
   
   - `Message.attachments` em toda mensagem: todas as mídias, na ordem da plataforma, vazio sem
     mídia. Nos tipos de mídia, `attachments[0]` é o próprio `media`, e o `type` é o do primeiro
@@ -637,7 +637,7 @@
     como mensagem comum, e álbum vazio rejeita com `TypeError`.
   - Quem monta `Message` à mão precisa do campo `attachments`, e um transport com `switch`
     exaustivo sobre o `OutgoingContent` precisa tratar o `album`.
-- 91fec63: Evento `poll.vote` (ADR 0071): o voto numa enquete chega ao plugin com
+- 91fec63: Evento `poll.vote` (ADR 0067): o voto numa enquete chega ao plugin com
   `{ chat, messageId, sender, options, fromMe }`. `options` são os índices das opções marcadas, a
   partir de 0, com a escolha inteira de quem votou (`[]` = voto retirado). O `chatFilter`, o
   `ignoreSelf` e o `ignoreBots` valem para ele como para a `reaction`. Mudança aditiva: transports
@@ -645,7 +645,7 @@
 
 ### Patch Changes
 
-- 9e55135: Corrige o descarte do plugin com execuções em andamento (M1-16, ADR 0033). Antes, um reload por
+- 9e55135: Corrige o descarte do plugin com execuções em andamento (M1-16, ADR 0029). Antes, um reload por
   config ou o teardown deixavam vivos os comandos, listeners, jobs e checagens de papel que já
   rodavam: o `signal` deles não abortava e o `reply` seguia enviando pela fila de saída do kernel.
   Agora o descarte expira essas execuções junto com o contexto do plugin: o `signal` de cada uma
@@ -666,14 +666,14 @@
   descartada, até `humanize.maxMs` depois do shutdown, com o transport possivelmente desconectado.
   Agora a espera é encerrada e o envio rejeita com `OutboundQueueError` `'closed'`, contado em
   `dropped`, sem chegar ao transport.
-- ac48966: `role: 'group-admin'` reconhece o admin também pelo telefone (#238, ADR 0046). No WhatsApp, o
+- ac48966: `role: 'group-admin'` reconhece o admin também pelo telefone (#238, ADR 0042). No WhatsApp, o
   remetente pode chegar como LID e os participantes do `getGroupMetadata` como JID de telefone (ou
   o contrário): o id não batia e um admin de verdade era recusado em silêncio. Agora casa por `id`
   ou, quando os dois lados têm `phone`, pelo telefone; sem telefone de um lado, só o `id` decide.
   O contrato do `Transport` passa a documentar que ids de contato podem vir em espaços diferentes,
   que o adapter preenche `phone` sempre que souber e que `getGroupMetadata` deve ser barato (cache
   no adapter, invalidado por `group.participants`/`group.updated`).
-- d6fc723: Os middlewares passam a envolver comando e listeners, como o ADR 0012 define (#225). Antes,
+- d6fc723: Os middlewares passam a envolver comando e listeners, como o ADR 0010 define (#225). Antes,
   o código depois de `await next()` rodava antes do comando. Agora ele roda quando comando e
   listeners terminam (ou estouram `commandMs`/`listenerMs`). Isso vale também para a edição
   (`message.edited`). Um middleware passa a medir o tratamento inteiro, a manter o "digitando"
@@ -704,5 +704,5 @@
   `engine` conferido contra a versão antiga. A doc de plugins passa a dizer qual `engine` declarar
   durante o 0.x (`>=0.1.0 <1.0.0` no monorepo, `^0.M.0` fora dele) e por que `^0.0.x` quebra no
   primeiro bump.
-- 5c864c2: O projeto se chama Bridger, com os pacotes no escopo `@usebridger/*` e o scaffold `create-bridger-plugin` (ADR 0083). A config de plugin lê variáveis com prefixo `BRIDGER_`, a anotação de campo não editável por override é `x-bridger-override`, plugins seguem o prefixo `bridger-plugin-` e o schema Postgres padrão é `bridger`. O repositório passa a ser `murillous/usebridger`.
+- 5c864c2: O projeto se chama Bridger, com os pacotes no escopo `@usebridger/*` e o scaffold `create-bridger-plugin` (ADR 0079). A config de plugin lê variáveis com prefixo `BRIDGER_`, a anotação de campo não editável por override é `x-bridger-override`, plugins seguem o prefixo `bridger-plugin-` e o schema Postgres padrão é `bridger`. O repositório passa a ser `murillous/usebridger`.
 - a8482ee: Metadados de publicação no `package.json`: `repository` (com a pasta do pacote), `homepage`, `bugs` e acesso público. As dependências entre pacotes `@usebridger/*` passam a sair como `^<versão>` em vez da versão exata.

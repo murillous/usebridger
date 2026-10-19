@@ -1,4 +1,4 @@
-// Horário de conexão, reconexões e expiração do QR de um bot (ADR 0115). Alimentado pelo
+// Horário de conexão, reconexões e expiração do QR de um bot (ADR 0111). Alimentado pelo
 // `transport-entry` no mesmo ponto do `recordStatus`, então não diverge do barramento.
 
 import type { ConnectionStatus } from '#transport/types.ts';

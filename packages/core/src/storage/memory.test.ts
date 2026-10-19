@@ -3,7 +3,7 @@ import { defineStorageContract } from './contract/index.ts';
 import { createMemoryStorage } from './memory.ts';
 
 // O adapter em memória é a referência: precisa passar na suíte inteira, menos a trava entre
-// processos (ADR 0074), que ele não tem por viver num processo só.
+// processos (ADR 0070), que ele não tem por viver num processo só.
 defineStorageContract(
   { describe, it },
   { name: 'memória', create: createMemoryStorage, processLocal: true },

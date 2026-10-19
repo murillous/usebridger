@@ -1,8 +1,8 @@
 # Release dos pacotes
 
 Como os pacotes publicáveis (`packages/*` sem `private`) saem para o npm. O porquê
-está nos ADRs [0082](adr/0082-release-a-partir-de-develop.md) e
-[0085](adr/0085-release-a-partir-da-main.md); o changeset de cada PR, no
+está nos ADRs [0078](adr/0078-release-a-partir-de-develop.md) e
+[0081](adr/0081-release-a-partir-da-main.md); o changeset de cada PR, no
 [`.changeset/README.md`](../.changeset/README.md).
 
 ## Fluxo

@@ -11,7 +11,7 @@ Há dois jeitos de lidar com uma capability, e a escolha é do plugin:
 
 **Exigir em `requires`**, quando o plugin não faz sentido sem ela. Num transport sem a capability,
 o boot para antes de conectar, com um erro que diz o que faltou
-([ADR 0102](../adr/0102-plugin-falho-derruba-o-boot.md)):
+([ADR 0098](../adr/0098-plugin-falho-derruba-o-boot.md)):
 
 ```ts
 export const figurinha = definePlugin({

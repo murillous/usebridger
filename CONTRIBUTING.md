@@ -13,7 +13,7 @@ Ao participar, você concorda com o [Código de Conduta](CODE_OF_CONDUCT.md).
 
 - **Bug**: abra uma issue com o template de bug, com passos para reproduzir.
 - **Feature ou mudança de API**: abra uma issue primeiro e espere o alinhamento. O escopo do
-  core é fechado ([ADR 0013](docs/adr/0013-escopo-do-core.md)) — muita coisa cabe melhor num
+  core é fechado ([ADR 0011](docs/adr/0011-escopo-do-core.md)) — muita coisa cabe melhor num
   plugin.
 - **Decisão arquitetural**: proponha um ADR novo em `docs/adr/`. ADR aceito não é reescrito; a
   mudança vira um ADR que o substitui ([formato](docs/adr/README.md)).

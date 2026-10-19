@@ -1,4 +1,4 @@
-// Jobs agendados guardam o tenant de quem agendou e rodam no escopo dele (ADR 0072). Relógio
+// Jobs agendados guardam o tenant de quem agendou e rodam no escopo dele (ADR 0068). Relógio
 // real: o escopo de tenant segue os timers do Node, não os falsos do Vitest.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -29,7 +29,7 @@ afterEach(async () => {
   for (const service of services.splice(0)) await service.stop();
 });
 
-describe('scheduler com tenant (ADR 0072)', () => {
+describe('scheduler com tenant (ADR 0068)', () => {
   it('o job guarda o tenant de quem agendou e o handler roda no escopo dele', async () => {
     const tenants = new TenantScope();
     const { service, storage } = create(tenants);

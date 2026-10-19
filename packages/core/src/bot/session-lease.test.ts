@@ -1,4 +1,4 @@
-// MP-17 (#282, ADR 0074): a mesma sessão não roda em dois processos que dividem o banco. Cada
+// MP-17 (#282, ADR 0070): a mesma sessão não roda em dois processos que dividem o banco. Cada
 // "processo" aqui é um storage próprio sobre a mesma tabela de travas, como duas conexões ao
 // mesmo SQLite: o `claimSession` (por objeto de storage) não enxerga um a partir do outro.
 

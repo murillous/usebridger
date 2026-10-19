@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-// ADR 0034: cada ponto de entrada tem um público, e o que sai dele fica preso ao ciclo de
-// depreciação depois da 1.0 (ADR 0027). As listas abaixo são a API pública: export novo (ou
+// ADR 0030: cada ponto de entrada tem um público, e o que sai dele fica preso ao ciclo de
+// depreciação depois da 1.0 (ADR 0024). As listas abaixo são a API pública: export novo (ou
 // removido) só passa editando-as, como decisão explícita, nunca por `vitest -u`.
 
 interface EntryExports {

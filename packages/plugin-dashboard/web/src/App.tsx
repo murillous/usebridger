@@ -131,7 +131,7 @@ function useLive(enabled: boolean, paused: boolean): LiveState {
   return { ...state, paused };
 }
 
-/** Abas de plugins (ADR 0108): o manifesto é lido de novo a cada navegação e a cada reconexão do WS. */
+/** Abas de plugins (ADR 0104): o manifesto é lido de novo a cada navegação e a cada reconexão do WS. */
 function useTabs(enabled: boolean, route: string, connected: boolean) {
   const [tabs, setTabs] = useState<TabView[]>();
   const [tick, setTick] = useState(0);
@@ -187,7 +187,7 @@ export function App() {
   );
   const session = live.status?.session ?? 'default';
   const sessionSelect = (
-    // A API expõe só a sessão deste plugin (ADR 0110); trocar de sessão é abrir o dashboard dela.
+    // A API expõe só a sessão deste plugin (ADR 0106); trocar de sessão é abrir o dashboard dela.
     <select className="input" aria-label="Sessão" defaultValue={session} key={session}>
       <option value={session}>{session}</option>
     </select>

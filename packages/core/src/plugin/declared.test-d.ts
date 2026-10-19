@@ -1,4 +1,4 @@
-// Tipos de `commands` e `on` no manifesto (ADR 0079), verificados pelo `pnpm typecheck`.
+// Tipos de `commands` e `on` no manifesto (ADR 0075), verificados pelo `pnpm typecheck`.
 import { describe, expectTypeOf, it } from 'vitest';
 import { z } from 'zod';
 import type {

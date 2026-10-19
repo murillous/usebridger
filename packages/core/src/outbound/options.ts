@@ -37,8 +37,8 @@ const DEFAULTS = {
 /** Valida as opções e aplica os padrões. Lança `RangeError` no primeiro valor inválido. */
 export function resolveOutboundOptions(options: OutboundQueueOptions): OutboundConfig {
   const retry = options.retry ?? {};
-  // O ritmo é da plataforma (ADR 0067): a config do bot sobrescreve o do transport, e sem
-  // nenhum dos dois vale o padrão anti-ban do WhatsApp (ADR 0019).
+  // O ritmo é da plataforma (ADR 0063): a config do bot sobrescreve o do transport, e sem
+  // nenhum dos dois vale o padrão anti-ban do WhatsApp (ADR 0017).
   const pacing = options.transport.pacing;
   const globalIntervalMs = pace('globalIntervalMs', options.globalIntervalMs, pacing);
   const chatIntervalMs = pace('chatIntervalMs', options.chatIntervalMs, pacing);

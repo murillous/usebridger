@@ -1,4 +1,4 @@
-// Texto formatado neutro (ADR 0061). O plugin monta uma árvore mínima com os helpers, e o
+// Texto formatado neutro (ADR 0057). O plugin monta uma árvore mínima com os helpers, e o
 // transport a traduz para a marcação da plataforma, com o escape dela. Texto cru (string) continua
 // valendo e vai ao transport como veio.
 

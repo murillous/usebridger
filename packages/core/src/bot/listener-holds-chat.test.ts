@@ -1,4 +1,4 @@
-// Comando e listener seguram a fila de entrada do chat até terminar (ADR 0042): é o que dá ordem
+// Comando e listener seguram a fila de entrada do chat até terminar (ADR 0038): é o que dá ordem
 // a quem guarda estado por conversa. Trabalho longo se solta do handler para liberar o chat.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -44,7 +44,7 @@ async function startBot(
   await bot.start();
 }
 
-describe('Bot: handler lento e a fila do chat (ADR 0042)', () => {
+describe('Bot: handler lento e a fila do chat (ADR 0038)', () => {
   it('listener lento segura a próxima mensagem do mesmo chat, não a de outro chat', async () => {
     const transport = new RecordingTransport();
     const gate = deferred();

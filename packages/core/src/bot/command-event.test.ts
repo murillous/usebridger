@@ -1,4 +1,4 @@
-// Evento `command` (ADR 0049, #254): o comando consome a mensagem (ADR 0012), mas um plugin
+// Evento `command` (ADR 0045, #254): o comando consome a mensagem (ADR 0010), mas um plugin
 // ainda observa que ele rodou, foi recusado ou falhou. Com `message`, cobre toda mensagem.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -40,7 +40,7 @@ async function startBot(
   return bot;
 }
 
-describe('Bot: evento `command` (ADR 0049)', () => {
+describe('Bot: evento `command` (ADR 0045)', () => {
   it('sai para comando que rodou, foi recusado ou falhou, com a mensagem', async () => {
     const transport = new RecordingTransport();
     const seen: CommandEvent[] = [];
@@ -102,7 +102,7 @@ describe('Bot: evento `command` (ADR 0049)', () => {
     expect(messages).toEqual([conversa.id, desconhecido.id]);
   });
 
-  it('sai depois que o comando termina e segura o chat como um listener (ADR 0042)', async () => {
+  it('sai depois que o comando termina e segura o chat como um listener (ADR 0038)', async () => {
     const transport = new RecordingTransport();
     const order: string[] = [];
     const gate = deferred();

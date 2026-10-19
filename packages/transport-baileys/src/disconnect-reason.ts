@@ -1,6 +1,6 @@
 // Código de desconexão do Baileys → `DisconnectReason` do core. A `ReconnectionPolicy` decide em
 // cima dele, e `logged-out`/`auth-failed` apagam as credenciais: só entram aqui quando o aparelho
-// ou o servidor rejeitou a credencial de fato (ADR 0045).
+// ou o servidor rejeitou a credencial de fato (ADR 0041).
 
 import type { DisconnectReason } from '@usebridger/core';
 import { DisconnectReason as Code } from 'baileys';
@@ -24,7 +24,7 @@ export function toDisconnectReason(error: unknown, { pairing }: CloseContext): D
     case Code.timedOut:
       return pairing ? 'qr-timeout' : 'connection-lost';
     // 515 é o restart que o servidor pede logo depois do pareamento: reconecta pela política
-    // (ADR 0048).
+    // (ADR 0044).
     case Code.connectionClosed:
     case Code.restartRequired:
       return 'connection-lost';

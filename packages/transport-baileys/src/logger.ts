@@ -1,6 +1,6 @@
 // O Baileys loga no formato do pino (`logger.info(obj, msg)`); o bot, no do core
 // (`log.info(msg, fields)`). Este adapter traduz um para o outro, para as linhas do Baileys
-// passarem pelo logger do bot, com a censura de segredos dele (ADR 0032).
+// passarem pelo logger do bot, com a censura de segredos dele (ADR 0028).
 
 import type { LogFields, Logger, LogLevel } from '@usebridger/core';
 import type { SocketConfig } from 'baileys';

@@ -1,13 +1,13 @@
 # Conversas: resposta esperada
 
 O plugin faz uma pergunta e trata a resposta sem segurar o chat
-([ADR 0060](../../../docs/adr/0060-resposta-esperada.md)). Exemplo: "!notas" → "De qual aluno?" →
+([ADR 0056](../../../docs/adr/0056-resposta-esperada.md)). Exemplo: "!notas" → "De qual aluno?" →
 "Maria" → notas da Maria.
 
 ## Por que não `await` a próxima mensagem
 
 A fila de entrada processa uma mensagem por chat por vez, e a tarefa da mensagem só termina quando
-o comando termina ([ADR 0042](../../../docs/adr/0042-handler-lento-segura-o-chat.md)). Um `run`
+o comando termina ([ADR 0038](../../../docs/adr/0038-handler-lento-segura-o-chat.md)). Um `run`
 que espera a próxima mensagem do mesmo chat espera uma tarefa que está na fila atrás dele. Ele
 fica preso até o `commandMs` estourar.
 
@@ -92,7 +92,7 @@ ctx.conversations.define('bimestre', async (c) => {
 
 Para avisar quem parou de responder, lembrar de terminar um cadastro ou registrar o abandono de um
 funil, passe `onExpire` no `define`
-([ADR 0097](../../../docs/adr/0097-onexpire-do-passo.md)):
+([ADR 0093](../../../docs/adr/0093-onexpire-do-passo.md)):
 
 ```ts
 ctx.conversations.define('nome', (c) => c.reply(`Olá, ${c.text}`), {
@@ -163,7 +163,7 @@ lança `ContextExpiredError`. Um handler atrasado não abre uma conversa que nin
 Num cadastro, numa triagem ou num funil de pedido, com TTL de horas, um deploy no meio do dia não
 pode derrubar quem está no meio do fluxo. O passo definido com **`persist: true`** grava cada
 espera dele no storage do bot, e o boot seguinte a restaura
-([ADR 0098](../../../docs/adr/0098-esperas-persistidas.md)):
+([ADR 0094](../../../docs/adr/0094-esperas-persistidas.md)):
 
 ```ts
 ctx.conversations.define(
@@ -202,11 +202,11 @@ ctx.conversations.define(
 - **O `data` precisa caber em JSON** (`JsonValue`, como sempre): ele vai ao storage como está e
   fica lá até a espera sair. Não guarde nele o que não guardaria no `ctx.storage`.
 - **Chat e contato.** O registro guarda o `Chat` (com o `tenantId`,
-  [ADR 0072](../../../docs/adr/0072-isolamento-por-tenant.md)) e o `Contact` da espera, para o
+  [ADR 0068](../../../docs/adr/0068-isolamento-por-tenant.md)) e o `Contact` da espera, para o
   `onExpire` restaurado ter `chat` e `sender`. Os `claims` do contato não vão ao storage: no
   `onExpire` de uma espera restaurada, `sender.claims` fica ausente.
 - **Uma sessão por processo.** A trava de sessão
-  ([ADR 0074](../../../docs/adr/0074-trava-de-sessao-entre-processos.md)) garante que só um
+  ([ADR 0070](../../../docs/adr/0070-trava-de-sessao-entre-processos.md)) garante que só um
   processo restaura e serve as esperas de uma sessão.
 
 As esperas ficam na coleção `waits` do namespace do kernel `$conversations` (por sessão), um

@@ -160,7 +160,7 @@ describe('createCommandRegistry', () => {
   });
 });
 
-describe('createCommandRegistry: aviso de mudança (ADR 0064)', () => {
+describe('createCommandRegistry: aviso de mudança (ADR 0060)', () => {
   it('avisa a cada comando que entra e a cada plugin que perde comandos', () => {
     let changes = 0;
     const registry = createCommandRegistry({ onChange: () => changes++ });

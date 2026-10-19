@@ -1,4 +1,4 @@
-// Registro de conversas: o `expire`, ponto único de expiração de uma espera (ADR 0097).
+// Registro de conversas: o `expire`, ponto único de expiração de uma espera (ADR 0093).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Chat, Contact } from '#message/types.ts';
@@ -15,7 +15,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('ConversationRegistry.expire (ADR 0097)', () => {
+describe('ConversationRegistry.expire (ADR 0093)', () => {
   it('só retira a espera que venceu, e devolve o onExpire com chat, remetente e data', () => {
     const registry = new ConversationRegistry<unknown, string>();
     const onExpire = vi.fn();

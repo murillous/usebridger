@@ -1,7 +1,7 @@
 # Modelo de mensagem
 
 O core entrega aos plugins uma `Message` normalizada, independente do transport
-([ADR 0009](../../../docs/adr/0009-modelo-de-mensagem-normalizado.md)). Os tipos estão em
+([ADR 0007](../../../docs/adr/0007-modelo-de-mensagem-normalizado.md)). Os tipos estão em
 `src/message/types.ts`; a construção, em `createMessage` e `createMedia`.
 
 ## Lendo mensagens (plugins)
@@ -33,7 +33,7 @@ if (msg.quoted?.is('sticker')) await msg.quoted.media.download();
   `MediaMessageType` lista os tipos que carregam `media`.
 - `is()` é propriedade própria da mensagem: sobrevive a `{ ...msg }`.
 - `key` (`MessageKey`) é a chave para agir sobre a mensagem: `ctx.send.react(msg.key, '👍')`,
-  `ctx.send.delete(msg.quoted.key)` ([ADR 0040](../../../docs/adr/0040-acoes-do-transport-no-plugin.md)).
+  `ctx.send.delete(msg.quoted.key)` ([ADR 0036](../../../docs/adr/0036-acoes-do-transport-no-plugin.md)).
   No contexto de comando ou listener, `c.react('👍')` já usa a chave da mensagem recebida.
 
 ### Tipos novos e `unknown`
@@ -42,7 +42,7 @@ O que a plataforma tem sem equivalente na lista chega como `unknown`: o dado do 
 a fatura, o story, a mensagem do Discord só com embed ou componentes. Um plugin específico de
 plataforma lê o resto pelo objeto bruto ([unsafe](unsafe.md)). O que se trata do mesmo jeito
 chega pelo tipo comum
-([ADR 0069](../../../docs/adr/0069-unioes-de-tipo-antes-do-1-0.md)):
+([ADR 0065](../../../docs/adr/0065-unioes-de-tipo-antes-do-1-0.md)):
 
 | Na plataforma | Chega como |
 | --- | --- |
@@ -81,7 +81,7 @@ switch (msg.type) {
 ## Vários anexos
 
 `attachments` traz todas as mídias da mensagem, na ordem da plataforma
-([ADR 0065](../../../docs/adr/0065-varios-anexos-e-albuns.md)). Uma mensagem do Discord com
+([ADR 0061](../../../docs/adr/0061-varios-anexos-e-albuns.md)). Uma mensagem do Discord com
 imagem e PDF, um álbum do Telegram ou os arquivos de uma mensagem do web chegam numa mensagem só.
 
 ```ts
@@ -112,7 +112,7 @@ O campo é obrigatório no tipo: o transport precisa decidir, e `null` é uma re
 ## `username`, `isBot` e `claims`
 
 Campos opcionais que o transport preenche quando a plataforma tem a informação
-([ADR 0057](../../../docs/adr/0057-contact-multiplataforma.md)). Ausente quer dizer que o
+([ADR 0053](../../../docs/adr/0053-contact-multiplataforma.md)). Ausente quer dizer que o
 transport não sabe:
 
 | Campo | Tipo | O que é |
@@ -135,7 +135,7 @@ plugin usa a própria credencial de serviço: o token do usuário não chega a e
 `chat.id` é o ID opaco do transport, e é para ele que vai a resposta. O plugin não o decompõe.
 `isGroup` é verdadeiro em todo chat que não é conversa privada. Os campos opcionais abaixo
 mostram a estrutura quando a plataforma tem a informação
-([ADR 0058](../../../docs/adr/0058-chat-multiplataforma.md)). Ausente quer dizer que o
+([ADR 0054](../../../docs/adr/0054-chat-multiplataforma.md)). Ausente quer dizer que o
 transport não sabe:
 
 | Campo | Tipo | O que é |

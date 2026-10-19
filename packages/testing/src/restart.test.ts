@@ -1,4 +1,4 @@
-// `restart()` do kit (ADR 0098): o bot novo sobe sobre o mesmo storage, para testar o que
+// `restart()` do kit (ADR 0094): o bot novo sobe sobre o mesmo storage, para testar o que
 // sobrevive a um deploy, como as esperas de passo com `persist: true`.
 
 import { command, createMemoryStorage, definePlugin, type StoragePort } from '@usebridger/core';

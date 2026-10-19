@@ -2,18 +2,18 @@
 
 Cada plugin declara a própria config como um schema Zod no manifesto. O kernel junta os valores de
 várias fontes, valida contra o schema e entrega ao plugin um objeto tipado em `ctx.config`. O
-plugin nunca lê variável de ambiente nem arquivo ([ADR 0017](../adr/0017-config-por-plugin-zod.md)).
+plugin nunca lê variável de ambiente nem arquivo ([ADR 0015](../adr/0015-config-por-plugin-zod.md)).
 O tutorial é [Configurar sem mexer no código](/usebridger/comecando/configuracao/).
 
 O schema é a fonte de tudo: o tipo do `ctx.config`, a validação, a conversão do texto das
 variáveis de ambiente, os campos secretos e o formulário que um painel pode gerar. Por isso ele é
 obrigatoriamente um `z.object`, importado de `@usebridger/core/zod`, a mesma cópia do Zod que o core
-usa ([ADR 0095](../adr/0095-zod-no-subpath-do-core.md)).
+usa ([ADR 0091](../adr/0091-zod-no-subpath-do-core.md)).
 
 ## De onde vem a config e a precedência
 
 Há quatro camadas. Para cada campo, vale a primeira que tem valor
-([ADR 0032](../adr/0032-camadas-da-config-de-plugin.md)):
+([ADR 0028](../adr/0028-camadas-da-config-de-plugin.md)):
 
 | Ordem | Camada | Quem escreve | Exemplo |
 | --- | --- | --- | --- |
@@ -33,7 +33,7 @@ separa sem ambiguidade nome de plugin e de campo. Só campos do schema são lido
 convertido para o tipo do campo.
 
 Mudar um override recarrega o plugin (`teardown` e `setup` de novo) sem reiniciar o processo.
-Código novo, ao contrário, pede restart ([ADR 0008](../adr/0008-sem-hot-reload.md)).
+Código novo, ao contrário, pede restart ([ADR 0006](../adr/0006-sem-hot-reload.md)).
 
 ## Segredos
 
@@ -58,14 +58,14 @@ campo inteiro.
 Não há i18n formal: os textos que o plugin mostra ao usuário ficam num objeto `messages` no
 manifesto, e cada um pode ser sobrescrito pela config, com a mesma precedência dos campos
 (`BRIDGER_AI__MESSAGES__THINKING`, `pluginConfig.ai.messages.thinking`)
-([ADR 0025](../adr/0025-sem-i18n-objeto-messages.md)). Isso cobre tanto a tradução quanto o tom de
+([ADR 0022](../adr/0022-sem-i18n-objeto-messages.md)). Isso cobre tanto a tradução quanto o tom de
 voz de cada bot, sem o peso de catálogos por idioma.
 
 O texto aceita placeholders (`'Use {prefix}lembrar <minutos> <texto>'`), preenchidos por
 `c.t(chave, valores)`; o `{prefix}` o kernel preenche com o prefixo do chat. A sobrescrita é
 validada contra o texto padrão: ela pode mover ou omitir um placeholder, mas não pedir um que o
 plugin não passa. O erro sai na config, e não na hora de responder
-([ADR 0092](../adr/0092-placeholders-nas-messages.md)).
+([ADR 0088](../adr/0088-placeholders-nas-messages.md)).
 
 ## Config inválida
 
@@ -73,7 +73,7 @@ O momento muda o que acontece, de propósito:
 
 | Quando | O que acontece |
 | --- | --- |
-| No boot | O boot para antes de conectar, com um erro que lista cada campo, a fonte e o motivo ([ADR 0102](../adr/0102-plugin-falho-derruba-o-boot.md)) |
+| No boot | O boot para antes de conectar, com um erro que lista cada campo, a fonte e o motivo ([ADR 0098](../adr/0098-plugin-falho-derruba-o-boot.md)) |
 | Num `setOverrides` em runtime | A config nova é validada antes de salvar; inválida, é recusada e o plugin segue com a anterior |
 | Num reload em runtime que falha | O plugin fica fora, com o motivo na tabela, e o bot segue no ar |
 
@@ -91,5 +91,5 @@ dá os valores atuais (com segredos mascarados) e a fonte de cada campo, para o 
 um valor vem do ambiente e não pode ser mudado ali.
 
 Esse é o caminho previsto para o painel, que é um plugin
-([ADR 0021](../adr/0021-dashboard-vira-plugin.md)). A referência completa está em
+([ADR 0019](../adr/0019-dashboard-vira-plugin.md)). A referência completa está em
 [Config de plugin](../../packages/core/docs/config.md).

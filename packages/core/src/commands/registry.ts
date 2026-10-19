@@ -48,7 +48,7 @@ function tokensOf(definition: CommandDefinition): Set<string> {
 }
 
 export interface CommandRegistryOptions {
-  /** Chamado a cada comando que entra ou sai (o aviso do `TransportDeps.commands`, ADR 0064). */
+  /** Chamado a cada comando que entra ou sai (o aviso do `TransportDeps.commands`, ADR 0060). */
   readonly onChange?: () => void;
 }
 

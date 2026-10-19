@@ -5,7 +5,7 @@
 // - devolve o atraso junto da ação, em vez de cada executor ter os seus `setTimeout` fixos;
 // - o intervalo mínimo entre limpezas funciona (no legacy um `|| 60000` o anulava);
 // - queda de rede nunca limpa a sessão: o legacy limpava após 3 tentativas, e uma queda de
-//   ~30 s apagava credenciais válidas (ADR 0045).
+//   ~30 s apagava credenciais válidas (ADR 0041).
 
 import type { DisconnectReason } from './types.ts';
 
@@ -20,9 +20,9 @@ export type ReconnectionDecision =
     }
   /**
    * Não reconectar: o bot para. `replaced`: reconectar derrubaria a outra conexão da mesma
-   * sessão, e as duas se derrubariam em laço (ADR 0036). `fatal`: erro de configuração que outra
+   * sessão, e as duas se derrubariam em laço (ADR 0032). `fatal`: erro de configuração que outra
    * tentativa repetiria. `auth-failed`: credencial rejeitada num transport sem pareamento, onde
-   * limpar a sessão não traz credencial nova (ADR 0068).
+   * limpar a sessão não traz credencial nova (ADR 0064).
    */
   | { readonly action: 'stop'; readonly cause: 'replaced' | 'fatal' | 'auth-failed' };
 
@@ -54,7 +54,7 @@ export interface ReconnectionPolicyOptions {
   /**
    * O transport pareia a sessão por QR ou código (capability `pairing`). Sem pareamento,
    * `auth-failed` decide `stop`: limpar a sessão não traz credencial nova. Padrão `true`, o
-   * comportamento do legacy; o `Bot` o lê da capability (ADR 0068).
+   * comportamento do legacy; o `Bot` o lê da capability (ADR 0064).
    */
   readonly pairing?: boolean;
   /** Relógio injetável para testes. Padrão `Date.now`. */

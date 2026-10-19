@@ -1,6 +1,6 @@
 // Tipos públicos do plugin: o serviço `metrics` e o ponto de extensão `metrics.exporters`.
 
-/** Rótulos de uma série: nome → valor. Nunca id de chat nem de usuário (ADR 0107). */
+/** Rótulos de uma série: nome → valor. Nunca id de chat nem de usuário (ADR 0103). */
 export type MetricLabels = Readonly<Record<string, string>>;
 
 /** Limites superiores (ms) dos baldes do histograma; acima do último vai um balde `+Inf`. */
@@ -73,7 +73,7 @@ export interface MetricsService {
   names(range: MetricsRange): Promise<string[]>;
   /**
    * Plugin que gravou a métrica primeiro (`core` para as do kernel); `undefined` se o dono já saiu
-   * ou a métrica só existe no histórico. O dono vem do serviço com escopo (ADR 0116), não é declarado.
+   * ou a métrica só existe no histórico. O dono vem do serviço com escopo (ADR 0112), não é declarado.
    */
   ownerOf(name: string): string | undefined;
 }

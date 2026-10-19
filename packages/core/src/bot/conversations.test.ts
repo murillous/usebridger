@@ -1,4 +1,4 @@
-// Resposta esperada (ADR 0060, #274): o handler pergunta, registra o passo que trata a próxima
+// Resposta esperada (ADR 0056, #274): o handler pergunta, registra o passo que trata a próxima
 // mensagem do remetente naquele chat e termina, sem segurar o chat na fila de entrada.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -77,7 +77,7 @@ function notas(heard: string[] = []): PluginDefinition {
   });
 }
 
-describe('Bot: resposta esperada (ADR 0060)', () => {
+describe('Bot: resposta esperada (ADR 0056)', () => {
   it('a próxima mensagem do remetente vai ao passo, com o data, e não chega a `message`', async () => {
     const transport = new RecordingTransport();
     const heard: string[] = [];

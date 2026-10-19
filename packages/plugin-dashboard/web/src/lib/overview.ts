@@ -6,7 +6,7 @@ export interface BotChip {
   tone: 'ok' | 'warn' | 'danger';
 }
 
-// Só estes `reason` fazem o core parar de reconectar (reconnection.ts, ADR 0068); nos outros o
+// Só estes `reason` fazem o core parar de reconectar (reconnection.ts, ADR 0064); nos outros o
 // kernel reconecta sozinho. `auth-failed` só é terminal sem pareamento: com ele o core limpa a
 // sessão e reconecta (reconnection.ts).
 export const isFatal = (status: StatusView): boolean =>

@@ -26,22 +26,22 @@ export interface TransportEntryDeps {
   readonly tenants: TenantScope;
   readonly flow: InboundFlow;
   readonly bus: EventBus;
-  /** O `queuedMs` do `message.handled` só é medido com observador (ADR 0106). */
+  /** O `queuedMs` do `message.handled` só é medido com observador (ADR 0102). */
   readonly observers?: Pick<Observers, 'has'>;
   readonly conversations: Pick<ConversationRegistry<KernelMessageContext, ExpireOrigin>, 'expire'>;
   readonly reconnector: Reconnector | undefined;
   readonly gate: ReadyGate;
-  /** Os filtros do pipeline, para os eventos que não passam por ele (ADR 0038). */
+  /** Os filtros do pipeline, para os eventos que não passam por ele (ADR 0034). */
   readonly chatIsAllowed: (chat: Pick<Chat, 'id' | 'parentId'>) => boolean;
   readonly dropsSelf: boolean;
   readonly dropsBots: boolean;
   /** `true` em `stopping`/`stopped`/`failed`: a espera vencida some em silêncio. */
   readonly stopping: () => boolean;
-  /** Guarda o último `connection.status`, antes de reemitir no barramento (ADR 0110). */
+  /** Guarda o último `connection.status`, antes de reemitir no barramento (ADR 0106). */
   readonly recordStatus?: (status: ConnectionStatus) => void;
-  /** Guarda a expiração do QR, antes de reemitir no barramento (ADR 0115). */
+  /** Guarda a expiração do QR, antes de reemitir no barramento (ADR 0111). */
   readonly recordQr?: (expiresAt: number | undefined) => void;
-  /** O giveUp da reconexão já levou o bot a `failed` (ADR 0120). */
+  /** O giveUp da reconexão já levou o bot a `failed` (ADR 0116). */
   readonly failed?: () => boolean;
   /** Getter: o logger nasce no `start()`. */
   readonly log: () => Logger;
@@ -50,15 +50,15 @@ export interface TransportEntryDeps {
 export interface TransportEntry {
   /** Assina todos os eventos do transport; devolve a função que desfaz. */
   subscribe(): () => void;
-  /** Ponto único da expiração de uma espera (ADR 0097). */
+  /** Ponto único da expiração de uma espera (ADR 0093). */
   expireWait(chat: Chat, sender: Contact): void;
 }
 
 export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
   /**
    * Põe a mensagem (nova ou editada) ou o clique na fila do chat dele: o mesmo chat anda em
-   * série. A tarefa roda no escopo do tenant do chat (ADR 0072). Com observador de
-   * `message.handled`, mede a espera na fila e a passa ao fluxo (ADR 0106).
+   * série. A tarefa roda no escopo do tenant do chat (ADR 0068). Com observador de
+   * `message.handled`, mede a espera na fila e a passa ao fluxo (ADR 0102).
    */
   function enqueue<T extends Message | Interaction>(
     item: T,
@@ -80,7 +80,7 @@ export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
   }
 
   /**
-   * Ponto único da expiração de uma espera (ADR 0097): põe na fila do chat a tarefa que retira a
+   * Ponto único da expiração de uma espera (ADR 0093): põe na fila do chat a tarefa que retira a
    * espera vencida e roda o `onExpire` do passo, para não correr junto com uma mensagem do mesmo
    * chat. Chamado pelo timer da espera; uma espera restaurada que venceu durante o restart passa
    * por aqui no boot. No `stop()`, ou com a fila do chat cheia ou fechada, a espera vencida some
@@ -104,7 +104,7 @@ export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
 
   /**
    * Repassa um evento que não é mensagem ao barramento, depois do `chatFilter`, do `ignoreSelf` e
-   * do `ignoreBots` (ADR 0038). Durante o boot, espera os plugins subirem; sem fila do chat.
+   * do `ignoreBots` (ADR 0034). Durante o boot, espera os plugins subirem; sem fila do chat.
    */
   function forward<E extends DirectEvent>(event: E): () => void {
     const origin = DIRECT_EVENTS[event];
@@ -114,7 +114,7 @@ export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
       const { chat, fromMe, fromBot } = origin(payload);
       if ((fromMe && deps.dropsSelf) || (fromBot && deps.dropsBots)) return;
       if (chat !== null && !deps.chatIsAllowed(chat)) return;
-      // Os listeners rodam no escopo do tenant do chat (ADR 0072). Ele vem do payload, não da
+      // Os listeners rodam no escopo do tenant do chat (ADR 0068). Ele vem do payload, não da
       // origem: entrada e saída do grupo passam pelo filtro sem chat, mas são de um tenant.
       const tenant = 'chat' in payload ? payload.chat.tenantId : undefined;
       deps.tenants.run(tenant, () => {
@@ -158,7 +158,7 @@ export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
         void deps.bus.emit('connection.qr', payload);
       }),
       deps.transport.on('connection.pairing-code', (payload) => {
-        // Mesma tentativa de pareamento que o QR (ADR 0050), e o mesmo risco no log.
+        // Mesma tentativa de pareamento que o QR (ADR 0046), e o mesmo risco no log.
         deps.reconnector?.onQr();
         deps
           .log()

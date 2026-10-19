@@ -20,7 +20,7 @@ describe('Contact.phone', () => {
   });
 });
 
-describe('Contact multiplataforma (ADR 0057)', () => {
+describe('Contact multiplataforma (ADR 0053)', () => {
   it('username, isBot e claims são opcionais: id, name e phone seguem bastando', () => {
     const contact: Contact = { id: 's', name: null, phone: null };
     expectTypeOf(contact.username).toEqualTypeOf<string | undefined>();

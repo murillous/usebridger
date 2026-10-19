@@ -1,4 +1,4 @@
-// Texto do envio (ADR 0061): a árvore neutra vira o par `text` visível + `formatted`, e o texto
+// Texto do envio (ADR 0057): a árvore neutra vira o par `text` visível + `formatted`, e o texto
 // acima do limite do transport vira várias partes, antes de entrar na fila de saída.
 
 import { type FormattedText, isFormatted, type MessageText, plainText } from '#text/format.ts';
@@ -103,7 +103,7 @@ export class TextLimiter {
     let restOptions: SendOptions | undefined;
     let lastOptions: SendOptions | undefined;
     if (options !== undefined) {
-      // Os botões vão onde a leitura termina, na última parte (ADR 0062).
+      // Os botões vão onde a leitura termina, na última parte (ADR 0058).
       const { quoted: _quoted, actions, ...others } = options;
       restOptions = others;
       lastOptions = actions === undefined ? others : { ...others, actions };

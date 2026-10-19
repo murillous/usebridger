@@ -1,4 +1,4 @@
-// `onExpire` pelo kit (ADR 0097): o autor de plugin vence a espera com os fake timers do Vitest
+// `onExpire` pelo kit (ADR 0093): o autor de plugin vence a espera com os fake timers do Vitest
 // e espera o bot assentar, sem API nova no `TestBot`.
 
 import { command, definePlugin } from '@usebridger/core';

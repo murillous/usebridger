@@ -1,4 +1,4 @@
-// #224 (ADR 0040): o plugin reage, edita, apaga, mostra "digitando", lê e altera grupos, lista
+// #224 (ADR 0036): o plugin reage, edita, apaga, mostra "digitando", lê e altera grupos, lista
 // comandos, vê o contato da sessão e as capabilities, e ouve `contact.updated`, tudo pela API
 // pública, sem `ctx.unsafe.native`.
 
@@ -164,7 +164,7 @@ describe('ctx.groups', () => {
   });
 });
 
-describe('ctx.groups.updateParticipants por ação (ADR 0059)', () => {
+describe('ctx.groups.updateParticipants por ação (ADR 0055)', () => {
   it('cada ação exige a sua capability; demote anda com promote', async () => {
     // Perfil do Telegram/Discord: bot remove e promove, mas não adiciona ninguém.
     const transport = new ActionTransport(['send.text', 'groups.remove', 'groups.promote']);

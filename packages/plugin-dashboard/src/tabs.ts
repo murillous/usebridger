@@ -8,7 +8,7 @@ import type { z } from '@usebridger/core/zod';
 import { sameOrigin } from '#auth.ts';
 import { readLimited } from '#body.ts';
 
-// Contrato do ponto `dashboard.tabs` (ADRs 0108, 0113 e 0118). Quem contribui importa só estes tipos.
+// Contrato do ponto `dashboard.tabs` (ADRs 0104, 0109 e 0114). Quem contribui importa só estes tipos.
 
 /** Cor do valor de um `stats`: `warn` para atenção (atrasado), `danger` para falha, `ok` para sucesso. */
 export type StatTone = 'ok' | 'warn' | 'danger';
@@ -18,7 +18,7 @@ export interface StatItem {
   value: string | number;
   /** Texto menor sob o valor (unidade, variação). */
   hint?: string;
-  /** Sem ele, cor neutra. Tom desconhecido também vira neutro (ADR 0118). */
+  /** Sem ele, cor neutra. Tom desconhecido também vira neutro (ADR 0114). */
   tone?: StatTone;
 }
 
@@ -48,7 +48,7 @@ export interface TableAction {
   run(input: { row: TableRow }): Promise<void>;
 }
 
-/** Campos de todo widget. `title` é o título do cartão; sem ele, o widget não tem título (ADR 0118). */
+/** Campos de todo widget. `title` é o título do cartão; sem ele, o widget não tem título (ADR 0114). */
 interface WidgetBase {
   id: string;
   title?: string;
@@ -91,7 +91,7 @@ declare module '@usebridger/core' {
 
 const ID = /^[a-z0-9-]{1,40}$/;
 const MAX_BODY = 64 * 1024;
-// Corte de resposta (ADR 0108): `load` sem paginação não derruba o browser.
+// Corte de resposta (ADR 0104): `load` sem paginação não derruba o browser.
 const MAX_ROWS = 500;
 const MAX_POINTS = 1000;
 const MAX_STATS = 50;

@@ -1,4 +1,4 @@
-// MP-15 (#280, ADR 0068): erro de configuração (`fatal`) e credencial rejeitada num transport sem
+// MP-15 (#280, ADR 0064): erro de configuração (`fatal`) e credencial rejeitada num transport sem
 // pareamento param o bot. Antes, um token inválido limpava uma sessão inútil e reconectava a
 // cada `minCleanIntervalMs`, para sempre.
 
@@ -145,7 +145,7 @@ describe("Bot: desconexão 'fatal'", () => {
   });
 });
 
-describe('Bot: estado failed (ADR 0120)', () => {
+describe('Bot: estado failed (ADR 0116)', () => {
   // Fatal que chega durante o connect inicial (token ou intents inválidos): o caso principal do #194.
   class FatalOnConnect extends RecordingTransport {
     override async connect(): Promise<void> {

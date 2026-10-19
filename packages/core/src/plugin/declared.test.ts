@@ -1,4 +1,4 @@
-// Manifesto com `commands` e `on` (ADR 0079). Quem escreve em JS não tem o compilador: a
+// Manifesto com `commands` e `on` (ADR 0075). Quem escreve em JS não tem o compilador: a
 // validação do `definePlugin` e do boot é o que aponta o erro.
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';

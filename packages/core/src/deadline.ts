@@ -1,4 +1,4 @@
-// Cancelamento cooperativo (ADR 0033). O JS não mata uma promise: quando o código de um plugin
+// Cancelamento cooperativo (ADR 0029). O JS não mata uma promise: quando o código de um plugin
 // estoura o prazo, o kernel só consegue avisá-lo (`signal`) e recusar o que ele tentar fazer
 // pelo contexto expirado. `Deadline` guarda esse estado para uma execução — um comando, um
 // listener, um job ou o contexto inteiro do plugin.
@@ -8,7 +8,7 @@
  * roteador, o scheduler, o host); o timer de `armTimer` só conta o tempo, sem expirar sozinho.
  *
  * Com `parent` (o `Deadline` de vida do plugin), a execução expira também quando o pai expira:
- * o descarte do plugin alcança os comandos, listeners e jobs dele ainda em andamento (ADR 0033).
+ * o descarte do plugin alcança os comandos, listeners e jobs dele ainda em andamento (ADR 0029).
  * O pai não guarda os filhos: `expired` e `reason` consultam o pai na leitura, e o `signal` só o
  * escuta quando alguém o lê — o caminho quente não paga nada a mais.
  */
@@ -20,7 +20,7 @@ export class Deadline {
   // `AbortController` é a parte cara (EventTarget) no caminho quente de cada mensagem.
   #controller: AbortController | undefined;
   #signal: AbortSignal | undefined;
-  // Envios da execução aguardando a fila de saída: enquanto houver um, o prazo não corre (ADR 0047).
+  // Envios da execução aguardando a fila de saída: enquanto houver um, o prazo não corre (ADR 0043).
   #holds = 0;
   #onHold: ((held: boolean) => void) | undefined;
 
@@ -54,7 +54,7 @@ export class Deadline {
   /**
    * Pausa o prazo enquanto `operation` (um envio pela fila de saída) não assenta: a espera pela
    * taxa anti-ban, o "digitando" e as re-tentativas são do kernel, não do plugin, e a fila tem
-   * tetos próprios (ADR 0047). Devolve uma promise nova, que assenta como `operation`: uma
+   * tetos próprios (ADR 0043). Devolve uma promise nova, que assenta como `operation`: uma
    * rejeição que o plugin ignore continua não tratada, como sem a pausa.
    */
   hold<T>(operation: Promise<T>): Promise<T> {
@@ -120,7 +120,7 @@ export class Deadline {
 
 /**
  * Uma execução com prazo (comando, listener ou job) estourou o tempo. É o `reason` do `signal`
- * abortado: o plugin distingue timeout de outro motivo com `instanceof` (ADR 0033).
+ * abortado: o plugin distingue timeout de outro motivo com `instanceof` (ADR 0029).
  */
 export class ExecutionTimeoutError extends Error {
   override readonly name: string = 'ExecutionTimeoutError';

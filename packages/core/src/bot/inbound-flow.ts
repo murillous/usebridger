@@ -36,7 +36,7 @@ import {
 import { CommandTimeoutError } from './plugin-context.ts';
 
 /**
- * Dono e passo da espera do menu numerado (ADR 0062). O nome não é kebab-case: nenhum plugin o
+ * Dono e passo da espera do menu numerado (ADR 0058). O nome não é kebab-case: nenhum plugin o
  * usa.
  */
 const MENU_OWNER = '#menu';
@@ -55,15 +55,15 @@ export interface InboundFlowDeps {
   /** Portão do boot: `true` com os plugins de pé; senão, a promise do fim do boot (`false` = abortado). */
   readonly ready: () => true | Promise<boolean>;
   readonly reportPluginError: (event: PluginErrorEvent) => void;
-  /** Comandos com `background: true` em andamento (ADR 0087). */
+  /** Comandos com `background: true` em andamento (ADR 0083). */
   readonly background: BackgroundTasks;
-  /** Destino do `message.handled` (ADR 0106). */
+  /** Destino do `message.handled` (ADR 0102). */
   readonly observers: Pick<Observers, 'emit'>;
 }
 
 /**
  * Medida da mensagem para o `message.handled`; só existe quando a entrada mediu a espera na fila,
- * isto é, havia observador no enqueue (ADR 0106).
+ * isto é, havia observador no enqueue (ADR 0102).
  */
 interface Probe {
   readonly queuedMs: number;
@@ -81,7 +81,7 @@ export interface InboundFlow {
   readonly handleEdited: (message: Message) => Promise<void>;
   readonly handleInteraction: (interaction: Interaction, queuedMs?: number) => Promise<void>;
   /**
-   * Expira a espera do remetente no chat, se ela venceu, e roda o `onExpire` do passo (ADR 0097).
+   * Expira a espera do remetente no chat, se ela venceu, e roda o `onExpire` do passo (ADR 0093).
    * Quem chama a põe na fila do chat: é a tarefa da expiração.
    */
   readonly expireReply: (chat: Chat, sender: Contact) => Promise<void>;
@@ -94,7 +94,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
   const log = deps.context.log;
   const contextDeps: MessageContextDeps = { ...deps.context, actions: prepareActions };
   // Mensagem montada a partir de um clique ou comando nativo -> a interação de origem, para o
-  // `ctx.unsafe.raw()` pedir ao transport o objeto bruto dela (ADR 0066). Some com a mensagem.
+  // `ctx.unsafe.raw()` pedir ao transport o objeto bruto dela (ADR 0062). Some com a mensagem.
   const interactions = new WeakMap<Message, Interaction>();
   // O menu numerado espera a resposta pelo mesmo registro dos plugins, então um comando digitado
   // ou outra espera também o cancelam. O passo nunca roda: o `dispatchMessage` trata a escolha.
@@ -103,7 +103,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
   /**
    * Barreiras comuns à mensagem nova e à edição: espera o fim do boot e roda os middlewares em
    * volta de `handle`, que só roda se a mensagem atravessar a cadeia. A volta da cebola espera
-   * `handle` terminar (ADR 0012).
+   * `handle` terminar (ADR 0010).
    */
   async function admit(
     message: Message,
@@ -123,7 +123,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     probe: Probe | undefined,
   ): Promise<void> {
     const { message } = ctx;
-    // A espera vem antes do roteador (ADR 0060). Retirada aqui de todo jeito: um comando digitado
+    // A espera vem antes do roteador (ADR 0056). Retirada aqui de todo jeito: um comando digitado
     // no meio da conversa a cancela e segue para o roteador.
     const pending = conversations.take(message.chat.id, message.sender.id);
     if (pending !== undefined && router.match(message, ctx.text) === null) {
@@ -131,7 +131,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
         await runStep(ctx, pending, probe);
         return;
       }
-      // Um número do menu roda a ação, como o clique; outro texto segue o fluxo normal (ADR 0062).
+      // Um número do menu roda a ação, como o clique; outro texto segue o fluxo normal (ADR 0058).
       const target = menuChoice(ctx, pending.data);
       if (target !== undefined) {
         await runAction(ctx, target, probe);
@@ -179,7 +179,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     const { message } = ctx;
     if (result.status === 'background') {
       // O chat já está livre; a falha, o `command` e o `message.handled` saem quando o `run`
-      // terminar (ADR 0087).
+      // terminar (ADR 0083).
       deps.background.track(
         result.done
           .then((outcome) => afterCommand(ctx, outcome, probe))
@@ -220,7 +220,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     const { plugin, name, invokedAs } = result.command;
     // Antes do `command`, cujo listener é aguardado: a duração é só a do comando.
     handled(ctx, probe, 'command', commandStatus(result.status, timedOut), name);
-    // Com await, como o `message`: o observador segura o chat e entra no `settled()` (ADR 0049).
+    // Com await, como o `message`: o observador segura o chat e entra no `settled()` (ADR 0045).
     await bus.emit('command', { plugin, name, invokedAs, status: result.status, message });
   }
 
@@ -252,7 +252,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
   }
 
   /**
-   * A tarefa da expiração, na fila do chat (ADR 0097). A espera só sai aqui, na vez dela: uma
+   * A tarefa da expiração, na fila do chat (ADR 0093). A espera só sai aqui, na vez dela: uma
    * mensagem do remetente que entrou antes na fila já a consumiu, e aí não há o que expirar. Não
    * passa pelos middlewares, porque não há mensagem; espera o fim do boot, como a mensagem. A
    * falha vira `plugin.error` com `phase: 'step-expire'`.
@@ -278,7 +278,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     }
   }
 
-  // --- Ações e botões (ADR 0062) -------------------------------------------------------------
+  // --- Ações e botões (ADR 0058) -------------------------------------------------------------
 
   /**
    * Resolve as ações de um `reply`: guarda o alvo de cada uma sob um ID e devolve os botões ou,
@@ -362,14 +362,14 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     });
     interactions.set(message, interaction);
     await admit(message, async (ctx) => {
-      // O clique é um comando: cancela a espera do remetente, como o comando digitado (ADR 0060).
+      // O clique é um comando: cancela a espera do remetente, como o comando digitado (ADR 0056).
       conversations.take(chat.id, sender.id);
       await runAction(ctx, target, startProbe(queuedMs));
     });
   }
 
   /**
-   * Comando nativo da plataforma (ADR 0064): roda como o clique num botão de comando, com o texto
+   * Comando nativo da plataforma (ADR 0060): roda como o clique num botão de comando, com o texto
    * livre interpretado como o que vem depois do comando digitado.
    */
   async function handleNativeCommand(
@@ -390,7 +390,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     });
     interactions.set(message, interaction);
     await admit(message, async (ctx) => {
-      // Comando cancela a espera do remetente, como o digitado (ADR 0060).
+      // Comando cancela a espera do remetente, como o digitado (ADR 0056).
       conversations.take(chat.id, sender.id);
       const started = startProbe(queuedMs);
       const result = await router.dispatch(ctx, { command, rawArgs: args });

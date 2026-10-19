@@ -1,4 +1,4 @@
-// Perfis de transport para o kit (ADR 0073): o que cada plataforma declara, para o teste do plugin
+// Perfis de transport para o kit (ADR 0069): o que cada plataforma declara, para o teste do plugin
 // rodar com as mesmas capabilities, limites e formato de contato que o transport real teria. A
 // fonte é a matriz da §6.10 do plano. O `whatsapp` e o `web` são o que o Baileys e o web declaram,
 // e um teste em cada transport confere. Telegram e Discord são previsão até o transport nascer.
@@ -100,7 +100,7 @@ const discord: TransportProfile = {
   sender: { id: 'user@fake', name: 'Usuário', phone: null, username: 'usuario' },
 };
 
-// O que o `@usebridger/transport-web` declara (ADR 0077); um teste lá confere.
+// O que o `@usebridger/transport-web` declara (ADR 0073); um teste lá confere.
 const web: TransportProfile = {
   capabilities: [
     ...COMMON,

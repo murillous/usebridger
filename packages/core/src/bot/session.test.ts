@@ -1,4 +1,4 @@
-// Aceite do M1-20 (#207, ADR 0036): bots de sessões diferentes dividem um storage sem dividir
+// Aceite do M1-20 (#207, ADR 0032): bots de sessões diferentes dividem um storage sem dividir
 // jobs, KV de plugin nem overrides; a mesma sessão não roda duas vezes no mesmo storage.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';

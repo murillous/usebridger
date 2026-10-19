@@ -1,4 +1,4 @@
-// ADR 0109 (#152): sinal `log` dos observadores.
+// ADR 0105 (#152): sinal `log` dos observadores.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PluginErrorEvent } from '#events/types.ts';
@@ -45,7 +45,7 @@ async function startBot(
   return { bot, errors };
 }
 
-describe('ctx.observe("log") (ADR 0109)', () => {
+describe('ctx.observe("log") (ADR 0105)', () => {
   it('entrega a linha do plugin com bindings do filho, nível e hora', async () => {
     const lines: LogSignal[] = [];
     const before = Date.now();

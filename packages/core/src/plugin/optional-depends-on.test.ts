@@ -1,4 +1,4 @@
-// `optionalDependsOn` (#84, ADR 0099): ordena como o `after` e é validado no manifesto.
+// `optionalDependsOn` (#84, ADR 0095): ordena como o `after` e é validado no manifesto.
 
 import { describe, expect, it } from 'vitest';
 import { manifestIssues } from './define.ts';

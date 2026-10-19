@@ -1,4 +1,4 @@
-// Contrato da trava com validade (ADR 0074). Dois donos no mesmo port fazem o papel de dois
+// Contrato da trava com validade (ADR 0070). Dois donos no mesmo port fazem o papel de dois
 // processos: o que se verifica é a decisão atômica do adapter, não o transporte até o banco.
 
 import assert from 'node:assert/strict';

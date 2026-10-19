@@ -1,4 +1,4 @@
-// Teto de execuções simultâneas de um comando (ADR 0088).
+// Teto de execuções simultâneas de um comando (ADR 0084).
 
 import { describe, expect, it } from 'vitest';
 import { deferred } from '#bot/harness.test-support.ts';

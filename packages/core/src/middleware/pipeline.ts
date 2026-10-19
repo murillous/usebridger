@@ -55,7 +55,7 @@ const RESOLVED: Promise<void> = Promise.resolve();
 const NOOP = (): void => undefined;
 
 /**
- * Primeiro estágio do fluxo de mensagem (ADR 0012). A ordem é calculada em `use`/remoção,
+ * Primeiro estágio do fluxo de mensagem (ADR 0010). A ordem é calculada em `use`/remoção,
  * não a cada mensagem: `run` só percorre um array pronto.
  */
 export class MiddlewarePipeline<C extends MessageContext = MessageContext> {
@@ -102,7 +102,7 @@ export class MiddlewarePipeline<C extends MessageContext = MessageContext> {
    * rejeitam a promise: o destino deles é de quem executa o pipeline.
    *
    * `terminal` é o estágio mais interno: roda quando o último middleware chama `next()`, e a
-   * volta da cebola espera por ele. É onde o kernel põe comando e listeners (ADR 0012).
+   * volta da cebola espera por ele. É onde o kernel põe comando e listeners (ADR 0010).
    *
    * Com `timeoutMs`, um middleware que estoura o prazo rejeita o `run` com
    * `MiddlewareTimeoutError`, e a mensagem para ali: um `next()` chamado depois disso rejeita

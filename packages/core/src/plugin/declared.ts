@@ -1,4 +1,4 @@
-// Açúcar do manifesto (ADR 0079): `commands` e `on` viram as chamadas que o `setup` faria à mão.
+// Açúcar do manifesto (ADR 0075): `commands` e `on` viram as chamadas que o `setup` faria à mão.
 // Não há segundo caminho de execução: o comando passa pelo mesmo `ctx.commands.add`, com prazo,
 // recusa e teardown iguais aos da forma longa.
 

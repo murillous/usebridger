@@ -2,10 +2,10 @@
 
 Guia de design e de sistema do `@usebridger/plugin-dashboard` (M5-4, #151). Quem mexer na
 interface ou criar uma aba nova segue este documento e o canvas. Decisões de base:
-[ADR 0021](../../../docs/adr/0021-dashboard-vira-plugin.md),
-[ADR 0076](../../../docs/adr/0076-http-do-core.md),
-[ADR 0096](../../../docs/adr/0096-pontos-de-extensao-em-servicos.md) e
-[ADR 0107](../../../docs/adr/0107-plugins-oficiais-de-metricas-e-dashboard.md).
+[ADR 0019](../../../docs/adr/0019-dashboard-vira-plugin.md),
+[ADR 0072](../../../docs/adr/0072-http-do-core.md),
+[ADR 0092](../../../docs/adr/0092-pontos-de-extensao-em-servicos.md) e
+[ADR 0103](../../../docs/adr/0103-plugins-oficiais-de-metricas-e-dashboard.md).
 
 ## Canvas
 
@@ -122,8 +122,8 @@ Abaixo de 768 px a sidebar sai e entra a barra inferior (TabBar).
   (config atual inválida, lida do GET de cada plugin) ou "falhou" (setup falhou) na lista;
   secret só leitura com chips `secret`/origem e o nome real da variável (`BRIDGER_<PLUGIN>__<CAMPO>`);
   dica de tipo do schema sob cada campo; "Salvar recarrega X e N dependente(s)" calculado do
-  `dependsOn` dos plugins (limite: dependentes por `optionalDependsOn`, que o core também recarrega, não entram na contagem, porque a linha do plugin não os expõe). O `PUT` da config segue recusando secret (ADR 0111).
-- **Config, secret cifrado (ADR 0121):** o manifesto (`GET /api/config/:plugin`) leva `secretsWritable`
+  `dependsOn` dos plugins (limite: dependentes por `optionalDependsOn`, que o core também recarrega, não entram na contagem, porque a linha do plugin não os expõe). O `PUT` da config segue recusando secret (ADR 0107).
+- **Config, secret cifrado (ADR 0117):** o manifesto (`GET /api/config/:plugin`) leva `secretsWritable`
   e o schema marca o campo com `x-bridger-set-secret`. "Substituir" abre um `<input type="password">`
   (largura total no celular) e salva por `PUT /api/config/:plugin/secrets/:path` com `{ "value": ... }`;
   "Remover" (só com fonte `secret`) usa `DELETE` na mesma rota e funciona sem chave mestra. Fonte `env`
@@ -145,11 +145,11 @@ funcione no hover.
 ## Sistema: extensão por abas
 
 O dashboard é fechado para modificação e aberto para extensão: outro plugin acrescenta uma aba
-sem tocar no código do dashboard, pelo ponto de extensão `dashboard.tabs` (ADR 0096). As abas do
+sem tocar no código do dashboard, pelo ponto de extensão `dashboard.tabs` (ADR 0092). As abas do
 próprio dashboard (Visão geral, Métricas, Plugins, Configuração) são as únicas que ele desenha à
 mão; as de plugins entram no grupo Extensões da sidebar.
 
-O contrato está no [ADR 0108](../../../docs/adr/0108-abas-do-dashboard-por-ponto-de-extensao.md).
+O contrato está no [ADR 0104](../../../docs/adr/0104-abas-do-dashboard-por-ponto-de-extensao.md).
 O resumo para quem desenha ou implementa:
 
 ```text
@@ -166,21 +166,21 @@ browser ──HTTP (autenticação do dashboard)──▶ plugin-dashboard ─�
   plugin só devolve dados; o dashboard desenha com os componentes deste guia, inclusive no celular.
   O `form` usa o mesmo gerador da config (M5-4.2), com o mesmo mascaramento de secret.
 - **Chave `<plugin>/<id>`:** o dono vem do registry, não da aba.
-- **Ciclo de vida de graça:** reload, disable ou falha de quem contribuiu tira a aba (ADR 0096). Aba
+- **Ciclo de vida de graça:** reload, disable ou falha de quem contribuiu tira a aba (ADR 0092). Aba
   que sumiu responde 404 e mostra "aba não está mais disponível".
 - **Erro por widget:** `load`, `run` ou `submit` que falha mostra o erro só naquele widget; `submit`
   inválido mostra as issues do Zod junto dos campos.
 - **Métricas não precisam de aba.** Métrica registrada no serviço `metrics` já aparece na seção
-  genérica (ADR 0107). Aba é para o que não é métrica: listas, ações, formulários.
+  genérica (ADR 0103). Aba é para o que não é métrica: listas, ações, formulários.
 
 ## Métricas e abas de plugin: diferenças aceitas do canvas
 
 Conferidas na M5-4.8 (#180). O canvas é ilustrativo; o que o contrato ou o core não sustenta fica de fora:
 
-- **Painel "Fila de saída"**: lê `bridger.outbound.pending`, gauge amostrado a cada flush (ADR 0117); o painel mostra o máximo por dia. "Envios por dia" deixou de ter painel; a métrica `bridger.outbound.sent` segue na tabela.
-- **Coluna "Plugin" da tabela de métricas**: vem de `metrics.ownerOf(nome)`, gravado pelo serviço `metrics` com escopo por quem chama (ADR 0116); as métricas do kernel saem como `core` e as sem dono, como `-`. A contagem de séries fica no texto, ao lado do nome.
+- **Painel "Fila de saída"**: lê `bridger.outbound.pending`, gauge amostrado a cada flush (ADR 0113); o painel mostra o máximo por dia. "Envios por dia" deixou de ter painel; a métrica `bridger.outbound.sent` segue na tabela.
+- **Coluna "Plugin" da tabela de métricas**: vem de `metrics.ownerOf(nome)`, gravado pelo serviço `metrics` com escopo por quem chama (ADR 0112); as métricas do kernel saem como `core` e as sem dono, como `-`. A contagem de séries fica no texto, ao lado do nome.
 - **Latência em ms**: a métrica real é `bridger.messages.handle_duration_ms`, o canvas mostra `_seconds`.
-- **Etiqueta de widget** ("widget: table + action"): anotação do canvas. Título por widget, tom em `stats` e rótulo do botão do form entraram no contrato (ADR 0118).
+- **Etiqueta de widget** ("widget: table + action"): anotação do canvas. Título por widget, tom em `stats` e rótulo do botão do form entraram no contrato (ADR 0114).
 - **Painel "Como o plugin declara esta aba"**: documentação do canvas, não faz parte do app.
 
 ## Visão geral: o que o core ainda não expõe

@@ -1,4 +1,4 @@
-// Pontos de extensão no registry (#83, ADR 0096): a contribuição é atribuída a quem contribuiu e
+// Pontos de extensão no registry (#83, ADR 0092): a contribuição é atribuída a quem contribuiu e
 // sai com ele, sem o serviço que oferece o ponto cuidar disso.
 
 import { describe, expect, it } from 'vitest';

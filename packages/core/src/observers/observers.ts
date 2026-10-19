@@ -1,4 +1,4 @@
-// Observadores do core (ADR 0106): sinais por unidade de trabalho para métricas, síncronos e
+// Observadores do core (ADR 0102): sinais por unidade de trabalho para métricas, síncronos e
 // nunca aguardados. Não usam o barramento, cujo listener segura o chat, nem o
 // `diagnostics_channel`, que é global ao processo.
 

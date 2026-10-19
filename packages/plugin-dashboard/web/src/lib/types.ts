@@ -58,7 +58,7 @@ export interface PluginRow {
   unregistered?: { command: string }[];
   /** `dependsOn` do manifesto: nome → faixa semver. */
   dependsOn?: Record<string, string>;
-  /** `optionalDependsOn` do manifesto: o reload em cascata do core também o segue (ADR 0099). */
+  /** `optionalDependsOn` do manifesto: o reload em cascata do core também o segue (ADR 0095). */
   optionalDependsOn?: Record<string, string>;
   /** Duração do contexto + `setup` em ms (só em plugin carregado). */
   setupMs?: number;
@@ -107,11 +107,11 @@ export interface ConfigResponse {
   view: { config: unknown; messages: unknown; sources: Record<string, string> } | null;
   schema: Record<string, unknown> | null;
   issues?: ConfigIssue[];
-  /** Há chave mestra: o core aceita `setSecret` (ADR 0121). */
+  /** Há chave mestra: o core aceita `setSecret` (ADR 0117). */
   secretsWritable?: boolean;
 }
 
-// Manifesto de `GET /api/tabs` (ADR 0108): o servidor tira as funções; o `form` leva o JSON Schema.
+// Manifesto de `GET /api/tabs` (ADR 0104): o servidor tira as funções; o `form` leva o JSON Schema.
 export interface TabAction {
   id: string;
   label: string;

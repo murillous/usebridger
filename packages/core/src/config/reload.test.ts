@@ -123,7 +123,7 @@ describe('reload por mudança de config', () => {
   });
 
   it('o segredo inicial e o alterado no reload nunca aparecem no log', async () => {
-    // Segredo não entra por override (ADR 0032): vem do arquivo, e o reload é disparado por
+    // Segredo não entra por override (ADR 0028): vem do arquivo, e o reload é disparado por
     // um override de campo comum.
     const { host, configs, raw, calls } = harness({ echo: { token: 'tok-novo-999' } });
     await host.start();

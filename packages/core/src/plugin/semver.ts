@@ -1,4 +1,4 @@
-// Subconjunto de semver suficiente para `engine` e `dependsOn` (ADR 0016): versões
+// Subconjunto de semver suficiente para `engine` e `dependsOn` (ADR 0014): versões
 // `M.m.p[-pre][+build]` e faixas com `^`, `~`, `>=`, `>`, `<=`, `<`, `=`, curingas (`x`, `X`,
 // `*`, versão parcial), comparadores separados por espaço (E) e `||` (OU). Faixas com hífen
 // (`1.0.0 - 2.0.0`) ficam de fora. Implementado aqui em vez do pacote `semver` para o core não

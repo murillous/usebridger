@@ -1,4 +1,4 @@
-// Série recorrente do scheduler (ADR 0104) pelo kit: o autor de plugin avança a série com os fake
+// Série recorrente do scheduler (ADR 0100) pelo kit: o autor de plugin avança a série com os fake
 // timers do Vitest, sem API nova no `TestBot`.
 
 import { definePlugin, type RecurrenceRule } from '@usebridger/core';

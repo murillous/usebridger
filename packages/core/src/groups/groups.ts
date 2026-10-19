@@ -1,4 +1,4 @@
-// `ctx.groups` (ADR 0040): leitura dos metadados direto no transport; alteração de participantes
+// `ctx.groups` (ADR 0036): leitura dos metadados direto no transport; alteração de participantes
 // é tráfego e passa pela fila de saída, como as ações de `ctx.send`.
 
 import type { EnqueueAction } from '#outbound/actions.ts';
@@ -9,7 +9,7 @@ import type { GroupMetadata, GroupParticipantAction, Transport } from '#transpor
 export interface Groups {
   /**
    * Nome, descrição e participantes do grupo (capability `groups`). `participants` fica ausente
-   * onde a plataforma não lista membros (ADR 0059). Sem cache: cada chamada consulta o transport.
+   * onde a plataforma não lista membros (ADR 0055). Sem cache: cada chamada consulta o transport.
    */
   metadata(groupId: string): Promise<GroupMetadata>;
   /**

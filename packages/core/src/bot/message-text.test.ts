@@ -1,4 +1,4 @@
-// `ctx.t` (ADR 0092): as `messages` do plugin com `{prefix}` do chat e os valores do plugin, no
+// `ctx.t` (ADR 0088): as `messages` do plugin com `{prefix}` do chat e os valores do plugin, no
 // comando, no passo e no listener de mensagem.
 
 import { afterEach, describe, expect, it } from 'vitest';
@@ -63,7 +63,7 @@ async function start(env: Record<string, string> = {}) {
   return { bot, transport, say };
 }
 
-describe('ctx.t (ADR 0092)', () => {
+describe('ctx.t (ADR 0088)', () => {
   it('preenche {prefix} com o do chat, que acompanha o prefixes.set', async () => {
     const { transport, say } = await start();
     await say('!sticker');

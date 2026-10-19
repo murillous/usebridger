@@ -5,7 +5,7 @@ detalhe; o porquê está nos [ADRs](../../../docs/adr/README.md).
 
 ## O que o core é
 
-Uma biblioteca, não um runner ([ADR 0034](../../../docs/adr/0034-biblioteca-sem-runner.md)): o
+Uma biblioteca, não um runner ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md)): o
 app importa `createBot`, passa transport, storage e plugins, e chama `start()`. Importar o core
 não tem efeito colateral: nada conecta, agenda timer ou cria logger antes do `start()`.
 
@@ -69,7 +69,7 @@ O que vale para onde, de fora para dentro:
 
 | Escopo | O que fica nele | Guia |
 | --- | --- | --- |
-| Processo | O `HttpServer` (`createHttp`), dividido por todos os bots; nada mais é global ([ADR 0004](../../../docs/adr/0004-uma-sessao-por-processo.md)) | [HTTP](http.md) |
+| Processo | O `HttpServer` (`createHttp`), dividido por todos os bots; nada mais é global ([ADR 0003](../../../docs/adr/0003-uma-sessao-por-processo.md)) | [HTTP](http.md) |
 | Bot (sessão) | Filas, barramento, roteador, host de plugins, scheduler, logger. Tudo o que persiste fica sob o nome da sessão, e uma trava impede dois processos na mesma sessão | [Bot → Sessão](bot.md#sessão) |
 | Plugin | Namespace de storage, rotas `/plugins/<nome>`, comandos, listeners e jobs registrados pelo contexto, desfeitos no `teardown`/reload | [Plugins](plugins.md) |
 | Tenant | Com `chat.tenantId`, o `ctx.storage` do plugin vai ao namespace do tenant em tudo o que o handler dispara | [Storage → Tenants](storage.md#tenants) |
@@ -85,7 +85,7 @@ O que vale para onde, de fora para dentro:
 - **Erro de plugin não derruba o bot.** Exceção ou prazo estourado em comando, listener, passo,
   job ou rota vira `plugin.error` e uma linha de log; o chat segue. Erro de manifesto, conflito
   de nomes, ciclo de dependências, plugin incompatível ou `setup` que falha derrubam o boot, antes
-  de o transport conectar ([ADR 0102](../../../docs/adr/0102-plugin-falho-derruba-o-boot.md)).
+  de o transport conectar ([ADR 0098](../../../docs/adr/0098-plugin-falho-derruba-o-boot.md)).
 - **Capabilities decidem o que roda.** O plugin declara em `requires` o que é essencial (sem ele,
   o boot para) e confere o opcional em `ctx.capabilities`. Uso de capability ausente lança
   `UnsupportedError`. → [Transport → Capabilities](transport.md#capabilities)

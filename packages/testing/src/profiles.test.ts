@@ -50,7 +50,7 @@ const convite = () =>
     },
   });
 
-describe('PROFILES (ADR 0073)', () => {
+describe('PROFILES (ADR 0069)', () => {
   it('cada perfil declara só capabilities do core, sem repetição', () => {
     for (const name of PROFILE_NAMES) {
       const { capabilities } = PROFILES[name];
@@ -133,7 +133,7 @@ describe('createTestBot com perfil', () => {
   });
 
   it('o perfil vale também no transport passado à mão', async () => {
-    // Sem `quoted` (o web real o declara desde o ADR 0077): a resposta sai sem citar.
+    // Sem `quoted` (o web real o declara desde o ADR 0073): a resposta sai sem citar.
     const capabilities = PROFILES.web.capabilities.filter((c) => c !== 'quoted');
     const transport = new FakeTransport({ profile: 'web', capabilities });
     const bot = await testBot({ transport, plugins: [quem()] });

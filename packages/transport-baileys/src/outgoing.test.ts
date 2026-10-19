@@ -12,7 +12,7 @@ const CAROL_LID = '333333333333333@lid';
 const media = Buffer.from('bytes');
 
 describe('toContent', () => {
-  it('renderiza a árvore neutra no texto e na legenda, juntando as menções (ADR 0061)', () => {
+  it('renderiza a árvore neutra no texto e na legenda, juntando as menções (ADR 0057)', () => {
     const alice = mention({ id: ALICE, name: 'Alice', phone: null });
     expect(
       toContent(
@@ -87,7 +87,7 @@ describe('toContent', () => {
     expect(toContent({ type: 'text', text: 'oi' }, { mentions: [] })).toEqual({ text: 'oi' });
   });
 
-  it('álbum lança UnsupportedError: sem send.album, a fila envia item a item (ADR 0065)', () => {
+  it('álbum lança UnsupportedError: sem send.album, a fila envia item a item (ADR 0061)', () => {
     const items = [
       { type: 'image', media },
       { type: 'image', media },

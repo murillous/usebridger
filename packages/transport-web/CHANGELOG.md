@@ -101,7 +101,7 @@
 
 ### Minor Changes
 
-- e190d3e: Release de teste do fluxo `develop` → `main` com Trusted Publishing (ADR 0085), sem mudança de API em relação à 0.1.0.
+- e190d3e: Release de teste do fluxo `develop` → `main` com Trusted Publishing (ADR 0081), sem mudança de API em relação à 0.1.0.
 
 ### Patch Changes
 
@@ -112,7 +112,7 @@
 
 ### Minor Changes
 
-- dc81875: Pacote novo (ADR 0077): transport para o chatbot dentro de um sistema web próprio. A fábrica
+- dc81875: Pacote novo (ADR 0073): transport para o chatbot dentro de um sistema web próprio. A fábrica
   `web({ auth, tenantClaim?, origins?, media? })` registra as rotas do transport no HTTP do core
   (`GET /chat` em WebSocket, `POST /media`, `GET /media/:id`) e exige `http` no `createBot`. O widget
   se autentica com o JWT do sistema do dono no primeiro frame, validado pelo `jose` (`HS256` com
@@ -125,7 +125,7 @@
 
 ### Patch Changes
 
-- 5c864c2: O projeto se chama Bridger, com os pacotes no escopo `@usebridger/*` e o scaffold `create-bridger-plugin` (ADR 0083). A config de plugin lê variáveis com prefixo `BRIDGER_`, a anotação de campo não editável por override é `x-bridger-override`, plugins seguem o prefixo `bridger-plugin-` e o schema Postgres padrão é `bridger`. O repositório passa a ser `murillous/usebridger`.
+- 5c864c2: O projeto se chama Bridger, com os pacotes no escopo `@usebridger/*` e o scaffold `create-bridger-plugin` (ADR 0079). A config de plugin lê variáveis com prefixo `BRIDGER_`, a anotação de campo não editável por override é `x-bridger-override`, plugins seguem o prefixo `bridger-plugin-` e o schema Postgres padrão é `bridger`. O repositório passa a ser `murillous/usebridger`.
 - a8482ee: Metadados de publicação no `package.json`: `repository` (com a pasta do pacote), `homepage`, `bugs` e acesso público. As dependências entre pacotes `@usebridger/*` passam a sair como `^<versão>` em vez da versão exata.
 - Updated dependencies [b7eb3a7]
 - Updated dependencies [70220de]

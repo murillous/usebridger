@@ -159,7 +159,7 @@ describe('roteador: match', () => {
     expect(calls[0]?.args).toEqual(['linha', '1', 'linha', '2']);
   });
 
-  it('com prefixo vazio, a primeira palavra é o token (ADR 0063)', async () => {
+  it('com prefixo vazio, a primeira palavra é o token (ADR 0059)', async () => {
     const router = createCommandRouter({ prefix: '' });
     const { def, calls } = spyCommand();
     router.registry.add('media', def);
@@ -569,7 +569,7 @@ describe('roteador: erros', () => {
   });
 });
 
-describe('roteador: background (ADR 0087)', () => {
+describe('roteador: background (ADR 0083)', () => {
   const MATCHED = { plugin: 'media', name: 'baixar', invokedAs: 'baixar' };
 
   it('devolve antes de o run terminar, e done assenta com ran', async () => {
@@ -735,7 +735,7 @@ describe('roteador: texto de trabalho ctx.text (M1-16.2)', () => {
   });
 });
 
-describe('roteador: comando dado, sem casar o texto (ADR 0062)', () => {
+describe('roteador: comando dado, sem casar o texto (ADR 0058)', () => {
   it('roda o comando pelo nome ou alias, com os args como vieram e o rawArgs unido', async () => {
     const router = createCommandRouter();
     const { def, calls } = spyCommand();
@@ -751,7 +751,7 @@ describe('roteador: comando dado, sem casar o texto (ADR 0062)', () => {
     expect(calls[0]?.rawArgs).toBe('a b c');
   });
 
-  it('com rawArgs (comando nativo, ADR 0064), interpreta o texto como o do comando digitado', async () => {
+  it('com rawArgs (comando nativo, ADR 0060), interpreta o texto como o do comando digitado', async () => {
     const router = createCommandRouter();
     const { def, calls } = spyCommand();
     router.registry.add('p', def);

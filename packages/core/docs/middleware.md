@@ -1,6 +1,6 @@
 # Middlewares
 
-Primeiro estágio do fluxo de uma mensagem ([ADR 0012](../../../docs/adr/0012-pipeline-de-3-estagios.md)):
+Primeiro estágio do fluxo de uma mensagem ([ADR 0010](../../../docs/adr/0010-pipeline-de-3-estagios.md)):
 middlewares → comando → listeners. Um middleware vê o contexto antes de todo o resto e pode
 barrar a mensagem, enriquecer o contexto ou medir o que acontece depois dele.
 
@@ -44,7 +44,7 @@ Regras:
 
 O middleware roda dentro da tarefa da fila do chat: preso, ele seguraria as próximas mensagens
 daquele chat. Por isso, no bot, cada um tem `timeouts.middlewareMs` (padrão 30 s;
-[ADR 0043](../../../docs/adr/0043-prazo-de-middleware.md)).
+[ADR 0039](../../../docs/adr/0039-prazo-de-middleware.md)).
 
 - O relógio conta **só o tempo do próprio middleware**. Ele para no `next()` e volta, com o que
   sobrou, quando o `next()` termina: um comando lento lá dentro não estoura o middleware de fora.
@@ -83,7 +83,7 @@ ligados, `chatFilter` e `rateLimit` quando configurados. Erro de middleware vai 
 
 ## Pipeline
 
-`MiddlewarePipeline` é peça interno do kernel, não exportado ([ADR 0034](../../../docs/adr/0034-biblioteca-sem-runner.md)); o app passa os middlewares em
+`MiddlewarePipeline` é peça interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md)); o app passa os middlewares em
 `createBot({ middlewares })`. Para quem mexe no core:
 
 ```ts

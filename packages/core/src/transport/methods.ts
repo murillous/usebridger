@@ -1,4 +1,4 @@
-// Coerência entre as capabilities e os métodos do transport (ADR 0080). Quem escreve o adapter em
+// Coerência entre as capabilities e os métodos do transport (ADR 0076). Quem escreve o adapter em
 // JS não tem o compilador: sem esta checagem, o método faltando só apareceria como `TypeError` no
 // meio do kernel, e a capability com erro de digitação passaria em silêncio.
 

@@ -43,7 +43,7 @@ export function resolveTransport(
       });
     }
   }
-  // Capability sem o método dela só falharia quando um plugin a usasse (ADR 0080).
+  // Capability sem o método dela só falharia quando um plugin a usasse (ADR 0076).
   const issues = transportIssues(resolved);
   if (issues.length > 0) {
     throw new BotConfigError(`transport inválido:\n- ${issues.join('\n- ')}`);

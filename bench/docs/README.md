@@ -1,7 +1,7 @@
 # Benchmark — documentação
 
 Mede as metas de performance do [plano §7](../../BRIDGER_PLAN.md#7-metas-de-performance)
-([ADR 0030](../../docs/adr/0030-metas-de-performance.md)) sobre o `FakeTransport`, sem rede.
+([ADR 0027](../../docs/adr/0027-metas-de-performance.md)) sobre o `FakeTransport`, sem rede.
 
 ## Rodar
 
@@ -40,7 +40,7 @@ Todos os cenários usam o mesmo bot (`src/workload.ts`), montado com o `createTe
 - Middlewares oficiais (`ignoreSelf`, `sanitize`), mais `rateLimit` por remetente com teto alto,
   `chatFilter` com uma lista de bloqueio e um middleware do app.
 - Fila de saída com `globalIntervalMs` e `chatIntervalMs` em 0
-  ([ADR 0047](../../docs/adr/0047-espera-na-fila-de-saida-fora-do-prazo.md)): a taxa anti-ban é
+  ([ADR 0043](../../docs/adr/0043-espera-na-fila-de-saida-fora-do-prazo.md)): a taxa anti-ban é
   política e dominaria a medida.
 
 A carga alterna três mensagens em 500 chats: `!ping` (comando que responde), `oi` (um listener
@@ -57,7 +57,7 @@ coisa.
 | Cenário | Meta | O que mede |
 | --- | --- | --- |
 | `overhead` | p99 < 1 ms | Uma mensagem por vez, do `emit` do transport até o `bot.settled()`: middlewares, roteador, listeners e fila de saída. 20 mil mensagens depois de 5 mil de aquecimento |
-| `overhead-observed` | p99 < 1 ms | O `overhead` com um observador vazio em `message.handled` e em `outbound.sent` (ADR 0106) |
+| `overhead-observed` | p99 < 1 ms | O `overhead` com um observador vazio em `message.handled` e em `outbound.sent` (ADR 0102) |
 | `throughput` | ≥ 5.000 msg/s | Rajadas de 5 mil mensagens (10 por chat), esperando o bot assentar entre elas. 200 mil mensagens depois de 20 mil de aquecimento |
 | `idle-memory` | < 80 MB | RSS do processo com o bot no ar e ocioso, depois de um `gc()` |
 | `memory-growth` | < 5 MB | Heap depois de 1M mensagens menos o heap depois de 100 mil de aquecimento, ambos após `gc()` |
@@ -86,7 +86,7 @@ Com `--baseline <dir>`, o runner recebe um checkout da base já buildado (`pnpm 
 cenário, base e commit testado se revezam execução a execução, e a ordem dentro do par inverte a
 cada rodada (base, testado; testado, base; ...). Um aquecimento da máquina, um vizinho no runner
 ou uma mudança de frequência da CPU no meio do benchmark pesam igual nos dois lados, em vez de
-cair inteiros num deles ([ADR 0089](../../docs/adr/0089-benchmark-intercalado.md)).
+cair inteiros num deles ([ADR 0085](../../docs/adr/0085-benchmark-intercalado.md)).
 
 A comparação usa o **quartil bom** de cada lado, no sentido da meta: o p25 num teto (`overhead`,
 `idle-memory`, `boot`), o p75 num piso (`throughput`). O ruído da máquina puxa a medida para o lado
@@ -142,8 +142,8 @@ ainda é maior que o que você quer medir.
 ## No CI
 
 O job `Benchmark` (`.github/workflows/ci.yml`) mede o baseline no próprio runner
-([ADR 0054](../../docs/adr/0054-baseline-do-benchmark.md)), intercalado com o commit testado
-([ADR 0089](../../docs/adr/0089-benchmark-intercalado.md)). Entre máquinas diferentes, a
+([ADR 0050](../../docs/adr/0050-baseline-do-benchmark.md)), intercalado com o commit testado
+([ADR 0085](../../docs/adr/0085-benchmark-intercalado.md)). Entre máquinas diferentes, a
 variação passa dos 10%, então um baseline versionado ou de outro job não serviria.
 
 1. `Build da base`: faz o build do primeiro pai do commit testado num `git worktree`. No PR, o

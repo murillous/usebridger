@@ -23,7 +23,7 @@ export interface Field {
   required: boolean;
   /** Campo `secret`: só máscara, nunca entra no PUT. */
   secret: boolean;
-  /** `x-bridger-set-secret` (ADR 0121): o core aceita `setSecret` neste campo (há chave mestra). */
+  /** `x-bridger-set-secret` (ADR 0117): o core aceita `setSecret` neste campo (há chave mestra). */
   settable: boolean;
   options?: string[];
   /** Exemplo do schema (`examples[0]`), usado como placeholder. */

@@ -1,4 +1,4 @@
-// Métricas do kernel (observadores do ADR 0106), ativos por dia e GET /metrics.
+// Métricas do kernel (observadores do ADR 0102), ativos por dia e GET /metrics.
 
 import { command, createHttp, definePlugin, type PluginDefinition } from '@usebridger/core';
 import { createTestBot } from '@usebridger/testing';

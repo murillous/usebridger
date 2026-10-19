@@ -88,7 +88,7 @@ describe('createUnsafeAccess', () => {
   });
 });
 
-describe('createUnsafeAccess: raw (ADR 0066)', () => {
+describe('createUnsafeAccess: raw (ADR 0062)', () => {
   const message = { id: 'm1' } as unknown as Message;
   const interaction = { id: 'i1' } as unknown as Interaction;
 

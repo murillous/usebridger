@@ -1,4 +1,4 @@
-// Middleware do app roda dentro da tarefa da fila do chat (ADR 0042): sem prazo, um que trava
+// Middleware do app roda dentro da tarefa da fila do chat (ADR 0038): sem prazo, um que trava
 // seguraria o chat para sempre (#239). O prazo conta só o tempo do próprio middleware, fora do
 // `next()`: comando e listeners no centro da cebola já têm os deles.
 

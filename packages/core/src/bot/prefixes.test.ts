@@ -1,4 +1,4 @@
-// Prefixo por tipo de chat e por chat, e o `/cmd@bot` do Telegram (ADR 0063, #276).
+// Prefixo por tipo de chat e por chat, e o `/cmd@bot` do Telegram (ADR 0059, #276).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { command } from '#commands/command.ts';
@@ -68,7 +68,7 @@ async function startBot(
   return bot;
 }
 
-describe('Bot: prefixo por tipo de chat e por chat (ADR 0063)', () => {
+describe('Bot: prefixo por tipo de chat e por chat (ADR 0059)', () => {
   it('um padrão por tipo: sem prefixo na conversa individual, `!` no grupo', async () => {
     const transport = new RecordingTransport();
     const bot = await startBot(transport, [ajuda()], { prefix: { dm: '' } });

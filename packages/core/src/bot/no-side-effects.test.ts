@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { TestTransport } from '#transport/fake-transport.test-support.ts';
 
-// ADR 0004: importar o core não pode abrir recurso, agendar timer, ouvir sinal nem criar global.
+// ADR 0003: importar o core não pode abrir recurso, agendar timer, ouvir sinal nem criar global.
 const watchedEvents = ['SIGINT', 'SIGTERM', 'exit', 'beforeExit', 'uncaughtException'] as const;
 
 // Escritas no stdio/IPC do worker do Vitest aparecem e somem a qualquer momento: são ruído.
@@ -54,7 +54,7 @@ it('importar @usebridger/core não tem side effect', async () => {
   expectNoSideEffect(before);
 });
 
-// ADR 0034: o mesmo vale para os outros pontos de entrada.
+// ADR 0030: o mesmo vale para os outros pontos de entrada.
 it.each([
   ['@usebridger/core/adapter', () => import('@usebridger/core/adapter')],
   ['@usebridger/core/storage-contract', () => import('@usebridger/core/storage-contract')],
@@ -75,7 +75,7 @@ it('createBot() não tem side effect até o start()', async () => {
   expectNoSideEffect(before);
 });
 
-// ADR 0037: a fábrica do transport roda no createBot, e o logger que ela recebe não pode nascer ali.
+// ADR 0033: a fábrica do transport roda no createBot, e o logger que ela recebe não pode nascer ali.
 it('createBot() com transport por fábrica não tem side effect até o start()', async () => {
   const { createBot } = await import('@usebridger/core');
   const before = snapshot();

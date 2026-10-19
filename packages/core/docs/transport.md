@@ -3,9 +3,9 @@
 O `Transport` é a porta entre o kernel e um canal de mensageria: WhatsApp, Telegram, Discord ou
 um chat web próprio. O core só conhece a interface; cada adapter traduz o formato nativo para os
 tipos normalizados, e nada do contrato supõe uma plataforma. Porquê:
-[ADR 0003](../../../docs/adr/0003-transport-abstrato.md),
-[ADR 0010](../../../docs/adr/0010-capabilities-do-transporte.md),
-[ADR 0011](../../../docs/adr/0011-escape-hatch-unsafe-native.md).
+[ADR 0002](../../../docs/adr/0002-transport-abstrato.md),
+[ADR 0008](../../../docs/adr/0008-capabilities-do-transporte.md),
+[ADR 0009](../../../docs/adr/0009-escape-hatch-unsafe-native.md).
 
 ## A interface
 
@@ -38,7 +38,7 @@ interface Transport {
 
 `connect()` inicia uma tentativa de conexão e resolve assim que ela começou (socket criado), sem
 esperar o `open`; rejeita só se nem deu para começar. O resto chega por `connection.status`
-([ADR 0048](../../../docs/adr/0048-connect-resolve-ao-iniciar.md)):
+([ADR 0044](../../../docs/adr/0044-connect-resolve-ao-iniciar.md)):
 
 - `open` quando dá para enviar. O `Bot` só despacha a fila de saída depois do primeiro `open`:
   um transport que nunca o emite não envia nada.
@@ -56,7 +56,7 @@ quem escreve uma classe implementa os das capabilities que declara e faz o resto
 `createBot` recusa com `BotConfigError` o transport que declara uma capability sem o método dela
 (`reactions` sem `react`), que declara uma capability desconhecida ou que não tem `connect`,
 `disconnect`, `on` ou `send`
-([ADR 0080](../../../docs/adr/0080-acucar-para-o-autor-de-transport.md)).
+([ADR 0076](../../../docs/adr/0076-acucar-para-o-autor-de-transport.md)).
 
 ## Forma curta: `defineTransport`
 
@@ -123,23 +123,23 @@ Onde a plataforma tem telefone, é o `phone` que liga os dois:
   como resolvê-lo, vai `null`.
 - Para saber se dois contatos são o mesmo, compare o `id` e, se os dois tiverem, o `phone`. É o
   que o kernel faz no `role: 'group-admin'`
-  ([ADR 0046](../../../docs/adr/0046-ids-de-contato-e-metadata-de-grupo.md)). Os `owners` da
+  ([ADR 0042](../../../docs/adr/0042-ids-de-contato-e-metadata-de-grupo.md)). Os `owners` da
   config dizem qual dos dois comparar: telefone com `phone`, `{ id }` com `id`.
 - `username` e `isBot` vão no remetente, nos participantes e no `transport.self` quando a
   plataforma informa. Marque `isBot: true` nos outros bots: é o que o `ignoreBots` lê para evitar
   loop entre bots. `claims` só vai no contato que fez a ação, e só com o que o transport
-  verificou ([ADR 0057](../../../docs/adr/0057-contact-multiplataforma.md)).
+  verificou ([ADR 0053](../../../docs/adr/0053-contact-multiplataforma.md)).
 
 - O `chat.id` precisa apontar para onde a resposta deve cair: no Telegram, componha o chat e o
   tópico (`message_thread_id`) e decomponha no envio. `parentId` é o espaço (servidor do
   Discord, supergrupo do Telegram), e `kind`/`title` vão quando a plataforma informa
-  ([ADR 0058](../../../docs/adr/0058-chat-multiplataforma.md)).
+  ([ADR 0054](../../../docs/adr/0054-chat-multiplataforma.md)).
 - `chat.tenantId` só com o que o transport **verificou** (o claim configurado do JWT, nunca um
   campo que o usuário escolhe), em todo evento do chat: mensagem, edição, clique, reação, voto,
   apagada e eventos de grupo. Com tenant, **componha o tenant no `chat.id` e no `id` dos
   contatos**: prefixos por chat, esperas de resposta, ações e rate limit são chaveados por esses
   IDs, e dois tenants não podem dividir um deles
-  ([ADR 0072](../../../docs/adr/0072-isolamento-por-tenant.md)).
+  ([ADR 0068](../../../docs/adr/0068-isolamento-por-tenant.md)).
 
 ## Eventos
 
@@ -195,7 +195,7 @@ class TelegramTransport implements Transport {
 
 Um adapter que precisa do bot (credenciais, logger) exporta uma fábrica, não a classe:
 `BotConfig.transport` aceita `(deps: TransportDeps) => Transport`
-([ADR 0037](../../../docs/adr/0037-transport-por-fabrica.md); uso em
+([ADR 0033](../../../docs/adr/0033-transport-por-fabrica.md); uso em
 [Bot → Transport por fábrica](bot.md#transport-por-fábrica)).
 
 ```ts
@@ -213,7 +213,7 @@ export function telegram(options: TelegramOptions): (deps: TransportDeps) => Tra
   ([Storage → Auth state](storage.md#auth-state-para-transports)).
 - `log` já vem com `{ transport: name }` e passa pela censura de segredos do bot. Antes do
   `start()` descarta as linhas; guarde a referência, ela passa a valer sozinha.
-- A fábrica roda dentro do `createBot`, que não pode ter efeito colateral (ADR 0004): **só monte o
+- A fábrica roda dentro do `createBot`, que não pode ter efeito colateral (ADR 0003): **só monte o
   objeto**. Socket, timer, leitura de credenciais e qualquer I/O ficam no `connect()`. O
   transport sai da fábrica pronto para `connect()`, sem passo de inicialização extra.
 - `commands` é a lista de comandos do bot, para o menu nativo da plataforma (ver
@@ -227,7 +227,7 @@ export function telegram(options: TelegramOptions): (deps: TransportDeps) => Tra
 
 Onde a plataforma tem menu de comandos (slash commands do Discord, `setMyCommands` do Telegram,
 menu do web), o transport registra os comandos do bot a partir de `deps.commands`
-([ADR 0064](../../../docs/adr/0064-comandos-nativos.md)):
+([ADR 0060](../../../docs/adr/0060-comandos-nativos.md)):
 
 - `list()` devolve os comandos registrados agora (`plugin`, `name`, `aliases`, `description`,
   `role`), como o `ctx.commands.list()` dos plugins;
@@ -287,7 +287,7 @@ recusa e evento `command`. O `args` é interpretado como o texto depois do coman
 `rawArgs`), e a mensagem do comando tem o texto `/<command> <args>`. Comando que não existe mais
 é descartado com log em `debug`; o transport encerra a interação pendente quando o prazo dela
 vencer. No Telegram, o comando chega como texto comum (`/start@MeuBot`), pelo evento `message`,
-e o roteador trata o prefixo ([ADR 0063](../../../docs/adr/0063-prefixo-por-chat.md)).
+e o roteador trata o prefixo ([ADR 0059](../../../docs/adr/0059-prefixo-por-chat.md)).
 
 A resposta do plugin chega por `send` com `quoted` igual à mensagem do comando (`id` = o `id` da
 interação), pela fila de saída. Responda como follow-up enquanto a plataforma aceitar (15 min no
@@ -313,7 +313,7 @@ await transport.send(chatId, {
 O core só entrega um `type` cuja capability o transport declara (`send.sticker` para figurinha,
 por exemplo; o Discord, que não deixa bot enviar figurinha arbitrária, não a declara). O
 `OutgoingContent` pode ganhar membros numa minor, cada um com capability nova
-([ADR 0069](../../../docs/adr/0069-unioes-de-tipo-antes-do-1-0.md)). No `switch` sobre
+([ADR 0065](../../../docs/adr/0065-unioes-de-tipo-antes-do-1-0.md)). No `switch` sobre
 `content.type`, lance erro no `default` em vez do `never` exaustivo. O caso só acontece se algo
 fora da fila chamar o `send` direto:
 
@@ -331,7 +331,7 @@ switch (content.type) {
 ### Texto formatado
 
 Quando o plugin usa a árvore neutra ([Texto formatado](text.md), [ADR
-0061](../../../docs/adr/0061-texto-formatado-neutro.md)), o conteúdo chega com `formatted` (ou
+0057](../../../docs/adr/0057-texto-formatado-neutro.md)), o conteúdo chega com `formatted` (ou
 `formattedCaption`), e `text` (ou `caption`) traz o texto visível dela. O `edit` recebe a árvore
 no terceiro parâmetro.
 
@@ -380,7 +380,7 @@ Discord conta a marcação (`**`, `<@id>`) e precisa do `measure`. Sem `limits`,
 ### Botões
 
 Com a capability `actions`, o `SendOptions.actions` traz os botões da mensagem, na ordem, como
-`{ id, label }` ([ADR 0062](../../../docs/adr/0062-acoes-e-botoes.md)). Eles só vêm com
+`{ id, label }` ([ADR 0058](../../../docs/adr/0058-acoes-e-botoes.md)). Eles só vêm com
 `type: 'text'`, e num texto dividido, só na última parte. O transport os renderiza do jeito da
 plataforma (teclado inline no Telegram, componentes no Discord, botões ou lista no WhatsApp
 oficial).
@@ -413,7 +413,7 @@ limite que não é inteiro ≥ 1 faz o `createBot` lançar `RangeError`.
 
 Com a capability `send.album`, o transport recebe `{ type: 'album', items, caption? }`, com os
 itens `image`, `video` ou `document` na ordem
-([ADR 0065](../../../docs/adr/0065-varios-anexos-e-albuns.md)). A fila nunca entrega menos de
+([ADR 0061](../../../docs/adr/0061-varios-anexos-e-albuns.md)). A fila nunca entrega menos de
 dois itens nem mais que `limits.album`, e só entrega o álbum a quem declara a capability: sem
 ela, envia item a item.
 
@@ -438,7 +438,7 @@ nada ser emitido depois dele. O core não conhece o `media_group_id`.
 ### Objeto bruto da entrada
 
 Implemente `raw(source)` para o `ctx.unsafe.raw()` devolver o objeto de onde a mensagem saiu
-([ADR 0066](../../../docs/adr/0066-objeto-bruto-da-mensagem.md), [escape hatch](unsafe.md)): o
+([ADR 0062](../../../docs/adr/0062-objeto-bruto-da-mensagem.md), [escape hatch](unsafe.md)): o
 `WAMessage` no Baileys, a `Message` do discord.js, o `Update` no Telegram. Guarde o objeto num
 `WeakMap` da instância, chaveado pela `Message` ou pela `Interaction` que você emitiu:
 
@@ -486,7 +486,7 @@ await transport.react(messageKey(ctx.message), '👍');
 
 A fila de saída re-tenta o que falha ([Fila de saída](outbound-queue.md#erros-e-retry)), a não
 ser que o erro diga o contrário. Lance o erro nativo enriquecido com dois campos opcionais, sem
-classe do core ([ADR 0067](../../../docs/adr/0067-retry-after-e-ritmo-do-transport.md)):
+classe do core ([ADR 0063](../../../docs/adr/0063-retry-after-e-ritmo-do-transport.md)):
 
 - **`retryable: false`**: falha permanente. A fila rejeita na hora, sem segurar o chat com
   re-tentativas que vão falhar igual.
@@ -522,7 +522,7 @@ chegar à fila. Mesmo assim, lance o `retryAfterMs` quando ele chegar.
 ### Ritmo
 
 `pacing` dá o ritmo padrão da fila de saída para a plataforma
-([ADR 0067](../../../docs/adr/0067-retry-after-e-ritmo-do-transport.md)). O que o app passa em
+([ADR 0063](../../../docs/adr/0063-retry-after-e-ritmo-do-transport.md)). O que o app passa em
 `createBot({ outbound })` sobrescreve cada campo, e o campo ausente cai no padrão do core (300 ms
 global, 1000 ms por chat), conservador porque nasceu da política anti-ban do WhatsApp.
 
@@ -544,7 +544,7 @@ número finito ≥ 0 faz o `createBot` lançar `RangeError`.
 Onde a plataforma não lista membros (Telegram) ou listar custa caro (servidor grande do
 Discord), deixe `participants` ausente. Nunca entregue a lista pela metade: um plugin que
 menciona todos agiria sobre ela sem saber
-([ADR 0059](../../../docs/adr/0059-grupos-multiplataforma.md)).
+([ADR 0055](../../../docs/adr/0055-grupos-multiplataforma.md)).
 
 O papel `group-admin` pergunta ao transport se o remetente é admin:
 
@@ -564,7 +564,7 @@ O kernel chama `getGroupMetadata` a cada comando `group-admin` de quem não é o
 pode chamá-lo por `ctx.groups.metadata` quando quiser. Por isso ele precisa ser barato: o adapter
 mantém cache por grupo e o invalida em `group.participants` e `group.updated` (o
 `transport-baileys` usa o `cachedGroupMetadata` do Baileys). O core não cacheia
-([ADR 0046](../../../docs/adr/0046-ids-de-contato-e-metadata-de-grupo.md)).
+([ADR 0042](../../../docs/adr/0042-ids-de-contato-e-metadata-de-grupo.md)).
 
 ## Capabilities
 
@@ -581,7 +581,7 @@ de novo; sem ela (transport por token), o bot vai a `failed` ([Política de reco
 A lista é só a do core: capability nova entra numa minor do `@usebridger/core`, e `requires` com nome
 fora dela recusa o plugin. O que cada transport declara está na matriz do plano §6.10. Limites de
 tamanho não são capability: ficam em `Transport.limits`
-([ADR 0070](../../../docs/adr/0070-capabilities-multiplataforma.md)).
+([ADR 0066](../../../docs/adr/0066-capabilities-multiplataforma.md)).
 
 ### Semântica comum das ações
 
@@ -605,7 +605,7 @@ o que o plugin espera em qualquer uma.
   duração são de cada plataforma e ficam no `native`. O voto chega como `poll.vote`, sempre com a
   escolha inteira de quem votou: o transport cuja plataforma manda a diferença (Discord) monta a
   escolha pelos eventos que viu, e o que só recebe voto de enquete não anônima (Telegram) envia
-  assim por padrão ([ADR 0071](../../../docs/adr/0071-voto-em-enquete.md)).
+  assim por padrão ([ADR 0067](../../../docs/adr/0067-voto-em-enquete.md)).
 
 O transport declara o subconjunto que suporta em `capabilities`. Helpers (de
 `@usebridger/core/adapter`; o plugin só vê o tipo `Capability` e o `UnsupportedError`, de
@@ -633,7 +633,7 @@ quem usa o transport sem o bot. O adapter mapeia o código nativo
 para um `DisconnectReason` (`qr-timeout`, `logged-out`, `auth-failed`, `fatal`, `replaced`,
 `server-error`, `connection-lost`, `unknown`). `replaced` é a conexão derrubada por outra da
 mesma sessão (no Baileys, `DisconnectReason.connectionReplaced`). `fatal` é erro de configuração
-que reconectar não resolve ([ADR 0068](../../../docs/adr/0068-desconexao-fatal-e-transport-sem-pareamento.md)).
+que reconectar não resolve ([ADR 0064](../../../docs/adr/0064-desconexao-fatal-e-transport-sem-pareamento.md)).
 
 ```ts
 import { hasCapability, ReconnectionPolicy } from '@usebridger/core/adapter';
@@ -658,13 +658,13 @@ transport.on('connection.status', async (s) => {
 
 | Motivo | Decisão |
 | --- | --- |
-| `connection-lost`, `unknown` | `reconnect` com backoff, sem limite de tentativas: queda de rede nunca limpa a sessão ([ADR 0045](../../../docs/adr/0045-queda-de-rede-nao-limpa-sessao.md)) |
+| `connection-lost`, `unknown` | `reconnect` com backoff, sem limite de tentativas: queda de rede nunca limpa a sessão ([ADR 0041](../../../docs/adr/0041-queda-de-rede-nao-limpa-sessao.md)) |
 | `server-error` | `reconnect` com atraso fixo (`serverErrorDelayMs`), sem gastar tentativa |
 | `qr-timeout` | `reconnect` (novo QR); após `maxQrCount` QRs, `clean-session` (`qr-limit`) |
 | `logged-out` | `clean-session` |
 | `auth-failed` | com `pairing` (padrão), `clean-session`; com `pairing: false`, `stop` (causa `auth-failed`): limpar não traz token novo |
 | `fatal` | `stop` (causa `fatal`): outra tentativa repetiria o erro |
-| `replaced` | `stop`: não reconectar. Duas conexões do mesmo número se derrubariam em laço ([ADR 0036](../../../docs/adr/0036-escopo-de-sessao.md)) |
+| `replaced` | `stop`: não reconectar. Duas conexões do mesmo número se derrubariam em laço ([ADR 0032](../../../docs/adr/0032-escopo-de-sessao.md)) |
 
 `decide()` assume que a decisão será executada e avança o estado. Uma limpeza que viria antes
 de `minCleanIntervalMs` da anterior é adiada (o `delayMs` cresce), evitando loop de limpeza.
@@ -675,7 +675,7 @@ contadores para log. O `Bot` lê o `pairing` da capability do transport.
 
 Reserve `logged-out` e `auth-failed` para credencial rejeitada de fato, e `fatal` para o que só
 uma pessoa corrige: uma rede instável mapeada para um deles apaga a sessão ou para o bot
-([ADR 0045](../../../docs/adr/0045-queda-de-rede-nao-limpa-sessao.md)). Na dúvida,
+([ADR 0041](../../../docs/adr/0041-queda-de-rede-nao-limpa-sessao.md)). Na dúvida,
 `connection-lost` ou `unknown`, que reconectam.
 
 | Plataforma | Nativo | Motivo |
@@ -693,7 +693,7 @@ Um transport sem `pairing` não emite `qr-timeout` nem `logged-out`: token revog
 Erro de configuração descoberto dentro do `connect()` (a porta ocupada no `listen`, o token
 recusado no login) sai como `closed` com o motivo da tabela, e não como rejeição do `connect()`.
 Um `connect()` de reconexão que rejeita conta como `connection-lost`
-([ADR 0048](../../../docs/adr/0048-connect-resolve-ao-iniciar.md)) e cai no backoff sem limite: o
+([ADR 0044](../../../docs/adr/0044-connect-resolve-ao-iniciar.md)) e cai no backoff sem limite: o
 bot tentaria de novo para sempre em vez de parar.
 
 ### Lib que se reconecta sozinha

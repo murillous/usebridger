@@ -1,6 +1,6 @@
 name: Release
 
-# Fluxo e segredos em docs/release.md; decisões nos ADRs 0082 e 0085. Com changesets pendentes na
+# Fluxo e segredos em docs/release.md; decisões nos ADRs 0078 e 0081. Com changesets pendentes na
 # `main`, abre ou atualiza o PR de versão; depois do merge dele, sem changesets, publica no npm e
 # abre a PR de volta para a `develop`.
 on:
@@ -83,7 +83,7 @@ jobs:
           # O pnpm só lê config de env com o prefixo dele; NPM_CONFIG_PROVENANCE seria ignorado.
           PNPM_CONFIG_PROVENANCE: true
 
-      # Devolve à `develop` as versões, os changelogs e os changesets consumidos (ADR 0085). Se a
+      # Devolve à `develop` as versões, os changelogs e os changesets consumidos (ADR 0081). Se a
       # PR já existe, o `gh` falha com "already exists" e o passo segue: ela recebe o push sozinha.
       - name: PR de volta para a develop
         if: steps.changesets.outputs.published == 'true'
@@ -92,5 +92,5 @@ jobs:
         run: |
           gh pr create --base develop --head main \
             --title 'chore(release): leva a main de volta para a develop' \
-            --body 'Versões, changelogs e changesets consumidos do último release. Merge commit, sem squash (ADR 0085).' \
+            --body 'Versões, changelogs e changesets consumidos do último release. Merge commit, sem squash (ADR 0081).' \
             || gh pr view main --json url --jq .url
