@@ -85,6 +85,7 @@ maiúscula. Declare o `title` no schema Zod, junto da descrição: `z.string().m
 `.meta({ examples: ['gpt-4o'] })`) vira o placeholder. `z.iso.datetime()` (`format: 'date-time'`)
 vira um seletor de data e hora, enviado como ISO em UTC. `#/config/<plugin>` abre a Config já
 no plugin (é o destino de "Abrir config" na lista de Plugins).
+Plugin que não declara `config` (`schema: null`) não aparece na lista da Config.
 
 **Secrets são só leitura no dashboard.** O `GET` os devolve mascarados (o valor real nunca sai) e o
 `PUT` recusa qualquer campo `secret`: o valor vem do arquivo (`pluginConfig`) ou do env. A

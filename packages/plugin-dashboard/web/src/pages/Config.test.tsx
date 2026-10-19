@@ -149,11 +149,29 @@ describe('Config: lista e seleção de plugin', () => {
     expect(screen.getByRole('option', { name: 'metrics · falhou' })).toBeTruthy();
   });
 
-  it('plugin sem schema avisa que não declara config', async () => {
-    setup([row('ai')], { ai: { schema: null, view: { config: {}, messages: {}, sources: {} } } });
+  it('esconde da lista os plugins sem schema', async () => {
+    setup([row('ai'), row('logs'), row('metrics')], {
+      ai: aiConfig(),
+      logs: { schema: null, view: { config: {}, messages: {}, sources: {} } },
+      metrics: aiConfig(),
+    });
     await form();
-    expect(screen.getByText('Este plugin não declara config.')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Salvar e recarregar' })).toBeNull();
+    const nav = screen.getByRole('navigation', { name: 'Plugins' });
+    await waitFor(() =>
+      expect(
+        within(nav)
+          .getAllByRole('button')
+          .map((b) => b.textContent),
+      ).toEqual(['ai', 'metrics']),
+    );
+    expect(within(screen.getByLabelText('Plugin')).getAllByRole('option').length).toBe(2);
+  });
+
+  it('avisa quando nenhum plugin declara config', async () => {
+    setup([row('logs')], {
+      logs: { schema: null, view: { config: {}, messages: {}, sources: {} } },
+    });
+    expect(await screen.findByText('Nenhum plugin declara config.')).toBeTruthy();
   });
 });
 
