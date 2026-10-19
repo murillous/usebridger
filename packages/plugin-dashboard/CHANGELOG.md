@@ -1,5 +1,16 @@
 # @usebridger/plugin-dashboard
 
+## 0.3.0
+
+### Minor Changes
+
+- 1f3db10: Config e `form` das abas: `z.array(z.object({...}))` com campos simples vira um editor de lista com um bloco por item e botões para subir, descer, remover e adicionar, no lugar do JSON cru. Erro do servidor num item aparece junto da lista.
+
+### Patch Changes
+
+- 01f4b9e: A tela de Config lista só os plugins que declaram `config`; os sem schema saem da lista.
+- b5dd608: Sidebar fixa durante o scroll da página, conteúdo principal centralizado e tabela de plugins com scroll próprio, mantendo os switches de ativar/desativar sempre dentro do card.
+
 ## 0.2.0
 
 ### Minor Changes
