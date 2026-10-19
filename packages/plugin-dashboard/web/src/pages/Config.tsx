@@ -506,7 +506,12 @@ export function Config({ selected }: { selected?: string }) {
   const [rows, setRows] = useState<PluginRow[]>([]);
   // Erros da config atual por plugin (GET de cada um): alimenta os badges antes de abrir o plugin.
   const [issueCounts, setIssueCounts] = useState<Record<string, number>>({});
-  const names = useMemo(() => rows.map((r) => r.name), [rows]);
+  // Plugins sem schema (`schema: null`) saem da lista: não há o que configurar. GET falho mantém o plugin.
+  const [noConfig, setNoConfig] = useState<ReadonlySet<string>>(new Set());
+  const names = useMemo(
+    () => rows.map((r) => r.name).filter((n) => !noConfig.has(n)),
+    [rows, noConfig],
+  );
   // O hash (`#/config/<plugin>`) é a única fonte da seleção; ausente ou desconhecido cai no primeiro.
   const plugin = selected && names.includes(selected) ? selected : names[0];
   const select = (name: string) => {
@@ -528,7 +533,10 @@ export function Config({ selected }: { selected?: string }) {
         // Plugin sem config legível (ex.: não carregou) fica sem badge de erro: o GET falho é o fallback.
         for (const r of list) {
           api<ConfigResponse>(`config/${encodeURIComponent(r.name)}`).then(
-            (d) => setIssueCounts((c) => ({ [r.name]: d.issues?.length ?? 0, ...c })),
+            (d) => {
+              setIssueCounts((c) => ({ [r.name]: d.issues?.length ?? 0, ...c }));
+              if (d.schema === null) setNoConfig((s) => new Set(s).add(r.name));
+            },
             () => undefined,
           );
         }
@@ -766,6 +774,9 @@ export function Config({ selected }: { selected?: string }) {
           </select>
         </div>
         <div className="cfg-body">
+          {rows.length > 0 && names.length === 0 && (
+            <p className="muted">Nenhum plugin declara config.</p>
+          )}
           {error && (
             <p className="notice danger" role="alert">
               {error}
