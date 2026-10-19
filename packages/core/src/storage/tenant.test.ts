@@ -5,7 +5,7 @@ import { createMemoryStorage } from './memory.ts';
 import { pluginStorage } from './namespace.ts';
 import { tenantStorage } from './tenant.ts';
 
-describe('storage com escopo de tenant (ADR 0072)', () => {
+describe('storage com escopo de tenant (ADR 0068)', () => {
   it('namespace do tenant é "<plugin>@<tenant>"; sem tenant, o do plugin', () => {
     const port = createMemoryStorage();
     const spy = vi.spyOn(port, 'forNamespace');

@@ -1,4 +1,4 @@
-// ADR 0111: `ctx.admin` só para os plugins em `adminPlugins`.
+// ADR 0107: `ctx.admin` só para os plugins em `adminPlugins`.
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';

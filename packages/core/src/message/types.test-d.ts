@@ -41,7 +41,7 @@ describe('narrowing do modelo de mensagem', () => {
     if (msg.quoted?.is('audio')) expectTypeOf(msg.quoted.media).toEqualTypeOf<Media>();
   });
 
-  it('o endereço da localização é opcional (ADR 0069)', () => {
+  it('o endereço da localização é opcional (ADR 0065)', () => {
     if (msg.is('location')) {
       expectTypeOf(msg.location.address).toEqualTypeOf<string | undefined>();
     }

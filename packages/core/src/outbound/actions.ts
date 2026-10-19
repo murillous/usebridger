@@ -1,4 +1,4 @@
-// `ctx.send` (ADR 0040): o envio e as ações sobre mensagens e chats, todos pela fila de saída. A
+// `ctx.send` (ADR 0036): o envio e as ações sobre mensagens e chats, todos pela fila de saída. A
 // fila não conhece as ações; aqui cada uma confere a capability e vira uma chamada enfileirada.
 
 import { plainText } from '#text/format.ts';
@@ -53,7 +53,7 @@ export function createOutbound(
       } catch (error) {
         return Promise.reject(error);
       }
-      // A árvore vai junto do texto visível, como no envio (ADR 0061).
+      // A árvore vai junto do texto visível, como no envio (ADR 0057).
       if (typeof text === 'string') {
         return action('message.edit', key.chatId, () => transport.edit(key, text), options);
       }

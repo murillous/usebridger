@@ -64,7 +64,7 @@ describe('Tab: cabeçalho e estados da aba', () => {
   });
 });
 
-describe('Tab: título por widget (ADR 0118)', () => {
+describe('Tab: título por widget (ADR 0114)', () => {
   it('desenha h3 e rotula a seção com o title; sem title, a seção usa o id', async () => {
     routes[`GET ${W}/lista`] = () => ({ body: { rows: [] } });
     show(
@@ -218,7 +218,7 @@ describe('Tab: form', () => {
     required: ['texto'],
   };
 
-  it('usa o submitLabel no botão (ADR 0118) e "Enviar" sem ele', () => {
+  it('usa o submitLabel no botão (ADR 0114) e "Enviar" sem ele', () => {
     show(
       tab([
         { kind: 'form', id: 'novo', title: 'Novo lembrete global', submitLabel: 'Agendar', schema },

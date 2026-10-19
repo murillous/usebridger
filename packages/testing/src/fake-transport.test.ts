@@ -47,7 +47,7 @@ describe('FakeTransport', () => {
     ]);
   });
 
-  it('expõe os `limits` e registra a árvore da edição formatada (ADR 0061)', async () => {
+  it('expõe os `limits` e registra a árvore da edição formatada (ADR 0057)', async () => {
     expect(new FakeTransport().limits).toBeUndefined();
     const transport = new FakeTransport({ limits: { text: 10 } });
     expect(transport.limits).toEqual({ text: 10 });

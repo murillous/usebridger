@@ -1,4 +1,4 @@
-// #224 (ADR 0040): as ações que não são envio passam pela fila de saída com as mesmas regras.
+// #224 (ADR 0036): as ações que não são envio passam pela fila de saída com as mesmas regras.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type Capability, UnsupportedError } from '#transport/capabilities.ts';

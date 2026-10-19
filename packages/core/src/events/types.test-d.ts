@@ -69,7 +69,7 @@ describe('on()', () => {
     });
   });
 
-  it('`command` só observa: o contexto não tem `reply` (ADR 0049)', () => {
+  it('`command` só observa: o contexto não tem `reply` (ADR 0045)', () => {
     events.on('command', (ctx) => {
       expectTypeOf(ctx.payload.message).toEqualTypeOf<Message>();
       expectTypeOf(ctx).not.toHaveProperty('reply');

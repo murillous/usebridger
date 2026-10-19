@@ -1,4 +1,4 @@
-// Segredos cifrados no storage (ADR 0121): camada `secret`, setSecret/clearSecret e rotação.
+// Segredos cifrados no storage (ADR 0117): camada `secret`, setSecret/clearSecret e rotação.
 
 import { randomBytes } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';

@@ -1,4 +1,4 @@
-// `run` de comandos com `background: true` em andamento (ADR 0087): fora da fila do chat, mas
+// `run` de comandos com `background: true` em andamento (ADR 0083): fora da fila do chat, mas
 // dentro do `settled()`. O shutdown os solta (`clear`): quem ignora o `signal` abortado e tem o
 // prazo desarmado nunca assenta.
 

@@ -1,5 +1,5 @@
-// Migrations internas do adapter, como no SQLite (ADR 0051): o schema é do adapter, não dos
-// plugins (ADR 0015). Tudo vive num schema Postgres próprio (`bridger` por padrão), e a versão
+// Migrations internas do adapter, como no SQLite (ADR 0047): o schema é do adapter, não dos
+// plugins (ADR 0013). Tudo vive num schema Postgres próprio (`bridger` por padrão), e a versão
 // fica numa tabela dele. O boot inteiro é uma transação só, porque DDL no Postgres é
 // transacional: ou o banco sai na versão nova, ou fica como estava.
 
@@ -55,7 +55,7 @@ const MIGRATIONS: readonly ((s: string) => string)[] = [
     PRIMARY KEY (session, type, id)
   );
 
-  -- Travas com validade (ADR 0074), medida pelo relógio do servidor: os processos que dividem
+  -- Travas com validade (ADR 0070), medida pelo relógio do servidor: os processos que dividem
   -- o banco podem estar em máquinas diferentes.
   CREATE TABLE ${s}.leases (
     name text PRIMARY KEY,

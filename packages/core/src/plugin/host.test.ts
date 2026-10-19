@@ -90,7 +90,7 @@ const statusOf = (table: readonly PluginReportEntry[]) =>
     table.map((entry) => [entry.name, entry.status === 'loaded' ? 'loaded' : entry.reason.kind]),
   );
 
-/** O `PluginBootError` com que o `start()` rejeitou (ADR 0102). */
+/** O `PluginBootError` com que o `start()` rejeitou (ADR 0098). */
 async function bootError(started: Promise<unknown>): Promise<PluginBootError> {
   const error = await started.then(
     () => undefined,
@@ -603,7 +603,7 @@ describe('createPluginHost — reload', () => {
     ]);
     await h.start();
     broken = true;
-    // Em runtime, o setup novo que falha não derruba o host (ADR 0102).
+    // Em runtime, o setup novo que falha não derruba o host (ADR 0098).
     expect((await h.reload('ai')).plugin.status).toBe('skipped');
     expect(h.state).toBe('running');
     expect(statusOf(h.report())).toEqual({ ai: 'setup-failed' });
@@ -613,7 +613,7 @@ describe('createPluginHost — reload', () => {
     expect(statusOf(h.report())).toEqual({ ai: 'loaded' });
   });
 
-  it('enable de plugin incompatível não derruba o host: só fica ignorado (ADR 0102)', async () => {
+  it('enable de plugin incompatível não derruba o host: só fica ignorado (ADR 0098)', async () => {
     const { host: h } = host([plugin('velho', { engine: '^2.0.0' }), plugin('ping')], {
       disabledPlugins: ['velho'],
     });

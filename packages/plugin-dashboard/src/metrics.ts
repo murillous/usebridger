@@ -1,5 +1,5 @@
 import type { HttpHandler, Logger, ServiceAccess } from '@usebridger/core';
-// Só tipos: o `plugin-metrics` é dependência opcional (ADR 0107) e nada dele é carregado em runtime.
+// Só tipos: o `plugin-metrics` é dependência opcional (ADR 0103) e nada dele é carregado em runtime.
 // O import também traz o `declare module` que tipa `services.get('metrics')`.
 import type { MetricRow } from '@usebridger/plugin-metrics';
 

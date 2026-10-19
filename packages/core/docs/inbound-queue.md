@@ -4,7 +4,7 @@
 distintos em paralelo, sem bloqueio global. Veio da fila por chat do legacy, agora com limite
 de backlog, métricas e shutdown gracioso.
 
-Peça interno do kernel, não exportado ([ADR 0034](../../../docs/adr/0034-biblioteca-sem-runner.md)): o app só a configura por
+Peça interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md)): o app só a configura por
 `createBot({ inbound: { maxPendingPerChat } })`. Os exemplos abaixo são para quem mexe no core.
 
 ```ts
@@ -34,7 +34,7 @@ fecha e drena antes do teardown dos plugins ([Bot](bot.md#fluxo-de-uma-mensagem)
 - A tarefa pode ser síncrona ou devolver uma promise; o chat só avança quando ela termina.
   Uma promise que nunca resolve trava aquele chat (e só ele): ponha timeout na própria tarefa
   se ela depende de I/O. No bot, a tarefa é o tratamento inteiro da mensagem, com comando e
-  listeners: um handler lento segura o chat ([ADR 0042](../../../docs/adr/0042-handler-lento-segura-o-chat.md)).
+  listeners: um handler lento segura o chat ([ADR 0038](../../../docs/adr/0038-handler-lento-segura-o-chat.md)).
 
 ## Erros
 

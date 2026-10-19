@@ -1,4 +1,4 @@
-// Arquivos em memória do transport (ADR 0077): os uploads do usuário e a mídia que o bot envia. A
+// Arquivos em memória do transport (ADR 0073): os uploads do usuário e a mídia que o bot envia. A
 // validade é conferida quando o mapa anda, sem timer: nada sobrevive ao `stop()` por causa dele.
 
 import { randomBytes } from 'node:crypto';

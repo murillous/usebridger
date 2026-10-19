@@ -1,4 +1,4 @@
-// Linha de plugins com duração do setup e horário do boot vindos do core (M5-4.8, ADR 0114).
+// Linha de plugins com duração do setup e horário do boot vindos do core (M5-4.8, ADR 0110).
 import { createHttp, definePlugin } from '@usebridger/core';
 import { createTestBot } from '@usebridger/testing';
 import { afterEach, expect, it } from 'vitest';

@@ -1,4 +1,4 @@
-// ADR 0106 (#148): o sinal `outbound.sent` que a fila de saída emite a cada `send`.
+// ADR 0102 (#148): o sinal `outbound.sent` que a fila de saída emite a cada `send`.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Observers, type OutboundSentSignal } from '#observers/observers.ts';
@@ -47,7 +47,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('OutboundQueue: outbound.sent (ADR 0106)', () => {
+describe('OutboundQueue: outbound.sent (ADR 0102)', () => {
   it('sem observador, não emite', async () => {
     const { queue, observers } = setup();
     const emit = vi.spyOn(observers, 'emit');

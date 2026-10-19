@@ -1,6 +1,6 @@
 // Entry `@usebridger/storage-postgres`: o adapter oficial para vários processos dividindo o banco
-// (D14). O app passa o port em `createBot({ storage })`; o porquê do driver e do schema está no
-// ADR 0078.
+// (D12). O app passa o port em `createBot({ storage })`; o porquê do driver e do schema está no
+// ADR 0074.
 
 import type { StoragePort } from '@usebridger/core/adapter';
 import pg from 'pg';

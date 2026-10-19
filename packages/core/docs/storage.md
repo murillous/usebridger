@@ -2,8 +2,8 @@
 
 O `StoragePort` é o armazenamento do bot: **KV** e **coleções** por plugin, e o **auth state**
 do transport. A API não expõe SQL nem nada de engine
-([ADR 0014](../../../docs/adr/0014-storage-port-sqlite-postgres.md),
-[ADR 0015](../../../docs/adr/0015-storage-kv-e-colecoes.md)): o mesmo plugin roda em memória,
+([ADR 0012](../../../docs/adr/0012-storage-port-sqlite-postgres.md),
+[ADR 0013](../../../docs/adr/0013-storage-kv-e-colecoes.md)): o mesmo plugin roda em memória,
 SQLite ou Postgres. A semântica abaixo é fixada pela [suíte de contrato](#suíte-de-contrato),
 que todo adapter roda.
 
@@ -97,7 +97,7 @@ Regras que valem em todo adapter:
   JavaScript nem por collation de idioma.
 - Arrays e objetos não são comparáveis: `eq` nunca casa com eles, `ne` sempre.
 - Sem OU, sem campos aninhados (`'a.b'`) e sem busca textual. Se fizer falta, a lacuna é do
-  core (ADR 0015).
+  core (ADR 0013).
 
 ### Ordenação e paginação
 
@@ -130,7 +130,7 @@ inválido, que lança na hora.
 ### Tenants
 
 Quando um bot atende vários clientes do dono (escolas, empresas), o transport marca o
-`chat.tenantId` ([ADR 0072](../../../docs/adr/0072-isolamento-por-tenant.md)). O plugin não
+`chat.tenantId` ([ADR 0068](../../../docs/adr/0068-isolamento-por-tenant.md)). O plugin não
 filtra nada: numa mensagem ou num evento desse chat, o mesmo `ctx.storage` grava e lê no
 namespace daquele tenant. Isso vale também para o que o handler dispara:
 
@@ -167,7 +167,7 @@ trocar o nome da sessão.
 Com vários bots no mesmo storage (um por transport: WhatsApp, Telegram, web), o `ctx.storage` de
 cada um fica na sua sessão. Para o que deve ser um só em todos eles (um rank, as personas, a
 memória de uma assistente), o plugin pede `ctx.storage.shared`
-([ADR 0075](../../../docs/adr/0075-varios-bots-e-escopo-compartilhado.md)). Ele tem o mesmo `kv`
+([ADR 0071](../../../docs/adr/0071-varios-bots-e-escopo-compartilhado.md)). Ele tem o mesmo `kv`
 e as mesmas `collection` e só o próprio plugin o alcança, em qualquer sessão.
 
 IDs de contato e de chat só são únicos dentro de um transport: o `42` do Telegram não é o `42` do
@@ -188,7 +188,7 @@ await ctx.storage.shared.kv.set(key, pontos);
 
 ## Para o kernel
 
-Tudo nesta seção é interno do kernel, não exportado ([ADR 0034](../../../docs/adr/0034-biblioteca-sem-runner.md)).
+Tudo nesta seção é interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md)).
 
 `pluginStorage(port, pluginName)` é como o `Bot` monta `ctx.storage` (o port é o `storage` do
 `createBot`, fechado no `stop()`). Namespaces que
@@ -201,7 +201,7 @@ nenhum plugin alcança os dados internos, seja qual for o nome dele. Componentes
 ### Escopo de sessão
 
 O `Bot` não passa o `storage` direto para scheduler, config e plugins: passa
-`sessionStorage(port, session)` ([ADR 0036](../../../docs/adr/0036-escopo-de-sessao.md)), uma
+`sessionStorage(port, session)` ([ADR 0032](../../../docs/adr/0032-escopo-de-sessao.md)), uma
 visão que prefixa todo namespace com a sessão. O `StoragePort` e os adapters não mudam.
 
 | Sessão | Plugin `sticker` | Scheduler | Overrides de config |
@@ -217,7 +217,7 @@ que fica sem prefixo para manter o formato de quem não passa `session`. `authSt
 ### Escopo compartilhado
 
 `sharedStorage(port)` é a visão do storage comum às sessões
-([ADR 0075](../../../docs/adr/0075-varios-bots-e-escopo-compartilhado.md)): monta sobre o
+([ADR 0071](../../../docs/adr/0071-varios-bots-e-escopo-compartilhado.md)): monta sobre o
 `storage` do `createBot`, não sobre o da sessão, e prefixa todo namespace com `$shared:`. O
 `ctx.storage.shared` é o `tenantStorage(sharedStorage(port), plugin, scope)`.
 
@@ -288,7 +288,7 @@ o banco, use o `await postgres({ connectionString })` do
 Implemente `StoragePort` (`forNamespace`, `authState`, `close` e, se o banco pode ser dividido
 entre processos, a trava: veja [Trava com validade](#trava-com-validade)). `authState(session)` só monta o
 objeto, sem I/O: o `createBot` o chama para entregar o auth à fábrica do transport
-([ADR 0037](../../../docs/adr/0037-transport-por-fabrica.md)), onde não pode haver efeito
+([ADR 0033](../../../docs/adr/0033-transport-por-fabrica.md)), onde não pode haver efeito
 colateral; a leitura fica nos métodos. `@usebridger/core/adapter` exporta as peças que
 deixam os erros e a validação iguais aos dos outros adapters:
 
@@ -325,7 +325,7 @@ suíte num adapter SQL:
 
 `acquireLease(name, owner, ttlMs)` e `releaseLease(name, owner)` são o que impede a mesma sessão
 de rodar em dois processos sobre o mesmo banco
-([ADR 0074](../../../docs/adr/0074-trava-de-sessao-entre-processos.md)). O bot trava
+([ADR 0070](../../../docs/adr/0070-trava-de-sessao-entre-processos.md)). O bot trava
 `session:<sessão>` no `start()` e renova chamando `acquireLease` de novo com o mesmo dono.
 
 | Estado da trava `name` | `acquireLease(name, owner, ttlMs)` |

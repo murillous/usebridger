@@ -1,4 +1,4 @@
-// Lista de comandos do transport (ADR 0064): o aviso de mudança sai em lote, nunca no boot nem
+// Lista de comandos do transport (ADR 0060): o aviso de mudança sai em lote, nunca no boot nem
 // depois do `close()`.
 
 import { describe, expect, it, vi } from 'vitest';

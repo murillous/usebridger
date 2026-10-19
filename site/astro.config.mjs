@@ -89,7 +89,7 @@ export default defineConfig({
       ],
       // Páginas sincronizadas trazem `editUrl` próprio apontando para o Markdown de origem; esta
       // base vale só para as escritas à mão em site/. Edita-se na develop: os PRs vão para ela
-      // (ADR 0085), e a main só recebe o release.
+      // (ADR 0081), e a main só recebe o release.
       editLink: { baseUrl: 'https://github.com/murillous/usebridger/edit/develop/site/' },
       sidebar: [
         { label: 'Começando', items: [{ autogenerate: { directory: 'comecando' } }] },

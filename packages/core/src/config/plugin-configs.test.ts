@@ -181,7 +181,7 @@ describe('createPluginConfigs: erros de validação', () => {
   });
 });
 
-describe('createPluginConfigs: messages (ADR 0025)', () => {
+describe('createPluginConfigs: messages (ADR 0022)', () => {
   it('sobrescreve chaves de messages com a mesma precedência dos campos', async () => {
     const { configs } = await setup({
       overrides: { sticker: { messages: { needMedia: 'override', done: 'override' } } },
@@ -212,7 +212,7 @@ describe('createPluginConfigs: messages (ADR 0025)', () => {
     expect(error.message).toContain('mensagem desconhecida; o plugin declara "needMedia", "done"');
   });
 
-  it('a sobrescrita só usa os placeholders do texto padrão, mais {prefix} (ADR 0092)', async () => {
+  it('a sobrescrita só usa os placeholders do texto padrão, mais {prefix} (ADR 0088)', async () => {
     const merge = plugin('merge', { messages: { added: 'PDF adicionado ({count}).' } });
     const ok = await setup({
       plugins: [merge],
@@ -552,7 +552,7 @@ describe('segredo curto demais para a censura do log', () => {
   });
 });
 
-describe('erros do autor no schema (ADR 0032)', () => {
+describe('erros do autor no schema (ADR 0028)', () => {
   const resolveOf = (definition: PluginDefinition): Promise<unknown> =>
     createPluginConfigs({
       plugins: [definition],

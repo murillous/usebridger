@@ -1,4 +1,4 @@
-// `onExpire` no passo (ADR 0097, #89): a espera que vence sem resposta avisa o plugin dono, na
+// `onExpire` no passo (ADR 0093, #89): a espera que vence sem resposta avisa o plugin dono, na
 // fila do chat, só quando o TTL vence de fato.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -84,7 +84,7 @@ function cadastro(
   });
 }
 
-describe('Bot: onExpire do passo (ADR 0097)', () => {
+describe('Bot: onExpire do passo (ADR 0093)', () => {
   it('vencido o TTL, roda com chat, remetente, passo e data, e o reply sai no chat sem citar', async () => {
     const transport = new RecordingTransport();
     const expired: ExpireContext[] = [];

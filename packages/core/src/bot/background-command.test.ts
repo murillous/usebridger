@@ -1,4 +1,4 @@
-// Comando com `background: true` (ADR 0087): o `run` sai da fila do chat e mantém o contexto,
+// Comando com `background: true` (ADR 0083): o `run` sai da fila do chat e mantém o contexto,
 // o prazo e o destino do erro.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -74,7 +74,7 @@ async function startBot({ run, timeoutMs }: Setup): Promise<{
   return { bot, transport, errors, commands };
 }
 
-describe('Bot: comando em segundo plano (ADR 0087)', () => {
+describe('Bot: comando em segundo plano (ADR 0083)', () => {
   it('não segura o chat, e o reply tardio cita a mensagem original', async () => {
     const download = deferred();
     const { transport, commands } = await startBot({

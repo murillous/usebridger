@@ -14,7 +14,7 @@ type InitOf<M> = M extends Message
   ? Omit<M, 'is' | 'key' | 'media' | 'attachments' | DefaultedKey> &
       Partial<Pick<M, DefaultedKey>> & {
         /**
-         * Todas as mídias, quando há mais de uma (ADR 0065). Começa pela própria `media`; ausente,
+         * Todas as mídias, quando há mais de uma (ADR 0061). Começa pela própria `media`; ausente,
          * vale `[media]`, ou nenhuma nos tipos sem mídia.
          */
         readonly attachments?: readonly MediaSource[];

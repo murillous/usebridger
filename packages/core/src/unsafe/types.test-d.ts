@@ -15,7 +15,7 @@ describe('ctx.unsafe.native', () => {
   });
 });
 
-describe('ctx.unsafe.raw (ADR 0066)', () => {
+describe('ctx.unsafe.raw (ADR 0062)', () => {
   it('recebe a mensagem e devolve unknown', () => {
     expectTypeOf(ctx.unsafe.raw).parameter(0).toEqualTypeOf<Message>();
     expectTypeOf(ctx.unsafe.raw).returns.toBeUnknown();

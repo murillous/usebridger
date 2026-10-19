@@ -1,7 +1,7 @@
 name: Docs
 
-# Publica o site (site/) no GitHub Pages, em murillous.github.io/usebridger (ADR 0103). A `main` só
-# recebe a `develop` no release (ADR 0085), então o site sai a cada release.
+# Publica o site (site/) no GitHub Pages, em murillous.github.io/usebridger (ADR 0099). A `main` só
+# recebe a `develop` no release (ADR 0081), então o site sai a cada release.
 on:
   push:
     branches: [main]

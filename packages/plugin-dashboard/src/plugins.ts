@@ -53,7 +53,7 @@ export function serializeResult(result: PluginChangeResult): object {
   };
 }
 
-/** Rotas de controle de plugins (ADR 0111). Sem `admin` (dashboard fora de `adminPlugins`) respondem 503. */
+/** Rotas de controle de plugins (ADR 0107). Sem `admin` (dashboard fora de `adminPlugins`) respondem 503. */
 export function registerPluginRoutes(
   http: { route(method: 'GET' | 'POST', path: string, handler: HttpHandler): void },
   admin: PluginAdmin | undefined,

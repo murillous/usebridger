@@ -66,7 +66,7 @@ describe('namespaces de storage', () => {
     expect(() => pluginStorage(vendas, '$config')).toThrow(ReservedNamespaceError);
   });
 
-  it('sharedStorage fica em "$shared:<plugin>", sem prefixo de sessão (ADR 0075)', () => {
+  it('sharedStorage fica em "$shared:<plugin>", sem prefixo de sessão (ADR 0071)', () => {
     const port = createMemoryStorage();
     const spy = vi.spyOn(port, 'forNamespace');
     pluginStorage(sharedStorage(port), 'rank');

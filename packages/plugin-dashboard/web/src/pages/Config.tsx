@@ -205,7 +205,7 @@ function RecordControl(props: {
   );
 }
 
-/** Ações do secret cifrado (ADR 0121): o valor só vive no input até o PUT e nunca é exibido. */
+/** Ações do secret cifrado (ADR 0117): o valor só vive no input até o PUT e nunca é exibido. */
 function SecretActions(props: {
   id: string;
   field: Field;
@@ -349,7 +349,7 @@ export function FieldView(props: {
   configKnown?: boolean;
   /** Dica do tipo do schema: só na Config, não no form das abas. */
   showHint?: boolean;
-  /** Só na Config: habilita as ações do secret cifrado (ADR 0121). */
+  /** Só na Config: habilita as ações do secret cifrado (ADR 0117). */
   secretActions?: Omit<Parameters<typeof SecretActions>[0], 'id' | 'field' | 'source'>;
   onChange: (value: unknown) => void;
 }) {
@@ -636,7 +636,7 @@ export function Config({ selected }: { selected?: string }) {
     }
   };
 
-  // Secret cifrado grava na hora, fora do form: PUT/DELETE em `secrets/:path` (ADR 0121).
+  // Secret cifrado grava na hora, fora do form: PUT/DELETE em `secrets/:path` (ADR 0117).
   const saveSecret = async (path: string, value: string | null): Promise<string | undefined> => {
     if (!plugin) return undefined;
     setResult(undefined);

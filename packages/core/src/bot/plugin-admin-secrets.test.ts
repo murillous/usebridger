@@ -1,4 +1,4 @@
-// ADR 0121 no bot: ctx.admin.config.setSecret/clearSecret, rotação e chave inválida no boot.
+// ADR 0117 no bot: ctx.admin.config.setSecret/clearSecret, rotação e chave inválida no boot.
 
 import { randomBytes } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';

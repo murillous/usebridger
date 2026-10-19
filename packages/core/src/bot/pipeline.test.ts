@@ -328,7 +328,7 @@ describe('Bot: fluxo da mensagem (§5.3)', () => {
     );
   });
 
-  it("role 'group-admin' usa o isChatAdmin do transport, com o chat inteiro (ADR 0059)", async () => {
+  it("role 'group-admin' usa o isChatAdmin do transport, com o chat inteiro (ADR 0055)", async () => {
     // Discord/Telegram: não há lista de membros (sem capability `groups`), mas o transport sabe
     // dizer se alguém é admin, e no Discord isso depende do servidor (`parentId`).
     const asked: [Chat, Contact][] = [];
@@ -374,7 +374,7 @@ describe('Bot: fluxo da mensagem (§5.3)', () => {
     expect(transport.metadataCalls).toBe(0);
   });
 
-  it("role 'group-admin' recusa quando o getGroupMetadata vem sem participants (ADR 0059)", async () => {
+  it("role 'group-admin' recusa quando o getGroupMetadata vem sem participants (ADR 0055)", async () => {
     class NoMembers extends RecordingTransport {
       override async getGroupMetadata(groupId: string) {
         const { participants: _omitted, ...metadata } = await super.getGroupMetadata(groupId);
@@ -685,7 +685,7 @@ function emVolta(got: string[]): Middleware<BotMessageContext> {
   };
 }
 
-describe('Bot: middlewares envolvem comando e listeners (#225, ADR 0012)', () => {
+describe('Bot: middlewares envolvem comando e listeners (#225, ADR 0010)', () => {
   it('a volta do next() roda depois do comando', async () => {
     const transport = new RecordingTransport();
     const got: string[] = [];
@@ -755,7 +755,7 @@ describe('Bot: middlewares envolvem comando e listeners (#225, ADR 0012)', () =>
   });
 });
 
-describe('Bot: eventos que não são mensagem (#219, ADR 0038)', () => {
+describe('Bot: eventos que não são mensagem (#219, ADR 0034)', () => {
   it('o chatFilter barra os eventos do chat bloqueado, menos a entrada e a saída do grupo', async () => {
     const transport = new RecordingTransport();
     const got: string[] = [];
@@ -780,7 +780,7 @@ describe('Bot: eventos que não são mensagem (#219, ADR 0038)', () => {
     );
   });
 
-  it('o chatFilter barra a reação e a deleção num chat do espaço bloqueado (ADR 0058)', async () => {
+  it('o chatFilter barra a reação e a deleção num chat do espaço bloqueado (ADR 0054)', async () => {
     const transport = new RecordingTransport();
     const got: string[] = [];
     const b = bot({
@@ -799,7 +799,7 @@ describe('Bot: eventos que não são mensagem (#219, ADR 0038)', () => {
     await vi.waitFor(() => expect(got).toEqual(['reaction:solto']));
   });
 
-  it('o chatFilter barra group.participants e group.updated de um canal do espaço bloqueado (ADR 0059)', async () => {
+  it('o chatFilter barra group.participants e group.updated de um canal do espaço bloqueado (ADR 0055)', async () => {
     const transport = new RecordingTransport();
     const got: string[] = [];
     const b = bot({
@@ -845,7 +845,7 @@ describe('Bot: eventos que não são mensagem (#219, ADR 0038)', () => {
     await vi.waitFor(() => expect(got).toEqual(['reaction:eu@test']));
   });
 
-  it('o ignoreBots barra a reação e a deleção feitas por outro bot (ADR 0057)', async () => {
+  it('o ignoreBots barra a reação e a deleção feitas por outro bot (ADR 0053)', async () => {
     const transport = new RecordingTransport();
     const got: string[] = [];
     const b = bot({ transport, plugins: [eventos(got)] });
@@ -890,7 +890,7 @@ describe('Bot: eventos que não são mensagem (#219, ADR 0038)', () => {
 });
 
 describe('Bot: boot', () => {
-  it('conflito de comando entre plugins é erro no boot (ADR 0007)', async () => {
+  it('conflito de comando entre plugins é erro no boot (ADR 0005)', async () => {
     const transport = new RecordingTransport();
     const a = definePlugin({
       name: 'a',
@@ -1335,7 +1335,7 @@ describe('Bot: shutdown', () => {
   });
 });
 
-describe('Bot: duas instâncias com o pipeline completo (ADR 0004)', () => {
+describe('Bot: duas instâncias com o pipeline completo (ADR 0003)', () => {
   it('não compartilham comandos, storage, filas nem respostas', async () => {
     const plugin = definePlugin({
       name: 'contador',

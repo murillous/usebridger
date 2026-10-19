@@ -49,7 +49,7 @@ export interface SentMessage {
   /** IDs mencionados. */
   readonly mentions: readonly string[];
   /**
-   * Botões enviados (capability `actions`, ADR 0062); ausente sem botões. O `click()` do
+   * Botões enviados (capability `actions`, ADR 0058); ausente sem botões. O `click()` do
    * `TestBot` clica num deles pelo rótulo.
    */
   readonly actions?: readonly OutgoingAction[];
@@ -59,7 +59,7 @@ export interface SentMessage {
 
 export interface FakeTransportOptions {
   /**
-   * Perfil da plataforma (ADR 0073): capabilities, limites e contatos como o transport dela
+   * Perfil da plataforma (ADR 0069): capabilities, limites e contatos como o transport dela
    * declararia. As opções abaixo substituem o campo do perfil. Ausente: todas as capabilities,
    * sem limites, contatos com telefone.
    */
@@ -71,7 +71,7 @@ export interface FakeTransportOptions {
   /** Grupos que `getGroupMetadata` conhece; dá para incluir depois com `setGroup`. */
   readonly groups?: readonly GroupMetadata[];
   /**
-   * Limites de tamanho, para testar a divisão de texto longo (ADR 0061). Padrão: os do perfil ou,
+   * Limites de tamanho, para testar a divisão de texto longo (ADR 0057). Padrão: os do perfil ou,
    * sem perfil, nenhum, e o texto vai inteiro.
    */
   readonly limits?: TextLimits;
@@ -107,7 +107,7 @@ export class FakeTransport implements Transport {
   #self: Contact | null = null;
   readonly #selfOnConnect: Contact;
   readonly #groups = new Map<string, GroupMetadata>();
-  // Por instância e chaveado pelo objeto emitido, como num transport real (ADR 0066).
+  // Por instância e chaveado pelo objeto emitido, como num transport real (ADR 0062).
   readonly #raws = new WeakMap<Message | Interaction, unknown>();
   readonly #emitter = new TypedEmitter<TransportEvents>((error) => this.errors.push(error));
   #connected = false;
@@ -209,7 +209,7 @@ export class FakeTransport implements Transport {
 
   /**
    * Objeto bruto registrado com `setRaw` para a mensagem ou interação, que o `ctx.unsafe.raw()`
-   * devolve (ADR 0066); `undefined` sem registro.
+   * devolve (ADR 0062); `undefined` sem registro.
    */
   raw(source: Message | Interaction): unknown {
     return this.#raws.get(source);

@@ -1,5 +1,5 @@
 // Comparação com o baseline (M2-4.2): o PR falha se um cenário piorar mais de 10% sobre a medida
-// do commit base, tirada na mesma máquina e intercalada com a do commit testado (ADR 0054, ADR 0089).
+// do commit base, tirada na mesma máquina e intercalada com a do commit testado (ADR 0050, ADR 0085).
 
 import type { Scenario } from './scenarios.ts';
 import { percentile } from './stats.ts';

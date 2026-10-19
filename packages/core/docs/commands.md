@@ -1,6 +1,6 @@
 # Comandos
 
-O roteador é o 2º estágio do pipeline ([ADR 0012](../../../docs/adr/0012-pipeline-de-3-estagios.md)):
+O roteador é o 2º estágio do pipeline ([ADR 0010](../../../docs/adr/0010-pipeline-de-3-estagios.md)):
 depois dos middlewares, antes dos listeners. Se a mensagem invoca um comando, ele valida papel e
 `accepts`, roda o comando e **consome** a mensagem — ela não chega aos listeners de `message`. No
 bot, quem precisa saber que um comando rodou assina o evento [`command`](events.md#comandos-command).
@@ -35,7 +35,7 @@ O nome vai **sem** o prefixo.
 
 No bot, o `run` que devolve texto (string ou `fmt`) responde com ele, citando a mensagem: o mesmo
 que terminar com `await ctx.reply(texto)`, dentro do prazo do comando
-([ADR 0079](../../../docs/adr/0079-acucar-no-manifesto-do-plugin.md)). Outro valor não responde
+([ADR 0075](../../../docs/adr/0075-acucar-no-manifesto-do-plugin.md)). Outro valor não responde
 nada, então `run: (c) => c.reply('x')` não responde duas vezes. Comando fixo também pode ir direto
 no manifesto, em `commands` ([Plugins → Forma curta](plugins.md#forma-curta-commands-e-on)).
 
@@ -58,7 +58,7 @@ createBot({ transport, prefix: '!', owners: ['+55 11 99999-9999'], plugins: [med
 
 ## O roteador por dentro
 
-Peça interno do kernel, não exportado ([ADR 0034](../../../docs/adr/0034-biblioteca-sem-runner.md)). Como o `Bot` o monta:
+Peça interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md)). Como o `Bot` o monta:
 
 ```ts
 import { createCommandRouter } from '#commands/router.ts';
@@ -107,7 +107,7 @@ o `Bot` monta. Quem usa o roteador solto e quer esses campos os põe no `ctx` pa
 ## Prefixo por chat
 
 O padrão vem da config, um para todo chat ou um por tipo de chat
-([ADR 0063](../../../docs/adr/0063-prefixo-por-chat.md)). `group` vale para todo chat que não é
+([ADR 0059](../../../docs/adr/0059-prefixo-por-chat.md)). `group` vale para todo chat que não é
 `dm` (grupo, canal, thread); o tipo omitido fica com `'!'`.
 
 ```ts
@@ -242,12 +242,12 @@ fora do `run` pode receber `MediaCommandContext`.
 - Owner passa também em `group-admin`.
 - `group-admin` fora de grupo é recusado (não há grupo a que o papel se refira).
 - No bot, quem responde é o `transport.isChatAdmin(chat, sender)`, se o transport o implementa
-  (Discord, Telegram: [ADR 0059](../../../docs/adr/0059-grupos-multiplataforma.md)).
+  (Discord, Telegram: [ADR 0055](../../../docs/adr/0055-grupos-multiplataforma.md)).
 - Sem ele, o remetente é admin se um participante admin do `getGroupMetadata` tem o mesmo `id`
   ou, quando os dois lados o têm, o mesmo `phone`: numa plataforma em que o mesmo contato tem IDs
   de espaços diferentes (o WhatsApp), o remetente e o participante podem vir cada um num. Sem
   telefone de um lado, só o `id` decide
-  ([ADR 0046](../../../docs/adr/0046-ids-de-contato-e-metadata-de-grupo.md)). Metadata sem
+  ([ADR 0042](../../../docs/adr/0042-ids-de-contato-e-metadata-de-grupo.md)). Metadata sem
   `participants` recusa.
 - Sem `isGroupAdmin` (transport sem `isChatAdmin` e sem a capability `groups`), `group-admin`
   recusa todo mundo exceto owners: falha fechada, nunca libera por falta de informação.
@@ -259,12 +259,12 @@ fora do `run` pode receber `MediaCommandContext`.
   estiver na lista por `{ id }`.
 - Um owner `{ id }` é comparado por igualdade com `message.sender.id`, para plataformas sem
   telefone (Discord, Telegram, web). Telefone e ID nunca se cruzam
-  ([ADR 0056](../../../docs/adr/0056-owners-por-telefone-ou-id.md)).
+  ([ADR 0052](../../../docs/adr/0052-owners-por-telefone-ou-id.md)).
 
 ### Papéis custom
 
 Um plugin define um papel nomeado no `setup`, e qualquer plugin o exige no comando
-([ADR 0035](../../../docs/adr/0035-papeis-nomeados-por-plugin.md)). O nome é tipado por
+([ADR 0031](../../../docs/adr/0031-papeis-nomeados-por-plugin.md)). O nome é tipado por
 declaration merging, como os serviços:
 
 ```ts
@@ -294,7 +294,7 @@ ctx.commands.add(command({ name: 'ban', role: 'moderador', run: (c) => c.reply('
   comando e loga um erro que pede o `dependsOn` no dono do papel.
 - `owner`, `group-admin` e `everyone` são reservados (`TypeError`). Definir um papel que já tem
   dono, de outro plugin ou do mesmo, lança `RoleConflictError` (`role`, `existing`, `incoming`).
-  No boot, isso derruba o `start()`, como conflito de comando ou de serviço (ADR 0035); num
+  No boot, isso derruba o `start()`, como conflito de comando ou de serviço (ADR 0031); num
   reload, o plugin recarregado fica ignorado.
 - O papel sai no teardown/reload do plugin que o definiu.
 
@@ -374,14 +374,14 @@ command({
 });
 ```
 
-Enquanto roda, o comando segura o chat dele ([ADR 0042](../../../docs/adr/0042-handler-lento-segura-o-chat.md)):
+Enquanto roda, o comando segura o chat dele ([ADR 0038](../../../docs/adr/0038-handler-lento-segura-o-chat.md)):
 um prazo de 5 min deixa as mensagens seguintes daquele chat esperando até 5 min. A consulta de
 admin e os papéis custom seguem com o `commandMs`.
 
 ### Comando em segundo plano
 
 Se o grupo não deve esperar, declare `background: true`
-([ADR 0087](../../../docs/adr/0087-comando-em-segundo-plano.md)). Papel, `accepts` e `onReject`
+([ADR 0083](../../../docs/adr/0083-comando-em-segundo-plano.md)). Papel, `accepts` e `onReject`
 continuam na fila do chat; o `run` começa ali e a próxima mensagem do chat segue sem esperá-lo:
 
 ```ts
@@ -410,7 +410,7 @@ terminar fora de ordem. Quem guarda estado por conversa e precisa de ordem não 
 O rate limit de entrada conta mensagens, não custo, e a fila paraleliza entre chats: dez chats
 mandando `!download` sobem dez yt-dlp juntos. `concurrency` põe um teto de `run` simultâneos do
 comando no bot, somando todos os chats
-([ADR 0088](../../../docs/adr/0088-limite-de-concorrencia-por-comando.md)):
+([ADR 0084](../../../docs/adr/0084-limite-de-concorrencia-por-comando.md)):
 
 ```ts
 command({
@@ -439,7 +439,7 @@ antigos ainda vivos não contam nele. O roteador solto ignora `concurrency`, com
 
 O `requires` do plugin vale para ele inteiro: num plugin com comandos que enviam tipos diferentes,
 exigir tudo derruba os que funcionariam. `requires` no comando exige a capability só dele
-([ADR 0090](../../../docs/adr/0090-requires-por-comando.md)):
+([ADR 0086](../../../docs/adr/0086-requires-por-comando.md)):
 
 ```ts
 ctx.commands.add(command({
@@ -462,7 +462,7 @@ capability, então um nome inválido falha em qualquer transport. O roteador sol
 ### Serviço por comando
 
 Um comando que usa o serviço de outro plugin, num plugin que funciona sem ele, declara o serviço
-em `services` ([ADR 0099](../../../docs/adr/0099-comando-que-exige-servico.md)). Com o provedor
+em `services` ([ADR 0095](../../../docs/adr/0095-comando-que-exige-servico.md)). Com o provedor
 em `optionalDependsOn` no manifesto, o comando some e volta junto com ele:
 
 ```ts
@@ -507,7 +507,7 @@ roda normalmente.
 No bot, o contexto do `run` traz `signal: AbortSignal`, que aborta quando o prazo estoura
 (`reason` = o `CommandTimeoutError`) ou quando o plugin é descartado (teardown, reload), com o
 motivo do descarte. Repasse-o a `fetch` e SDKs, para o trabalho parar junto
-([ADR 0033](../../../docs/adr/0033-cancelamento-cooperativo.md)):
+([ADR 0029](../../../docs/adr/0029-cancelamento-cooperativo.md)):
 
 ```ts
 command({

@@ -29,7 +29,7 @@ describe('CAPABILITIES', () => {
     expect(isCapability('send.hologram')).toBe(false);
   });
 
-  it('typing no lugar de presence (ADR 0070)', () => {
+  it('typing no lugar de presence (ADR 0066)', () => {
     expect(isCapability('typing')).toBe(true);
     expect(isCapability('presence')).toBe(false);
   });
@@ -110,7 +110,7 @@ describe('capabilitiesForSend / assertCanSend', () => {
     ]);
   });
 
-  it('botões exigem `actions`; lista vazia não exige nada (ADR 0062)', () => {
+  it('botões exigem `actions`; lista vazia não exige nada (ADR 0058)', () => {
     const actions = [{ id: 'a1', label: 'Notas' }];
     expect(capabilitiesForSend({ type: 'text', text: 'oi' }, { actions })).toEqual([
       'send.text',
@@ -121,7 +121,7 @@ describe('capabilitiesForSend / assertCanSend', () => {
     ]);
   });
 
-  it('álbum exige a capability de cada tipo de item, sem repetir, e não send.album (ADR 0065)', () => {
+  it('álbum exige a capability de cada tipo de item, sem repetir, e não send.album (ADR 0061)', () => {
     const media = Buffer.from('x');
     const items = [
       { type: 'image', media },
@@ -143,7 +143,7 @@ describe('capabilitiesForSend / assertCanSend', () => {
 });
 
 describe('groupActionCapability', () => {
-  it('mapeia cada ação; demote usa a mesma de promote (ADR 0059)', () => {
+  it('mapeia cada ação; demote usa a mesma de promote (ADR 0055)', () => {
     expect(groupActionCapability('add')).toBe('groups.add');
     expect(groupActionCapability('remove')).toBe('groups.remove');
     expect(groupActionCapability('promote')).toBe('groups.promote');

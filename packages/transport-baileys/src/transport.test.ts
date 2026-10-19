@@ -70,7 +70,7 @@ describe('BaileysTransport: conexão', () => {
     expect(driver.sockets).toHaveLength(0);
   });
 
-  it('connect() resolve com o socket criado, sem esperar o open (ADR 0048)', async () => {
+  it('connect() resolve com o socket criado, sem esperar o open (ADR 0044)', async () => {
     const { driver, transport, statuses } = setup();
     await transport.connect();
 
@@ -451,7 +451,7 @@ describe('BaileysTransport: mensagens recebidas', () => {
     expect(messages[0]).toMatchObject({ type: 'text', id: 'M1', text: 'oi' });
   });
 
-  it('raw() devolve o WAMessage da mensagem e da citada; fora daqui, undefined (ADR 0066)', async () => {
+  it('raw() devolve o WAMessage da mensagem e da citada; fora daqui, undefined (ADR 0062)', async () => {
     const { socket, messages, transport } = await connected();
     const original: WAMessage = {
       ...text('M1'),
@@ -573,7 +573,7 @@ describe('BaileysTransport: eventos (M2-1.6)', () => {
     const record =
       (event: string) =>
       (payload: unknown): void => {
-        // Os eventos de grupo identificam o grupo pelo `chat` (ADR 0059); os demais, pelos ids.
+        // Os eventos de grupo identificam o grupo pelo `chat` (ADR 0055); os demais, pelos ids.
         const keys = event.startsWith('group.') ? ['chat', 'id'] : ['id', 'name', 'messageId'];
         seen.push(`${event} ${JSON.stringify(payload, keys)}`);
       };
@@ -727,7 +727,7 @@ describe('BaileysTransport: eventos (M2-1.6)', () => {
 });
 
 describe('BaileysTransport: capabilities', () => {
-  it('declara as capabilities do Baileys: todas as do core, menos botões e álbum (ADR 0062, 0065)', () => {
+  it('declara as capabilities do Baileys: todas as do core, menos botões e álbum (ADR 0058, 0061)', () => {
     const { transport } = setup();
     const missing = new Set(['actions', 'send.album']);
     expect([...transport.capabilities].sort()).toEqual(
@@ -824,7 +824,7 @@ describe('BaileysTransport: envio e ações', () => {
     expect(socket.sent.every((s) => s.jid === GROUP)).toBe(true);
   });
 
-  it('edit com a árvore neutra manda a marcação do WhatsApp e as menções (ADR 0061)', async () => {
+  it('edit com a árvore neutra manda a marcação do WhatsApp e as menções (ADR 0057)', async () => {
     const { transport, socket } = await open();
     const key = { chatId: GROUP, id: 'M1', fromMe: true, senderId: null };
     await transport.edit(
@@ -874,7 +874,7 @@ describe('BaileysTransport: envio e ações', () => {
   });
 });
 
-describe('BaileysTransport: metadados de grupo (ADR 0046)', () => {
+describe('BaileysTransport: metadados de grupo (ADR 0042)', () => {
   const GROUP = '120363000000000001@g.us';
   const LID = '111@lid';
 

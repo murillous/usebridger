@@ -353,7 +353,7 @@ describe('abas de plugins: contrato defensivo', () => {
   });
 });
 
-// ADR 0118: título por widget, tom de `stats` e rótulo do botão do `form`.
+// ADR 0114: título por widget, tom de `stats` e rótulo do botão do `form`.
 const rotulos = definePlugin({
   name: 'rotulos',
   version: '1.0.0',

@@ -1,4 +1,4 @@
-// Protocolo v1 do chat web (ADR 0077): frames JSON no WebSocket `GET <base>/chat`. Os tipos são
+// Protocolo v1 do chat web (ADR 0073): frames JSON no WebSocket `GET <base>/chat`. Os tipos são
 // o contrato com o front; o cliente de referência (`./client.ts`) os usa, e o servidor valida o
 // que chega antes de confiar.
 
@@ -86,7 +86,7 @@ export interface ServerMessageFrame {
   readonly kind: 'text' | 'image' | 'video' | 'audio' | 'document';
   /** Texto, ou legenda da mídia (o texto visível, quando há `formatted`). */
   readonly text?: string;
-  /** Árvore do texto formatado (ADR 0061), para o front renderizar. */
+  /** Árvore do texto formatado (ADR 0057), para o front renderizar. */
   readonly formatted?: FormattedText;
   readonly media?: MediaRef;
   /** ID da mensagem citada. */

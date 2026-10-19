@@ -1,4 +1,4 @@
-// Buffer de envio para a conversa sem conexão aberta (ADR 0077): até 100 frames por conversa, por
+// Buffer de envio para a conversa sem conexão aberta (ADR 0073): até 100 frames por conversa, por
 // 1 h, entregues em ordem no próximo `auth`. Sem timer: a validade é conferida quando o buffer anda.
 
 import type { ServerFrame } from './protocol.ts';

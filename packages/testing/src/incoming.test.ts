@@ -64,7 +64,7 @@ describe('buildMessage', () => {
     expect(() => buildMessage({})).toThrow(/text/);
   });
 
-  it('attachments vêm depois da mídia principal, que dá o type (ADR 0065)', async () => {
+  it('attachments vêm depois da mídia principal, que dá o type (ADR 0061)', async () => {
     const message = buildMessage({
       image: Buffer.from('png'),
       attachments: [

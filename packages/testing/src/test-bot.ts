@@ -22,7 +22,7 @@ export interface ClickOptions {
   readonly sender?: Partial<Contact>;
   /** Padrão: o chat da mensagem que o envio cita ou, sem citação, conversa privada no `chatId`. */
   readonly chat?: Chat;
-  /** Objeto bruto falso da interação, que o `ctx.unsafe.raw()` devolve (ADR 0066). */
+  /** Objeto bruto falso da interação, que o `ctx.unsafe.raw()` devolve (ADR 0062). */
   readonly raw?: unknown;
 }
 
@@ -30,7 +30,7 @@ export interface TestBotOptions extends Omit<BotConfig, 'transport'> {
   /** Padrão: um `FakeTransport` do `profile` ou, sem perfil, com todas as capabilities. */
   readonly transport?: FakeTransport;
   /**
-   * Perfil da plataforma (ADR 0073), atalho para `transport: new FakeTransport({ profile })`. Não
+   * Perfil da plataforma (ADR 0069), atalho para `transport: new FakeTransport({ profile })`. Não
    * combina com `transport`: o perfil vai no transport.
    */
   readonly profile?: ProfileName;
@@ -66,7 +66,7 @@ export interface TestBot {
    */
   receive(input: IncomingMessage): Promise<Message>;
   /**
-   * Clica no botão de rótulo `label` do envio (ADR 0062) e espera o bot assentar. Lança se o
+   * Clica no botão de rótulo `label` do envio (ADR 0058) e espera o bot assentar. Lança se o
    * envio não tem esse botão: num transport sem a capability `actions`, o menu sai em texto, e o
    * teste responde com o número pelo `receive()`.
    */
@@ -76,7 +76,7 @@ export interface TestBot {
   /**
    * Simula um restart (deploy, crash): para este bot e sobe outro com as mesmas opções sobre o
    * **mesmo storage**, que não é fechado no meio. Serve para testar o que sobrevive ao restart,
-   * como as esperas de passo com `persist: true` (ADR 0098). `overrides` troca opções do bot novo
+   * como as esperas de passo com `persist: true` (ADR 0094). `overrides` troca opções do bot novo
    * (a versão nova do plugin, por exemplo); o storage não se troca. O transport criado pelo kit
    * é novo (e `sent` começa vazio); o passado em `transport` é reaproveitado. Daqui em diante,
    * use o `TestBot` devolvido.
@@ -138,7 +138,7 @@ async function startTestBot(
     storage: durable,
   });
   await bot.start();
-  // Contadores do bot, não do módulo (ADR 0004): os IDs recomeçam em cada `TestBot`.
+  // Contadores do bot, não do módulo (ADR 0003): os IDs recomeçam em cada `TestBot`.
   let received = 0;
   const build = { nextId: () => `in-${++received}`, sender };
   let clicks = 0;
@@ -192,7 +192,7 @@ async function startTestBot(
   };
 }
 
-/** O `raw` da descrição vai para o transport, na mensagem e na citada descrita (ADR 0066). */
+/** O `raw` da descrição vai para o transport, na mensagem e na citada descrita (ADR 0062). */
 function registerRaw(transport: FakeTransport, message: Message, input: IncomingMessage): void {
   if ('raw' in input) transport.setRaw(message, input.raw);
   const quoted = input.quoted;

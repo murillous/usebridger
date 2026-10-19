@@ -1,4 +1,4 @@
-// Esperas persistidas (ADR 0098, #90): o passo com `persist: true` grava a espera no storage do
+// Esperas persistidas (ADR 0094, #90): o passo com `persist: true` grava a espera no storage do
 // kernel, e o boot seguinte a restaura. Cada "restart" aqui é um bot novo sobre o mesmo storage,
 // que sobrevive ao `stop()` (o `close` do storage do teste não apaga nada).
 
@@ -87,7 +87,7 @@ function notas(options: NotasOptions = {}): PluginDefinition {
   });
 }
 
-/** `!cadastro` abre uma espera de 1 minuto cujo passo tem `onExpire` (ADR 0097). */
+/** `!cadastro` abre uma espera de 1 minuto cujo passo tem `onExpire` (ADR 0093). */
 function cadastro(): PluginDefinition {
   return definePlugin({
     name: 'cadastro',
@@ -190,7 +190,7 @@ async function say(started: Started, text: string): Promise<void> {
 const orphanWarnings = (lines: readonly LogLine[]): LogLine[] =>
   lines.filter((line) => line.level === 'warn' && line.message.includes('espera descartada'));
 
-describe('Bot: esperas persistidas (ADR 0098)', () => {
+describe('Bot: esperas persistidas (ADR 0094)', () => {
   it('a espera de passo com persist sobrevive ao restart sobre o mesmo storage', async () => {
     const storage = durableStorage();
     const first = await boot(storage, [notas()]);
@@ -259,7 +259,7 @@ describe('Bot: esperas persistidas (ADR 0098)', () => {
 
     expect(sentTexts(second.transport)).toEqual([]);
     expect(heard).toEqual(['Maria']);
-    // Expirar não é órfã: sem aviso, como a expiração com o bot no ar (ADR 0060).
+    // Expirar não é órfã: sem aviso, como a expiração com o bot no ar (ADR 0056).
     expect(orphanWarnings(second.lines)).toEqual([]);
     await stop(second.bot);
     expect(await waits(storage).find()).toEqual([]);
@@ -459,7 +459,7 @@ describe('Bot: esperas persistidas (ADR 0098)', () => {
     await say(started, '!notas');
 
     await started.bot.plugins.reload('notas');
-    // Falha passageira não apaga a conversa (ADR 0098).
+    // Falha passageira não apaga a conversa (ADR 0094).
     expect(orphanWarnings(started.lines)).toEqual([]);
     expect(await waits(storage).find()).toHaveLength(1);
 
@@ -485,7 +485,7 @@ describe('Bot: esperas persistidas (ADR 0098)', () => {
         throw new Error('banco fora do ar');
       },
     });
-    // O boot abortado (ADR 0102) não varre as esperas: elas ficam para o boot corrigido.
+    // O boot abortado (ADR 0098) não varre as esperas: elas ficam para o boot corrigido.
     await expect(boot(storage, [broken, outro()])).rejects.toMatchObject({
       name: 'PluginBootError',
       plugin: 'notas',
@@ -659,7 +659,7 @@ describe('Bot: esperas persistidas (ADR 0098)', () => {
   });
 });
 
-describe('Bot: failed não apaga esperas persistidas (ADR 0120)', () => {
+describe('Bot: failed não apaga esperas persistidas (ADR 0116)', () => {
   it('a espera vence em failed sem onExpire nem remoção; o boot seguinte dispara o onExpire', async () => {
     const storage = durableStorage();
     const first = await boot(storage, [cadastro()]);

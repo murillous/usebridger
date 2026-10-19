@@ -1,4 +1,4 @@
-// Máscara de segredos para dados que saem do core por fora do logger (`ctx.admin`, ADR 0111): o
+// Máscara de segredos para dados que saem do core por fora do logger (`ctx.admin`, ADR 0107): o
 // log já censura, mas uma mensagem de erro devolvida a um cliente (dashboard) sairia crua.
 
 import { MIN_SECRET_LENGTH } from './logger.ts';

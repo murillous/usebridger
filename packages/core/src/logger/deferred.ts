@@ -1,6 +1,6 @@
 // Logger que resolve o destino a cada linha (M1-21). O `createBot` entrega um logger à fábrica
 // do transport antes de existir o logger real, que só nasce no `start()` (criá-lo antes seria
-// efeito colateral, ADR 0004). Este repassa cada chamada ao logger que valer no momento.
+// efeito colateral, ADR 0003). Este repassa cada chamada ao logger que valer no momento.
 
 import type { LogFields, Logger, LogLevel } from './types.ts';
 

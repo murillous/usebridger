@@ -1,7 +1,7 @@
 // `owners` da config do bot. Uma string é telefone, comparado com `Contact.phone`, que o transport
 // entrega só com dígitos (M1-16). Normalizar aqui deixa o operador escrever o número como está
 // acostumado (`+55 (11) 99999-9999`) sem que a comparação dependa da formatação. `{ id }` é o ID
-// nativo do contato (`Contact.id`), para plataformas sem telefone (ADR 0056).
+// nativo do contato (`Contact.id`), para plataformas sem telefone (ADR 0052).
 
 // Pontuação comum em telefone escrito à mão. Qualquer outra coisa (letra, `@` de JID) é erro:
 // melhor recusar no boot do que nunca reconhecer o dono.

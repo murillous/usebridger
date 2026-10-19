@@ -1,4 +1,4 @@
-// Auth state do Baileys sobre o `AuthStateStore` do bot (ADR 0014/0037), no lugar do
+// Auth state do Baileys sobre o `AuthStateStore` do bot (ADR 0012/0033), no lugar do
 // `useMultiFileAuthState`. O store só guarda JSON; os `Buffer`/`Uint8Array` do Baileys vão e
 // voltam pelo `BufferJSON`, como no arquivo que o `useMultiFileAuthState` gravaria.
 
@@ -27,7 +27,7 @@ export interface StoredAuthState {
  * cada leitura iria ao storage e repetiria a conversão do `BufferJSON`. O cache vive só nesta
  * tentativa: depois de um `clear()` do bot, a próxima começa vazia e não ressuscita chave
  * apagada. Ele não vê gravações de outro processo, o que não acontece porque a mesma sessão
- * não roda em dois (ADR 0036).
+ * não roda em dois (ADR 0032).
  */
 export async function loadAuthState(
   store: AuthStateStore,

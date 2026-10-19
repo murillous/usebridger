@@ -1,4 +1,4 @@
-// Capabilities do transporte (ADR 0010). A lista é API pública: plugins a citam em `requires`,
+// Capabilities do transporte (ADR 0008). A lista é API pública: plugins a citam em `requires`,
 // então incluir é barato, mas renomear ou remover é breaking change.
 
 import type { GroupParticipantAction, OutgoingContent, SendOptions } from './types.ts';
@@ -12,7 +12,7 @@ export const CAPABILITIES = [
   'groups.promote',
   'mentions',
   'reactions',
-  // "Digitando" no chat; o status online global do WhatsApp não é do contrato (ADR 0070).
+  // "Digitando" no chat; o status online global do WhatsApp não é do contrato (ADR 0066).
   'typing',
   'send.text',
   'send.image',
@@ -28,7 +28,7 @@ export const CAPABILITIES = [
   'polls',
   'quoted',
   // A sessão se pareia por QR ou código (`connection.qr`/`.pairing-code`): limpar as credenciais
-  // leva a um pareamento novo. Sem ela, `auth-failed` para o bot em vez de limpar (ADR 0068).
+  // leva a um pareamento novo. Sem ela, `auth-failed` para o bot em vez de limpar (ADR 0064).
   'pairing',
 ] as const;
 
@@ -92,7 +92,7 @@ const groupCapability: { readonly [K in GroupParticipantAction]: Capability } = 
   demote: 'groups.promote',
 };
 
-/** Capability de uma alteração de participantes; `demote` anda junto com `promote` (ADR 0059). */
+/** Capability de uma alteração de participantes; `demote` anda junto com `promote` (ADR 0055). */
 export function groupActionCapability(action: GroupParticipantAction): Capability {
   return groupCapability[action];
 }
@@ -111,7 +111,7 @@ const sendCapability: { readonly [K in Exclude<OutgoingContent['type'], 'album'>
 /**
  * Capabilities que um envio exige: a do tipo de conteúdo, mais citação, menções e botões se
  * usados. O álbum exige a de cada tipo de item, e não a `send.album`: sem ela, a fila o envia
- * item a item (ADR 0065).
+ * item a item (ADR 0061).
  */
 export function capabilitiesForSend(content: OutgoingContent, options?: SendOptions): Capability[] {
   const required: Capability[] =

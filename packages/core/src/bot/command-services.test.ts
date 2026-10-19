@@ -1,4 +1,4 @@
-// Comando que exige serviço (#84, ADR 0099): sem o serviço provido, o comando fica fora do
+// Comando que exige serviço (#84, ADR 0095): sem o serviço provido, o comando fica fora do
 // roteador, do `ctx.commands.list()` e do menu; com `optionalDependsOn`, ele some e volta junto
 // com o provedor, e o plugin que o declara carrega mesmo sem o provedor.
 
@@ -80,7 +80,7 @@ const download = definePlugin({
 
 const names = (menu: TransportCommands) => menu.list().map((c) => c.name);
 
-describe('services por comando (ADR 0099)', () => {
+describe('services por comando (ADR 0095)', () => {
   it('sem o provedor, o plugin carrega e só o comando fica de fora', async () => {
     const { bot, transport, menu, lines } = start([download]);
     await bot.start();
@@ -124,7 +124,7 @@ describe('services por comando (ADR 0099)', () => {
   });
 
   it('o provedor que falha no setup do reload não derruba o plugin', async () => {
-    // No boot, o provedor que falha derruba o boot (ADR 0102); em runtime, o dependente opcional
+    // No boot, o provedor que falha derruba o boot (ADR 0098); em runtime, o dependente opcional
     // segue sem ele.
     let broken = false;
     const flaky = definePlugin({

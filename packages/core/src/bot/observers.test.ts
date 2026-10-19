@@ -1,4 +1,4 @@
-// ADR 0106 (#148): `ctx.observe` com `message.handled` e `outbound.sent`, síncronos, por bot.
+// ADR 0102 (#148): `ctx.observe` com `message.handled` e `outbound.sent`, síncronos, por bot.
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { command } from '#commands/command.ts';
@@ -53,7 +53,7 @@ async function startBot(
   return { bot, seen };
 }
 
-describe('ctx.observe (ADR 0106)', () => {
+describe('ctx.observe (ADR 0102)', () => {
   it('`message.handled` do comando com o nome canônico e `outbound.sent` da resposta com `replyTo`', async () => {
     const transport = new RecordingTransport();
     const { bot, seen } = await startBot(transport, (ctx) => {

@@ -74,7 +74,7 @@ export { GroupAdminTimeoutError } from './group-admin.ts';
 /** Prazo padrão do `run` de um comando: o mesmo dos listeners. */
 const DEFAULT_COMMAND_TIMEOUT_MS = 30_000;
 
-/** Prazo padrão de cada middleware: o mesmo dos handlers (ADR 0043). */
+/** Prazo padrão de cada middleware: o mesmo dos handlers (ADR 0039). */
 const DEFAULT_MIDDLEWARE_TIMEOUT_MS = 30_000;
 
 /**
@@ -101,7 +101,7 @@ const TRANSPORT_ROUTE_OWNER = '$transport';
  */
 export function createBot(config: BotConfig): Bot {
   const session = validateSession(config.session ?? DEFAULT_SESSION);
-  // Todo o estado vive neste closure (ADR 0004): duas instâncias nunca se enxergam.
+  // Todo o estado vive neste closure (ADR 0003): duas instâncias nunca se enxergam.
   const hooks: RegisteredStopHook[] = [];
   let state: BotState = 'idle';
   let stopRequested = false;
@@ -121,7 +121,7 @@ export function createBot(config: BotConfig): Bot {
   // A fábrica recebe o logger antes de ele existir: este delega ao filho `{ transport }` que o
   // start() cria e, até lá, ao no-op.
   let transportLog: Logger | undefined;
-  // A lista de comandos que o transport registra na plataforma (ADR 0064). O registro avisa o
+  // A lista de comandos que o transport registra na plataforma (ADR 0060). O registro avisa o
   // catálogo, que junta os avisos em lote.
   const catalog = createCommandCatalog({
     list: () => registry.list(),
@@ -129,7 +129,7 @@ export function createBot(config: BotConfig): Bot {
       log.error('listener de commands.onChange do transport falhou', { err: error }),
   });
   const registry = createCommandRegistry({ onChange: () => catalog.changed() });
-  // Rotas da sessão no servidor do processo (ADR 0076); só entram nele no start().
+  // Rotas da sessão no servidor do processo (ADR 0072); só entram nele no start().
   const http = config.http === undefined ? undefined : sessionHttp(config.http, session, getLog);
   let resolvedTransport: Transport | undefined;
   const transport = resolveTransport(config.transport, {
@@ -154,7 +154,7 @@ export function createBot(config: BotConfig): Bot {
   // O transport registra rotas na fábrica; publicadas no start(), retiradas no stop.
   let httpAttached = false;
   let releaseSession: ReleaseSession | undefined;
-  // Trava da sessão entre processos (ADR 0074); só existe com storage que a implementa.
+  // Trava da sessão entre processos (ADR 0070); só existe com storage que a implementa.
   let sessionLease: SessionLease | undefined;
   // O `stop()` durante o `start()` aborta a espera pela trava em vez de esperar a validade.
   const bootAbort = new AbortController();
@@ -180,7 +180,7 @@ export function createBot(config: BotConfig): Bot {
     onError: (event) => logPluginError(log, event),
   });
   const pluginErrors = createPluginErrorReporter({ log: getLog, bus });
-  // Sinais por unidade de trabalho, para métricas (ADR 0106).
+  // Sinais por unidade de trabalho, para métricas (ADR 0102).
   // O erro de um observador de `log` é logado: sem o `quiet`, ele voltaria ao próprio sinal.
   const observers = new Observers((event) =>
     event.event === 'log'
@@ -188,7 +188,7 @@ export function createBot(config: BotConfig): Bot {
       : pluginErrors.report(event),
   );
   const logTap = createLogSignalTap(observers, secrets);
-  // Ordem dos pontos de extensão: a tabela do host, já na ordem de carga (ADR 0096).
+  // Ordem dos pontos de extensão: a tabela do host, já na ordem de carga (ADR 0092).
   const services = createServiceRegistry({
     loadOrder: () => host?.report().map((entry) => entry.name) ?? [],
   });
@@ -212,8 +212,8 @@ export function createBot(config: BotConfig): Bot {
         { plugin: command.plugin, command: command.name, role },
       ),
   });
-  // A espera com `onExpire` que vence entra na fila do chat como uma mensagem (ADR 0097). As de
-  // passo com `persist` ficam no storage da sessão (ADR 0098); a coleção só abre no primeiro uso.
+  // A espera com `onExpire` que vence entra na fila do chat como uma mensagem (ADR 0093). As de
+  // passo com `persist` ficam no storage da sessão (ADR 0094); a coleção só abre no primeiro uso.
   const conversations = new ConversationRegistry<KernelMessageContext, ExpireOrigin>({
     // `entry` nasce mais abaixo; seguro porque o `onDue` só dispara depois do `restore()` no boot.
     onDue: (chat, sender) => entry.expireWait(chat, sender),
@@ -229,7 +229,7 @@ export function createBot(config: BotConfig): Bot {
     timeouts.middlewareMs ?? DEFAULT_MIDDLEWARE_TIMEOUT_MS,
     getLog,
   );
-  // Os mesmos filtros, para os eventos que não passam pelo pipeline (ADR 0038).
+  // Os mesmos filtros, para os eventos que não passam pelo pipeline (ADR 0034).
   const chatFilterOptions = config.middlewares?.chatFilter;
   const chatIsAllowed = chatFilterOptions ? chatAllowed(chatFilterOptions) : () => true;
   const dropsSelf = config.middlewares?.ignoreSelf !== false;
@@ -246,12 +246,12 @@ export function createBot(config: BotConfig): Bot {
     observers,
   });
   const stats = (): BotStats => ({ inbound: inbound.stats(), outbound: outbound.stats() });
-  // O plugin vê o envio e as ações (ADR 0040): a fila (close, stats) fica com o kernel.
+  // O plugin vê o envio e as ações (ADR 0036): a fila (close, stats) fica com o kernel.
   const send = createOutbound(outbound, transport);
   const groups = createGroups(transport, enqueueAction(outbound, transport));
   // Cópia: o plugin recebe um `ReadonlySet`, mas um cast não deve alterar o do transport.
   const capabilities: ReadonlySet<Capability> = new Set(transport.capabilities);
-  // Tenant da mensagem ou do evento em andamento (ADR 0072): o storage dos plugins e os jobs
+  // Tenant da mensagem ou do evento em andamento (ADR 0068): o storage dos plugins e os jobs
   // agendados seguem ele.
   const tenants = new TenantScope();
   const scheduler = createSchedulerService({
@@ -296,10 +296,10 @@ export function createBot(config: BotConfig): Bot {
               (typeof config.transport === 'function' ? () => auth.clear() : undefined),
           },
           pairing: hasCapability(transport, 'pairing'),
-          // Chamado de dentro de um handler do transport (ADR 0120).
+          // Chamado de dentro de um handler do transport (ADR 0116).
           giveUp: () => enterFailed(),
         });
-  // Snapshot do último status para plugin que sobe depois do evento (ADR 0110).
+  // Snapshot do último status para plugin que sobe depois do evento (ADR 0106).
   let lastConnection: ConnectionStatus | undefined;
   const connectionTracker = createConnectionTracker();
   const entry = createTransportEntry({
@@ -350,7 +350,7 @@ export function createBot(config: BotConfig): Bot {
     };
     push('fila-de-saida', STOP_TIMEOUTS.outbound, (signal) => {
       // Conexão caída: o gancho do transporte já parou a reconexão, então drenar só gastaria o
-      // prazo. Descarta já (ADR 0039).
+      // prazo. Descarta já (ADR 0035).
       if (outbound.paused) return outbound.close({ drain: false });
       // Drena até o prazo; estourado, descarta o que aguarda (docs/outbound-queue.md).
       signal.addEventListener('abort', () => void outbound.close({ drain: false }), {
@@ -435,7 +435,7 @@ export function createBot(config: BotConfig): Bot {
               entry.name === name && entry.status === 'skipped' && entry.reason.kind === 'disabled',
           ) ?? false,
     });
-    // Rotação da chave mestra (ADR 0121): antes do setup, para os plugins já lerem com a atual.
+    // Rotação da chave mestra (ADR 0117): antes do setup, para os plugins já lerem com a atual.
     await configs.rotateSecrets();
     const createContext = createPluginContextFactory({
       configs,
@@ -478,7 +478,7 @@ export function createBot(config: BotConfig): Bot {
       armed,
       onRoleError: pluginErrors.report,
       onLateCommandError: (plugin, command, error) => {
-        // A recusa de um contexto expirado já foi logada quando aconteceu (ADR 0033).
+        // A recusa de um contexto expirado já foi logada quando aconteceu (ADR 0029).
         if (error instanceof ContextExpiredError) return;
         log.error(`comando "${command}" rejeitou depois do prazo`, {
           plugin,
@@ -501,7 +501,7 @@ export function createBot(config: BotConfig): Bot {
     try {
       await pluginHost.start();
     } catch (error) {
-      // Conflito de nome sai com o próprio erro (ADR 0007 e 0035): diz qual comando, papel ou
+      // Conflito de nome sai com o próprio erro (ADR 0005 e 0031): diz qual comando, papel ou
       // serviço colidiu, que é o que o autor precisa corrigir.
       const conflict =
         error instanceof PluginBootError &&
@@ -537,7 +537,7 @@ export function createBot(config: BotConfig): Bot {
         log.warn('sem storage configurado: usando memória, os dados somem ao reiniciar');
       }
       // Sem conexão até o primeiro `open`: o `connect()` resolve ao iniciar a tentativa, e os
-      // envios do setup e dos jobs vencidos iriam para um socket ainda fechado (ADR 0048). O
+      // envios do setup e dos jobs vencidos iriam para um socket ainda fechado (ADR 0044). O
       // teto da pausa conta daqui.
       outbound.pause();
       unsubscribe = entry.subscribe();
@@ -603,7 +603,7 @@ export function createBot(config: BotConfig): Bot {
 
     if (stopRequested) throw stoppedDuringBoot();
     // Fatal no connect inicial (token ou intents inválidos): o `start()` resolve em `failed`, com
-    // plugins e HTTP no ar para o painel mostrar o erro (ADR 0120).
+    // plugins e HTTP no ar para o painel mostrar o erro (ADR 0116).
     if (failRequested) {
       gate.settle(false);
       toFailed();
@@ -615,7 +615,7 @@ export function createBot(config: BotConfig): Bot {
   }
 
   /**
-   * Desistência da reconexão (ADR 0120): para o transport e as filas, mas mantém plugins, HTTP e
+   * Desistência da reconexão (ADR 0116): para o transport e as filas, mas mantém plugins, HTTP e
    * scheduler no ar, para o painel mostrar o erro. O `stop()` encerra o resto.
    */
   function enterFailed(): void {
@@ -628,7 +628,7 @@ export function createBot(config: BotConfig): Bot {
     void reconnector?.stop();
     void inbound.close({ drain: false });
     void outbound.close({ drain: false });
-    // Sem o fechamento, as esperas persistidas venceriam e sumiriam sem `onExpire` (ADR 0097/0098).
+    // Sem o fechamento, as esperas persistidas venceriam e sumiriam sem `onExpire` (ADR 0093/0094).
     conversations.close();
     // Os jobs ficam no storage para o próximo boot, como no `abandonInternals`.
     void scheduler.stop(AbortSignal.abort());
@@ -683,7 +683,7 @@ export function createBot(config: BotConfig): Bot {
     // Storage por último: os teardowns e o scheduler ainda o usam até aqui. Se outro bot (outra
     // sessão) ainda o usa, quem fecha é o último a parar.
     // As gravações de espera persistida em andamento terminam antes de o storage fechar e de outro
-    // processo assumir a sessão (ADR 0098). Falha de escrita já vai ao log; isto não rejeita.
+    // processo assumir a sessão (ADR 0094). Falha de escrita já vai ao log; isto não rejeita.
     await conversations.flush();
     // Liberada no stop limpo, a sessão sobe em outro processo na hora, sem esperar a validade.
     try {

@@ -1,4 +1,4 @@
-// Prazo do `run` de comando (ADR 0005): um comando preso não pode segurar o chat para sempre.
+// Prazo do `run` de comando (ADR 0004): um comando preso não pode segurar o chat para sempre.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type CommandRejection, command, type RejectContext } from '#commands/command.ts';
@@ -262,7 +262,7 @@ describe('Bot: prazo de comando', () => {
     expect(errors[0]?.error).toMatchObject({ chatId: 'g@test', timeoutMs: 50 });
   });
 
-  it('isChatAdmin preso também estoura o prazo do comando (ADR 0059)', async () => {
+  it('isChatAdmin preso também estoura o prazo do comando (ADR 0055)', async () => {
     const transport = Object.assign(new RecordingTransport(['send.text', 'quoted']), {
       isChatAdmin: () => new Promise<boolean>(() => undefined),
     });

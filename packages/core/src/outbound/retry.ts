@@ -1,4 +1,4 @@
-// Política de retry da fila de saída (ADR 0019 e 0067), sem estado: a fila guarda as tentativas,
+// Política de retry da fila de saída (ADR 0017 e 0063), sem estado: a fila guarda as tentativas,
 // as janelas e os contadores, e pergunta aqui se re-tenta e com que espera.
 
 import { UnsupportedError } from '#transport/capabilities.ts';
@@ -20,7 +20,7 @@ export interface RetryAfter {
 }
 
 /**
- * Janela que a plataforma informou num erro do transport (ADR 0067): `retryAfterMs` finito e
+ * Janela que a plataforma informou num erro do transport (ADR 0063): `retryAfterMs` finito e
  * >= 0, e `retryAfterScope: 'global'` quando ela vale para todos os chats. Duck typing, como o
  * `retryable`: o transport não precisa de classe do core para lançar o erro nativo enriquecido.
  */

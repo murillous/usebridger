@@ -27,7 +27,7 @@ const toIssues = (error: PluginConfigError) =>
 
 /**
  * Rotas `/api/config/:plugin` (M5-4.2): view com secrets mascarados + JSON Schema para o
- * formulário, e gravação de overrides. O `PUT` recusa secret; ele se grava pelas rotas `/secrets/:path` (ADR 0121).
+ * formulário, e gravação de overrides. O `PUT` recusa secret; ele se grava pelas rotas `/secrets/:path` (ADR 0117).
  */
 export function registerConfigRoutes(
   ctx: PluginContext,
@@ -162,7 +162,7 @@ export function registerConfigRoutes(
     ),
   );
 
-  // Segredo cifrado (ADR 0121). O valor só trafega no corpo do PUT e nunca volta na resposta.
+  // Segredo cifrado (ADR 0117). O valor só trafega no corpo do PUT e nunca volta na resposta.
   const secretRoute = (
     apply: (
       admin: PluginAdmin,

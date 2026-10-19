@@ -15,19 +15,19 @@ export type DirectEvent = Extract<
   | 'contact.updated'
 >;
 
-/** O que os filtros do ADR 0038 leem de um evento; `chat: null` = não passa pelo `chatFilter`. */
+/** O que os filtros do ADR 0034 leem de um evento; `chat: null` = não passa pelo `chatFilter`. */
 interface EventOrigin {
-  /** Com o `parentId`, para o `chatFilter` casar também o espaço (ADR 0058). */
+  /** Com o `parentId`, para o `chatFilter` casar também o espaço (ADR 0054). */
   readonly chat: Pick<Chat, 'id' | 'parentId'> | null;
   readonly fromMe: boolean;
-  /** Autor do evento, para o `ignoreBots` (ADR 0057). */
+  /** Autor do evento, para o `ignoreBots` (ADR 0053). */
   readonly fromBot: boolean;
 }
 
 const ALWAYS_PASSES: EventOrigin = { chat: null, fromMe: false, fromBot: false };
 
 /**
- * Origem de cada evento direto, para o `chatFilter`, o `ignoreSelf` e o `ignoreBots` (ADR 0038).
+ * Origem de cada evento direto, para o `chatFilter`, o `ignoreSelf` e o `ignoreBots` (ADR 0034).
  */
 export const DIRECT_EVENTS: {
   readonly [E in DirectEvent]: (payload: BotEvents[E]) => EventOrigin;

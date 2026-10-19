@@ -1,4 +1,4 @@
-// O protocolo do `WebTransport` sem rede (ADR 0077): rotas e sockets falsos, para os prazos rodarem
+// O protocolo do `WebTransport` sem rede (ADR 0073): rotas e sockets falsos, para os prazos rodarem
 // com relógio falso e cada frame ser conferido.
 
 import {

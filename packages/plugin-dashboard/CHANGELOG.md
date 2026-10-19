@@ -7,8 +7,8 @@
 - a784db1: Status do bot no contexto (M5-4.8): `ctx.connectionInfo()`, `ctx.botName`, `BotConfig.name` e `expiresAt` opcional em `connection.qr` (preenchido pelo Baileys). O card do bot na Visão geral mostra "No ar desde", Reconexões e "Expira em", o cabeçalho mostra o nome do bot, e o botão Copiar volta ao normal depois de uma falha.
 - 7996b2a: Visão geral ganha o 5º KPI "Fila de saída", ao vivo pelo status (`outboundPending`), e Métricas troca "Envios por dia" pelo painel da fila de saída (máximo por dia, gauge). A coluna "Plugin" mostra o dono de cada métrica (`core` para o kernel), `GET /api/metrics` devolve `plugin` por métrica e a contagem de séries passa a ficar no texto, ao lado do nome.
 - b67d9ca: Tela de plugins conforme o canvas (M5-4.8): nome e versão numa coluna, estado carregado/falhou/pulado/desligado, toggle de ativo, busca, subtítulo do boot, painel com a causa real do erro de setup (`reason.causeMessage`, com secrets censurados) e, no mobile, filtros, card de problema e lista com toggle. Nova rota `GET /api/plugins/boot`. A tabela deixa de estourar a largura em 1080 px.
-- 2ea098c: A Config substitui e remove segredos cifrados (ADR 0121): rotas `PUT` e `DELETE /api/config/:plugin/secrets/:path`, `secretsWritable` no manifesto e botões "Substituir" e "Remover" nos campos secretos.
-- 416395d: Abas de plugin (`dashboard.tabs`): todo widget aceita `title?` (antes só `series`), desenhado sobre o widget e usado como rótulo da seção; `StatItem` ganha `tone?` (`ok`, `warn`, `danger`), que colore o valor do cartão; e o `form` ganha `submitLabel?` para o texto do botão de envio (padrão "Enviar"). Título ou rótulo que não é texto some do manifesto, e tom desconhecido some do item sem descartá-lo (ADR 0118).
+- 2ea098c: A Config substitui e remove segredos cifrados (ADR 0117): rotas `PUT` e `DELETE /api/config/:plugin/secrets/:path`, `secretsWritable` no manifesto e botões "Substituir" e "Remover" nos campos secretos.
+- 416395d: Abas de plugin (`dashboard.tabs`): todo widget aceita `title?` (antes só `series`), desenhado sobre o widget e usado como rótulo da seção; `StatItem` ganha `tone?` (`ok`, `warn`, `danger`), que colore o valor do cartão; e o `form` ganha `submitLabel?` para o texto do botão de envio (padrão "Enviar"). Título ou rótulo que não é texto some do manifesto, e tom desconhecido some do item sem descartá-lo (ADR 0114).
 
 ### Patch Changes
 
@@ -33,7 +33,7 @@
 
 ### Minor Changes
 
-- 64f30e7: Abas contribuídas por plugins pelo ponto `dashboard.tabs` (ADR 0108): `GET /api/tabs`, `GET /api/tabs/:plugin/:tab/:widget`, `POST .../actions/:action` e `POST .../submit`; widgets `stats`, `table`, `series`, `form` e `text`; grupo Extensões na sidebar e em Mais no celular. Exporta os tipos `DashboardTab`, `DashboardWidget` e afins.
+- 64f30e7: Abas contribuídas por plugins pelo ponto `dashboard.tabs` (ADR 0104): `GET /api/tabs`, `GET /api/tabs/:plugin/:tab/:widget`, `POST .../actions/:action` e `POST .../submit`; widgets `stats`, `table`, `series`, `form` e `text`; grupo Extensões na sidebar e em Mais no celular. Exporta os tipos `DashboardTab`, `DashboardWidget` e afins.
 - 678e1fb: App web do dashboard (React + Vite) servido pelo próprio plugin em `GET /` e `/*`, com fallback de SPA e `<base href>` do `basePath`: Login, Visão geral (status, QR, código de pareamento, indicador ao vivo), Logs, Plugins e Config (formulário gerado do JSON Schema). Os estáticos saem em `dist/web` no `pnpm build`.
 - c61f21d: API de config dos plugins: `GET`/`PUT /api/config/:plugin` devolvem view (secrets mascarados) e JSON Schema, e gravam overrides com validação e reload; exige `adminPlugins` (M5-4.2).
 - 1c52dfc: `GET /api/logs` aceita `?level=<nível>` e devolve só as linhas com nível igual ou acima; nível inválido responde 400.
@@ -41,7 +41,7 @@
 - f65c4fa: Plugins: colunas setup, `dependsOn`, serviços e contribuições. Config: lista de plugins ao lado no desktop (`select` só abaixo de 768 px), lista editável para array de primitivos e pares chave/valor para record.
 - 786a0d4: `GET /api/plugins` (tabela de boot) e `POST /api/plugins/:name/enable|disable|reload`, só com `dashboard` em `adminPlugins` (503 sem isso).
 - d79e8af: `GET /api/status` e o snapshot do WebSocket trazem `session`; o status parte do último estado de conexão guardado pelo core, então reflete a conexão atual depois de um reload do plugin.
-- 56fb75d: Novo pacote `@usebridger/plugin-dashboard`: base do dashboard (ADR 0107) com login por token e cookie de sessão HttpOnly, `GET /api/status`, `GET /api/logs` (buffer em anel alimentado pelo sinal `log`) e WebSocket `/api/ws` com snapshot e push de status, QR, código de pareamento e logs.
+- 56fb75d: Novo pacote `@usebridger/plugin-dashboard`: base do dashboard (ADR 0103) com login por token e cookie de sessão HttpOnly, `GET /api/status`, `GET /api/logs` (buffer em anel alimentado pelo sinal `log`) e WebSocket `/api/ws` com snapshot e push de status, QR, código de pareamento e logs.
 
 ### Patch Changes
 

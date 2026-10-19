@@ -236,7 +236,7 @@ export function createEventBus(options: EventBusOptions): EventBus {
 
   /**
    * Corre a promise do listener contra o prazo; resolve `true` se ele falhou. Estourado o prazo,
-   * expira o `Deadline` do listener: o `ctx.signal` dele aborta (ADR 0033).
+   * expira o `Deadline` do listener: o `ctx.signal` dele aborta (ADR 0029).
    */
   function watch(
     entry: Entry,
@@ -253,7 +253,7 @@ export function createEventBus(options: EventBusOptions): EventBus {
         armed.delete(disarm);
         settle();
       };
-      // Pausa enquanto o `reply` do listener aguarda a fila de saída (ADR 0047).
+      // Pausa enquanto o `reply` do listener aguarda a fila de saída (ADR 0043).
       const cancel = deadline.armTimer(entry.timeoutMs, () => {
         disarm();
         const error = new ListenerTimeoutError(entry.plugin, event, entry.timeoutMs);
@@ -271,7 +271,7 @@ export function createEventBus(options: EventBusOptions): EventBus {
         (error: unknown) => {
           if (settled) {
             // Já reportado como timeout; o erro tardio só vai para o log. A recusa de um
-            // contexto expirado já foi logada quando aconteceu (ADR 0033): não repete.
+            // contexto expirado já foi logada quando aconteceu (ADR 0029): não repete.
             if (!(error instanceof ContextExpiredError)) {
               onError({ plugin: entry.plugin, phase: 'listener', event, error, timedOut: false });
             }

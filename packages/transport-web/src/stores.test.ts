@@ -1,4 +1,4 @@
-// Buffer de envio e arquivos em memória (ADR 0077): validade sem timer e tetos.
+// Buffer de envio e arquivos em memória (ADR 0073): validade sem timer e tetos.
 
 import { describe, expect, it } from 'vitest';
 import { MEDIA_TTL_MS, MediaStore } from './media-store.ts';

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TenantScope } from './scope.ts';
 
-describe('TenantScope (ADR 0072)', () => {
+describe('TenantScope (ADR 0068)', () => {
   it('fora de run não há tenant', () => {
     expect(new TenantScope().current).toBeUndefined();
   });

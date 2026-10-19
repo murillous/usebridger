@@ -1,4 +1,4 @@
-// `requires` por comando (ADR 0090): sem a capability, o comando não é registrado e some do
+// `requires` por comando (ADR 0086): sem a capability, o comando não é registrado e some do
 // roteador, do `ctx.commands.list()` e do menu nativo; o resto do plugin segue de pé.
 
 import { afterEach, describe, expect, it } from 'vitest';
@@ -54,7 +54,7 @@ const media = (onSetup: (ctx: PluginContext) => void = () => undefined): PluginD
     },
   });
 
-describe('requires por comando (ADR 0090)', () => {
+describe('requires por comando (ADR 0086)', () => {
   it('sem a capability, o comando fica fora do roteador, do list() e do menu', async () => {
     let listed: string[] = [];
     const { bot, transport, lines, menu } = start(

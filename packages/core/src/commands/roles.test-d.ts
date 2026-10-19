@@ -1,4 +1,4 @@
-// Papéis por declaration merging contra `@usebridger/core`, como um plugin faz (ADR 0035).
+// Papéis por declaration merging contra `@usebridger/core`, como um plugin faz (ADR 0031).
 import type { CommandRole, PluginContext } from '@usebridger/core';
 import { describe, expectTypeOf, it } from 'vitest';
 import { command } from '#commands/command.ts';

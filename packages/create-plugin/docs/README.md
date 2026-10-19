@@ -1,7 +1,7 @@
 # create-bridger-plugin — documentação
 
 Cria a pasta de um plugin do Bridger pronta para desenvolver, testar e publicar. O porquê das
-escolhas está no [ADR 0081](../../../docs/adr/0081-create-bridger-plugin.md).
+escolhas está no [ADR 0077](../../../docs/adr/0077-create-bridger-plugin.md).
 
 ## Uso
 

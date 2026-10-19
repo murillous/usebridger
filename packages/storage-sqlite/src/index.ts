@@ -1,5 +1,5 @@
 // Entry `@usebridger/storage-sqlite`: o adapter de storage padrão, que o app passa em
-// `createBot({ storage })`. Usa o `node:sqlite` do próprio Node (ADR 0051): nada de addon nativo
+// `createBot({ storage })`. Usa o `node:sqlite` do próprio Node (ADR 0047): nada de addon nativo
 // para compilar no `pnpm install`.
 
 import type { StoragePort } from '@usebridger/core/adapter';

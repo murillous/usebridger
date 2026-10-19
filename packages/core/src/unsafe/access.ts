@@ -1,4 +1,4 @@
-// Fábrica do escape hatch `ctx.unsafe` (M1-15, ADR 0011; `raw` no ADR 0066).
+// Fábrica do escape hatch `ctx.unsafe` (M1-15, ADR 0009; `raw` no ADR 0062).
 
 import type { Logger } from '#logger/types.ts';
 import type { Message } from '#message/types.ts';
@@ -30,7 +30,7 @@ export interface UnsafeAccess {
   forPlugin(manifest: Pick<PluginManifest, 'name' | 'transports'>): Unsafe;
 }
 
-/** O que o plugin acessou; cada um avisa uma vez, para o log medir os dois usos (ADR 0011). */
+/** O que o plugin acessou; cada um avisa uma vez, para o log medir os dois usos (ADR 0009). */
 type Accessor = 'native' | 'raw';
 
 /**
@@ -49,7 +49,7 @@ export function createUnsafeAccess(options: UnsafeAccessOptions): UnsafeAccess {
     const fields = { plugin: manifest.name, transport: transport.name };
     const access = what === 'native' ? 'ctx.unsafe.native' : 'ctx.unsafe.raw()';
     // Sem `transports` no manifesto o plugin se diz portável, mas ao ler o objeto nativo ele
-    // passa a depender deste transport (ADR 0011). Não bloqueamos: o aviso deixa isso visível.
+    // passa a depender deste transport (ADR 0009). Não bloqueamos: o aviso deixa isso visível.
     if (manifest.transports === undefined) {
       log.warn(
         `plugin "${manifest.name}" acessou ${access} sem declarar transports no manifesto; ` +

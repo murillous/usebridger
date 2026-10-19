@@ -1,4 +1,4 @@
-// Transport do chat web (ADR 0077). O sistema do dono entrega ao widget um JWT; o widget abre o
+// Transport do chat web (ADR 0073). O sistema do dono entrega ao widget um JWT; o widget abre o
 // WebSocket do transport, se autentica no primeiro frame e conversa por frames JSON. Mídia vai por
 // HTTP nas rotas do próprio transport. Nada aqui guarda o token.
 
@@ -56,7 +56,7 @@ export interface WebOptions {
   /** Como validar o JWT do sistema do dono: `{ secret }` (HS256) ou `{ jwksUrl }`. */
   readonly auth: WebAuth;
   /**
-   * Claim do JWT com o cliente do dono (empresa, escola), que vira `chat.tenantId` (ADR 0072).
+   * Claim do JWT com o cliente do dono (empresa, escola), que vira `chat.tenantId` (ADR 0068).
    * Configurado, o token sem ele é recusado. Ausente: o transport atende um cliente só.
    */
   readonly tenantClaim?: string;
@@ -142,7 +142,7 @@ export class WebTransport implements Transport {
     this.#events = new TypedEmitter<TransportEvents>((error, event) =>
       this.#log.error('handler de evento do transport falhou', { err: error, event }),
     );
-    // Na fábrica (ADR 0076): a porta abre antes do `connect()`, e as rotas respondem 503 até lá.
+    // Na fábrica (ADR 0072): a porta abre antes do `connect()`, e as rotas respondem 503 até lá.
     routes.ws('/chat', (request) => this.#accept(request));
     routes.route('POST', '/media', (request) => this.#upload(request));
     routes.route('OPTIONS', '/media', (request) => this.#preflight(request));
@@ -158,7 +158,7 @@ export class WebTransport implements Transport {
   async connect(): Promise<void> {
     this.#connected = true;
     this.#self = SELF;
-    // A porta já está aberta (ADR 0076): dá para receber e enviar a partir de agora.
+    // A porta já está aberta (ADR 0072): dá para receber e enviar a partir de agora.
     this.#events.emit('connection.status', { status: 'open' });
   }
 
@@ -337,7 +337,7 @@ export class WebTransport implements Transport {
     this.#close(connection, CLOSE_UNAUTHORIZED, 'não deu para verificar o token');
   }
 
-  /** Fecha a conexão no `exp`; o cliente reconecta com um token novo (ADR 0077). */
+  /** Fecha a conexão no `exp`; o cliente reconecta com um token novo (ADR 0073). */
   #expireAt(connection: Connection, expiresAt: number): void {
     const remaining = expiresAt - Date.now();
     if (remaining <= 0) {
@@ -407,7 +407,7 @@ export class WebTransport implements Transport {
       this.#reject(connection, 'invalid-frame', '`actionId` deve ser texto de até 64 caracteres');
       return;
     }
-    // O kernel confere se o ID é de um botão enviado a este chat (ADR 0062): forjar não adianta.
+    // O kernel confere se o ID é de um botão enviado a este chat (ADR 0058): forjar não adianta.
     this.#events.emit('interaction', {
       id: randomUUID(),
       chat: connection.chat as Chat,
@@ -491,7 +491,7 @@ export class WebTransport implements Transport {
         };
       }
       default:
-        // `assertCanSend` já barrou o que o web não declara; o álbum, a fila divide (ADR 0065).
+        // `assertCanSend` já barrou o que o web não declara; o álbum, a fila divide (ADR 0061).
         throw new UnsupportedError('send.album', this.name);
     }
   }
@@ -592,7 +592,7 @@ export class WebTransport implements Transport {
       }
       tenantId = String(value);
     }
-    // O tenant entra no ID (ADR 0072): dois tenants nunca dividem um contato nem uma conversa.
+    // O tenant entra no ID (ADR 0068): dois tenants nunca dividem um contato nem uma conversa.
     const sub = encodeURIComponent(verified.sub);
     const id = tenantId === undefined ? sub : `${encodeURIComponent(tenantId)}:${sub}`;
     const name = verified.claims['name'];
@@ -672,7 +672,7 @@ function toSource(media: StoredMedia): MediaSource {
   };
 }
 
-/** Tipo da mensagem pelo mimetype do primeiro anexo (ADR 0065). */
+/** Tipo da mensagem pelo mimetype do primeiro anexo (ADR 0061). */
 function mediaType(
   mimetype: string,
   fileName: string | undefined,

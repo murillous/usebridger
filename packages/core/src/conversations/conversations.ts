@@ -1,7 +1,7 @@
-// Resposta esperada (ADR 0060): o handler pergunta, registra qual passo trata a próxima mensagem
-// daquela pessoa naquele chat e termina, sem segurar o chat na fila de entrada (ADR 0042). O
+// Resposta esperada (ADR 0056): o handler pergunta, registra qual passo trata a próxima mensagem
+// daquela pessoa naquele chat e termina, sem segurar o chat na fila de entrada (ADR 0038). O
 // estado fica em memória; o passo definido com `persist: true` também grava a espera no storage
-// do kernel, para ela sobreviver a um restart (ADR 0098). A leitura segue só em memória: o
+// do kernel, para ela sobreviver a um restart (ADR 0094). A leitura segue só em memória: o
 // storage é a cópia que o boot restaura.
 
 import type { BotMessageContext } from '#context.ts';
@@ -23,7 +23,7 @@ export interface ExpectReplyOptions {
   readonly data?: JsonValue;
   /**
    * Validade da espera em ms. Padrão: 5 minutos. Vencida, some; se o passo tem `onExpire`, ele
-   * roda (ADR 0097).
+   * roda (ADR 0093).
    */
   readonly ttlMs?: number;
 }
@@ -56,7 +56,7 @@ export interface StepContext extends BotMessageContext {
 export type StepHandler = (ctx: StepContext) => unknown;
 
 /**
- * Contexto do `onExpire` (ADR 0097): a espera venceu sem resposta. Não há mensagem; o `reply`
+ * Contexto do `onExpire` (ADR 0093): a espera venceu sem resposta. Não há mensagem; o `reply`
  * envia no chat da espera, sem citar.
  */
 export interface ExpireContext {
@@ -86,12 +86,12 @@ export type ExpireHandler = (ctx: ExpireContext) => unknown;
 
 export interface StepOptions {
   /**
-   * Roda quando uma espera deste passo vence sem resposta (ADR 0097). Não roda quando a espera é
+   * Roda quando uma espera deste passo vence sem resposta (ADR 0093). Não roda quando a espera é
    * respondida, substituída, cancelada por um comando ou descartada (teardown, reload, `stop()`).
    */
   readonly onExpire?: ExpireHandler;
   /**
-   * Grava no storage do bot cada espera deste passo, e o boot seguinte a restaura (ADR 0098).
+   * Grava no storage do bot cada espera deste passo, e o boot seguinte a restaura (ADR 0094).
    * Custa uma escrita no `expectReply` e uma remoção quando a espera sai. Padrão: `false` (só em
    * memória; um restart a perde).
    */
@@ -104,7 +104,7 @@ export interface Conversations {
    * Define o passo `step`, que trata a resposta registrada com `expectReply(step)`. Nome vazio ou
    * repetido no mesmo plugin lança `TypeError`, como um `onExpire` que não é função. O passo sai
    * no teardown/reload; as esperas dele saem junto, salvo as de passo com `persist: true`, que um
-   * reload mantém (ADR 0098).
+   * reload mantém (ADR 0094).
    */
   define(step: string, handler: StepHandler, options?: StepOptions): void;
 }
@@ -161,7 +161,7 @@ export const WAIT_RECORD_VERSION = 1;
 type JsonObject = { readonly [key: string]: JsonValue };
 
 /**
- * Espera persistida (ADR 0098), na coleção `waits` de `kernelStorage(sessão, 'conversations')`.
+ * Espera persistida (ADR 0094), na coleção `waits` de `kernelStorage(sessão, 'conversations')`.
  * Um documento por (chat, remetente).
  */
 export type WaitRecord = {
@@ -170,7 +170,7 @@ export type WaitRecord = {
   /** `chat.id` e `sender.id` soltos: é por eles que a remoção filtra. */
   chatId: string;
   senderId: string;
-  /** O `Chat` da espera (com o `tenantId`, ADR 0072), para o `onExpire` rodar sem mensagem. */
+  /** O `Chat` da espera (com o `tenantId`, ADR 0068), para o `onExpire` rodar sem mensagem. */
   chat: JsonObject;
   /** O `Contact` de quem não respondeu, sem os `claims`: atributo verificado não vai ao disco. */
   sender: JsonObject;
@@ -185,7 +185,7 @@ export type WaitRecord = {
 };
 
 /**
- * Situação de um plugin para a varredura das esperas persistidas (ADR 0098): `loaded` subiu,
+ * Situação de um plugin para a varredura das esperas persistidas (ADR 0094): `loaded` subiu,
  * `disabled` foi desligado (`disable` ou `disabledPlugins`), `down` não subiu por outro motivo
  * (`setup` que falhou, capability ou dependência) e `absent` não está mais na lista de plugins.
  */
@@ -195,7 +195,7 @@ export interface ConversationRegistryOptions {
   /**
    * Uma espera com `onExpire` venceu. O registro não a retira aqui: quem recebe põe a expiração
    * na fila do chat e chama `expire` quando a vez chegar, para a mensagem que entrou antes na
-   * fila ainda responder (ADR 0097). Espera sem `onExpire` some direto, sem passar por aqui.
+   * fila ainda responder (ADR 0093). Espera sem `onExpire` some direto, sem passar por aqui.
    */
   readonly onDue?: (chat: Chat, sender: Contact) => void;
   /**
@@ -233,7 +233,7 @@ interface StepEntry<C, O> {
   readonly persist: boolean;
 }
 
-/** Esperas e passos de todos os plugins de um bot (estado no closure do bot, ADR 0004). */
+/** Esperas e passos de todos os plugins de um bot (estado no closure do bot, ADR 0003). */
 export class ConversationRegistry<C, O = unknown> {
   readonly #steps = new Map<string, Map<string, StepEntry<C, O>>>();
   readonly #waits = new Map<string, Wait>();
@@ -319,7 +319,7 @@ export class ConversationRegistry<C, O = unknown> {
    * Retira a espera do remetente no chat, se houver. Quem chama decide se roda o passo ou, com um
    * comando digitado, só a descarta. O mapa vazio sai sem montar a chave: o caminho de cada
    * mensagem não paga nada sem conversa aberta. Uma espera já vencida, cuja expiração ainda está
-   * na fila atrás desta mensagem, também responde: quem chegou antes à fila ganha (ADR 0097).
+   * na fila atrás desta mensagem, também responde: quem chegou antes à fila ganha (ADR 0093).
    */
   take(chatId: string, senderId: string): PendingReply<C> | undefined {
     if (this.#waits.size === 0) return undefined;
@@ -328,7 +328,7 @@ export class ConversationRegistry<C, O = unknown> {
     if (wait === undefined) return undefined;
     const run = this.#steps.get(wait.plugin)?.get(wait.step)?.run;
     // Só a espera persistida fica sem passo (o `removePlugin` tira as outras), e só entre o
-    // `removePlugin` de um reload e o `sweep` dele (ADR 0098). Ninguém trataria a resposta, então
+    // `removePlugin` de um reload e o `sweep` dele (ADR 0094). Ninguém trataria a resposta, então
     // a mensagem segue o fluxo; a espera fica para o plugin recarregado ou para o `sweep` descartar.
     if (run === undefined) return undefined;
     this.#drop(key);
@@ -336,12 +336,12 @@ export class ConversationRegistry<C, O = unknown> {
   }
 
   /**
-   * Ponto único de expiração (ADR 0097): retira a espera do remetente no chat **se ela venceu** e
+   * Ponto único de expiração (ADR 0093): retira a espera do remetente no chat **se ela venceu** e
    * devolve o que roda o `onExpire` do passo. Devolve `undefined` se não há espera, se a que há
    * ainda não venceu (a vencida foi respondida e trocada por outra no meio do caminho) ou se o
    * passo não tem `onExpire` (aí a vencida só some). O bot chama daqui de dentro da fila do chat;
    * uma espera restaurada do storage que venceu durante o restart passa pelo mesmo caminho
-   * (ADR 0098).
+   * (ADR 0094).
    */
   expire(chatId: string, senderId: string): ExpiredReply<O> | undefined {
     const key = waitKey(chatId, senderId);
@@ -360,7 +360,7 @@ export class ConversationRegistry<C, O = unknown> {
     return { plugin, step, data, chat, sender, run: expire };
   }
 
-  /** O passo do plugin, para rodar sem espera (o clique num botão, ADR 0062). */
+  /** O passo do plugin, para rodar sem espera (o clique num botão, ADR 0058). */
   find(plugin: string, step: string): KernelStep<C> | undefined {
     return this.#steps.get(plugin)?.get(step)?.run;
   }
@@ -384,7 +384,7 @@ export class ConversationRegistry<C, O = unknown> {
    * rodou o `setup`. Sai com `warn`, também do storage, a espera de plugin desligado, removido ou
    * que subiu sem o passo (renomeado). A de plugin que não subiu por outro motivo (`setup` que
    * falhou, capability, dependência) fica, dormente: uma falha passageira não apaga conversas, e
-   * ela volta quando o plugin subir (ADR 0098).
+   * ela volta quando o plugin subir (ADR 0094).
    */
   sweep(presence: (plugin: string) => PluginPresence): void {
     for (const [key, wait] of this.#waits) {
@@ -401,7 +401,7 @@ export class ConversationRegistry<C, O = unknown> {
   }
 
   /**
-   * Restaura as esperas persistidas (ADR 0098). Roda no boot, depois do `setup` de todos os
+   * Restaura as esperas persistidas (ADR 0094). Roda no boot, depois do `setup` de todos os
    * plugins: a vencida durante o restart segue o caminho do timer que dispara (com `onExpire`, vai
    * à fila do chat pelo `onDue`; sem, some), a sem passo vai à varredura (`sweep`), e as outras
    * voltam com o tempo que faltava. Falha de leitura vai ao log e o boot segue sem as conversas:
@@ -480,7 +480,7 @@ export class ConversationRegistry<C, O = unknown> {
 
   /**
    * A espera venceu. Sem `onExpire`, a expiração continua silenciosa e não ocupa a fila do chat
-   * (ADR 0060). Com ele, o bot põe a expiração na fila do chat e chama `expire` na vez dela.
+   * (ADR 0056). Com ele, o bot põe a expiração na fila do chat e chama `expire` na vez dela.
    */
   #due(key: string, wait: Wait): void {
     wait.due = true;
@@ -555,7 +555,7 @@ export class ConversationRegistry<C, O = unknown> {
 }
 
 function toRecord(wait: Wait): WaitRecord {
-  // Os claims são atributos verificados do token da sessão (ADR 0057): não sobrevivem a ela.
+  // Os claims são atributos verificados do token da sessão (ADR 0053): não sobrevivem a ela.
   const { claims: _claims, ...sender } = wait.sender;
   return {
     v: WAIT_RECORD_VERSION,

@@ -1,12 +1,12 @@
 # Fila de saída
 
-`OutboundQueue` é por onde todo envio do bot passa ([ADR 0019](../../../docs/adr/0019-fila-de-saida-anti-ban.md)):
+`OutboundQueue` é por onde todo envio do bot passa ([ADR 0017](../../../docs/adr/0017-fila-de-saida-anti-ban.md)):
 intervalo mínimo global e por chat, prioridade (comando > broadcast), retry com backoff ou na
 janela que a plataforma informou, e humanização opcional. Ela implementa `Sender`; `createOutbound` monta em cima dela o `ctx.send`
 com as ações (reação, edição, apagar, "digitando") e `createReply`, o `ctx.reply`. O plugin nunca vê
 a fila.
 
-Peça interno do kernel, não exportado ([ADR 0034](../../../docs/adr/0034-biblioteca-sem-runner.md)): o app só a configura por `createBot({ outbound })`
+Peça interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md)): o app só a configura por `createBot({ outbound })`
 (as opções abaixo, sem `transport`); o plugin envia por `ctx.send`/`ctx.reply` e trata
 `OutboundQueueError` e `UnsupportedError`, de `@usebridger/core`. Os exemplos são para quem mexe
 no core.
@@ -36,7 +36,7 @@ await reply.sticker(buffer);
 ## Ações que não são envio
 
 Reação, edição, apagar, "digitando" e alteração de participantes de grupo também são tráfego
-([ADR 0040](../../../docs/adr/0040-acoes-do-transport-no-plugin.md)). `enqueue(chatId, ação,
+([ADR 0036](../../../docs/adr/0036-acoes-do-transport-no-plugin.md)). `enqueue(chatId, ação,
 { priority })` as põe na fila com as mesmas regras do envio: intervalos, prioridade, backlog,
 retry, pausa e prazo. A humanização não se aplica. Resolve com o retorno da ação; as métricas
 contam a ação como envio (`sent`, `failed`, `retries`).
@@ -68,12 +68,12 @@ WhatsApp, a plataforma mais restritiva. A latência sob carga sobe por design: �
 tomar ban.
 
 O transport pode dar outro ritmo padrão, o da plataforma dele, em `transport.pacing`
-([Transport](transport.md#ritmo), [ADR 0067](../../../docs/adr/0067-retry-after-e-ritmo-do-transport.md)).
+([Transport](transport.md#ritmo), [ADR 0063](../../../docs/adr/0063-retry-after-e-ritmo-do-transport.md)).
 A ordem é: a opção da fila (`createBot({ outbound })`), depois o `pacing` do transport, depois o
 padrão acima, campo a campo. A fila lê o `pacing` uma vez, na construção.
 
 A espera aqui não conta no prazo do comando ou listener que chamou `ctx.reply`/`ctx.react`: o
-prazo pausa até o envio assentar ([ADR 0047](../../../docs/adr/0047-espera-na-fila-de-saida-fora-do-prazo.md)).
+prazo pausa até o envio assentar ([ADR 0043](../../../docs/adr/0043-espera-na-fila-de-saida-fora-do-prazo.md)).
 Benchmark de vazão do kernel roda com `globalIntervalMs` e `chatIntervalMs` em 0, senão a taxa
 domina a medição.
 
@@ -101,7 +101,7 @@ resposta `high` a comando. No pior caso a fila guarda `3 × maxPending` mensagen
 
 Com `transport.limits` ([Transport](transport.md#limites-de-tamanho)), o `send` divide o texto
 acima do limite antes de enfileirar
-([ADR 0061](../../../docs/adr/0061-texto-formatado-neutro.md)). Sem `limits`, o texto vai inteiro,
+([ADR 0057](../../../docs/adr/0057-texto-formatado-neutro.md)). Sem `limits`, o texto vai inteiro,
 e o custo é zero.
 
 - **Onde corta:** num parágrafo, depois numa linha, depois num espaço e, por último, num
@@ -128,7 +128,7 @@ O `ctx.send.edit` não divide: acima de `limits.text`, rejeita com `RangeError` 
 ## Álbum
 
 O conteúdo `{ type: 'album', items, caption? }` envia várias mídias de uma vez
-([ADR 0065](../../../docs/adr/0065-varios-anexos-e-albuns.md)). Os itens são `image`, `video` ou
+([ADR 0061](../../../docs/adr/0061-varios-anexos-e-albuns.md)). Os itens são `image`, `video` ou
 `document`, sem legenda própria; a legenda é do álbum.
 
 ```ts
@@ -182,7 +182,7 @@ Para outra regra, passe `retry.isRetryable`; se ele lançar, o envio rejeita com
 ### Janela da plataforma (`retryAfterMs`)
 
 Num 429, a plataforma diz quando tentar de novo. O transport põe esse tempo no erro, em
-`retryAfterMs` ([ADR 0067](../../../docs/adr/0067-retry-after-e-ritmo-do-transport.md)):
+`retryAfterMs` ([ADR 0063](../../../docs/adr/0063-retry-after-e-ritmo-do-transport.md)):
 
 - **Re-tentativa:** espera `retryAfterMs` exato, sem jitter, no lugar do backoff. Conta em
   `maxAttempts` como qualquer re-tentativa, e só vale para erro transitório: `retryable: false` e o
@@ -194,26 +194,26 @@ Num 429, a plataforma diz quando tentar de novo. O transport põe esse tempo no 
   Depois, o intervalo global espaça a saída, como sempre.
 - **Sem escopo (ou `'chat'`):** só o chat do envio espera, e os outros seguem.
 - **Prazos:** a espera não conta no prazo do comando ou listener que chamou `ctx.reply`
-  ([ADR 0047](../../../docs/adr/0047-espera-na-fila-de-saida-fora-do-prazo.md)) nem no
+  ([ADR 0043](../../../docs/adr/0043-espera-na-fila-de-saida-fora-do-prazo.md)) nem no
   `sendTimeoutMs`, que mede só a chamada ao transport. O `close({ drain: false })` descarta o que
   espera a janela e cancela os timers.
 
 ## Conexão caída
 
 Sem conexão, o envio falharia e esgotaria o retry (~3 s) antes da primeira reconexão (5 s). Por
-isso a fila pausa ([ADR 0039](../../../docs/adr/0039-fila-de-saida-e-conexao.md)):
+isso a fila pausa ([ADR 0035](../../../docs/adr/0035-fila-de-saida-e-conexao.md)):
 
 - `pause()` para o despacho. O que aguarda e o que chegar esperam. O envio em andamento termina;
   se falhar, a re-tentativa também espera, sem gastar as tentativas que restam.
 - `resume()` volta a despachar, na mesma ordem.
 - `maxPauseMs` (padrão `60000`: quanto tempo uma resposta ainda faz sentido; a reconexão não tem
-  limite de tentativas, [ADR 0045](../../../docs/adr/0045-queda-de-rede-nao-limpa-sessao.md)) limita a
+  limite de tentativas, [ADR 0041](../../../docs/adr/0041-queda-de-rede-nao-limpa-sessao.md)) limita a
   pausa. Estourado, o que aguarda rejeita com `'disconnected'` e os envios novos rejeitam na hora,
   até o `resume()`. `Infinity` desliga o teto. O prazo conta desde a pausa, não desde a chegada de
   cada mensagem.
 
 O `Bot` pausa no `start()`, até o primeiro `open`
-([ADR 0048](../../../docs/adr/0048-connect-resolve-ao-iniciar.md)), e no `connection.status`
+([ADR 0044](../../../docs/adr/0044-connect-resolve-ao-iniciar.md)), e no `connection.status`
 `closed`, e retoma no `open`; a fila não conhece o estado da conexão por conta própria. Um envio
 que falhou bem na hora da queda pode ter sido entregue mesmo assim, e a re-tentativa depois da
 reconexão o duplica. É o mesmo risco de qualquer retry.

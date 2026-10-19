@@ -1,4 +1,4 @@
-// Trava da sessão entre processos (ADR 0074). O `claimSession` só enxerga bots no mesmo objeto de
+// Trava da sessão entre processos (ADR 0070). O `claimSession` só enxerga bots no mesmo objeto de
 // storage; dois processos sobre o mesmo banco se veem só por aqui. Nem toda plataforma derruba a
 // conexão antiga (o Discord aceita o mesmo token em vários gateways), então sem a trava os dois
 // responderiam. A trava é por nome de sessão, sem olhar o transport: plataformas diferentes com o

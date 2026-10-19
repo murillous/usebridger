@@ -24,7 +24,7 @@ export interface PluginControlDeps {
 export interface PluginControl {
   readonly plugins: BotPlugins;
   readonly config: BotPluginConfigs;
-  /** Situação do plugin na tabela do host, para a varredura das esperas persistidas (ADR 0098). */
+  /** Situação do plugin na tabela do host, para a varredura das esperas persistidas (ADR 0094). */
   presence(plugin: string): PluginPresence;
 }
 
@@ -51,10 +51,10 @@ export function createPluginControl(deps: PluginControlDeps): PluginControl {
     // Um aviso só ao transport, no fim: no meio, os comandos do plugin saíram e não voltaram.
     const result = await deps.catalog.batch(() => host[action](name));
     // O reload que redefiniu o passo fica com as esperas persistidas, e o `setup` novo que falhou
-    // também (dormentes); o `disable` e o passo que sumiu as perdem, também do storage (ADR 0098).
+    // também (dormentes); o `disable` e o passo que sumiu as perdem, também do storage (ADR 0094).
     deps.conversations.sweep(presence);
     for (const error of result.teardownErrors) deps.lifecycleError(error);
-    // Os dependentes recarregados em cascata (ADR 0041) também podem falhar no `setup` novo.
+    // Os dependentes recarregados em cascata (ADR 0037) também podem falhar no `setup` novo.
     for (const entry of [result.plugin, ...result.dependents]) {
       if (entry.status === 'skipped' && entry.reason.kind === 'setup-failed') {
         deps.lifecycleError(entry.reason.error);

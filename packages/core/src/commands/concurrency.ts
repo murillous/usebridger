@@ -1,6 +1,6 @@
 import { isThenable } from '#deadline.ts';
 
-/** Teto de execuções simultâneas de um comando (`concurrency`, ADR 0088). */
+/** Teto de execuções simultâneas de um comando (`concurrency`, ADR 0084). */
 export interface ConcurrencyLimit {
   /**
    * Roda `task` se houver vaga; senão, espera a vez em ordem de chegada. A vaga só volta quando o

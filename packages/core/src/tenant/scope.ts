@@ -1,11 +1,11 @@
-// Escopo de tenant do bot (ADR 0072). O kernel roda cada mensagem e evento cujo chat tem
+// Escopo de tenant do bot (ADR 0068). O kernel roda cada mensagem e evento cujo chat tem
 // `tenantId` dentro deste escopo, e o storage do plugin lê dele o tenant corrente. Assim o mesmo
 // `ctx.storage` serve ao handler, à closure do `setup`, ao service de outro plugin e ao timer
 // disparado no handler, sem o plugin repassar nada: o isolamento não depende da disciplina dele.
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-/** Um por bot (ADR 0004: nada global); dois bots no processo não veem o tenant um do outro. */
+/** Um por bot (ADR 0003: nada global); dois bots no processo não veem o tenant um do outro. */
 export class TenantScope {
   readonly #store = new AsyncLocalStorage<string | undefined>();
 

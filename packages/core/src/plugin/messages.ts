@@ -1,4 +1,4 @@
-// Placeholders nas `messages` do plugin (ADR 0092): `{nome}` no texto, preenchido na hora de usar
+// Placeholders nas `messages` do plugin (ADR 0088): `{nome}` no texto, preenchido na hora de usar
 // por `ctx.t`. O `{prefix}` o kernel resolve para o chat da mensagem; os outros o plugin passa.
 
 /** Valores dos placeholders de uma mensagem. */
@@ -16,7 +16,7 @@ export type MessageText<TKey extends string = string> = {
   bivarianceHack(key: TKey, values?: MessageValues): string;
 }['bivarianceHack'];
 
-/** Placeholder que o kernel preenche: o prefixo de comando do chat (ADR 0063). */
+/** Placeholder que o kernel preenche: o prefixo de comando do chat (ADR 0059). */
 export const PREFIX_PLACEHOLDER = 'prefix';
 
 // Só `{identificador}`: chaves com espaço ou pontuação (`{ ok }`, JSON) ficam como texto.

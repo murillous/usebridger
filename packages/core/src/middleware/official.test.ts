@@ -45,7 +45,7 @@ describe('chatFilter', () => {
     await expect(passes(chatFilter({}), { chatId: 'qualquer' })).resolves.toBe(true);
   });
 
-  it('allow com o espaço libera todos os chats dele (ADR 0058)', async () => {
+  it('allow com o espaço libera todos os chats dele (ADR 0054)', async () => {
     const filter = chatFilter({ allow: ['servidor'] });
     await expect(passes(filter, { chatId: 'canal', chatParentId: 'servidor' })).resolves.toBe(true);
     await expect(passes(filter, { chatId: 'canal', chatParentId: 'outro' })).resolves.toBe(false);

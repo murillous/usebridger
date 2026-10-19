@@ -23,7 +23,7 @@ export function createPipeline(
   log: () => Logger,
 ): MiddlewarePipeline<KernelMessageContext> {
   // Middleware roda dentro da tarefa da fila do chat: sem prazo, um preso seguraria o chat
-  // para sempre (ADR 0043).
+  // para sempre (ADR 0039).
   const pipeline = new MiddlewarePipeline<KernelMessageContext>({
     timeoutMs,
     onLateError: (error) => log().error('middleware rejeitou depois do prazo', { err: error }),

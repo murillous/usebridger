@@ -45,7 +45,7 @@ describe('createReply', () => {
     );
   });
 
-  it('com ações, envia o texto e os botões que o `actions` resolveu (ADR 0062)', async () => {
+  it('com ações, envia o texto e os botões que o `actions` resolveu (ADR 0058)', async () => {
     const sender = spySender();
     const prepare = vi.fn(() => ({ text: 'menu', actions: [{ id: 'a1', label: 'Notas' }] }));
     const actions = [{ label: 'Notas', command: 'notas' }];

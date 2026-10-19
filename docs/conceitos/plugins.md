@@ -3,12 +3,12 @@
 Um plugin é um objeto criado por `definePlugin`: um **manifesto** (nome, versão, faixa do core, o
 que ele exige) mais o comportamento. O kernel lê o manifesto antes de rodar qualquer código do
 plugin, e é isso que permite recusar o incompatível no boot em vez de falhar no meio de uma
-conversa ([ADR 0016](../adr/0016-manifesto-do-plugin.md)).
+conversa ([ADR 0014](../adr/0014-manifesto-do-plugin.md)).
 
 ## Manifesto e setup
 
 Há duas formas de declarar o comportamento, e elas levam ao mesmo lugar
-([ADR 0079](../adr/0079-acucar-no-manifesto-do-plugin.md)):
+([ADR 0075](../adr/0075-acucar-no-manifesto-do-plugin.md)):
 
 - **`commands` e `on` no manifesto**: um objeto nome → comando e outro evento → listener. É a
   forma curta, e o que o template gera. O `run` que devolve texto responde.
@@ -31,17 +31,17 @@ As duas formas convivem no mesmo plugin.
 ## Exigir uma capability ou conferir
 
 Cada transport declara capabilities, e o plugin escolhe como lidar com cada uma
-([ADR 0010](../adr/0010-capabilities-do-transporte.md)):
+([ADR 0008](../adr/0008-capabilities-do-transporte.md)):
 
 - **Exigir em `requires`** quando o plugin não faz sentido sem ela. Um plugin de figurinhas sem
   `send.sticker` não tem o que fazer. Num transport sem a capability, o boot para antes de
   conectar e diz o que faltou; para subir o bot sem esse plugin, o operador o põe em
-  `disabledPlugins` ([ADR 0102](../adr/0102-plugin-falho-derruba-o-boot.md)).
+  `disabledPlugins` ([ADR 0098](../adr/0098-plugin-falho-derruba-o-boot.md)).
 - **Conferir em `ctx.capabilities.has(...)`** quando ela é um extra. O plugin sobe em todo
   transport e usa o recurso onde ele existe, com outro caminho onde não existe.
 - **Exigir num comando só**, com `command({ requires })`, quando um comando depende dela e o resto
   do plugin não. Sem a capability, só aquele comando fica de fora do roteador, da ajuda e do menu
-  nativo ([ADR 0090](../adr/0090-requires-por-comando.md)).
+  nativo ([ADR 0086](../adr/0086-requires-por-comando.md)).
 
 A regra é **exigir o mínimo**: cada capability em `requires` tira o plugin de uma plataforma
 inteira. `commands` no manifesto já soma `send.text`. Em runtime, usar uma capability que o
@@ -56,8 +56,8 @@ falta, escolhido pelo que faz sentido para quem está do outro lado:
 | Recurso | Sem a capability |
 | --- | --- |
 | Enviar imagem, vídeo, áudio, documento, figurinha, álbum | Rejeita com `UnsupportedError`; exija em `requires` ou confira antes |
-| Botões (`reply(texto, { actions })`) | O kernel acrescenta uma lista numerada ao texto e aceita o número como resposta ([ADR 0062](../adr/0062-acoes-e-botoes.md)) |
-| Reação pelo atalho do contexto (`c.react`) | Não faz nada e registra em `debug`: a reação é enfeite ([ADR 0093](../adr/0093-react-do-contexto-tolerante.md)) |
+| Botões (`reply(texto, { actions })`) | O kernel acrescenta uma lista numerada ao texto e aceita o número como resposta ([ADR 0058](../adr/0058-acoes-e-botoes.md)) |
+| Reação pelo atalho do contexto (`c.react`) | Não faz nada e registra em `debug`: a reação é enfeite ([ADR 0089](../adr/0089-react-do-contexto-tolerante.md)) |
 | Reação por `ctx.send.react` | Rejeita: é o caminho de quem precisa saber se saiu |
 | Enquete (`reply.poll`) | Rejeita; confira `polls` antes |
 | Texto formatado | Sai sem a marcação, como texto visível |
@@ -69,7 +69,7 @@ A matriz do que cada transport suporta está em [Capabilities](../guias/capabili
 Cada plataforma marca negrito de um jeito (`*a*`, `**a**`, HTML). O plugin portátil escreve com
 os helpers do core, `` fmt`Notas de ${bold(nome)}` ``, que montam uma árvore neutra, e o
 transport a traduz para a marcação dele, com o escape certo
-([ADR 0061](../adr/0061-texto-formatado-neutro.md)).
+([ADR 0057](../adr/0057-texto-formatado-neutro.md)).
 
 Duas propriedades importam mais que a sintaxe: o valor interpolado é **literal** (um `*` digitado
 pelo usuário não vira negrito nem quebra a marcação), e `mention(contato)` gera a menção certa em
@@ -78,7 +78,7 @@ cada plataforma. Texto cru continua aceito e vai como veio, para o plugin de uma
 ## Um plugin que usa outro
 
 Plugins conversam por **services**, nunca importando o estado um do outro
-([ADR 0018](../adr/0018-service-registry.md)):
+([ADR 0016](../adr/0016-service-registry.md)):
 
 - o provedor publica com `ctx.services.provide('traducao', impl)`;
 - o consumidor declara `dependsOn: { traducao: '^1.0.0' }` e pega com `ctx.services.get`;
@@ -88,7 +88,7 @@ Por que um registry em vez de `import`? Porque o serviço é **uma instância vi
 e o storage do provedor, e pode ser recarregado. O `import` daria o código, não a instância que o
 bot carregou. Quando o provedor recarrega, quem depende dele por `dependsOn` recarrega junto, para
 não ficar segurando um serviço de um contexto já descartado
-([ADR 0041](../adr/0041-reload-em-cascata.md)).
+([ADR 0037](../adr/0037-reload-em-cascata.md)).
 
 Os campos de ordem e dependência servem a coisas diferentes:
 
@@ -101,7 +101,7 @@ Os campos de ordem e dependência servem a coisas diferentes:
 
 `command({ services: [...] })` faz pelo service o que o `requires` por comando faz pela
 capability: sem o serviço, só aquele comando fica de fora
-([ADR 0099](../adr/0099-comando-que-exige-servico.md)).
+([ADR 0095](../adr/0095-comando-que-exige-servico.md)).
 
 ### Estender outro plugin
 
@@ -109,12 +109,12 @@ Quando outros plugins acrescentam peças a um serviço (etapas de um pipeline, f
 exportador), o provedor abre um **ponto de extensão** e os outros contribuem com
 `ctx.services.contribute(nome, peça)`. O kernel sabe de quem é cada contribuição e a retira
 quando aquele plugin desce, recarrega ou é desligado, coisa que um `Set` guardado pelo provedor
-não saberia fazer ([ADR 0096](../adr/0096-pontos-de-extensao-em-servicos.md)).
+não saberia fazer ([ADR 0092](../adr/0092-pontos-de-extensao-em-servicos.md)).
 
 ## Onde guardar dados
 
 `ctx.storage` dá ao plugin um espaço só dele, com duas formas
-([ADR 0015](../adr/0015-storage-kv-e-colecoes.md)):
+([ADR 0013](../adr/0013-storage-kv-e-colecoes.md)):
 
 - **KV**, para valores avulsos por chave (`kv.get`, `kv.set`);
 - **coleções**, para documentos com filtro, ordenação, limite e índices declarados.
@@ -127,9 +127,9 @@ O escopo é automático em três níveis, para o plugin não precisar compor cha
 - **sessão**: cada bot tem seus dados ([Bot e sessão](bot-e-sessao.md#sessão));
 - **tenant**: num transport com clientes separados (o web, com o tenant vindo do token), o mesmo
   `ctx.storage` resolve os dados do cliente da mensagem corrente, inclusive em services e timers
-  iniciados ali ([ADR 0072](../adr/0072-isolamento-por-tenant.md));
+  iniciados ali ([ADR 0068](../adr/0068-isolamento-por-tenant.md));
 - **compartilhado**: `ctx.storage.shared` é do plugin em todas as sessões, para um dado comum a
-  vários números ([ADR 0075](../adr/0075-varios-bots-e-escopo-compartilhado.md)).
+  vários números ([ADR 0071](../adr/0071-varios-bots-e-escopo-compartilhado.md)).
 
 O plugin nunca alcança os dados de outro plugin nem os do kernel. Para dividir dados, ofereça um
 service.
@@ -160,8 +160,8 @@ prazo, quando o contexto os recusa com `ContextExpiredError`. O modelo inteiro e
 
 A API do core cobre o que as plataformas têm em comum. Para o resto, `ctx.unsafe.native` dá o
 cliente da biblioteca (o socket do Baileys) e `ctx.unsafe.raw(message)` dá o objeto original da
-mensagem, ambos como `unknown` ([ADR 0011](../adr/0011-escape-hatch-unsafe-native.md),
-[ADR 0066](../adr/0066-objeto-bruto-da-mensagem.md)).
+mensagem, ambos como `unknown` ([ADR 0009](../adr/0009-escape-hatch-unsafe-native.md),
+[ADR 0062](../adr/0062-objeto-bruto-da-mensagem.md)).
 
 O preço:
 

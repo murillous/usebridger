@@ -88,7 +88,7 @@
 
 ### Minor Changes
 
-- a4268bd: Log legível no terminal: `createLogger({ format: 'pretty' })` e `logFormat: 'pretty'` no bot escrevem hora, nível, `[plugin]`, a mensagem e os campos em `chave=valor`, com o `err` recuado nas linhas seguintes e cor no terminal. O padrão segue JSON. No `@usebridger/transport-baileys`, a opção `logLevel` (padrão `'warn'`) põe um piso nas linhas do próprio Baileys: a sincronização e o protocolo, em inglês, saem do `info`. O `console` do libsignal (`Closing session: SessionEntry {...}`) passa a ir para o mesmo logger, em `debug`, sem os objetos de sessão (ADR 0091).
+- a4268bd: Log legível no terminal: `createLogger({ format: 'pretty' })` e `logFormat: 'pretty'` no bot escrevem hora, nível, `[plugin]`, a mensagem e os campos em `chave=valor`, com o `err` recuado nas linhas seguintes e cor no terminal. O padrão segue JSON. No `@usebridger/transport-baileys`, a opção `logLevel` (padrão `'warn'`) põe um piso nas linhas do próprio Baileys: a sincronização e o protocolo, em inglês, saem do `info`. O `console` do libsignal (`Closing session: SessionEntry {...}`) passa a ir para o mesmo logger, em `debug`, sem os objetos de sessão (ADR 0087).
 
 ### Patch Changes
 
@@ -114,7 +114,7 @@
 
 ### Minor Changes
 
-- e190d3e: Release de teste do fluxo `develop` → `main` com Trusted Publishing (ADR 0085), sem mudança de API em relação à 0.1.0.
+- e190d3e: Release de teste do fluxo `develop` → `main` com Trusted Publishing (ADR 0081), sem mudança de API em relação à 0.1.0.
 
 ### Patch Changes
 
@@ -130,7 +130,7 @@
   código (`pairing: { phone }`, `connection.pairing-code`), guarda as credenciais no auth state do
   storage do bot e informa cada queda com o motivo normalizado; a reconexão fica com o bot. Envio e
   recebimento de mensagens ainda não: as ações lançam `UnsupportedError`.
-- 929c946: A localização traz o endereço em `location.address` quando o WhatsApp o informa (ADR 0069). O
+- 929c946: A localização traz o endereço em `location.address` quando o WhatsApp o informa (ADR 0065). O
   `name` segue igual, com o endereço no lugar do nome que falta.
 - 1245f6d: O transport passa a enviar e agir (#105, #106): declara as 17 capabilities do plano §6.10 e
   implementa `send` (texto, imagem, vídeo, áudio, voz, sticker, documento e enquete, com citação e
@@ -145,7 +145,7 @@
   chegada. O `contact.updated` sai na primeira mensagem de cada contato e depois só quando o nome ou
   o telefone muda, antes da `message`. Reação, edição, apagamento e grupo completam o nome do
   contato com o último `pushName` visto.
-- 39e7242: Segue o contrato de grupos multiplataforma do core (ADR 0059). Os eventos `group.*` trazem o grupo
+- 39e7242: Segue o contrato de grupos multiplataforma do core (ADR 0055). Os eventos `group.*` trazem o grupo
   em `chat` no lugar de `groupId`, e o `group.updated` e o `getGroupMetadata` trazem o nome em
   `title` (o `subject` do WhatsApp). O transport declara `groups.add`, `groups.remove` e
   `groups.promote` no lugar de `groups.admin`. O comportamento no WhatsApp não muda.
@@ -155,31 +155,31 @@
   `sender`, `mentions` e o autor da citada trazem `phone` resolvido também quando o id é um LID,
   para os `owners` e o `group-admin` funcionarem. A mídia baixa sob demanda. Histórico (`append`),
   status e mensagens de controle (edição, reação, apagamento) não viram `message`.
-- 2db7d00: `raw()` devolve o `WAMessage` de onde a mensagem saiu, para o `ctx.unsafe.raw()` (ADR 0066). A
+- 2db7d00: `raw()` devolve o `WAMessage` de onde a mensagem saiu, para o `ctx.unsafe.raw()` (ADR 0062). A
   citada devolve o proto montado do `contextInfo`, sem `pushName` nem horário.
-- e557209: Texto formatado neutro do core na marcação do WhatsApp (ADR 0061): `*negrito*`, `_itálico_`,
+- e557209: Texto formatado neutro do core na marcação do WhatsApp (ADR 0057): `*negrito*`, `_itálico_`,
   `` `código` ``, `rótulo (url)` no link e `@número` na menção, com o JID na lista de menções.
   Vale para o texto, para a legenda e para o `edit`.
-- 7b8ab13: Segue o contrato de capabilities do core (ADR 0070). O transport declara `typing` no lugar de
+- 7b8ab13: Segue o contrato de capabilities do core (ADR 0066). O transport declara `typing` no lugar de
   `presence` e implementa `sendTyping`: `text` envia a presença `composing`, e `voice`, a `recording`.
   A enquete com `multiple: true` sai com `selectableCount` 0 (quantas quiser); sem ela, 1. O status
   online global fica no socket nativo.
-- 91fec63: Emite `poll.vote` (ADR 0071). O transport guarda em memória as enquetes que envia e recebe (até
+- 91fec63: Emite `poll.vote` (ADR 0067). O transport guarda em memória as enquetes que envia e recebe (até
   1000, esquecidas no `disconnect()`) e decifra o voto, que o Baileys 7 entrega cifrado, tentando o
   telefone e o LID de quem criou e de quem votou. Voto de enquete que o transport não viu é
   descartado com log em debug.
 
 ### Patch Changes
 
-- 5c864c2: O projeto se chama Bridger, com os pacotes no escopo `@usebridger/*` e o scaffold `create-bridger-plugin` (ADR 0083). A config de plugin lê variáveis com prefixo `BRIDGER_`, a anotação de campo não editável por override é `x-bridger-override`, plugins seguem o prefixo `bridger-plugin-` e o schema Postgres padrão é `bridger`. O repositório passa a ser `murillous/usebridger`.
+- 5c864c2: O projeto se chama Bridger, com os pacotes no escopo `@usebridger/*` e o scaffold `create-bridger-plugin` (ADR 0079). A config de plugin lê variáveis com prefixo `BRIDGER_`, a anotação de campo não editável por override é `x-bridger-override`, plugins seguem o prefixo `bridger-plugin-` e o schema Postgres padrão é `bridger`. O repositório passa a ser `murillous/usebridger`.
 - a8482ee: Metadados de publicação no `package.json`: `repository` (com a pasta do pacote), `homepage`, `bugs` e acesso público. As dependências entre pacotes `@usebridger/*` passam a sair como `^<versão>` em vez da versão exata.
 - 55bda98: O Baileys não declara `send.album`: no WhatsApp, a fila envia o álbum item a item. O `toContent`
-  lança `UnsupportedError` para o `album`, que só chega se alguém pular a checagem (ADR 0065).
+  lança `UnsupportedError` para o `album`, que só chega se alguém pular a checagem (ADR 0061).
 - 3f231d7: As chaves do auth state passam por um cache em memória por tentativa de conexão
   (`makeCacheableSignalKeyStore` do Baileys): leituras repetidas não vão mais ao storage. As
   gravações seguem indo ao storage na hora.
 - fdee994: O Baileys declara a capability `pairing`: credencial rejeitada (403, 411) continua limpando a
-  sessão e pareando de novo, em vez de parar o bot como num transport por token (ADR 0068).
+  sessão e pareando de novo, em vez de parar o bot como num transport por token (ADR 0064).
 - Updated dependencies [b7eb3a7]
 - Updated dependencies [70220de]
 - Updated dependencies [5eb7203]

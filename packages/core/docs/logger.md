@@ -89,7 +89,7 @@ curto não protege nada de qualquer forma.
 
 ## Logger silencioso
 
-`createNoopLogger()` (interno do kernel, não exportado ([ADR 0034](../../../docs/adr/0034-biblioteca-sem-runner.md))) descarta tudo sem ler os campos nem
+`createNoopLogger()` (interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md))) descarta tudo sem ler os campos nem
 alocar — para os testes do core e como padrão quando ninguém passou logger. `child()` devolve o
 próprio no-op.
 
@@ -102,7 +102,7 @@ censura por `secrets` roda só nas linhas emitidas e só quando há segredo conf
 ## Saída legível em dev
 
 `format: 'pretty'` (no bot, `logFormat: 'pretty'`) troca o JSON por uma linha de texto
-([ADR 0091](../../../docs/adr/0091-log-legivel-e-baileys-em-warn.md)):
+([ADR 0087](../../../docs/adr/0087-log-legivel-e-baileys-em-warn.md)):
 
 ```text
 14:03:22 INFO  conexão aberta

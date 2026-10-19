@@ -1,5 +1,5 @@
 // Entry `@usebridger/transport-baileys`: a fábrica que o app passa em `createBot({ transport })`
-// (ADR 0037). A classe fica interna: o transport precisa das dependências do bot.
+// (ADR 0033). A classe fica interna: o transport precisa das dependências do bot.
 
 import type { LogLevel } from '@usebridger/core';
 import type { Transport, TransportDeps } from '@usebridger/core/adapter';

@@ -91,7 +91,7 @@ Camadas, variáveis de ambiente, segredos e reload: [Config](config.md).
 | `session` fora de kebab-case | `BotConfigError` |
 | `owners` com telefone malformado | `BotConfigError` |
 | Fábrica de transport que lança | `BotConfigError` |
-| Transport sem `name`, sem os métodos obrigatórios, ou com capability desconhecida ou sem o método dela ([ADR 0080](../../../docs/adr/0080-acucar-para-o-autor-de-transport.md)) | `BotConfigError` |
+| Transport sem `name`, sem os métodos obrigatórios, ou com capability desconhecida ou sem o método dela ([ADR 0076](../../../docs/adr/0076-acucar-para-o-autor-de-transport.md)) | `BotConfigError` |
 | Opção fora do domínio (prefixo começado por espaço, `maxPendingPerChat` negativo, prioridade `NaN`...) | `TypeError` / `RangeError` |
 
 As opções e seus padrões: [Bot → `createBot(config)`](bot.md#createbotconfig).

@@ -1,4 +1,4 @@
-// Prefixo de comando por tipo de chat e por chat (ADR 0063). O padrão vem da config, e o override
+// Prefixo de comando por tipo de chat e por chat (ADR 0059). O padrão vem da config, e o override
 // de um chat fica no storage do kernel. O override é lido inteiro no boot: o roteador consulta
 // o prefixo a cada mensagem, e o caminho quente não pode ir ao storage (plano §7).
 

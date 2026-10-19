@@ -1,4 +1,4 @@
-// Papéis custom nomeados (M1-19, ADR 0035): um plugin define, outro exige, o roteador avalia com
+// Papéis custom nomeados (M1-19, ADR 0031): um plugin define, outro exige, o roteador avalia com
 // prazo e fail-closed.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -217,7 +217,7 @@ describe('papéis custom nomeados', () => {
     });
   });
 
-  it('conflito de papel entre plugins derruba o boot (ADR 0035)', async () => {
+  it('conflito de papel entre plugins derruba o boot (ADR 0031)', async () => {
     const transport = new RecordingTransport();
     const rival = definePlugin({
       name: 'rival',

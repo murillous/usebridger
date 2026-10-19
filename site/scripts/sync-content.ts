@@ -137,7 +137,7 @@ export function syncContent(root: string, contentDir: string): void {
       '---',
       // JSON é string YAML válida (aspas e acentos escapados).
       `title: ${JSON.stringify(title ?? out)}`,
-      // develop, não main: os PRs vão para a develop (ADR 0085) e a main só recebe o release.
+      // develop, não main: os PRs vão para a develop (ADR 0081) e a main só recebe o release.
       `editUrl: ${REPO}/edit/develop/${source}`,
       '---',
       '',

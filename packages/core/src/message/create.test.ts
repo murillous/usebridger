@@ -83,7 +83,7 @@ describe('createMessage', () => {
     expect('media' in msg).toBe(false);
   });
 
-  it('propaga o endereço opcional da localização (ADR 0069)', () => {
+  it('propaga o endereço opcional da localização (ADR 0065)', () => {
     const venue = createMessage({
       ...base,
       type: 'location',
@@ -115,7 +115,7 @@ describe('createMessage', () => {
   });
 });
 
-describe('createMessage: attachments (ADR 0065)', () => {
+describe('createMessage: attachments (ADR 0061)', () => {
   it('mensagem sem mídia tem attachments vazio', () => {
     const msg = createMessage({ ...base, type: 'text', text: 'oi' });
     expect(msg.attachments).toEqual([]);

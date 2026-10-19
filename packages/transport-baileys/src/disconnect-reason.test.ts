@@ -25,7 +25,7 @@ describe('toDisconnectReason', () => {
     );
   });
 
-  // Stream error sem motivo conhecido chega como 500: não pode apagar a sessão (ADR 0045).
+  // Stream error sem motivo conhecido chega como 500: não pode apagar a sessão (ADR 0041).
   it('500 (badSession) não é credencial rejeitada', () => {
     expect(toDisconnectReason(boom(DisconnectReason.badSession), { pairing: false })).toBe(
       'server-error',

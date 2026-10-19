@@ -2,7 +2,7 @@
 
 O `Bot` é a raiz do kernel: liga transport, storage, plugins, filas, middlewares, roteador,
 barramento, scheduler e logger, e todo estado fica pendurado na instância, nunca em módulo
-([ADR 0004](../../../docs/adr/0004-uma-sessao-por-processo.md)). Importar `@usebridger/core` e
+([ADR 0003](../../../docs/adr/0003-uma-sessao-por-processo.md)). Importar `@usebridger/core` e
 chamar `createBot()` não abre conexão, não agenda timer, não cria logger e não registra listener
 de processo — o efeito começa no `start()`.
 
@@ -65,7 +65,7 @@ const bot = createBot({
 | `state` | `idle`, `starting`, `running`, `failed`, `stopping` ou `stopped` |
 | `start()` / `stop()` / `onStop()` | Lifecycle (abaixo) |
 | `config.setOverrides(nome, overrides)` | Valida, salva no storage e recarrega o plugin (`teardown` → `setup`) |
-| `config.setSecret(nome, caminho, valor)` / `config.clearSecret(nome, caminho)` | Salvam ou removem um segredo cifrado no storage e recarregam o plugin ([ADR 0121](../../../docs/adr/0121-segredos-cifrados-editaveis-pelo-dashboard.md), `config.md`). Rejeitam sem `BRIDGER_SECRET_KEY` (`setSecret`), fora de campo `secret()`, ou com `kind: 'shadowed'` se env/arquivo definem o campo |
+| `config.setSecret(nome, caminho, valor)` / `config.clearSecret(nome, caminho)` | Salvam ou removem um segredo cifrado no storage e recarregam o plugin ([ADR 0117](../../../docs/adr/0117-segredos-cifrados-editaveis-pelo-dashboard.md), `config.md`). Rejeitam sem `BRIDGER_SECRET_KEY` (`setSecret`), fora de campo `secret()`, ou com `kind: 'shadowed'` se env/arquivo definem o campo |
 | `config.secretsWritable` | `true` se há `BRIDGER_SECRET_KEY` |
 | `config.describe(nome)` / `config.jsonSchema(nome)` | Config mascarada e JSON Schema, para o dashboard |
 | `plugins()` | Tabela de boot atual (`PluginReportEntry[]`, reflete reloads); vazia antes do `start()` |
@@ -101,7 +101,7 @@ está vazia, nenhum listener está em andamento e a fila de saída está vazia, 
 tempo**. Como uma realimenta a outra (o comando envia, o prazo de um listener estoura e vira
 `plugin.error`, cujo listener envia), a espera se repete até uma conferência achar as três
 ociosas. Serve para testes, inclusive para afirmar que **nada** foi enviado, sem `vi.waitFor`
-nem polling em `stats()` ([ADR 0044](../../../docs/adr/0044-espera-pelo-bot-assentar.md)).
+nem polling em `stats()` ([ADR 0040](../../../docs/adr/0040-espera-pelo-bot-assentar.md)).
 
 ```ts
 transport.emit('message', mensagem('!ping'));
@@ -112,8 +112,8 @@ expect(transport.sent).toHaveLength(1);
 O que entra e o que fica de fora:
 
 - **Entra**: mensagens e edições (fila de entrada, middlewares, comando, listeners), o `run` de
-  comandos com `background: true` ([ADR 0087](../../../docs/adr/0087-comando-em-segundo-plano.md)), eventos
-  diretos (`reaction`, grupos, `contact.updated`; ADR 0038), `plugin.error`, `connection.*` e
+  comandos com `background: true` ([ADR 0083](../../../docs/adr/0083-comando-em-segundo-plano.md)), eventos
+  diretos (`reaction`, grupos, `contact.updated`; ADR 0034), `plugin.error`, `connection.*` e
   tudo o que já está na fila de saída, inclusive em espera de re-tentativa.
 - **Fica de fora**: jobs do scheduler (não foram recebidos; dispare o job e espere o efeito dele)
   e trabalho que o plugin agenda por conta própria (`setTimeout`, promise solta que só depois
@@ -122,7 +122,7 @@ O que entra e o que fica de fora:
   aguarda. Para não esperar, junte com um prazo seu (`Promise.race`).
 - **Durante o boot**: espera os plugins subirem e o que chegou nesse meio-tempo. Antes do
   `start()` e depois do `stop()`, resolve na hora. Nunca rejeita.
-- Listener que estoura o prazo deixa de contar (ele segue em segundo plano, ADR 0042); um preso
+- Listener que estoura o prazo deixa de contar (ele segue em segundo plano, ADR 0038); um preso
   segura o `settled()` até o prazo, 30 s por padrão.
 
 Com os intervalos padrão da fila de saída (300 ms global, 1000 ms por chat), cada envio espera de
@@ -133,7 +133,7 @@ assíncrono.
 
 ## Fluxo de uma mensagem
 
-Plano §5.3 e [ADR 0012](../../../docs/adr/0012-pipeline-de-3-estagios.md):
+Plano §5.3 e [ADR 0010](../../../docs/adr/0010-pipeline-de-3-estagios.md):
 
 ```
 transport 'message' ou 'message.edited'
@@ -160,10 +160,10 @@ shutdown.
 - **Comando e listeners rodam dentro dos middlewares**: o código depois de `await next()` roda
   quando eles terminam, então um middleware mede o tratamento inteiro, mantém o "digitando" ou
   libera um recurso no fim. A volta espera também os prazos (`commandMs`, `listenerMs`).
-- **Middleware tem prazo** (`timeouts.middlewareMs`, 30 s; [ADR 0043](../../../docs/adr/0043-prazo-de-middleware.md)),
+- **Middleware tem prazo** (`timeouts.middlewareMs`, 30 s; [ADR 0039](../../../docs/adr/0039-prazo-de-middleware.md)),
   contado fora do `next()`. Estourado, a mensagem é descartada com `MiddlewareTimeoutError` no
   log e o chat segue ([Middlewares](middleware.md#prazo)).
-- **Handler lento segura o chat** ([ADR 0042](../../../docs/adr/0042-handler-lento-segura-o-chat.md)):
+- **Handler lento segura o chat** ([ADR 0038](../../../docs/adr/0038-handler-lento-segura-o-chat.md)):
   a fila de entrada só passa à próxima mensagem do chat quando o comando ou **todos** os
   listeners terminam (ou estouram o prazo). Uma chamada de LLM de 15 s num listener faz o
   `!sticker` seguinte do mesmo grupo esperar 15 s; outros chats não esperam. É o que garante a
@@ -171,18 +171,18 @@ shutdown.
   solta do handler (ver [Eventos](events.md#trabalho-longo-solte-o-chat)). Com o backlog em
   `inbound.maxPendingPerChat`, as mensagens novas do chat são descartadas, com `warn` e
   `stats().inbound.dropped`.
-- **Resposta esperada** ([Conversas](conversations.md), [ADR 0060](../../../docs/adr/0060-resposta-esperada.md)):
+- **Resposta esperada** ([Conversas](conversations.md), [ADR 0056](../../../docs/adr/0056-resposta-esperada.md)):
   se o remetente tem uma espera neste chat (`expectReply`), a mensagem vai ao passo do plugin e
   para ali. Se o texto casa com um comando, a espera é descartada e o comando roda. O passo tem o
   prazo do comando e, se falhar, vira `plugin.error` com `phase: 'step'`. A espera que vence com
   `onExpire` no passo entra na fila do chat como uma tarefa própria, sem passar pelos middlewares
-  ([ADR 0097](../../../docs/adr/0097-onexpire-do-passo.md)); a falha vira `phase: 'step-expire'`.
+  ([ADR 0093](../../../docs/adr/0093-onexpire-do-passo.md)); a falha vira `phase: 'step-expire'`.
 - **Comando que casa consome** a mensagem, mesmo recusado (papel, `accepts`) ou com erro. A
   resposta de `onReject` sai pelo `ctx.reply`. Comando que lança vira `plugin.error`
   (`phase: 'command'`, `event` = nome do comando) e uma linha de log em `error`; o chat segue.
   Depois do comando, rodado, recusado ou com erro, sai o evento `command` para quem observa
   ([Eventos](events.md#comandos-command)).
-- **Prazo de comando** (`timeouts.commandMs`, padrão 30 s, [ADR 0005](../../../docs/adr/0005-plugins-no-mesmo-processo.md);
+- **Prazo de comando** (`timeouts.commandMs`, padrão 30 s, [ADR 0004](../../../docs/adr/0004-plugins-no-mesmo-processo.md);
   o `timeoutMs` de um comando sobrescreve só para ele, ver [Comandos](commands.md#resultado-de-dispatch)):
   um `run` que não termina no prazo vira `plugin.error` com `timedOut: true` e erro
   `CommandTimeoutError` (`plugin`, `command`, `timeoutMs`, `stage: 'run'`), e o chat passa para
@@ -193,7 +193,7 @@ shutdown.
   próprios). A consulta de admin ao transport (`role: 'group-admin'`) também: estourada, o
   comando não roda e sai `plugin.error` com `timedOut: true` e `GroupAdminTimeoutError`
   (`chatId`, `timeoutMs`).
-- **Middlewares do app não têm prazo**: são código do app, não de plugin (ADR 0005 isola
+- **Middlewares do app não têm prazo**: são código do app, não de plugin (ADR 0004 isola
   plugins). Um middleware que nunca chama `next()` nem resolve segura o chat dele na fila de
   entrada; quem escreve middleware assíncrono responde por limitar o próprio I/O.
 - **Listeners** de eventos de mensagem recebem, além de `payload`/`claimed`/`claim()`/`signal`,
@@ -204,7 +204,7 @@ shutdown.
   Edição não dispara comando: passou, vai aos listeners de `message.edited` (com os mesmos
   campos). Um middleware do app vê as edições também e as distingue por `ctx.message.isEdited`.
 - Os demais eventos do transport vão ao barramento sem fila nem middlewares, mas com os filtros
-  da config de middlewares ([ADR 0038](../../../docs/adr/0038-filtro-de-eventos-no-kernel.md)).
+  da config de middlewares ([ADR 0034](../../../docs/adr/0034-filtro-de-eventos-no-kernel.md)).
   Veja [Eventos que não são mensagem](#eventos-que-não-são-mensagem).
 - Erro de middleware (ou do próprio roteador) vai para o log em `error`, com o `chatId`; o chat
   segue para a próxima mensagem.
@@ -240,7 +240,7 @@ createBot({
 #### Eventos que não são mensagem
 
 As opções `chatFilter`, `ignoreSelf` e `ignoreBots` valem também para os eventos que não passam
-pelo pipeline ([ADR 0038](../../../docs/adr/0038-filtro-de-eventos-no-kernel.md)). O kernel
+pelo pipeline ([ADR 0034](../../../docs/adr/0034-filtro-de-eventos-no-kernel.md)). O kernel
 aplica as regras antes de repassá-los ao barramento:
 
 | Evento | `chatFilter` (por) | `ignoreSelf` | `ignoreBots` |
@@ -272,7 +272,7 @@ instância, sempre em nome do plugin:
 | Campo | Ligado a |
 | --- | --- |
 | `plugin` | `name`, `version` e `messages` já mesclados com a config |
-| `config` | config validada (`PluginConfigError` derruba o boot; num reload, ignora o plugin; ADR 0102) |
+| `config` | config validada (`PluginConfigError` derruba o boot; num reload, ignora o plugin; ADR 0098) |
 | `log` | logger do bot com `{ plugin }` |
 | `signal` | aborta no descarte do contexto (teardown, reload, `setup` que falhou ou estourou o prazo) |
 | `commands.add` | roteador do bot; o `run`/`onReject` recebem `log` com `plugin` e `chatId` |
@@ -311,18 +311,18 @@ Destino dos erros de plugin — todos viram `plugin.error` no barramento e linha
 | `listener` | listener lançou, rejeitou ou estourou o prazo |
 | `scheduler` | handler de job lançou, rejeitou ou estourou o prazo |
 
-**Conflito de nome derruba o boot** ([ADR 0007](../../../docs/adr/0007-plugins-via-npm-e-pasta.md),
-[ADR 0035](../../../docs/adr/0035-papeis-nomeados-por-plugin.md)): se o `setup` de um plugin falha
+**Conflito de nome derruba o boot** ([ADR 0005](../../../docs/adr/0005-plugins-via-npm-e-pasta.md),
+[ADR 0031](../../../docs/adr/0031-papeis-nomeados-por-plugin.md)): se o `setup` de um plugin falha
 com `CommandConflictError`, `RoleConflictError` ou `ServiceConflictError`, o `start()` encerra o
 que subiu e rejeita com esse erro. Os demais erros de `setup` no boot também o derrubam, com
-`PluginBootError` ([ADR 0102](../../../docs/adr/0102-plugin-falho-derruba-o-boot.md)); num
+`PluginBootError` ([ADR 0098](../../../docs/adr/0098-plugin-falho-derruba-o-boot.md)); num
 `reload`, conflitos e falhas só ignoram o plugin.
 
 ## Prazos e cancelamento (`ctx.signal`)
 
 O JS não mata uma promise: um comando, listener, job ou `setup` que estoura o prazo segue rodando
-em segundo plano ([ADR 0005](../../../docs/adr/0005-plugins-no-mesmo-processo.md)). O kernel
-oferece **cancelamento cooperativo** ([ADR 0033](../../../docs/adr/0033-cancelamento-cooperativo.md)):
+em segundo plano ([ADR 0004](../../../docs/adr/0004-plugins-no-mesmo-processo.md)). O kernel
+oferece **cancelamento cooperativo** ([ADR 0029](../../../docs/adr/0029-cancelamento-cooperativo.md)):
 
 | Onde | `signal` | Aborta quando | `reason` |
 | --- | --- | --- | --- |
@@ -334,7 +334,7 @@ oferece **cancelamento cooperativo** ([ADR 0033](../../../docs/adr/0033-cancelam
 
 O prazo mede o tempo **do plugin**. Enquanto um `reply` ou `react` do contexto de um comando ou
 listener aguarda a fila de saída, o relógio do prazo para, e volta com o que sobrou quando o envio
-assenta ([ADR 0047](../../../docs/adr/0047-espera-na-fila-de-saida-fora-do-prazo.md)). A espera
+assenta ([ADR 0043](../../../docs/adr/0043-espera-na-fila-de-saida-fora-do-prazo.md)). A espera
 pela taxa anti-ban, o "digitando" da humanização, as re-tentativas e a chamada ao transport não
 contam: uma rajada em muitos chats não vira `timedOut` de comando que funcionou. O `ctx.send` do
 plugin, `ctx.groups` e os jobs continuam contando, porque não pertencem a uma execução.
@@ -394,7 +394,7 @@ idle ──start()──▶ starting ──boot ok──▶ running ──stop()
 
 `stopped` é terminal: um bot parado não reinicia. Para subir de novo, crie outra instância.
 
-`failed` ([ADR 0120](../../../docs/adr/0120-giveup-da-reconexao-leva-ao-estado-failed.md)): saída de
+`failed` ([ADR 0116](../../../docs/adr/0116-giveup-da-reconexao-leva-ao-estado-failed.md)): saída de
 `running` quando a reconexão desiste. Transport e filas ficam parados; plugins e HTTP seguem no ar
 (o dashboard mostra o erro). Nenhum handler é despachado. `stop()` encerra o resto e chega a
 `stopped`; `start()` rejeita com `BotStateError`. Um erro fatal durante o connect inicial do
@@ -427,7 +427,7 @@ Em ordem (plano §5.3):
 5. Liga o scheduler (dispara os jobs vencidos no downtime) e passa a `running`.
 
 O `connect()` resolve ao iniciar a tentativa, não no `open`
-([ADR 0048](../../../docs/adr/0048-connect-resolve-ao-iniciar.md)). Por isso a fila de saída nasce
+([ADR 0044](../../../docs/adr/0044-connect-resolve-ao-iniciar.md)). Por isso a fila de saída nasce
 pausada: os envios do `setup` e dos jobs vencidos esperam o primeiro `open`, até
 `outbound.maxPauseMs`, contado desde o `start()`. Num pareamento por QR mais longo que isso, eles
 rejeitam com `OutboundQueueError` `'disconnected'`, e os envios voltam a sair no `open`.
@@ -564,9 +564,9 @@ O transport avisa as quedas por `connection.status`; a `ReconnectionPolicy`
 - `clean-session` só vem de `logged-out`, `qr-limit` ou `auth-failed` num transport com a
   capability `pairing` (o Baileys a declara). Num transport por token (Discord, Telegram), limpar
   não traz token novo: o bot vai a `failed` em vez de limpar e falhar de novo a cada `minCleanIntervalMs`
-  ([ADR 0068](../../../docs/adr/0068-desconexao-fatal-e-transport-sem-pareamento.md)). Queda de rede reconecta
+  ([ADR 0064](../../../docs/adr/0064-desconexao-fatal-e-transport-sem-pareamento.md)). Queda de rede reconecta
   sem limite de tentativas e nunca apaga as credenciais
-  ([ADR 0045](../../../docs/adr/0045-queda-de-rede-nao-limpa-sessao.md)); para desistir após um
+  ([ADR 0041](../../../docs/adr/0041-queda-de-rede-nao-limpa-sessao.md)); para desistir após um
   tempo, observe `connection.status` e chame `bot.stop()`.
 - Um `connect()` de reconexão que falha conta como queda (`connection-lost`): a política decide
   de novo, com a tentativa seguinte do backoff.
@@ -578,7 +578,7 @@ O transport avisa as quedas por `connection.status`; a `ReconnectionPolicy`
 - `connection.qr` conta para o limite de QRs da política e vai para o barramento (um plugin pode
   desenhar o QR). O log em `info` só avisa que chegou um QR; o valor (campo `qr`) sai em `debug`,
   porque quem lê o log (agregador, arquivo) pareia o número enquanto o QR vale.
-- `connection.pairing-code` (pareamento por código, [ADR 0050](../../../docs/adr/0050-codigo-de-pareamento.md))
+- `connection.pairing-code` (pareamento por código, [ADR 0046](../../../docs/adr/0046-codigo-de-pareamento.md))
   segue as mesmas regras do QR: conta para o limite, o valor (`code`) só sai em `debug` e vai para o
   barramento.
 - `connection.status`/`connection.qr`/`connection.pairing-code` também chegam aos listeners.
@@ -726,7 +726,7 @@ process.once('SIGTERM', () => {
 
 ## Sessão
 
-`session` identifica o número que o bot opera ([ADR 0036](../../../docs/adr/0036-escopo-de-sessao.md)).
+`session` identifica o número que o bot opera ([ADR 0032](../../../docs/adr/0032-escopo-de-sessao.md)).
 Tudo o que o bot persiste fica no escopo dela: o storage de cada plugin, os jobs do scheduler e
 os overrides de config. Assim, vários números podem dividir um storage (um Postgres para todos,
 por exemplo) sem um ver os jobs, o KV ou a config do outro.
@@ -757,7 +757,7 @@ const suporte = createBot({ transport: transportSuporte, storage, session: 'supo
 Dois processos com a mesma sessão sobre o mesmo banco responderiam em dobro: o Discord aceita o
 mesmo token em vários gateways, e o web não derruba a conexão antiga. Por isso o `start()` trava a
 sessão no storage antes de carregar os plugins
-([ADR 0074](../../../docs/adr/0074-trava-de-sessao-entre-processos.md)):
+([ADR 0070](../../../docs/adr/0070-trava-de-sessao-entre-processos.md)):
 
 | Situação | O que acontece |
 | --- | --- |
@@ -777,7 +777,7 @@ sessão no storage antes de carregar os plugins
 ## Transport por fábrica
 
 `transport` aceita uma fábrica `(deps: TransportDeps) => Transport`
-([ADR 0037](../../../docs/adr/0037-transport-por-fabrica.md)). É a forma dos adapters oficiais:
+([ADR 0033](../../../docs/adr/0033-transport-por-fabrica.md)). É a forma dos adapters oficiais:
 o app escreve `transport: baileys({ ... })` e o bot entrega ao adapter o que é dele, sem o app
 ligar transport e storage à mão nem repetir a sessão.
 
@@ -803,11 +803,11 @@ Como escrever um adapter com fábrica: [Transport](transport.md#adapter-com-fáb
 Duas chamadas a `createBot` não compartilham nada — roteador, barramento, filas, scheduler,
 registry de serviços, logger e storage padrão são da instância. A mesma `PluginDefinition` pode
 servir aos dois bots: cada um monta o próprio contexto. É o caminho para multi-sessão
-([ADR 0004](../../../docs/adr/0004-uma-sessao-por-processo.md)).
+([ADR 0003](../../../docs/adr/0003-uma-sessao-por-processo.md)).
 
 Para servir várias plataformas, suba um bot por transport no mesmo processo, todos com a mesma
 instância de storage e uma sessão cada
-([ADR 0075](../../../docs/adr/0075-varios-bots-e-escopo-compartilhado.md)):
+([ADR 0071](../../../docs/adr/0071-varios-bots-e-escopo-compartilhado.md)):
 
 ```ts
 const storage = sqlite({ path: 'data/bot.db' });

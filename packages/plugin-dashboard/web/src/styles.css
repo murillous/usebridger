@@ -901,7 +901,7 @@ th.num {
 }
 /* Sem transição nem animação no app: prefers-reduced-motion já é respeitado. */
 
-/* Abas de plugins (ADR 0108) */
+/* Abas de plugins (ADR 0104) */
 .stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));

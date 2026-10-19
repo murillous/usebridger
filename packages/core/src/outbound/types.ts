@@ -1,4 +1,4 @@
-// Contrato da fila de saída (M1-12, ADR 0019). O M1-12 completa este arquivo; os nomes
+// Contrato da fila de saída (M1-12, ADR 0017). O M1-12 completa este arquivo; os nomes
 // exportados aqui são usados por outros módulos e não mudam.
 
 import type { MessageAction } from '#actions/actions.ts';
@@ -23,7 +23,7 @@ export interface OutboundSendOptions extends SendOptions {
 /** Envio exposto ao plugin (`ctx.send`); passa sempre pela fila de saída. */
 export interface Sender {
   /**
-   * Envia o conteúdo ou, como atalho, só o texto (cru ou formatado, ADR 0061). Um texto acima do
+   * Envia o conteúdo ou, como atalho, só o texto (cru ou formatado, ADR 0057). Um texto acima do
    * limite do transport sai em partes, e a chave devolvida é a da primeira.
    */
   send(
@@ -33,7 +33,7 @@ export interface Sender {
   ): Promise<MessageKey>;
 }
 
-/** Opções das ações da fila que não são envio (ADR 0040). */
+/** Opções das ações da fila que não são envio (ADR 0036). */
 export interface ActionOptions {
   /** Padrão: `'normal'`. */
   readonly priority?: SendPriority;
@@ -41,13 +41,13 @@ export interface ActionOptions {
 
 /**
  * `ctx.send`: tudo o que gera tráfego sobre mensagens e chats, sempre pela fila de saída (ADR
- * 0019, ADR 0040). Cada ação confere a capability antes de enfileirar e, sem ela, rejeita com
+ * 0017, ADR 0036). Cada ação confere a capability antes de enfileirar e, sem ela, rejeita com
  * `UnsupportedError`.
  */
 export interface Outbound extends Sender {
   /**
    * Reage à mensagem (capability `reactions`). A sessão tem uma reação por mensagem: um emoji novo
-   * substitui o anterior, e `null` remove a da sessão (ADR 0070).
+   * substitui o anterior, e `null` remove a da sessão (ADR 0066).
    */
   react(key: MessageKey, emoji: string | null, options?: ActionOptions): Promise<void>;
   /**
@@ -61,7 +61,7 @@ export interface Outbound extends Sender {
    */
   delete(key: MessageKey, options?: ActionOptions): Promise<void>;
   /**
-   * "Digitando" (`text`) ou "gravando áudio" (`voice`) no chat (capability `typing`, ADR 0070). Some
+   * "Digitando" (`text`) ou "gravando áudio" (`voice`) no chat (capability `typing`, ADR 0066). Some
    * no próximo envio ou quando a plataforma o expira (5 s no Telegram).
    */
   typing(chatId: string, kind: TypingKind, options?: ActionOptions): Promise<void>;
@@ -78,7 +78,7 @@ export interface ReplyOptions {
 /** Opções da resposta de texto, a única que leva botões. */
 export interface ReplyTextOptions extends ReplyOptions {
   /**
-   * Botões que rodam um comando ou um passo de conversa do plugin (ADR 0062). Sem a capability
+   * Botões que rodam um comando ou um passo de conversa do plugin (ADR 0058). Sem a capability
    * `actions`, ou acima de `limits.actions`, saem como menu numerado no fim do texto, e o número
    * que o remetente responder roda a ação. `label` vazio, comando não registrado ou passo não
    * definido lançam `TypeError`.
@@ -113,7 +113,7 @@ export interface ReplyPollOptions extends ReplyOptions {
 
 /**
  * `ctx.reply`: responde no chat da mensagem, citando-a, pela fila de saída. Chamado direto
- * envia texto, cru ou formatado (ADR 0061); os atalhos cobrem cada tipo de `OutgoingContent`.
+ * envia texto, cru ou formatado (ADR 0057); os atalhos cobrem cada tipo de `OutgoingContent`.
  */
 export interface Reply {
   (text: MessageText, options?: ReplyTextOptions): Promise<MessageKey>;
@@ -126,7 +126,7 @@ export interface Reply {
   sticker(media: MediaInput, options?: ReplyOptions): Promise<MessageKey>;
   document(media: MediaInput, options: ReplyDocumentOptions): Promise<MessageKey>;
   /**
-   * Várias mídias numa mensagem (ADR 0065). Sem a capability `send.album`, sai um item por
+   * Várias mídias numa mensagem (ADR 0061). Sem a capability `send.album`, sai um item por
    * mensagem, a legenda no primeiro; a chave é a da primeira. Álbum vazio rejeita com `TypeError`.
    */
   album(items: readonly AlbumItem[], options?: ReplyAlbumOptions): Promise<MessageKey>;
