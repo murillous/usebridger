@@ -462,7 +462,14 @@ describe('Bot: fluxo da mensagem (§5.3)', () => {
 
     await vi.waitFor(() => expect(sentTexts(transport)).toEqual(['segue']));
     expect(errors).toEqual([
-      { plugin: 'quebrado', phase: 'command', event: 'falha', error: boom, timedOut: false },
+      {
+        plugin: 'quebrado',
+        phase: 'command',
+        event: 'falha',
+        error: boom,
+        timedOut: false,
+        trace: expect.stringMatching(/^[0-9a-f]{32}$/),
+      },
     ]);
     expect(logger.lines.some((line) => line.level === 'error' && line.fields['err'] === boom)).toBe(
       true,
@@ -1010,7 +1017,14 @@ describe('Bot: boot', () => {
 
     await vi.waitFor(() =>
       expect(errors).toEqual([
-        { plugin: 'agenda', phase: 'scheduler', event: 'lembrete', error: boom, timedOut: false },
+        {
+          plugin: 'agenda',
+          phase: 'scheduler',
+          event: 'lembrete',
+          error: boom,
+          timedOut: false,
+          trace: expect.stringMatching(/^[0-9a-f]{32}$/),
+        },
       ]),
     );
   });

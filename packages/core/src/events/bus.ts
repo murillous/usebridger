@@ -7,6 +7,7 @@ import {
   ListenerTimeoutError,
 } from '#deadline.ts';
 import type { Message, MessageType } from '#message/types.ts';
+import { currentTrace } from '#trace/scope.ts';
 import type { Unsubscribe } from '#transport/types.ts';
 import type {
   BotEventName,
@@ -221,12 +222,14 @@ export function createEventBus(options: EventBusOptions): EventBus {
   }
 
   function fail(entry: Entry, event: BotEventName, error: unknown, timedOut: boolean): void {
+    const trace = currentTrace();
     const report: PluginErrorEvent = {
       plugin: entry.plugin,
       phase: 'listener',
       event,
       error,
       timedOut,
+      ...(trace === undefined ? {} : { trace }),
     };
     onError(report);
     // Falha de um listener de `plugin.error` viraria outro `plugin.error`, em loop: fica só no
