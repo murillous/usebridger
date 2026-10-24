@@ -14,7 +14,13 @@ import * as LOG from '#logger/events.ts';
 import { NO_TRAIL, type Trail } from '#logger/trail.ts';
 import type { Logger } from '#logger/types.ts';
 import { DEFAULT_SESSION } from '#storage/namespace.ts';
-import { formatTraceparent, newTraceId, parseTraceparent, runInTrace } from '#trace/scope.ts';
+import {
+  formatTraceparent,
+  newTraceId,
+  parseTraceFlags,
+  parseTraceparent,
+  runInTrace,
+} from '#trace/scope.ts';
 import type {
   HttpHandler,
   HttpMethod,
@@ -390,7 +396,8 @@ function mount(app: Hono, entry: RouteEntry, upgradeWebSocket: typeof UpgradeWeb
   if (typeof target === 'function') {
     const handler = target;
     app.on(entry.method, path, (c) => {
-      const trace = parseTraceparent(c.req.header('traceparent')) ?? newTraceId();
+      const header = c.req.header('traceparent');
+      const trace = parseTraceparent(header) ?? newTraceId();
       // Um trace por request (ADR 0120): o `traceparent` válido de entrada é adotado, para a linha
       // do proxy e a do bot se cruzarem; o header volta na resposta.
       return runInTrace(trace, async () => {
@@ -418,7 +425,7 @@ function mount(app: Hono, entry: RouteEntry, upgradeWebSocket: typeof UpgradeWeb
           status: response.status,
           durationMs: Math.round((performance.now() - started) * 100) / 100,
         });
-        return withTraceparent(response, trace);
+        return withTraceparent(response, trace, parseTraceFlags(header));
       });
     });
     return;
@@ -443,16 +450,32 @@ function mount(app: Hono, entry: RouteEntry, upgradeWebSocket: typeof UpgradeWeb
   });
 }
 
-// O `Response` do handler pode ter headers imutáveis (`fetch`, `Response.redirect`): a cópia só
-// troca os headers, o corpo segue como stream.
-function withTraceparent(response: Response, trace: string): Response {
-  const headers = new Headers(response.headers);
-  headers.set('traceparent', formatTraceparent(trace));
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
+// O `Response` do handler pode ter headers imutáveis (`fetch`, `Response.redirect`): tenta o `set`
+// direto e só então copia, com o corpo seguindo como stream. Se nem a cópia vale (`Response.error()`
+// tem status 0 e o construtor recusa), devolve a resposta original, sem o header.
+// Exportada só para o teste dos três ramos; fora do índice do pacote.
+export function withTraceparent(response: Response, trace: string, flags?: string): Response {
+  const value = formatTraceparent(trace, flags);
+  try {
+    response.headers.set('traceparent', value);
+    return response;
+  } catch {
+    // Headers imutáveis: segue para a cópia abaixo.
+    void 0;
+  }
+  // O `Response` do node-server não recusa o status 0 e viraria um 200: o erro de rede fica como está.
+  if (response.type === 'error') return response;
+  try {
+    const headers = new Headers(response.headers);
+    headers.set('traceparent', value);
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  } catch {
+    return response;
+  }
 }
 
 /** Callbacks do Hono ligados aos do autor, com cada conexão registrada na rota. */
