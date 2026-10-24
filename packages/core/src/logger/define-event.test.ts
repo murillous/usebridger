@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { defineLogEvent } from './define-event.ts';
 import * as LOG from './events.ts';
@@ -43,5 +44,11 @@ describe('catálogo do core', () => {
   it('nomes únicos: o nome é a chave de filtro no agregador', () => {
     const names = events.map((event) => event.name);
     expect(new Set(names).size).toBe(names.length);
+  });
+
+  it('a lista de eventos da doc tem todo evento do core', () => {
+    const doc = readFileSync(new URL('../../docs/log-events.md', import.meta.url), 'utf8');
+    const missing = events.map((event) => event.name).filter((name) => !doc.includes(`\`${name}\``));
+    expect(missing).toEqual([]);
   });
 });

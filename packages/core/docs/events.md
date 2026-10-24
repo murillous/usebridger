@@ -194,7 +194,7 @@ listener vai para o log do bot. Por dentro (interno do kernel, não exportado ([
 import { createEventBus } from '#events/bus.ts';
 
 const bus = createEventBus({
-  onError: (e) => log.error({ plugin: e.plugin, event: e.event, err: e.error }, 'listener falhou'),
+  onError: (e) => logPluginError(log, e), // evento `plugin.failed`, com `eventName` e `err`
   listenerTimeoutMs: 30_000, // padrão
 });
 

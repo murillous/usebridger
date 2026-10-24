@@ -176,11 +176,19 @@ Use o `TypedEmitter`. Um handler que lança ou rejeita não interrompe os demais
 o adapter: o erro vai para o `onError` passado no construtor.
 
 ```ts
+import { defineLogEvent } from '@usebridger/core';
 import { TypedEmitter, type TransportEvents } from '@usebridger/core/adapter';
+
+// Mesmo nome que o core e os outros transports usam (ADR 0118): o binding `transport` diz qual.
+const HandlerFailed = defineLogEvent({
+  name: 'transport.handler.failed',
+  level: 'error',
+  message: 'handler de evento do transport falhou',
+});
 
 class TelegramTransport implements Transport {
   readonly #events = new TypedEmitter<TransportEvents>((error, event) =>
-    this.#log.error({ error, event }, 'handler de evento falhou'),
+    this.#log.event(HandlerFailed, { err: error, eventName: event }),
   );
 
   on: Transport['on'] = (event, handler) => this.#events.on(event, handler);

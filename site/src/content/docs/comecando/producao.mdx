@@ -98,13 +98,68 @@ O `CMD` em forma de lista é o que faz o `SIGTERM` chegar ao Node. Na forma de t
 O bot escreve uma linha JSON por evento no stdout:
 
 ```json
-{"level":30,"time":1760572800000,"pid":1,"hostname":"bot","msg":"conexão aberta"}
+{"level":"info","time":"2026-10-23T14:03:22.418Z","bot":"default","service":"meu-bot","version":"1.4.0","env":"production","event":"connection.opened","msg":"conexão aberta"}
 ```
 
 - Deixe no stdout: o PM2 (`pm2 logs`) e o Docker (`docker compose logs`) já guardam e giram os arquivos, e um agregador lê dali.
 - O nível padrão é `info`. Para investigar, suba com `logLevel: 'debug'`.
 - Para ler no terminal, `logFormat: 'pretty'` troca o JSON por texto. Em produção, mantenha o JSON.
 - Segredos da config não aparecem: saem como `[REDACTED]`. Pelo mesmo motivo, o QR e o código de pareamento só aparecem em `debug`, porque quem lê o log poderia parear o número.
+- Filtre e alerte pelo `event` (`command.timeout`, `connection.closed`), não pelo texto do `msg`: o nome é estável, a redação não. A lista está em [Eventos de log](/usebridger/pacotes/core/log-events/).
+- `bot` (a sessão) sai sozinho. Diga ao bot de onde ele é, para o agregador separar os bots:
+
+```ts
+createBot({
+  // ...
+  logBindings: { service: 'meu-bot', version: pkg.version, env: process.env.NODE_ENV },
+});
+```
+
+### Loki
+
+Com o Grafana Alloy lendo os contêineres e mandando ao Loki, promova a rótulo só o que tem poucos valores: `service`, `bot`, `env`, `level` e `plugin`. `event`, `chat` e `command` ficam no corpo da linha. Como rótulo, cada chat viraria um stream, e o Loki fica lento.
+
+```alloy
+discovery.docker "bots" {
+  host = "unix:///var/run/docker.sock"
+}
+
+loki.source.docker "bots" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.docker.bots.targets
+  forward_to = [loki.process.bridger.receiver]
+}
+
+loki.process "bridger" {
+  stage.json {
+    expressions = { level = "", time = "", service = "", bot = "", env = "", plugin = "" }
+  }
+
+  stage.labels {
+    values = { level = "", service = "", bot = "", env = "", plugin = "" }
+  }
+
+  stage.timestamp {
+    source = "time"
+    format = "RFC3339Nano"
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+```
+
+Com o PM2, troque o `loki.source.docker` por `local.file_match` + `loki.source.file` apontando para `~/.pm2/logs/*.log`; o `loki.process` é o mesmo. No Grafana, o resto é LogQL sobre o JSON:
+
+```logql
+{service="meu-bot", env="production"} | json | event="command.timeout"
+sum by (event) (count_over_time({service="meu-bot", level="error"} | json [1h]))
+```
 
 ## Backup do storage
 

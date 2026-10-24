@@ -60,11 +60,14 @@ Uma linha JSON por chamada, no formato que o Loki e o Grafana leem sem pipeline 
   não.
 - **`log.<nível>(mensagem, campos?)` continua** para o app e para plugins de terceiros. O kernel
   (core, transports e plugins oficiais) usa só `log.event`.
-- **Catálogo do core** num módulo só (`logger/events.ts`), não exportado: o contrato é o nome, não o
-  objeto. **Evento novo é minor; renomear ou remover quebra**, como os sinais do ADR 0105. Cada
-  plugin oficial e cada transport mantém o próprio catálogo, com a área do pacote (`dashboard.*`,
-  `metrics.*`, `baileys.*`, `web.*`).
+- **Catálogo do core** num módulo só (`logger/events.ts`, um `export const` por evento, importado
+  como `import * as LOG`), fora da API pública: o contrato é o nome, não o objeto. **Evento novo é
+  minor; renomear ou remover quebra**, como os sinais do ADR 0105. Cada plugin oficial e cada
+  transport mantém o próprio catálogo (`src/log-events.ts`), com a área do pacote (`dashboard.*`,
+  `metrics.*`, `baileys.*`, `web.*`). Evento que todo transport tem usa a área `transport` e o
+  mesmo nome do core (`transport.handler.failed`); o binding `transport` diz qual foi.
 - `event` é chave reservada: um campo `event` passado em `campos` é sobrescrito pelo nome do evento.
+  O nome de evento do barramento ou do transport que antes ia em `event` passa a `eventName`.
 
 ### Campos
 
@@ -75,8 +78,8 @@ Uma linha JSON por chamada, no formato que o Loki e o Grafana leem sem pipeline 
   `service`, `bot`, `version`, `env`, `plugin`, `transport`, `chat`, `sender`, `messageId`,
   `command`, `step`, `role`, `route`, `status`, `reason`, `durationMs`, `trace`. Outros nomes
   continuam livres.
-- **`chatId` vira `chat`**, no binding por mensagem e nos campos. `reason` é o motivo em texto
-  curto; o erro vai sempre em `err`.
+- **`chatId` vira `chat`** e `senderId` vira `sender`, no binding por mensagem e nos campos.
+  `reason` é o motivo em texto curto; o erro vai sempre em `err`.
 
 ### Regra no lint
 

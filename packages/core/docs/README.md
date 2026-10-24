@@ -42,6 +42,7 @@ explícita.
 | [Fila de saída](outbound-queue.md) | `OutboundQueue`: taxa global/por chat, prioridade, retry, humanização; `createReply` |
 | [Eventos](events.md) | Barramento: eventos do §6.4, filtros, prioridade, `claim()`, isolamento |
 | [Services](services.md) | `ctx.services`: `provide`/`get` tipados por declaration merging, erros, registry |
-| [Logger](logger.md) | `createLogger`, níveis, contexto `plugin`/`chatId`, `err`, redação de segredos |
+| [Logger](logger.md) | `createLogger`, formato da linha, `log.event` e `defineLogEvent`, dicionário de campos, bindings base, `err`, redação de segredos, Loki |
+| [Eventos de log](log-events.md) | Os `event`s do core, dos transports e dos plugins oficiais |
 | [Escape hatch](unsafe.md) | `ctx.unsafe.native`, aviso no log e `transports` no manifesto |
 | [Config](config.md) | Config por plugin com Zod: precedência env > arquivo > overrides > default, `secret`, `messages`, reload, `owners` |
