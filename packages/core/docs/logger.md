@@ -48,7 +48,9 @@ com a última. Crie o filho a partir do logger do plugin, não do filho de outro
 ## Erros
 
 Passe o erro no campo **`err`**: ele é serializado com `type`, `message`, `stack` e a `cause`
-(recursiva, também com stack). Em outro nome de campo o `Error` vira `{}` no JSON.
+(recursiva, também com stack). É a convenção do core e dos plugins oficiais. Um `Error` sob outra
+chave do primeiro nível dos campos (`{ error }`, `{ falha }`) sai serializado igual, sob o próprio
+nome; aninhado num objeto (`{ ctx: { error } }`), não.
 
 ```ts
 log.error('falha ao enviar', { err: new Error('envio falhou', { cause }) });
@@ -115,7 +117,8 @@ censura por `secrets` roda só nas linhas emitidas e só quando há segredo conf
 
 - Hora local, nível, `[plugin]` quando houver, a mensagem e os demais campos em `chave=valor`
   (texto com espaço entre aspas, objeto em JSON compacto). `pid` e `hostname` ficam de fora.
-- O `err` sai nas linhas seguintes, recuado: a stack e, em seguida, a de cada `causa`.
+- O `err` sai nas linhas seguintes, recuado: a stack e, em seguida, a de cada `causa`. Um erro
+  sob outra chave sai ali também, prefixado com o nome do campo (`error: Error: ...`).
 - Colorido só no stdout de um terminal; `NO_COLOR` desliga. Com `destination` próprio, texto puro.
 - A conversão roda sobre a linha JSON já censurada: `secrets` e `redact` valem igual.
 

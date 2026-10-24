@@ -41,6 +41,16 @@ describe("createLogger({ format: 'pretty' })", () => {
     expect(rest.every((line) => line.startsWith('    '))).toBe(true);
   });
 
+  it('põe o Error sob outra chave nas linhas seguintes, com o nome do campo', () => {
+    const { log, raw } = capture();
+    log.error('aba falhou', { error: new Error('manifesto inválido'), aba: 'grupos' });
+    const [head, ...rest] = (raw[0] as string).trimEnd().split('\n');
+    expect(head?.slice(9)).toBe('ERROR aba falhou aba=grupos');
+    expect(rest[0]).toBe('    error: Error: manifesto inválido');
+    expect(rest.length).toBeGreaterThan(1);
+    expect(rest.every((line) => line.startsWith('    '))).toBe(true);
+  });
+
   it('censura os segredos igual ao JSON', () => {
     const { log, raw } = capture('info', ['sk-segredo-123']);
     log.info('chamando com sk-segredo-123', { token: 'sk-segredo-123' });

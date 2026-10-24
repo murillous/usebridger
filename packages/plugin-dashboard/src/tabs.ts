@@ -288,7 +288,7 @@ export function registerTabRoutes(
           })),
         );
       } catch (error) {
-        log.error('dashboard: falha ao montar o manifesto de abas', { error });
+        log.error('dashboard: falha ao montar o manifesto de abas', { err: error });
         return text('erro interno', 500);
       }
     }),
@@ -307,7 +307,7 @@ export function registerTabRoutes(
   const failed = (what: string, ctx: { plugin: string; key: string }, error: unknown): Response => {
     // Mensagem genérica ao browser: o erro do plugin pode trazer dado sensível.
     log.error(`dashboard: falha em ${what} da aba do plugin "${ctx.plugin}" (${ctx.key})`, {
-      error,
+      err: error,
     });
     return text('erro no widget', 500);
   };

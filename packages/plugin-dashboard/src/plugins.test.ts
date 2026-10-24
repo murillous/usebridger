@@ -215,7 +215,7 @@ describe('serialização segura e erros', () => {
     expect(res.status).toBe(500);
     expect(await res.text()).toBe('erro interno');
     expect(errors).toHaveLength(1);
-    expect(errors[0]?.[1]).toMatchObject({ error: { message: 'boom' } });
+    expect(errors[0]?.[1]).toMatchObject({ err: { message: 'boom' } });
   });
 
   it('409 trunca a mensagem em 300 caracteres', async () => {
