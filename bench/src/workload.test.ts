@@ -24,6 +24,13 @@ describe('bot de referência', () => {
     expect(report.every((entry) => entry.status === 'loaded')).toBe(true);
   });
 
+  it('com `metrics`, carrega também o plugin-metrics', async () => {
+    workload = await createWorkload({ metrics: true });
+    const report = workload.bot.bot.plugins();
+    expect(report).toHaveLength(PLUGIN_COUNT + 2);
+    expect(report.find((entry) => entry.name === 'metrics')?.status).toBe('loaded');
+  });
+
   it('responde o comando e o texto "oi", e não responde o texto solto', async () => {
     workload = await createWorkload();
     const { bot } = workload;

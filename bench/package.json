@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@usebridger/core": "workspace:*",
+    "@usebridger/plugin-metrics": "workspace:*",
     "@usebridger/testing": "workspace:*",
     "zod": "^4.6.5"
   }
