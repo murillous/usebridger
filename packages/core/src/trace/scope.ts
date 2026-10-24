@@ -20,23 +20,39 @@ export function runInTrace<R>(trace: string, fn: () => R): R {
   return store.run(trace, fn);
 }
 
+/**
+ * Roda `fn` fora de qualquer trace. Timer e loop de longa vida criados dentro de uma mensagem
+ * herdariam o trace dela para sempre; o que eles logam não pertence àquela mensagem.
+ */
+export function outsideTrace<R>(fn: () => R): R {
+  return store.exit(fn);
+}
+
 /** Trace novo: 32 hex minúsculos, o `trace-id` do W3C Trace Context. */
 export function newTraceId(): string {
   return randomUUID().replaceAll('-', '');
 }
 
 // Versão 00, `trace-id` e `parent-id` não zerados (o W3C os declara inválidos).
-const TRACEPARENT = /^00-(?!0{32}-)([0-9a-f]{32})-(?!0{16}-)[0-9a-f]{16}-[0-9a-f]{2}$/;
+const TRACEPARENT = /^00-(?!0{32}-)([0-9a-f]{32})-(?!0{16}-)[0-9a-f]{16}-([0-9a-f]{2})$/;
 
 /**
- * O `trace-id` de um header `traceparent` válido, ou `undefined`. Header malformado é ignorado,
- * nunca erro: o request segue com um trace gerado.
+ * O `trace-id` de um header `traceparent` válido, ou `undefined`. Header malformado (inclusive com
+ * maiúsculas, que o W3C proíbe) é ignorado, nunca erro: o request segue com um trace gerado.
  */
 export function parseTraceparent(header: string | null | undefined): string | undefined {
   return header ? TRACEPARENT.exec(header.trim())?.[1] : undefined;
 }
 
-/** O `traceparent` de resposta: o mesmo `trace-id`, com um `span-id` novo deste serviço. */
-export function formatTraceparent(trace: string): string {
-  return `00-${trace}-${randomUUID().replaceAll('-', '').slice(0, 16)}-01`;
+/** As `trace-flags` de um `traceparent` válido, ou `undefined`. */
+export function parseTraceFlags(header: string | null | undefined): string | undefined {
+  return header ? TRACEPARENT.exec(header.trim())?.[2] : undefined;
+}
+
+/**
+ * O `traceparent` de resposta: o mesmo `trace-id`, com um `span-id` novo deste serviço. As flags
+ * repetem as da entrada (ex.: `00`, não amostrado); sem entrada, `01`.
+ */
+export function formatTraceparent(trace: string, flags = '01'): string {
+  return `00-${trace}-${randomUUID().replaceAll('-', '').slice(0, 16)}-${flags}`;
 }
