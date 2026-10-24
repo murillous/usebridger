@@ -3,6 +3,7 @@ import type { PluginErrorEvent } from '#events/types.ts';
 import * as LOG from '#logger/events.ts';
 import type { Logger } from '#logger/types.ts';
 import type { PluginLifecycleError } from '#plugin/report.ts';
+import { currentTrace } from '#trace/scope.ts';
 
 // `logPluginError` fica solto porque o bus nasce com `onError: logPluginError` antes de o
 // reporter existir (o reporter precisa do bus para emitir `plugin.error`).
@@ -34,9 +35,12 @@ export function createPluginErrorReporter(deps: {
   return {
     report(event) {
       logPluginError(deps.log(), event);
-      void deps.bus.emit('plugin.error', event);
+      // O trace só entra no payload; a linha de log já o carimba sozinha.
+      const trace = currentTrace();
+      void deps.bus.emit('plugin.error', { ...event, ...(trace ? { trace } : {}) });
     },
     lifecycle(error) {
+      const trace = currentTrace();
       const phase = error.phase === 'context' || error.phase === 'setup' ? 'setup' : 'teardown';
       void deps.bus.emit('plugin.error', {
         plugin: error.plugin,
@@ -44,6 +48,7 @@ export function createPluginErrorReporter(deps: {
         event: null,
         error: error.cause ?? error,
         timedOut: error.timedOut,
+        ...(trace ? { trace } : {}),
       });
     },
   };

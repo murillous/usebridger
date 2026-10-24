@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PluginErrorEvent } from '#events/types.ts';
 import { PluginLifecycleError } from '#plugin/report.ts';
+import { runInTrace } from '#trace/scope.ts';
 import { recordingLogger } from './harness.test-support.ts';
 import { createPluginErrorReporter, logPluginError } from './plugin-errors.ts';
 
@@ -71,5 +72,29 @@ describe('createPluginErrorReporter', () => {
       'plugin.error',
       expect.objectContaining({ error: cause, timedOut: false }),
     );
+  });
+});
+
+describe('trace no payload emitido', () => {
+  const run = (fn: (r: ReturnType<typeof createPluginErrorReporter>) => void) => {
+    const bus = { emit: vi.fn() };
+    const reporter = createPluginErrorReporter({ log: () => recordingLogger(), bus });
+    fn(reporter);
+    return bus.emit.mock.calls.map(([, payload]) => payload as PluginErrorEvent);
+  };
+  const both = (r: ReturnType<typeof createPluginErrorReporter>) => {
+    r.report(event);
+    r.lifecycle(new PluginLifecycleError('ping', 'setup', 'falhou', false));
+  };
+
+  it('report e lifecycle levam o trace ativo', () => {
+    const payloads = run((r) => runInTrace('a'.repeat(32), () => both(r)));
+    expect(payloads.map((p) => p.trace)).toEqual(['a'.repeat(32), 'a'.repeat(32)]);
+  });
+
+  it('sem trace o campo fica ausente', () => {
+    const payloads = run(both);
+    expect(payloads).toHaveLength(2);
+    for (const p of payloads) expect('trace' in p).toBe(false);
   });
 });

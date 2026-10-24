@@ -32,6 +32,8 @@ export interface PluginErrorEvent {
   readonly event: string | null;
   readonly error: unknown;
   readonly timedOut: boolean;
+  /** Trace (ADR 0120) em que o erro ocorreu, o mesmo da linha de log. Ausente sem trace ativo. */
+  readonly trace?: string;
 }
 
 /**

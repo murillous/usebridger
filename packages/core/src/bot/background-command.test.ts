@@ -116,7 +116,14 @@ describe('Bot: comando em segundo plano (ADR 0083)', () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(errors).toEqual([
-      { plugin: 'midia', phase: 'command', event: 'baixar', error: boom, timedOut: false },
+      {
+        plugin: 'midia',
+        phase: 'command',
+        event: 'baixar',
+        error: boom,
+        timedOut: false,
+        trace: expect.stringMatching(/^[0-9a-f]{32}$/),
+      },
     ]);
     expect(commands).toEqual([{ name: 'baixar', status: 'failed' }]);
   });
