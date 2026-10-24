@@ -56,11 +56,18 @@ function formatRecord(
   const parts = [paint('gray', clock(record['time'])), paint(style, label)];
   if (typeof record['plugin'] === 'string') parts.push(paint('cyan', `[${record['plugin']}]`));
   parts.push(String(record['msg'] ?? ''));
-  const fields = Object.entries(record)
-    .filter(([key]) => !HIDDEN.has(key))
-    .map(([key, value]) => paint('gray', `${key}=${formatValue(value)}`));
+  const fields: string[] = [];
+  const errors: string[] = [];
+  if (record['err'] !== undefined) errors.push(formatError(record['err']));
+  for (const [key, value] of Object.entries(record)) {
+    if (HIDDEN.has(key)) continue;
+    // Erro sob outra chave (`{ error }`) também vai para as linhas seguintes, com o nome do campo:
+    // a stack numa linha só, em JSON, não dá para ler.
+    if (isSerializedError(value)) errors.push(`${key}: ${formatError(value)}`);
+    else fields.push(paint('gray', `${key}=${formatValue(value)}`));
+  }
   let text = [...parts, ...fields].join(' ');
-  if (record['err'] !== undefined) text += `\n${indent(formatError(record['err']))}`;
+  for (const error of errors) text += `\n${indent(error)}`;
   return text;
 }
 
@@ -73,6 +80,13 @@ function clock(time: unknown): string {
 function formatValue(value: unknown): string {
   if (typeof value === 'string') return /^[^\s"=]+$/.test(value) ? value : JSON.stringify(value);
   return JSON.stringify(value) ?? String(value);
+}
+
+/** Erro como o `errWithCause` do pino o deixa na linha. */
+function isSerializedError(value: unknown): value is SerializedError {
+  if (typeof value !== 'object' || value === null) return false;
+  const { message, stack } = value as SerializedError;
+  return typeof message === 'string' && typeof stack === 'string';
 }
 
 /** Stack do erro e as das causas, em sequência; sem stack, `tipo: mensagem` ou o JSON. */

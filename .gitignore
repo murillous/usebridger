@@ -21,3 +21,5 @@ site/dist/
 site/src/content/docs/api/
 # Banco gerado ao rodar os exemplos (credenciais do WhatsApp incluídas).
 examples/*/data/
+# Referência HTML gerada localmente pelo TypeDoc.
+docs/referencia/

@@ -111,6 +111,31 @@ describe('createLogger', () => {
     );
   });
 
+  it('serializa um Error sob qualquer chave como o err, sem mexer nos campos recebidos', () => {
+    const { log, lines } = capture();
+    const cause = new Error('disco cheio');
+    const fields = { error: new Error('flush falhou', { cause }), outro: new TypeError('x'), n: 1 };
+    log.error('flush de métricas falhou', fields);
+
+    const line = lines()[0] as Record<string, Record<string, unknown>>;
+    expect(line['error']).toMatchObject({ type: 'Error', message: 'flush falhou' });
+    expect(line['error']?.['stack']).toEqual(expect.stringContaining('flush falhou'));
+    expect(line['error']?.['cause']).toMatchObject({ message: 'disco cheio' });
+    expect(line['outro']).toMatchObject({ type: 'TypeError', message: 'x' });
+    expect(line['outro']?.['stack']).toEqual(expect.stringContaining('TypeError: x'));
+    expect(line).toMatchObject({ n: 1 });
+    expect(fields.error).toBeInstanceOf(Error);
+  });
+
+  it('censura segredos no Error sob qualquer chave', () => {
+    const secret = 'sk-segredo-123';
+    const { log, raw, lines } = capture({ secrets: [secret] });
+    log.error('falhou', { error: new Error(`401 para a chave ${secret}`) });
+
+    expect(raw[0]).not.toContain(secret);
+    expect(lines()[0]?.['error']).toMatchObject({ message: '401 para a chave [REDACTED]' });
+  });
+
   it('redact troca os caminhos configurados por [REDACTED]', () => {
     const { log, raw, lines } = capture({ redact: ['config.apiKey', '*.token'] });
     log.info('config carregada', {

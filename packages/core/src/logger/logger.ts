@@ -52,8 +52,9 @@ const CENSOR = '[REDACTED]';
 export const MIN_SECRET_LENGTH = 4;
 
 /**
- * Logger estruturado em JSON. `child({ plugin })` e `child({ chatId })` acumulam contexto; o
- * campo `err` é serializado com `message`, `stack` e `cause`.
+ * Logger estruturado em JSON. `child({ plugin })` e `child({ chatId })` acumulam contexto; um
+ * `Error` nos campos, sob qualquer chave, é serializado com `type`, `message`, `stack` e `cause`.
+ * A convenção é o campo `err`.
  */
 export function createLogger(options: LoggerOptions = {}): Logger {
   const destination = withSecretsCensored(formatted(options), options.secrets);
@@ -63,6 +64,7 @@ export function createLogger(options: LoggerOptions = {}): Logger {
       // `errWithCause` mantém a `cause` como objeto estruturado (com stack própria), em vez de
       // concatená-la na mensagem como o serializer padrão.
       serializers: { err: stdSerializers.errWithCause },
+      formatters: { log: serializeErrors },
       ...(options.redact && options.redact.length > 0
         ? { redact: { paths: [...options.redact], censor: CENSOR } }
         : {}),
@@ -70,6 +72,19 @@ export function createLogger(options: LoggerOptions = {}): Logger {
     destination,
   );
   return wrap(options.bindings ? root.child(options.bindings) : root);
+}
+
+// O serializer do pino só cobre o `err`. Um `Error` sob outra chave (`{ error }`) sairia `{}`,
+// porque message e stack não são enumeráveis; aqui ele ganha o mesmo tratamento do `err`. Copia
+// os campos só quando há o que trocar: o objeto é de quem chamou.
+function serializeErrors(fields: Record<string, unknown>): Record<string, unknown> {
+  let out = fields;
+  for (const [key, value] of Object.entries(fields)) {
+    if (key === 'err' || !(value instanceof Error)) continue;
+    if (out === fields) out = { ...fields };
+    out[key] = stdSerializers.errWithCause(value);
+  }
+  return out;
 }
 
 // O `pretty` converte a linha que sai da censura: os segredos são achados no JSON, onde a forma

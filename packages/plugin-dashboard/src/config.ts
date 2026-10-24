@@ -62,7 +62,7 @@ export function registerConfigRoutes(
 
   const fail = (what: string, name: string, error: unknown, body = 'erro interno'): Response => {
     // O erro inteiro (stack incluso): o logger do core já censura os secrets.
-    ctx.log.error(`dashboard: falha ao ${what} config do plugin "${name}"`, { error });
+    ctx.log.error(`dashboard: falha ao ${what} config do plugin "${name}"`, { err: error });
     return text(body, 500);
   };
 

@@ -97,7 +97,7 @@ export function registerPluginRoutes(
             return new Response(error.message.slice(0, 300), { status: 409 });
           }
           log.error(`dashboard: falha em ${action} do plugin "${name}"`, {
-            error,
+            err: error,
           });
           return new Response('erro interno', { status: 500 });
         }

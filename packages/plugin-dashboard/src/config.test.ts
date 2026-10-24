@@ -299,6 +299,6 @@ describe('ctx.admin com falha', () => {
     const boom = new Error('boom');
     const { put, errors } = fake(() => Promise.reject(boom));
     expect((await put()).status).toBe(500);
-    expect(errors[0]?.[1]).toEqual({ error: boom });
+    expect(errors[0]?.[1]).toEqual({ err: boom });
   });
 });
