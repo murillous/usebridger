@@ -36,6 +36,9 @@
       "default": "./dist/zod.mjs"
     }
   },
+  "bin": {
+    "bridger-pseudonym": "./dist/pseudonym-cli.mjs"
+  },
   "files": [
     "dist",
     "docs"

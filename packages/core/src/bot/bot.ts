@@ -3,6 +3,7 @@ import { createCommandCatalog } from '#commands/catalog.ts';
 import { createPrefixStore } from '#commands/prefixes.ts';
 import { createCommandRegistry } from '#commands/registry.ts';
 import { createCommandRouter } from '#commands/router.ts';
+import { processEnv, readSecretKeys } from '#config/env.ts';
 import { normalizeOwners } from '#config/owners.ts';
 import { createPluginConfigs, type PluginConfigs } from '#config/plugin-configs.ts';
 import { ConversationRegistry, type WaitRecord } from '#conversations/conversations.ts';
@@ -13,6 +14,7 @@ import { sessionHttp } from '#http/server.ts';
 import { createDeferredLogger } from '#logger/deferred.ts';
 import * as LOG from '#logger/events.ts';
 import { createLogger, createNoopLogger } from '#logger/logger.ts';
+import { createPseudonymizer, withPseudonyms } from '#logger/pseudonym.ts';
 import { createSecretSet } from '#logger/secrets.ts';
 import { createLogSignalTap } from '#logger/signal.ts';
 import type { Logger } from '#logger/types.ts';
@@ -190,6 +192,10 @@ export function createBot(config: BotConfig): Bot {
       : pluginErrors.report(event),
   );
   const logTap = createLogSignalTap(observers, secrets);
+  // Chave mestra lida só no start (o ambiente é da config); sem ela a chave é do processo (ADR 0119).
+  const pseudonymizer = createPseudonymizer(
+    () => readSecretKeys(config.env ?? processEnv()).current,
+  );
   // Ordem dos pontos de extensão: a tabela do host, já na ordem de carga (ADR 0092).
   const services = createServiceRegistry({
     loadOrder: () => host?.report().map((entry) => entry.name) ?? [],
@@ -470,6 +476,7 @@ export function createBot(config: BotConfig): Bot {
       adminPlugins: new Set(config.adminPlugins ?? []),
       admin: control,
       secrets,
+      pseudonym: pseudonymizer.pseudonym,
       unsafe: createUnsafeAccess({
         transport,
         log,
@@ -518,16 +525,19 @@ export function createBot(config: BotConfig): Bot {
       // Bindings base em toda linha (ADR 0118): `bot` é a sessão; o app acrescenta `service`,
       // `version` e `env`. Valem também sobre o logger próprio do app. O `createBot` já recusou
       // `bot` em `logBindings`, então o spread não o sobrescreve.
-      log = logTap
-        .wrap(
-          config.logger ??
-            createLogger({
-              level: config.logLevel ?? 'info',
-              ...(config.logFormat && { format: config.logFormat }),
-              secrets,
-            }),
-        )
-        .child({ bot: session, ...config.logBindings });
+      log = withPseudonyms(
+        logTap
+          .wrap(
+            config.logger ??
+              createLogger({
+                level: config.logLevel ?? 'info',
+                ...(config.logFormat && { format: config.logFormat }),
+                secrets,
+              }),
+          )
+          .child({ bot: session, ...config.logBindings }),
+        pseudonymizer.pseudonym,
+      );
       transportLog = log.child({ transport: transport.name });
       // Antes de `booted`: um bot recusado aqui não fecha o storage do bot que usa a sessão.
       releaseSession = claimSession(storage, session);
@@ -535,6 +545,8 @@ export function createBot(config: BotConfig): Bot {
       // Ligada já no boot: o `/health` mostra a sessão subindo (503) até ela ficar `running`.
       http?.attach(() => state);
       httpAttached = http !== undefined;
+      // Chave malformada lança aqui (`BotConfigError`), como já lançaria na config dos plugins.
+      if (pseudonymizer.ephemeral()) log.event(LOG.pseudonymEphemeral);
       if (config.storage === undefined) {
         log.event(LOG.storageMissing);
       }

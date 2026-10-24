@@ -11,6 +11,11 @@ export const storageMissing: LogEvent = defineLogEvent({
   level: 'warn',
   message: 'sem storage configurado: usando memória, os dados somem ao reiniciar',
 });
+export const pseudonymEphemeral: LogEvent = defineLogEvent({
+  name: 'bot.pseudonym.ephemeral',
+  level: 'info',
+  message: 'sem BRIDGER_SECRET_KEY: os pseudônimos dos logs mudam a cada restart',
+});
 export const stopFailed: LogEvent = defineLogEvent({
   name: 'bot.stop.failed',
   level: 'error',

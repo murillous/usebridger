@@ -32,8 +32,8 @@ describe('message.rate-limited', () => {
     const line = logger.lines.find((l) => l.fields['event'] === 'message.rate-limited');
     expect(line?.fields).toMatchObject({
       event: 'message.rate-limited',
-      chat: 'chat@test',
-      sender: 'user@test',
+      chat: expect.stringMatching(/^u_[\w-]{22}$/),
+      sender: expect.stringMatching(/^u_[\w-]{22}$/),
     });
     expect(line?.fields).not.toHaveProperty('chatId');
   });

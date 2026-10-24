@@ -88,7 +88,7 @@ describe('context.expired leva o rótulo do contexto (ADR 0118)', () => {
     await bot.settled();
 
     expect(logger.lines.find((line) => line.message === 'no onExpire')?.fields).toMatchObject({
-      chat: 'chat@test',
+      chat: expect.stringMatching(/^u_[\w-]{22}$/),
     });
     expect(expired(logger)).toHaveLength(1);
     expect(expired(logger)[0]?.fields).toMatchObject({ step: 'passo', context: 'expire' });

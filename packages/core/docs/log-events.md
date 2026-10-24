@@ -13,6 +13,7 @@ cada linha seguem o [dicionário do logger](logger.md#campos).
 
 | Evento | Nível | Mensagem |
 | --- | --- | --- |
+| `bot.pseudonym.ephemeral` | `info` | sem BRIDGER_SECRET_KEY: os pseudônimos dos logs mudam a cada restart |
 | `bot.storage.missing` | `warn` | sem storage configurado: usando memória, os dados somem ao reiniciar |
 | `bot.stop.failed` | `error` | falha ao parar o bot |
 | `bot.start.cleanup-failed` | `error` | falha ao encerrar após erro no start |

@@ -2,6 +2,7 @@
 // `Logger`/`LoggerOptions`, para trocar a implementação sem quebrar plugins.
 
 import { type Logger as PinoLogger, pino, stdSerializers } from 'pino';
+import { redactPersonalIds } from './personal-id.ts';
 import { prettyDestination } from './pretty.ts';
 import type { SecretSource } from './secrets.ts';
 import type { LogFields, Logger, LogLevel } from './types.ts';
@@ -57,7 +58,9 @@ export const MIN_SECRET_LENGTH = 4;
  * A convenção é o campo `err`.
  */
 export function createLogger(options: LoggerOptions = {}): Logger {
-  const destination = withSecretsCensored(formatted(options), options.secrets);
+  const destination = withPersonalIdsRedacted(
+    withSecretsCensored(formatted(options), options.secrets),
+  );
   const root = pino(
     {
       level: options.level ?? 'info',
@@ -128,6 +131,13 @@ function withSecretsCensored(
       target.write(censored);
     },
   };
+}
+
+// Redação de reserva do ADR 0119: JID e telefone que escaparem (em campo, mensagem ou `err`)
+// saem como `[REDACTED]`. Sempre ligada: id pessoal não tem opção de ficar no log.
+function withPersonalIdsRedacted(destination: LogDestination | undefined): LogDestination {
+  const target = destination ?? pino.destination(1);
+  return { write: (line) => target.write(redactPersonalIds(line)) };
 }
 
 // O segredo aparece na linha na forma escapada do JSON; o mais longo primeiro, para um segredo

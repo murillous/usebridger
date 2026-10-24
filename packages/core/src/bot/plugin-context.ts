@@ -38,6 +38,7 @@ import type { Groups } from '#groups/groups.ts';
 import type { SessionHttp } from '#http/server.ts';
 import type { HttpRoutes } from '#http/types.ts';
 import * as LOG from '#logger/events.ts';
+import type { Pseudonym } from '#logger/pseudonym.ts';
 import { createRedactor } from '#logger/redact.ts';
 import type { SecretSource } from '#logger/secrets.ts';
 import type { Logger } from '#logger/types.ts';
@@ -122,6 +123,8 @@ export interface PluginContextDeps {
   /** Observadores do bot; os do plugin saem no `dispose` (ADR 0102). */
   readonly observers: Observers;
   readonly unsafe: UnsafeAccess;
+  /** Pseudônimo estável de ids para logs (ADR 0119). */
+  readonly pseudonym: Pseudonym;
   /** Plugins que recebem `ctx.admin` (ADR 0107) e o controle que ele entrega. */
   readonly adminPlugins: ReadonlySet<string>;
   readonly admin: PluginAdmin;
@@ -373,6 +376,7 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         return deps.observers.add(name, signal, observer);
       },
       unsafe: deps.unsafe.forPlugin(plugin),
+      pseudonym: deps.pseudonym,
       admin: deps.adminPlugins.has(name) ? liveAdmin(name, deps.admin, live, redact) : undefined,
     };
 

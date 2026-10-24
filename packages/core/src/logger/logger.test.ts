@@ -80,7 +80,7 @@ describe('createLogger', () => {
     expect(lines()).toEqual([
       expect.objectContaining({
         plugin: 'clima',
-        chatId: '123@g.us',
+        chatId: '[REDACTED]',
         cidade: 'Recife',
         msg: 'previsão enviada',
       }),
