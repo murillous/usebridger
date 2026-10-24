@@ -1,7 +1,6 @@
 import QRCode from 'qrcode';
 import { useEffect, useRef, useState } from 'react';
 import type { LiveState } from '#web/lib/live.ts';
-import { fmtInt, fmtMs, KERNEL, percentile, rowsOf, total } from '#web/lib/metrics.ts';
 import {
   botChip,
   botName,
@@ -13,8 +12,6 @@ import {
   stateLabel,
 } from '#web/lib/overview.ts';
 import type { StatusView } from '#web/lib/types.ts';
-import { Stat } from './Stat.tsx';
-import { useMetrics } from './useMetrics.ts';
 
 function Qr({ value }: { value: string }) {
   const [src, setSrc] = useState<string>();
@@ -29,27 +26,6 @@ function Qr({ value }: { value: string }) {
     };
   }, [value]);
   return src ? <img className="qr" src={src} alt="QR code para parear o WhatsApp" /> : null;
-}
-
-function Kpis({ pending }: { pending: number | undefined }) {
-  const { data } = useMetrics(1);
-  // Sem o plugin de métricas (ou enquanto carrega) a seção some; a aba Métricas explica.
-  if (!data?.available) return null;
-  return (
-    <section aria-labelledby="kpis-t">
-      <div className="row spread">
-        <h2 id="kpis-t">Hoje (UTC)</h2>
-        <a href="#/metricas">Ver métricas</a>
-      </div>
-      <div className="kpis">
-        <Stat label="Mensagens" value={fmtInt(total(rowsOf(data, KERNEL.handled)))} />
-        <Stat label="Usuários ativos" value={fmtInt(total(rowsOf(data, KERNEL.users)))} />
-        <Stat label="Grupos ativos" value={fmtInt(total(rowsOf(data, KERNEL.groups)))} />
-        <Stat label="Latência p95" value={fmtMs(percentile(rowsOf(data, KERNEL.duration), 0.95))} />
-        <Stat label="Fila de saída" value={pending === undefined ? '-' : fmtInt(pending)} />
-      </div>
-    </section>
-  );
 }
 
 function RecentLogs({ live }: { live: LiveState }) {
@@ -181,7 +157,6 @@ export function Overview({ live }: { live: LiveState }) {
           <p className="muted">Aguardando o status do bot…</p>
         )}
       </section>
-      <Kpis pending={status?.outboundPending} />
       <RecentLogs live={live} />
     </>
   );

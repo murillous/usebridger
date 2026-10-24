@@ -1,7 +1,7 @@
 # @usebridger/plugin-dashboard — documentação
 
 Base do dashboard ([ADR 0103](../../../docs/adr/0103-plugins-oficiais-de-metricas-e-dashboard.md)):
-autenticação, status, QR, logs e WebSocket sobre o HTTP do core. O app web (telas Login, Visão geral, Métricas, Logs, Plugins e Config)
+autenticação, status, QR, logs e WebSocket sobre o HTTP do core. O app web (telas Login, Visão geral, Logs, Plugins e Config)
 vem junto; o desenho está em [design.md](./design.md). Abas de plugins: veja abaixo.
 
 ## Instalar
@@ -39,25 +39,11 @@ transport informar `expiresAt` no `connection.qr` (o Baileys informa).
 
 ## Métricas
 
-`GET /api/metrics?days=N` (1 a 90, padrão 7; fora disso 400) lê o serviço `metrics` do
-`@usebridger/plugin-metrics`, que é **opcional**: o dashboard só usa o tipo dele e consulta o
-serviço a cada pedido (`services.has('metrics')`), então o plugin pode subir depois.
-
-- Sem o plugin: `{ "available": false }` e a tela Métricas explica como instalar; o resto segue.
-- Plugin antigo, sem `names`: `{ "available": false, "reason": "version" }` e a tela pede para
-  atualizar.
-- Com o plugin: `{ available: true, from, to, metrics: [{ name, rows }] }`, uma entrada por métrica
-  devolvida por `names(range)` com as linhas de `query` (contador ou histograma, por dia e rótulos).
-
-O serviço é lido a cada pedido, sem `optionalDependsOn`, de propósito: com a dependência declarada,
-o reload do `metrics` reiniciaria o dashboard em cascata.
-
-A tela tem painéis fixos das métricas do kernel (`bridger.messages.*`, `bridger.outbound.sent`,
-`bridger.active.*`) e a seção "Todas as métricas registradas", que lista tudo o que o serviço
-conhece: métrica nova de qualquer plugin aparece ali sem mudar o dashboard. Os gráficos são SVG
-com `role="img"`, `aria-label` com os valores por dia e `<title>` por barra; o eixo mostra o primeiro
-dia ("12 out") e o último ("hoje") em texto; o valor de cada dia fica no `aria-label` e no `<title>`. Percentil no balde `+Inf` aparece como "> 30.000 ms". A Visão geral
-mostra os KPIs de hoje (dia UTC; mensagens, p95, usuários e grupos ativos) quando o serviço existe.
+A seção de métricas (rota `/api/metrics`, tela Métricas e KPIs de hoje na Visão geral) saiu do
+dashboard: ela lia a API do `@usebridger/plugin-metrics` que a M6 substitui pelo `prom-client`
+([ADR 0121](../../../docs/adr/0121-plugin-metrics-sobre-o-prom-client.md)). Ela volta no dashboard
+novo da M7. Enquanto isso, as métricas ficam no `GET /metrics` (Prometheus) do próprio
+`plugin-metrics`, e o dashboard não depende mais dele.
 
 ## Config dos plugins
 

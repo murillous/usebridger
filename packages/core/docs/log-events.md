@@ -146,7 +146,6 @@ As linhas saem com `plugin=dashboard` ou `plugin=metrics`.
 | Evento | Nível | Mensagem |
 | --- | --- | --- |
 | `dashboard.config.failed` | `error` | falha na config do plugin |
-| `dashboard.metrics.read-failed` | `error` | falha ao ler as métricas |
 | `dashboard.admin.missing` | `warn` | controle de plugins indisponível: ponha "dashboard" em adminPlugins no createBot |
 | `dashboard.plugin-action.failed` | `error` | falha na ação sobre o plugin |
 | `dashboard.tab.ignored` | `warn` | aba ignorada |

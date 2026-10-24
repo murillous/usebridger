@@ -14,7 +14,6 @@ import { COOKIE, createSessions, sameOrigin, tokenMatches } from '#auth.ts';
 import { readLimited } from '#body.ts';
 import { registerConfigRoutes } from '#config.ts';
 import { createLogBuffer, filterByLevel, type LogEntry } from '#logs.ts';
-import { registerMetricsRoutes } from '#metrics.ts';
 import { registerPluginRoutes } from '#plugins.ts';
 import { createStaticHandler } from '#static.ts';
 import { registerTabRoutes } from '#tabs.ts';
@@ -243,7 +242,6 @@ export const dashboard: PluginDefinition = definePlugin({
 
     registerConfigRoutes(ctx, guarded);
     registerPluginRoutes(ctx.http, ctx.admin, ctx.log, guarded);
-    registerMetricsRoutes(ctx.http, ctx.services, ctx.log, guarded);
     registerTabRoutes(ctx.http, ctx.services.extensionPoint('dashboard.tabs'), ctx.log, guarded);
 
     ctx.http.ws('/api/ws', (request) => {

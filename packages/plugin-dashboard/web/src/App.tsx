@@ -15,7 +15,6 @@ import { Config } from './pages/Config.tsx';
 import { LiveBadge } from './pages/LiveBadge.tsx';
 import { Login } from './pages/Login.tsx';
 import { Logs } from './pages/Logs.tsx';
-import { Metrics } from './pages/Metrics.tsx';
 import { Overview } from './pages/Overview.tsx';
 import { Plugins } from './pages/Plugins.tsx';
 import { Tab } from './pages/Tab.tsx';
@@ -45,7 +44,6 @@ const ICONS: Record<string, string> = {
   inicio: 'M3 11l9-8 9 8M5 10v10h14V10',
   plugins: 'M9 3v4M15 3v4M6 7h12v5a6 6 0 0 1-12 0zM12 18v3',
   config: 'M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6',
-  metricas: 'M4 20V10M10 20V4M16 20v-8M22 20H2',
   pausa: 'M8 5v14M16 5v14',
   retomar: 'M7 4l13 8-13 8z',
   lua: 'M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z',
@@ -74,7 +72,6 @@ function Icon({ id, size = 22 }: { id: string; size?: number }) {
 // Roteamento por hash: o servidor só conhece `/` e os estáticos, e o app funciona em qualquer basePath.
 const ROUTES = [
   { id: 'inicio', label: 'Visão geral', group: 'Bot' },
-  { id: 'metricas', label: 'Métricas', group: 'Bot' },
   { id: 'logs', label: 'Logs', group: 'Bot' },
   { id: 'plugins', label: 'Plugins', group: 'Administração' },
   { id: 'config', label: 'Configuração', group: 'Administração' },
@@ -83,12 +80,11 @@ const ROUTES = [
 // TabBar do celular (design.md): Logs e a conta ficam em "Mais".
 const TABS = [
   { id: 'inicio', label: 'Início', match: ['inicio'] },
-  { id: 'metricas', label: 'Métricas', match: ['metricas'] },
   { id: 'plugins', label: 'Plugins', match: ['plugins'] },
   { id: 'config', label: 'Config', match: ['config'] },
   { id: 'mais', label: 'Mais', match: ['mais', 'logs'] },
 ];
-const KNOWN = ['inicio', 'metricas', 'logs', 'plugins', 'config', 'mais'];
+const KNOWN = ['inicio', 'logs', 'plugins', 'config', 'mais'];
 
 const EXT = 'ext/';
 const current = (): string => location.hash.replace(/^#\/?/, '') || 'inicio';
@@ -292,8 +288,6 @@ export function App() {
         </header>
         {page === 'logs' ? (
           <Logs live={live} />
-        ) : page === 'metricas' ? (
-          <Metrics />
         ) : page === 'plugins' ? (
           <Plugins />
         ) : page === 'config' ? (

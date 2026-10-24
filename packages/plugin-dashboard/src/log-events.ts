@@ -8,11 +8,6 @@ export const configFailed: LogEvent = defineLogEvent({
   level: 'error',
   message: 'falha na config do plugin',
 });
-export const metricsReadFailed: LogEvent = defineLogEvent({
-  name: 'dashboard.metrics.read-failed',
-  level: 'error',
-  message: 'falha ao ler as métricas',
-});
 export const adminMissing: LogEvent = defineLogEvent({
   name: 'dashboard.admin.missing',
   level: 'warn',
