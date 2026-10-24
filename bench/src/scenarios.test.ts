@@ -10,6 +10,8 @@ describe('cenários', () => {
       'overhead',
       'overhead-observed',
       'throughput',
+      'throughput-logged',
+      'throughput-logged-off',
       'idle-memory',
       'memory-growth',
       'boot',
@@ -23,6 +25,12 @@ describe('cenários', () => {
 
   it('vazão devolve msg/s', async () => {
     expect(await throughput({ warmup: 500, messages: 3_000 })).toBeGreaterThan(0);
+  });
+
+  it('vazão com logger em info devolve msg/s, com a trilha ligada ou desligada', async () => {
+    const load = { warmup: 500, messages: 3_000, logged: true };
+    expect(await throughput({ ...load, trail: 'info' })).toBeGreaterThan(0);
+    expect(await throughput({ ...load, trail: 'off' })).toBeGreaterThan(0);
   });
 
   it('crescimento de memória devolve MB', async () => {

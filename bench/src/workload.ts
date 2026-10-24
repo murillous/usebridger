@@ -3,7 +3,13 @@
 // por todo o caminho da mensagem (middlewares → roteador → barramento → fila de saída).
 
 import { setImmediate as nextTick } from 'node:timers/promises';
-import { command, definePlugin, type Message, type PluginDefinition } from '@usebridger/core';
+import {
+  command,
+  createLogger,
+  definePlugin,
+  type Message,
+  type PluginDefinition,
+} from '@usebridger/core';
 import { createMessage } from '@usebridger/core/adapter';
 import { createTestBot, type TestBot } from '@usebridger/testing/bot';
 import { z } from 'zod';
@@ -24,6 +30,10 @@ export interface Workload {
 export interface WorkloadOptions {
   /** Um observador vazio em cada sinal do core, para medir o custo deles (ADR 0102). */
   readonly observed?: boolean;
+  /** Logger em `info` com destino nulo, para medir o custo de montar as linhas (ADR 0120). */
+  readonly logged?: boolean;
+  /** Modo da trilha (ADR 0120); só aparece no custo com `logged`. */
+  readonly trail?: 'info' | 'off';
 }
 
 /** Sobe o bot de referência sobre o `FakeTransport`, com a fila de saída sem intervalo (D43). */
@@ -45,6 +55,10 @@ export async function createWorkload(options: WorkloadOptions = {}): Promise<Wor
     },
   });
   const bot = await createTestBot({
+    ...(options.logged === true && {
+      logger: createLogger({ level: 'info', destination: { write: () => undefined } }),
+    }),
+    ...(options.trail !== undefined && { trail: options.trail }),
     plugins: [observer, ...plugins],
     middlewares: {
       // `rateLimit` por remetente com teto alto: entra no caminho sem barrar mensagem, e o
