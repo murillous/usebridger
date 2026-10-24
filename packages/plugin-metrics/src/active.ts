@@ -2,7 +2,7 @@
 // com chave aleatória do dia que nunca é gravada nem logada. Na virada a chave e o conjunto são
 // trocados, então o mesmo usuário não é ligável entre dias. Só a contagem sai daqui.
 
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHmac, createSecretKey, type KeyObject, randomBytes } from 'node:crypto';
 
 export interface ActiveTracker {
   record(userId: string, groupId: string | undefined): void;
@@ -14,7 +14,7 @@ export interface ActiveTracker {
 
 interface Day {
   readonly day: string;
-  readonly key: Buffer;
+  readonly key: KeyObject;
   readonly users: Set<string>;
   readonly groups: Set<string>;
   flushedUsers: number;
@@ -29,7 +29,9 @@ export function createActiveTracker(options: {
   const dayOf = (): string => new Date(options.now()).toISOString().slice(0, 10);
   const fresh = (day: string): Day => ({
     day,
-    key: randomBytes(32),
+    // `KeyObject` uma vez por dia: com `Buffer`, o `createHmac` converte a chave a cada mensagem,
+    // o que custava ~13 µs por chamada contra ~2 µs (bench `throughput-metrics`).
+    key: createSecretKey(randomBytes(32)),
     users: new Set(),
     groups: new Set(),
     flushedUsers: 0,
