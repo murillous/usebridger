@@ -1,6 +1,7 @@
 // Trilha de eventos (ADR 0120): os fatos de cada unidade de trabalho, em `info`. `trail` na config
 // do bot rebaixa para `debug` ou desliga, sem mexer no nível dos erros.
 
+import { BotConfigError } from '#config/owners.ts';
 import type { LogEvent, LogFields, Logger } from './types.ts';
 
 /** `'off'` desliga a trilha; `'debug'` a emite em `debug`, para ligá-la só quando investigando. */
@@ -40,6 +41,6 @@ export function createTrail(mode: TrailMode, log: () => Logger): Trail {
 /** Valida o valor vindo da config (JS puro ou `as`). */
 export function assertTrailMode(mode: unknown): asserts mode is TrailMode | undefined {
   if (mode !== undefined && mode !== 'info' && mode !== 'debug' && mode !== 'off') {
-    throw new TypeError(`trail inválido: "${String(mode)}" (use 'info', 'debug' ou 'off')`);
+    throw new BotConfigError(`trail inválido: "${String(mode)}" (use 'info', 'debug' ou 'off')`);
   }
 }

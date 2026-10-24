@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { command } from '#commands/command.ts';
+import { BotConfigError } from '#config/owners.ts';
 import type { PluginErrorEvent } from '#events/types.ts';
 import { createHttp } from '#http/server.ts';
 import { createLogger } from '#logger/logger.ts';
@@ -247,7 +248,7 @@ describe('trace: unidade', () => {
 
   it('recusa trail inválido', () => {
     expect(() => createBot({ transport: new RecordingTransport(), trail: 'x' as never })).toThrow(
-      TypeError,
+      BotConfigError,
     );
   });
 });

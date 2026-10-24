@@ -6,6 +6,7 @@ import type { ConversationRegistry } from '#conversations/conversations.ts';
 import type { EventBus } from '#events/bus.ts';
 import type { BotEvents } from '#events/types.ts';
 import * as LOG from '#logger/events.ts';
+import { NO_TRAIL, type Trail } from '#logger/trail.ts';
 import type { Logger } from '#logger/types.ts';
 import type { Chat, Contact, Message } from '#message/types.ts';
 import type { Observers } from '#observers/observers.ts';
@@ -45,6 +46,8 @@ export interface TransportEntryDeps {
   readonly recordQr?: (expiresAt: number | undefined) => void;
   /** O giveUp da reconexão já levou o bot a `failed` (ADR 0116). */
   readonly failed?: () => boolean;
+  /** Trilha de eventos (ADR 0120). Padrão: desligada. */
+  readonly trail?: Trail;
   /** Getter: o logger nasce no `start()`. */
   readonly log: () => Logger;
 }
@@ -101,10 +104,19 @@ export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
       work(chat.tenantId, () => deps.flow.expireReply(chat, sender)),
     );
     if (result === 'queued') return;
-    deps.conversations.expire(chat.id, sender.id);
-    deps.log().event(LOG.expireDropped, {
-      chat: chat.id,
-      reason: result,
+    const expired = deps.conversations.expire(chat.id, sender.id);
+    // A espera some sem o `onExpire`, mas o fato é da trilha; um trace só para a trilha e o aviso.
+    work(chat.tenantId, () => {
+      if (expired !== undefined) {
+        (deps.trail ?? NO_TRAIL).emit(LOG.stepExpired, {
+          plugin: expired.plugin,
+          step: expired.step,
+        });
+      }
+      deps.log().event(LOG.expireDropped, {
+        chat: chat.id,
+        reason: result,
+      });
     });
   }
 
