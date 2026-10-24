@@ -109,6 +109,8 @@ O bot escreve uma linha JSON por evento no stdout:
 - `bot` (a sessão) sai sozinho. Diga ao bot de onde ele é, para o agregador separar os bots:
 
 ```ts
+import pkg from './package.json' with { type: 'json' };
+
 createBot({
   // ...
   logBindings: { service: 'meu-bot', version: pkg.version, env: process.env.NODE_ENV },
@@ -119,14 +121,27 @@ createBot({
 
 Com o Grafana Alloy lendo os contêineres e mandando ao Loki, promova a rótulo só o que tem poucos valores: `service`, `bot`, `env`, `level` e `plugin`. `event`, `chat` e `command` ficam no corpo da linha. Como rótulo, cada chat viraria um stream, e o Loki fica lento.
 
+O Alloy precisa do `/var/run/docker.sock` para descobrir os contêineres, e quem monta esse socket tem acesso equivalente a root no host. O `:ro` no volume não muda isso (o socket ainda aceita chamadas de escrita à API do Docker): use um Alloy dedicado, de preferência atrás de um proxy do socket que libere só a leitura de contêineres (ex.: `docker-socket-proxy` com `CONTAINERS=1`), e restrinja a descoberta aos contêineres do bot (o serviço `bot` do compose, no exemplo), para não coletar o log dos outros.
+
 ```alloy
-discovery.docker "bots" {
+discovery.docker "all" {
   host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "bots" {
+  targets = discovery.docker.all.targets
+
+  // Só o serviço do bot: troque "bot" pelo nome do serviço no seu compose.
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex         = "bot"
+    action        = "keep"
+  }
 }
 
 loki.source.docker "bots" {
   host       = "unix:///var/run/docker.sock"
-  targets    = discovery.docker.bots.targets
+  targets    = discovery.relabel.bots.targets
   forward_to = [loki.process.bridger.receiver]
 }
 

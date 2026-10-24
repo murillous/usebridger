@@ -222,7 +222,7 @@ describe('BaileysTransport: poll.vote', () => {
       warn: () => undefined,
       error: (message) => void lines.push(message),
       fatal: () => undefined,
-      event: (event) => void lines.push(event.name),
+      event: (event) => void lines.push(`${event.level}:${event.name}`),
       child: () => log,
     };
     const deps: TransportDeps = {
@@ -294,7 +294,7 @@ describe('BaileysTransport: poll.vote', () => {
       type: 'notify',
     });
 
-    await expect.poll(() => lines).toContain('baileys.poll.vote-unknown');
+    await expect.poll(() => lines).toContain('debug:baileys.poll.vote-unknown');
     expect(votes).toEqual([]);
   });
 });

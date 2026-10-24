@@ -303,6 +303,9 @@ describe('ctx.admin com falha', () => {
     const boom = new Error('boom');
     const { put, errors } = fake(() => Promise.reject(boom));
     expect((await put()).status).toBe(500);
-    expect(errors[0]?.[1]).toMatchObject({ err: boom });
+    expect(errors[0]).toEqual([
+      expect.objectContaining({ name: 'dashboard.config.failed' }),
+      { action: 'gravar', target: 'target', err: boom },
+    ]);
   });
 });
