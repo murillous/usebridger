@@ -61,6 +61,14 @@ para montar uma URL pública.
 corpo mostra os nomes das sessões: se isso não pode ser público, não exponha o `/health` no
 proxy.
 
+## `traceparent`
+
+Cada request de rota (plugin ou transport) roda num `trace` ([ADR 0120](../../../docs/adr/0120-trace-e-trilha-de-eventos.md)).
+Um `traceparent` válido no pedido (W3C, versão 00) dá o `trace-id` ao request; sem ele, o core
+gera um. A resposta devolve `traceparent` com o mesmo `trace-id`. O `trace` entra nos logs que o
+handler emite, e o core registra um `http.request` com `method`, `route`, `status` e `durationMs`
+(sem query string nem corpo). O `/health` e o WebSocket ficam de fora.
+
 ## Rotas no plugin
 
 ```ts

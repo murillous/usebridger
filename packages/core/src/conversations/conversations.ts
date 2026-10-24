@@ -7,6 +7,7 @@
 import type { BotMessageContext } from '#context.ts';
 import { ExecutionTimeoutError } from '#deadline.ts';
 import * as LOG from '#logger/events.ts';
+import { NO_TRAIL, type Trail } from '#logger/trail.ts';
 import type { Logger } from '#logger/types.ts';
 import type { Chat, Contact } from '#message/types.ts';
 import type { Reply } from '#outbound/types.ts';
@@ -206,6 +207,8 @@ export interface ConversationRegistryOptions {
   readonly store?: () => Collection<WaitRecord>;
   /** Logger do bot, lido a cada uso: ele nasce no `start()`. */
   readonly log?: () => Logger;
+  /** Trilha de eventos (ADR 0120): `step.entered` a cada espera aberta. Padrão: desligada. */
+  readonly trail?: Trail;
 }
 
 interface Wait {
@@ -244,6 +247,7 @@ export class ConversationRegistry<C, O = unknown> {
   readonly #writes = new Map<string, Promise<void>>();
   readonly #store: (() => Collection<WaitRecord>) | undefined;
   readonly #log: () => Logger | undefined;
+  readonly #trail: Trail;
   #collection: Collection<WaitRecord> | undefined;
   #closed = false;
 
@@ -251,6 +255,7 @@ export class ConversationRegistry<C, O = unknown> {
     this.#onDue = options.onDue;
     this.#store = options.store;
     this.#log = options.log ?? (() => undefined);
+    this.#trail = options.trail ?? NO_TRAIL;
   }
 
   define(
@@ -306,6 +311,7 @@ export class ConversationRegistry<C, O = unknown> {
       dueAt: Date.now() + ttlMs,
       persist: entry.persist,
     });
+    this.#trail.emit(LOG.stepEntered, { plugin, step });
     const replacesPersisted = previous?.persist === true;
     if (!(wait.persist || replacesPersisted)) return;
     // A cópia da anterior sai antes de a nova entrar. Sem espera persistida antes, a remoção

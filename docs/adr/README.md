@@ -139,3 +139,4 @@ Um ADR novo entra no fim da lista.
 - [0117](0117-segredos-cifrados-editaveis-pelo-dashboard.md) — Segredos cifrados no storage, editáveis pelo dashboard
 - [0118](0118-contrato-de-log-estruturado.md) — Contrato de log estruturado: `event` estável, campos padronizados e formato para o Loki
 - [0119](0119-pseudonimo-estavel-nos-logs.md) — Pseudônimo estável do usuário nos logs
+- [0120](0120-trace-e-trilha-de-eventos.md) — Trace de correlação e trilha de eventos por unidade de trabalho

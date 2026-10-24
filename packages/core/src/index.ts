@@ -108,6 +108,7 @@ export { createLogger, type LogDestination, type LoggerOptions } from '#logger/l
 export { isPersonalId, redactPersonalIds } from '#logger/personal-id.ts';
 export type { Pseudonym, PseudonymKind } from '#logger/pseudonym.ts';
 export { createSecretSet, type SecretSet, type SecretSource } from '#logger/secrets.ts';
+export type { TrailMode } from '#logger/trail.ts';
 export type {
   EmitLevel,
   LogEvent,

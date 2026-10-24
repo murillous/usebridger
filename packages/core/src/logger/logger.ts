@@ -2,6 +2,7 @@
 // `Logger`/`LoggerOptions`, para trocar a implementação sem quebrar plugins.
 
 import { type Logger as PinoLogger, pino, stdSerializers } from 'pino';
+import { currentTrace } from '#trace/scope.ts';
 import { redactPersonalIds } from './personal-id.ts';
 import { prettyDestination } from './pretty.ts';
 import type { SecretSource } from './secrets.ts';
@@ -70,6 +71,9 @@ export function createLogger(options: LoggerOptions = {}): Logger {
       // Formato do ADR 0118: nível em texto e hora ISO UTC, que o Loki e o Grafana leem sem
       // pipeline extra. `pid` e `hostname` saem: quem identifica a origem são os bindings base.
       base: null,
+      // Carimba o `trace` da unidade de trabalho corrente (ADR 0120) na linha que sai, sem copiar
+      // os campos de quem loga; o campo da chamada vence.
+      mixin: traceFields,
       timestamp: pino.stdTimeFunctions.isoTime,
       formatters: { level: (label) => ({ level: label }), log: serializeErrors },
       ...(options.redact && options.redact.length > 0
@@ -79,6 +83,11 @@ export function createLogger(options: LoggerOptions = {}): Logger {
     destination,
   );
   return wrap(options.bindings ? root.child(withoutReserved(options.bindings, true)) : root);
+}
+
+function traceFields(): Record<string, string> {
+  const trace = currentTrace();
+  return trace === undefined ? {} : { trace };
 }
 
 // O serializer do pino só cobre o `err`. Um `Error` sob outra chave (`{ error }`) sairia `{}`,

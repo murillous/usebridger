@@ -6,6 +6,7 @@ import type { BotMessageContext } from '#context.ts';
 import type { HttpServer } from '#http/types.ts';
 import type { LoggerOptions } from '#logger/logger.ts';
 import type { SecretSet } from '#logger/secrets.ts';
+import type { TrailMode } from '#logger/trail.ts';
 import type { LogFields, Logger, LogLevel } from '#logger/types.ts';
 import type { ChatFilterOptions } from '#middleware/chat-filter.ts';
 import type { Middleware } from '#middleware/pipeline.ts';
@@ -155,13 +156,18 @@ export interface BotConfig {
    * (ver `LoggerOptions.format`).
    */
   readonly logFormat?: LoggerOptions['format'];
+  /**
+   * Trilha de eventos `info` por mensagem, envio, passo, job e request (ADR 0120). `'debug'` a
+   * emite em `debug`; `'off'` a desliga. Os erros e avisos não mudam. Padrão: `'info'`.
+   */
+  readonly trail?: TrailMode;
   /** Fonte de segredos compartilhada entre a config de plugin e o logger. Padrão: uma nova. */
   readonly secrets?: SecretSet;
   readonly middlewares?: BotMiddlewaresConfig;
   /** Fila de entrada por chat. */
   readonly inbound?: Pick<InboundQueueOptions, 'maxPendingPerChat'>;
   /** Fila de saída (taxa, prioridade, retry, humanização). */
-  readonly outbound?: Omit<OutboundQueueOptions, 'transport' | 'observers'>;
+  readonly outbound?: Omit<OutboundQueueOptions, 'transport' | 'observers' | 'trail'>;
   /** Reconexão automática. Padrão: ligada com os padrões da `ReconnectionPolicy`. */
   readonly reconnection?: BotReconnectionOptions | false;
   readonly timeouts?: BotTimeouts;

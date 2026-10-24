@@ -18,6 +18,7 @@ import {
 import type { EventBus } from '#events/bus.ts';
 import type { ListenerExtras, PluginErrorEvent } from '#events/types.ts';
 import * as LOG from '#logger/events.ts';
+import { NO_TRAIL, type Trail } from '#logger/trail.ts';
 import { createMessage } from '#message/create.ts';
 import type { Chat, Contact, Message } from '#message/types.ts';
 import type { MiddlewarePipeline } from '#middleware/pipeline.ts';
@@ -32,6 +33,7 @@ import {
   type ExpireOrigin,
   type KernelMessageContext,
   type MessageContextDeps,
+  messageBindings,
   messageExtras,
 } from './message-context.ts';
 import { CommandTimeoutError } from './plugin-context.ts';
@@ -60,20 +62,23 @@ export interface InboundFlowDeps {
   readonly background: BackgroundTasks;
   /** Destino do `message.handled` (ADR 0102). */
   readonly observers: Pick<Observers, 'emit'>;
+  /** Trilha de eventos (ADR 0120). Padrão: desligada. */
+  readonly trail?: Trail;
 }
 
 /**
- * Medida da mensagem para o `message.handled`; só existe quando a entrada mediu a espera na fila,
- * isto é, havia observador no enqueue (ADR 0102).
+ * Medida da mensagem para o `message.handled` (sinal e trilha). `queuedMs` só existe quando a
+ * entrada mediu a espera na fila, isto é, havia observador no enqueue (ADR 0102): sem ele, não há
+ * sinal, mas a trilha ainda leva a duração.
  */
 interface Probe {
-  readonly queuedMs: number;
+  readonly queuedMs: number | undefined;
   /** Início do handler, depois dos middlewares. */
   readonly startedAt: number;
 }
 
-function startProbe(queuedMs: number | undefined): Probe | undefined {
-  return queuedMs === undefined ? undefined : { queuedMs, startedAt: performance.now() };
+function startProbe(queuedMs: number | undefined): Probe {
+  return { queuedMs, startedAt: performance.now() };
 }
 
 /** `queuedMs`: a espera na fila do chat, medida só com observador de `message.handled`. */
@@ -93,6 +98,7 @@ export interface InboundFlow {
 export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
   const { router, conversations, actions, bus, pipeline, maxButtons, reportPluginError } = deps;
   const log = deps.context.log;
+  const trail = deps.trail ?? NO_TRAIL;
   const contextDeps: MessageContextDeps = { ...deps.context, actions: prepareActions };
   // Mensagem montada a partir de um clique ou comando nativo -> a interação de origem, para o
   // `ctx.unsafe.raw()` pedir ao transport o objeto bruto dela (ADR 0062). Some com a mensagem.
@@ -115,14 +121,23 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     await pipeline.run(createMessageContext(message, contextDeps), handle);
   }
 
+  // Só fato e metadado: o texto da mensagem não vai à trilha, em nível nenhum (ADR 0120).
+  function received(chat: Chat, sender: Contact, messageId: string, kind: string): void {
+    if (!trail.enabled()) return;
+    trail.emit(LOG.messageReceived, {
+      ...messageBindings(deps.context.pseudonym, chat, sender),
+      chatType: chat.isGroup ? 'group' : 'private',
+      kind,
+      messageId,
+    });
+  }
+
   function handleMessage(message: Message, queuedMs?: number): Promise<void> {
+    received(message.chat, message.sender, message.id, message.type);
     return admit(message, (ctx) => dispatchMessage(ctx, startProbe(queuedMs)));
   }
 
-  async function dispatchMessage(
-    ctx: KernelMessageContext,
-    probe: Probe | undefined,
-  ): Promise<void> {
+  async function dispatchMessage(ctx: KernelMessageContext, probe: Probe): Promise<void> {
     const { message } = ctx;
     // A espera vem antes do roteador (ADR 0056). Retirada aqui de todo jeito: um comando digitado
     // no meio da conversa a cancela e segue para o roteador.
@@ -148,15 +163,26 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     await afterCommand(ctx, result, probe);
   }
 
-  /** Emite o `message.handled`; sem `probe` (sem observador no enqueue), nada. */
+  /** Fecha a mensagem: a linha da trilha e, com `queuedMs` medido, o sinal `message.handled`. */
   function handled(
     ctx: KernelMessageContext,
-    probe: Probe | undefined,
+    probe: Probe,
     route: MessageHandledSignal['route'],
     status: MessageHandledSignal['status'],
-    command?: string,
+    detail: { readonly command?: string; readonly step?: string } = {},
   ): void {
-    if (probe === undefined) return;
+    const { command, step } = detail;
+    const durationMs = performance.now() - probe.startedAt;
+    if (trail.enabled()) {
+      trail.emit(LOG.messageHandled, {
+        route,
+        ...(command !== undefined && { command }),
+        ...(step !== undefined && { step }),
+        status,
+        durationMs: Math.round(durationMs * 100) / 100,
+      });
+    }
+    if (probe.queuedMs === undefined) return;
     const { message } = ctx;
     deps.observers.emit('message.handled', {
       messageId: message.id,
@@ -167,7 +193,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
       ...(command !== undefined && { command }),
       status,
       queuedMs: probe.queuedMs,
-      durationMs: performance.now() - probe.startedAt,
+      durationMs,
     });
   }
 
@@ -175,7 +201,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
   async function afterCommand(
     ctx: KernelMessageContext,
     result: Extract<DispatchResult, { readonly consumed: true }>,
-    probe: Probe | undefined,
+    probe: Probe,
   ): Promise<void> {
     const { message } = ctx;
     if (result.status === 'background') {
@@ -220,7 +246,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     }
     const { plugin, name, invokedAs } = result.command;
     // Antes do `command`, cujo listener é aguardado: a duração é só a do comando.
-    handled(ctx, probe, 'command', commandStatus(result.status, timedOut), name);
+    handled(ctx, probe, 'command', commandStatus(result.status, timedOut), { command: name });
     // Com await, como o `message`: o observador segura o chat e entra no `settled()` (ADR 0045).
     await bus.emit('command', { plugin, name, invokedAs, status: result.status, message });
   }
@@ -232,7 +258,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
   async function runStep(
     ctx: KernelMessageContext,
     pending: PendingReply<KernelMessageContext>,
-    probe: Probe | undefined,
+    probe: Probe,
   ): Promise<void> {
     try {
       await pending.run(ctx, pending.data);
@@ -246,10 +272,10 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
         timedOut,
       };
       reportPluginError(event);
-      handled(ctx, probe, 'step', timedOut ? 'timeout' : 'failed');
+      handled(ctx, probe, 'step', timedOut ? 'timeout' : 'failed', { step: pending.step });
       return;
     }
-    handled(ctx, probe, 'step', 'ok');
+    handled(ctx, probe, 'step', 'ok', { step: pending.step });
   }
 
   /**
@@ -263,6 +289,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     if (ready !== true && !(await ready)) return;
     const expired = conversations.expire(chat.id, sender.id);
     if (expired === undefined) return;
+    trail.emit(LOG.stepExpired, { plugin: expired.plugin, step: expired.step });
     try {
       await expired.run(
         createExpireOrigin(expired.chat, expired.sender, contextDeps),
@@ -347,6 +374,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
   async function handleInteraction(interaction: Interaction, queuedMs?: number): Promise<void> {
     if (interaction.command !== undefined) return handleNativeCommand(interaction, queuedMs);
     const { chat, sender, actionId } = interaction;
+    received(chat, sender, interaction.id, 'interaction');
     const target = actions.resolve(actionId, chat.id);
     if (target === undefined) {
       log().event(LOG.buttonUnknown, { chat: chat.id });
@@ -378,6 +406,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     queuedMs: number | undefined,
   ): Promise<void> {
     const { chat, sender, command, args } = interaction;
+    received(chat, sender, interaction.id, 'command');
     const message = createMessage({
       type: 'text',
       id: interaction.id,
@@ -407,7 +436,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
   async function runAction(
     ctx: KernelMessageContext,
     target: ActionTarget,
-    probe: Probe | undefined,
+    probe: Probe,
   ): Promise<void> {
     if (target.kind === 'command') {
       const result = await router.dispatch(ctx, { command: target.command, args: target.args });

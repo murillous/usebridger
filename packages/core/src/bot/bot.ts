@@ -17,6 +17,7 @@ import { createLogger, createNoopLogger } from '#logger/logger.ts';
 import { createPseudonymizer, withPseudonyms } from '#logger/pseudonym.ts';
 import { createSecretSet } from '#logger/secrets.ts';
 import { createLogSignalTap } from '#logger/signal.ts';
+import { assertTrailMode, createTrail } from '#logger/trail.ts';
 import type { Logger } from '#logger/types.ts';
 import { chatAllowed } from '#middleware/chat-filter.ts';
 import { Observers } from '#observers/observers.ts';
@@ -36,6 +37,7 @@ import {
   sharedStorage,
 } from '#storage/namespace.ts';
 import { TenantScope } from '#tenant/scope.ts';
+import { newTraceId, runInTrace } from '#trace/scope.ts';
 import { type Capability, hasCapability } from '#transport/capabilities.ts';
 import type { ConnectionStatus, Transport } from '#transport/types.ts';
 import { createUnsafeAccess } from '#unsafe/access.ts';
@@ -106,6 +108,7 @@ const TRANSPORT_ROUTE_OWNER = '$transport';
 export function createBot(config: BotConfig): Bot {
   const session = validateSession(config.session ?? DEFAULT_SESSION);
   validateLogBindings(config.logBindings);
+  assertTrailMode(config.trail);
   // Todo o estado vive neste closure (ADR 0003): duas instâncias nunca se enxergam.
   const hooks: RegisteredStopHook[] = [];
   let state: BotState = 'idle';
@@ -118,6 +121,8 @@ export function createBot(config: BotConfig): Bot {
   // logar (nada deveria) cai no no-op.
   let log: Logger = createNoopLogger();
   const getLog = (): Logger => log;
+  // Trilha de eventos por unidade de trabalho (ADR 0120); o `trace` vem do escopo do core.
+  const trail = createTrail(config.trail ?? 'info', getLog);
   const secrets = config.secrets ?? createSecretSet();
   const storage = config.storage ?? createMemoryStorage();
   // O escopo da sessão é aplicado aqui, uma vez: scheduler, config e plugins só veem esta visão.
@@ -134,7 +139,8 @@ export function createBot(config: BotConfig): Bot {
   });
   const registry = createCommandRegistry({ onChange: () => catalog.changed() });
   // Rotas da sessão no servidor do processo (ADR 0072); só entram nele no start().
-  const http = config.http === undefined ? undefined : sessionHttp(config.http, session, getLog);
+  const http =
+    config.http === undefined ? undefined : sessionHttp(config.http, session, getLog, trail);
   let resolvedTransport: Transport | undefined;
   const transport = resolveTransport(config.transport, {
     session,
@@ -227,6 +233,7 @@ export function createBot(config: BotConfig): Bot {
     onDue: (chat, sender) => entry.expireWait(chat, sender),
     store: () => kernelStorage(scoped, 'conversations').collection<WaitRecord>('waits'),
     log: getLog,
+    trail,
   });
   const actions = new ActionRegistry();
   // Validado mesmo sem a capability: `limits.actions` malformado é erro de config de todo jeito.
@@ -251,6 +258,7 @@ export function createBot(config: BotConfig): Bot {
     ...config.outbound,
     transport,
     observers,
+    trail,
   });
   const stats = (): BotStats => ({ inbound: inbound.stats(), outbound: outbound.stats() });
   // O plugin vê o envio e as ações (ADR 0036): a fila (close, stats) fica com o kernel.
@@ -264,6 +272,7 @@ export function createBot(config: BotConfig): Bot {
   const scheduler = createSchedulerService({
     storage: scoped,
     tenants,
+    trail,
     jobTimeoutMs: timeouts.jobMs,
     onError: pluginErrors.report,
     onLateError: (event) => logPluginError(log, event),
@@ -288,6 +297,7 @@ export function createBot(config: BotConfig): Bot {
     reportPluginError: pluginErrors.report,
     background,
     observers,
+    trail,
   });
   const reconnector: Reconnector | undefined =
     config.reconnection === false
@@ -581,7 +591,8 @@ export function createBot(config: BotConfig): Bot {
     // manifesto inválido, ciclo) derruba o boot antes de o transport abrir sessão — sem QR nem
     // handshake à toa.
     try {
-      await bootPlugins();
+      // O boot é uma unidade de trabalho: o `setup` de todos os plugins loga sob o mesmo trace.
+      await runInTrace(newTraceId(), bootPlugins);
     } catch (error) {
       log.event(LOG.pluginsLoadFailed, { err: error });
       // O transport nunca conectou: o encerramento não chama `disconnect()`.

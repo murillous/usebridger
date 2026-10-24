@@ -55,7 +55,7 @@ export interface KernelMessageContext extends BotMessageContext, SanitizedContex
 }
 
 /** Bindings `chat` e `sender` do log da mensagem: pseudônimos, com o tipo vindo do `isGroup`. */
-function messageBindings(
+export function messageBindings(
   pseudonym: Pseudonym | undefined,
   chat: Message['chat'],
   sender: Message['sender'],
