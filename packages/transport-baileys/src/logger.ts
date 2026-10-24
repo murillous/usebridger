@@ -36,7 +36,10 @@ export function toBaileysLogger(log: Logger, floor: LogLevel = 'trace'): ILogger
     const rank = RANK[method];
     return (obj: unknown, msg?: string): void => {
       if (rank < RANK[floor]) return;
+      // Linha de terceiro repassada ao logger do bot: não há evento do kernel.
+      // biome-ignore lint/plugin: linha de terceiro (ADR 0118)
       if (typeof obj === 'string') log[method](obj);
+      // biome-ignore lint/plugin: linha de terceiro (ADR 0118)
       else log[method](msg ?? '', toFields(obj));
     };
   };

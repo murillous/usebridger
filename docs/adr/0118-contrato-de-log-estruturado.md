@@ -87,6 +87,10 @@ Um plugin Grit do Biome (`tooling/biome/log-event.grit`) barra, nos `src` dos pa
 (fora dos testes), chamada de `trace`/`debug`/`info`/`warn`/`error`/`fatal` sobre um logger e
 mensagem de `defineLogEvent` que não seja literal de string. Adapter que repassa linha de terceiro
 (o logger do Baileys) suprime a regra com justificativa.
+A regra olha o texto da chamada, então tem alcance limitado: receptor `log`, `logger`, `*Log` ou
+`*Logger`, `log.child(...).<nível>(...)` e `log[...]()` são barrados; alias (`const l = log`),
+destructuring (`const { warn } = log`), logger em objeto por variável e chave entre aspas ficam fora
+e são papel da revisão. Os `examples`, o `bench` e o `site` são código de app e não entram.
 
 ### `pretty` (ADR 0087)
 

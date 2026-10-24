@@ -48,10 +48,10 @@
   "plugins": [
     "./tooling/biome/no-swallowed-catch.grit",
     {
-      // Logs do kernel só por evento (ADR 0118); os testes e a implementação do logger ficam de fora.
+      // Logs do kernel só por evento (ADR 0118): só os pacotes (o `**/` inicial é exigido pelo glob do plugin); examples, bench e site são código de app, onde `log.<nível>` vale. Os testes e a implementação do logger ficam de fora.
       "path": "./tooling/biome/log-event.grit",
       "includes": [
-        "**/src/**/*.ts",
+        "**/packages/*/src/**/*.ts",
         "!**/*.test.ts",
         "!**/*.test-support.ts",
         "!**/core/src/logger/**"
