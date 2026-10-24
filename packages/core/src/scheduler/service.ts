@@ -14,7 +14,7 @@ import { NO_TRAIL, type Trail } from '#logger/trail.ts';
 import { kernelStorage } from '#storage/namespace.ts';
 import type { Collection, JsonValue, StoragePort, Where, WithId } from '#storage/types.ts';
 import { TenantScope } from '#tenant/scope.ts';
-import { currentTrace, newTraceId, runInTrace } from '#trace/scope.ts';
+import { currentTrace, newTraceId, outsideTrace, runInTrace } from '#trace/scope.ts';
 import type { Unsubscribe } from '#transport/types.ts';
 import { nextOccurrence, normalizeRule, type RecurrenceRule } from './rule.ts';
 import type { JobContext, JobHandler, Scheduler } from './types.ts';
@@ -253,11 +253,14 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
     disarm();
     const delay = Math.min(Math.max(at - Date.now(), 0), MAX_TIMER_DELAY_MS);
     armedAt = at;
-    timer = setTimeout(() => {
-      timer = undefined;
-      armedAt = undefined;
-      wake();
-    }, delay);
+    // Fora do trace de quem agendou: o timer vive além da mensagem e o que ele logar não é dela.
+    timer = outsideTrace(() =>
+      setTimeout(() => {
+        timer = undefined;
+        armedAt = undefined;
+        wake();
+      }, delay),
+    );
   }
 
   /** Garante que o loop acorde a tempo de `fireAt` (job novo ou próxima ocorrência de série). */
@@ -275,12 +278,14 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
       return;
     }
     disarm();
-    loop = detached(async () => {
-      do {
-        rerun = false;
-        await tick();
-      } while (rerun && started);
-    }).finally(() => {
+    loop = outsideTrace(() =>
+      detached(async () => {
+        do {
+          rerun = false;
+          await tick();
+        } while (rerun && started);
+      }),
+    ).finally(() => {
       loop = undefined;
       // Um `rerun` pedido depois do `while` e antes daqui não teria volta nem timer (#142).
       if (rerun) wake();

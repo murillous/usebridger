@@ -1,0 +1,73 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import { createNoopLogger } from '#logger/logger.ts';
+import { createHttp, type SessionHttp, sessionHttp } from './server.ts';
+
+const attached: SessionHttp[] = [];
+const ID = '4bf92f3577b34da6a3ce929d0e0e4736';
+
+afterEach(async () => {
+  for (const session of attached.splice(0)) await session.detach();
+});
+
+async function serve(handler: () => Response): Promise<string> {
+  const http = createHttp({ port: 0, hostname: '127.0.0.1' });
+  const session = sessionHttp(http, 'default', createNoopLogger);
+  session
+    .scope(
+      'api',
+      () => '/plugins/api',
+      () => undefined,
+    )
+    .route('GET', '/x', handler);
+  session.attach(() => 'running');
+  attached.push(session);
+  await session.listen();
+  return `http://127.0.0.1:${http.port}/plugins/api/x`;
+}
+
+describe('traceparent da resposta', () => {
+  it('HTTP 500 do handler que lança continua devolvendo o header', async () => {
+    const url = await serve(() => {
+      throw new Error('quebrou');
+    });
+    const response = await fetch(url);
+    expect(response.status).toBe(500);
+    expect(response.headers.get('traceparent')).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/);
+  });
+
+  it('Response.redirect (headers imutáveis) recebe o header', async () => {
+    const url = await serve(() => Response.redirect('http://127.0.0.1/destino', 302));
+    const response = await fetch(url, { redirect: 'manual' });
+    expect(response.status).toBe(302);
+    expect(response.headers.get('traceparent')).toMatch(/^00-[0-9a-f]{32}-/);
+  });
+
+  it('Response.error() não derruba o servidor', async () => {
+    const url = await serve(() => Response.error());
+    // O servidor segue de pé: o fetch resolve, nunca cai num 500 do próprio traceparent.
+    const first = await fetch(url);
+    const second = await fetch(url);
+    expect(typeof first.status).toBe('number');
+    expect(typeof second.status).toBe('number');
+  });
+
+  it('recusa traceparent com maiúsculas e gera outro trace', async () => {
+    const url = await serve(() => new Response('ok'));
+    const response = await fetch(url, {
+      headers: { traceparent: `00-${ID.toUpperCase()}-00f067aa0ba902b7-01` },
+    });
+    const header = response.headers.get('traceparent') ?? '';
+    expect(header).toMatch(/^00-[0-9a-f]{32}-/);
+    expect(header).not.toContain(ID);
+  });
+
+  it('repete as flags da entrada', async () => {
+    const url = await serve(() => new Response('ok'));
+    const response = await fetch(url, {
+      headers: { traceparent: `00-${ID}-00f067aa0ba902b7-00` },
+    });
+    const header = response.headers.get('traceparent') ?? '';
+    expect(header.startsWith(`00-${ID}-`)).toBe(true);
+    expect(header.endsWith('-00')).toBe(true);
+  });
+});
