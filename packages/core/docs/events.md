@@ -176,7 +176,7 @@ podem terminar fora de ordem. Quem guarda histórico por conversa e precisa de o
 ## Isolamento e `plugin.error`
 
 Exceção síncrona, rejeição ou timeout de um listener não afetam os demais: o bus monta um
-`PluginErrorEvent` (`phase: 'listener'`, nome do plugin, evento, `timedOut`), entrega ao `onError`
+`PluginErrorEvent` (`phase: 'listener'`, nome do plugin, evento, `timedOut`, `trace` ativo, quando houver), entrega ao `onError`
 do bus e emite `plugin.error` para quem quiser assinar (ex.: dashboard).
 
 - O timeout não cancela o listener (não há como); ele segue rodando, mas já foi reportado, e o

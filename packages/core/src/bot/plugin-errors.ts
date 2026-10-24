@@ -37,7 +37,7 @@ export function createPluginErrorReporter(deps: {
       logPluginError(deps.log(), event);
       // O trace só entra no payload; a linha de log já o carimba sozinha.
       const trace = currentTrace();
-      void deps.bus.emit('plugin.error', trace === undefined ? event : { ...event, trace });
+      void deps.bus.emit('plugin.error', { ...event, ...(trace ? { trace } : {}) });
     },
     lifecycle(error) {
       const trace = currentTrace();
@@ -48,7 +48,7 @@ export function createPluginErrorReporter(deps: {
         event: null,
         error: error.cause ?? error,
         timedOut: error.timedOut,
-        ...(trace === undefined ? {} : { trace }),
+        ...(trace ? { trace } : {}),
       });
     },
   };
