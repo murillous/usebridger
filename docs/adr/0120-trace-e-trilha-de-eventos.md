@@ -25,7 +25,7 @@ coisas:
   `TenantScope` (ADR 0068), mas **do módulo, não do bot**. É a exceção ao "nada global" do ADR
   0003, deliberada: o store não guarda estado do bot, só o id da unidade de trabalho de cada
   contexto assíncrono, então dois bots no processo não se enxergam. Em troca, todo `createLogger`
-  carimba o `trace` sem o app configurar nada, inclusive o `config.logger` do app. Uma **unidade de trabalho** é: a mensagem (também o clique, o comando nativo e a
+  carimba o `trace` sem o app configurar nada, inclusive um `config.logger` criado com `createLogger`. Uma **unidade de trabalho** é: a mensagem (também o clique, o comando nativo e a
   expiração de um passo, que passam pela fila do chat), o evento direto do transport, o request
   HTTP de uma rota, a execução de um job e o boot dos plugins. Cada uma abre o próprio `trace`.
 - **Propagação sem o plugin repassar nada:**
@@ -54,7 +54,8 @@ coisas:
   adivinhar 128 bits. A alternativa (gerar sempre e só registrar o de fora) exigiria um segundo
   campo e uma junção a mais na consulta, sem ganho de segurança que justifique.
 - Fora: o `/health` (sonda a cada poucos segundos, só ruído) e o WebSocket (a conexão vive além
-  do request; a decisão de aceitar não vira `http.request`).
+  do request; a decisão de aceitar não vira `http.request`). Por isso os logs dos callbacks de
+  WebSocket saem sem `trace`.
 
 ### Trilha
 
@@ -86,8 +87,23 @@ Eventos `info` do core, com os campos do dicionário do ADR 0118:
 ### Custo
 
 O `AsyncLocalStorage` roda uma vez por unidade de trabalho (a mensagem já pagava o do tenant), o
-id vem de `randomUUID`, e as linhas da trilha só custam quando o nível as emite. O benchmark do
-repo (PR #232) mede antes e depois; a meta é nenhuma regressão acima de 10%.
+id vem de `randomUUID`, e as linhas da trilha só custam quando o nível as emite.
+
+O bench padrão usa logger `silent` (`packages/testing/src/test-bot.ts`), então não enxerga o custo
+das linhas. Medição do cenário `throughput` com `createLogger({ level: 'info' })` e destino nulo
+(`write: () => undefined`), contra o `silent` atual, 8 execuções alternadas de cada (processo novo
+por execução), AMD Ryzen 7 5700U, 16 threads, Node 24.21, máquina ociosa:
+
+| Logger | msg/s (min a max) |
+| --- | --- |
+| `silent` | 10.648 a 12.352 (mediana ~11.9k) |
+| `info`, destino nulo | 6.316 a 6.430 (mediana ~6.4k) |
+
+Montar e serializar as linhas da trilha em `info` custa cerca de 46% da vazão do bot de referência
+(500 chats, 20 plugins), ainda acima da meta de 5.000 msg/s. O número vale para o pior caso, em
+que a mensagem não faz nada além de passar pela trilha; o custo absoluto é fixo por linha, então
+pesa menos num bot cujo handler faz I/O. Quem precisar da vazão máxima rebaixa a trilha (`off`).
+A medição foi pontual, com uma alteração local do bench que não foi commitada.
 
 ### Relação com o `ctx.audit` (#224)
 
