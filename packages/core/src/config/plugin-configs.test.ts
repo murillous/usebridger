@@ -177,7 +177,8 @@ describe('createPluginConfigs: erros de validação', () => {
       file: { stiker: {} },
       log: createLogger({ destination }),
     });
-    expect(raw.join('')).toContain('pluginConfig cita \\"stiker\\"');
+    expect(raw.join('')).toContain('"event":"config.plugin.unknown"');
+    expect(raw.join('')).toContain('"plugin":"stiker"');
   });
 });
 
@@ -507,8 +508,9 @@ describe('createPluginConfigs: segredos fora do override', () => {
 
     const output = raw.join('');
     expect(output).not.toMatch(/sk-legado-777|tok-legado-888/);
-    expect(output).toContain('campo secreto \\"apiKey\\", ignorado');
-    expect(output).toContain('campo secreto \\"openai.token\\", ignorado');
+    expect(output).toContain('"event":"config.override.secret-ignored"');
+    expect(output).toContain('"field":"apiKey"');
+    expect(output).toContain('"field":"openai.token"');
     // Um aviso por campo, não um por resolve.
     expect(raw).toHaveLength(2);
   });

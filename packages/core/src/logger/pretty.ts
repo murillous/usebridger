@@ -7,17 +7,31 @@ import type { LogDestination } from './logger.ts';
 
 type Style = Parameters<typeof styleText>[0];
 
-const LEVELS: Readonly<Record<number, readonly [label: string, style: Style]>> = {
-  10: ['TRACE', 'gray'],
-  20: ['DEBUG', 'blue'],
-  30: ['INFO ', 'green'],
-  40: ['WARN ', 'yellow'],
-  50: ['ERROR', 'red'],
-  60: ['FATAL', ['bgRed', 'white']],
+const LEVELS: Readonly<Record<string, readonly [label: string, style: Style]>> = {
+  trace: ['TRACE', 'gray'],
+  debug: ['DEBUG', 'blue'],
+  info: ['INFO ', 'green'],
+  warn: ['WARN ', 'yellow'],
+  error: ['ERROR', 'red'],
+  fatal: ['FATAL', ['bgRed', 'white']],
 };
 
-/** Campos que o cabeçalho já mostra ou que não ajudam a ler no terminal. */
-const HIDDEN = new Set(['level', 'time', 'pid', 'hostname', 'msg', 'plugin', 'err']);
+/**
+ * Campos que o cabeçalho já mostra ou que não ajudam a ler no terminal: o `event` é para o
+ * agregador, e os bindings base são os mesmos em toda linha (ADR 0118).
+ */
+const HIDDEN = new Set([
+  'level',
+  'time',
+  'msg',
+  'plugin',
+  'err',
+  'event',
+  'service',
+  'bot',
+  'version',
+  'env',
+]);
 
 interface SerializedError {
   readonly type?: string;
@@ -52,28 +66,33 @@ function formatRecord(
   record: Record<string, unknown>,
   paint: (style: Style, text: string) => string,
 ): string {
-  const [label, style] = LEVELS[record['level'] as number] ?? ['?    ', 'white'];
+  const [label, style] = LEVELS[String(record['level'])] ?? ['?    ', 'white'];
   const parts = [paint('gray', clock(record['time'])), paint(style, label)];
   if (typeof record['plugin'] === 'string') parts.push(paint('cyan', `[${record['plugin']}]`));
   parts.push(String(record['msg'] ?? ''));
   const fields: string[] = [];
-  const errors: string[] = [];
-  if (record['err'] !== undefined) errors.push(formatError(record['err']));
+  const below: string[] = [];
+  if (record['err'] !== undefined) below.push(formatError(record['err']));
   for (const [key, value] of Object.entries(record)) {
     if (HIDDEN.has(key)) continue;
-    // Erro sob outra chave (`{ error }`) também vai para as linhas seguintes, com o nome do campo:
-    // a stack numa linha só, em JSON, não dá para ler.
-    if (isSerializedError(value)) errors.push(`${key}: ${formatError(value)}`);
-    else fields.push(paint('gray', `${key}=${formatValue(value)}`));
+    // Erro sob outra chave (`{ error }`) e texto de várias linhas (a tabela de boot em `report`)
+    // vão para as linhas seguintes: numa linha só, escapados, não dá para ler.
+    if (isSerializedError(value)) below.push(`${key}: ${formatError(value)}`);
+    else if (typeof value === 'string' && value.includes('\n')) {
+      // A tabela de boot (`report`) é lida como bloco; qualquer outro campo precisa do nome, senão
+      // o texto fica solto sob a linha, sem dizer de quem é.
+      const text = escapeControls(value);
+      below.push(key === 'report' ? text : `${key}:\n${text}`);
+    } else fields.push(paint('gray', `${key}=${formatValue(value)}`));
   }
   let text = [...parts, ...fields].join(' ');
-  for (const error of errors) text += `\n${indent(error)}`;
+  for (const block of below) text += `\n${indent(block)}`;
   return text;
 }
 
 /** Hora local `HH:MM:SS`; o dia fica de fora, o terminal é para acompanhar ao vivo. */
 function clock(time: unknown): string {
-  const date = typeof time === 'number' ? new Date(time) : new Date();
+  const date = typeof time === 'string' || typeof time === 'number' ? new Date(time) : new Date();
   return date.toTimeString().slice(0, 8);
 }
 
@@ -95,6 +114,16 @@ function formatError(err: unknown): string {
   const { type, message, stack, cause } = err as SerializedError;
   const own = stack ?? (message === undefined ? JSON.stringify(err) : `${type}: ${message}`);
   return cause === undefined ? own : `${own}\ncausa: ${formatError(cause)}`;
+}
+
+// Controles (ESC, CR, ...) vindos de um campo poderiam injetar ANSI no terminal; só o `\n`, que é
+// a quebra de linha do bloco, é mantido.
+function escapeControls(text: string): string {
+  return text.replaceAll(
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: casar controles é o propósito
+    /[\u0000-\u0008\u000b-\u001f\u007f]/g,
+    (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
 }
 
 function indent(text: string): string {

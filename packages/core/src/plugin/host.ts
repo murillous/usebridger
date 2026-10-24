@@ -1,4 +1,5 @@
-import type { Logger } from '#logger/types.ts';
+import * as LOG from '#logger/events.ts';
+import type { LogEvent, Logger } from '#logger/types.ts';
 import { type CapabilityHolder, missingCapabilities } from '#transport/capabilities.ts';
 import { CORE_VERSION } from '#version.ts';
 import { installDeclared, requiredCapabilities } from './declared.ts';
@@ -359,9 +360,11 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
   }
 
   function logLifecycleError(error: PluginLifecycleError): void {
-    log.error(error.message, {
+    log.event(LOG.pluginLifecycleFailed, {
       plugin: error.plugin,
       phase: error.phase,
+      // A mensagem do erro do host diz o que houve (prazo, setup que lançou); o `err` é a causa.
+      reason: error.message,
       timedOut: error.timedOut,
       err: error.cause ?? error,
     });
@@ -385,8 +388,11 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
     );
     // Plugin ignorado ou comando deixado de fora é configuração a revisar: warn chama atenção
     // sem ser falha do bot.
-    if (toReview) log.warn(formatBootTable(entries), fields);
-    else log.info(formatBootTable(entries), fields);
+    // A tabela vai em `report`, e não no `msg`: o `pretty` a mostra nas linhas seguintes.
+    log.event(toReview ? LOG.pluginsBootedToReview : LOG.pluginsBooted, {
+      ...fields,
+      report: formatBootTable(entries),
+    });
   }
 
   // `^0.0.z` aceita só `0.0.z`: o dependente para de carregar no primeiro bump de patch da
@@ -399,11 +405,12 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
     for (const [label, dependencies] of fields) {
       for (const [dependency, range] of Object.entries(dependencies ?? {})) {
         if (!isExactCaret(range)) continue;
-        log.warn(
-          `plugin "${definition.name}": ${label}["${dependency}"] = "${range}" aceita só essa ` +
-            'versão exata; para acompanhar o 0.x da dependência, use "0.x" ou ">=0.0.0 <1.0.0"',
-          { plugin: definition.name, dependency, range },
-        );
+        log.event(LOG.pluginExactCaret, {
+          plugin: definition.name,
+          field: label,
+          dependency,
+          range,
+        });
       }
     }
   }
@@ -415,11 +422,12 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
     for (const [dependency, range] of Object.entries(definition.optionalDependsOn ?? {})) {
       const version = byName.get(dependency)?.entry.definition.version;
       if (version === undefined || satisfies(version, range)) continue;
-      log.warn(
-        `plugin "${definition.name}": optionalDependsOn["${dependency}"] = "${range}" não ` +
-          `aceita a versão carregada ${version}; o plugin sobe e o serviço dela segue visível`,
-        { plugin: definition.name, dependency, range, version },
-      );
+      log.event(LOG.pluginOptionalVersion, {
+        plugin: definition.name,
+        dependency,
+        range,
+        loaded: version,
+      });
     }
   }
 
@@ -451,14 +459,14 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
     for (const slot of slots) byName.set(slot.entry.definition.name, slot);
     for (const name of disabled) {
       if (!byName.has(name)) {
-        log.warn(`disabledPlugins cita "${name}", que não existe entre os plugins`, {
+        log.event(LOG.disabledUnknown, {
           plugin: name,
         });
       }
     }
     for (const name of options.adminPlugins ?? []) {
       if (!byName.has(name)) {
-        log.warn(`adminPlugins cita "${name}", que não existe entre os plugins`, {
+        log.event(LOG.adminUnknown, {
           plugin: name,
         });
       }
@@ -535,20 +543,20 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
           'só recarrega plugin carregado ou cujo setup falhou',
       );
     }
-    return restart(slot, 'recarregado');
+    return restart(slot, LOG.pluginReloaded);
   }
 
   async function runDisable(name: string): Promise<PluginChangeResult> {
     const slot = slotOf('disable', name);
     if (disabled.has(name)) return { plugin: slot.report, dependents: [], teardownErrors: [] };
     disabled.add(name);
-    return restart(slot, 'desligado');
+    return restart(slot, LOG.pluginDisabled);
   }
 
   async function runEnable(name: string): Promise<PluginChangeResult> {
     const slot = slotOf('enable', name);
     if (!disabled.delete(name)) return { plugin: slot.report, dependents: [], teardownErrors: [] };
-    return restart(slot, 'ligado');
+    return restart(slot, LOG.pluginEnabled);
   }
 
   /**
@@ -556,7 +564,7 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
    * `incompatibility`, inclusive a raiz: o motivo dela pode ter mudado (desligada, ou com a
    * dependência desligada), e um `setup-failed` anterior ganha nova tentativa.
    */
-  async function restart(slot: Slot, verb: string): Promise<PluginChangeResult> {
+  async function restart(slot: Slot, done: LogEvent): Promise<PluginChangeResult> {
     const name = slot.entry.definition.name;
     // Quem guardou um serviço do plugin no `setup` ficaria com a instância do contexto
     // descartado: o subgrafo de dependentes desce e sobe junto (ADR 0037).
@@ -570,16 +578,13 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
         : await bringUp(each);
     }
     const dependents = affected.slice(1).map(current);
-    log.info(
-      `plugin "${name}" ${verb}: ${slot.report.status === 'loaded' ? 'carregado' : 'ignorado'}`,
-      {
-        plugin: name,
-        status: slot.report.status,
-        ...(dependents.length > 0 && {
-          dependents: dependents.map((entry) => ({ name: entry.name, status: entry.status })),
-        }),
-      },
-    );
+    log.event(done, {
+      plugin: name,
+      status: slot.report.status,
+      ...(dependents.length > 0 && {
+        dependents: dependents.map((entry) => ({ name: entry.name, status: entry.status })),
+      }),
+    });
     return { plugin: current(slot), dependents, teardownErrors: errors };
   }
 

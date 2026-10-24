@@ -10,6 +10,7 @@ import {
   type MetricsRange,
   type MetricsService,
 } from '#types.ts';
+import * as LOG from './log-events.ts';
 
 /** Um documento por (métrica, dia, série, campo): o `increment` atômico mexe num campo só. */
 export interface MetricDoc {
@@ -194,7 +195,7 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
         // Destino explícito: descarta a amostra e avisa uma vez, em vez de lançar no caminho quente.
         if (!metric.overflowWarned) {
           metric.overflowWarned = true;
-          log.warn('métrica passou do limite de séries; amostras de séries novas descartadas', {
+          log.event(LOG.seriesOverflow, {
             metric: name,
             maxSeriesPerMetric,
           });
@@ -291,7 +292,7 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
             sample(written, last, max);
           } catch (error) {
             // Não perde a amostra: volta ao agregado para o próximo flush tentar de novo.
-            log.error('falha ao gravar métrica; mantida em memória', { metric: name, error });
+            log.event(LOG.writeFailed, { metric: name, err: error });
             const id = `${cell.day}|${cell.key}`;
             let target = metric.cells.get(id);
             if (!target) {
@@ -316,7 +317,7 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
             written.fields.set(field, value);
           } catch (error) {
             // Não perde o dado: devolve ao agregado para o próximo flush tentar de novo.
-            log.error('falha ao gravar métrica; mantida em memória', { metric: name, error });
+            log.event(LOG.writeFailed, { metric: name, err: error });
             const id = `${cell.day}|${cell.key}`;
             let target = metric.cells.get(id);
             if (!target) {
@@ -333,7 +334,7 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
     try {
       await purge();
     } catch (error) {
-      log.error('falha ao apagar métricas antigas', { error });
+      log.event(LOG.purgeFailed, { err: error });
     }
     if (rows.length === 0) return;
     const snapshot = { at: new Date(now()).toISOString(), rows };
@@ -342,11 +343,11 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
         try {
           await exporter(snapshot);
         } catch (error) {
-          log.error('exportador de métricas falhou', { error });
+          log.event(LOG.exporterFailed, { err: error });
         }
       }
     } catch (error) {
-      log.error('falha ao listar exportadores de métricas', { error });
+      log.event(LOG.exportersListFailed, { err: error });
     }
   }
 

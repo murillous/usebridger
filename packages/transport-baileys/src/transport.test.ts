@@ -33,6 +33,7 @@ function recordingLogger(lines: LogLine[] = []): Logger & { lines: LogLine[] } {
     warn: at('warn'),
     error: at('error'),
     fatal: at('fatal'),
+    event: (event) => at(event.level)(event.message),
     child: () => recordingLogger(lines),
   };
 }

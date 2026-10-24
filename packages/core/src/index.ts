@@ -103,9 +103,18 @@ export type {
   HttpSocketAccept,
   HttpSocketHandlers,
 } from '#http/types.ts';
+export { defineLogEvent } from '#logger/define-event.ts';
 export { createLogger, type LogDestination, type LoggerOptions } from '#logger/logger.ts';
 export { createSecretSet, type SecretSet, type SecretSource } from '#logger/secrets.ts';
-export type { LogFields, Logger, LogLevel } from '#logger/types.ts';
+export type {
+  EmitLevel,
+  LogEvent,
+  LogEventName,
+  LogFields,
+  Logger,
+  LogLevel,
+  StandardLogFields,
+} from '#logger/types.ts';
 export type {
   AudioMessage,
   Chat,

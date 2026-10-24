@@ -218,7 +218,11 @@ describe('ctx.signal em listeners', () => {
     expect(logger.lines).toContainEqual(
       expect.objectContaining({
         level: 'warn',
-        fields: expect.objectContaining({ plugin: 'ouvinte', event: 'message' }),
+        fields: expect.objectContaining({
+          plugin: 'ouvinte',
+          eventName: 'message',
+          event: 'context.expired',
+        }),
       }),
     );
   });

@@ -12,6 +12,7 @@ import type {
   FormattedText,
   GroupMetadata,
   GroupParticipantAction,
+  LogEvent,
   Logger,
   LogLevel,
   Message,
@@ -62,6 +63,7 @@ import {
   toReaction,
 } from './events.ts';
 import { renderWhatsApp } from './format.ts';
+import * as LOG from './log-events.ts';
 import { type ILogger, toBaileysLogger } from './logger.ts';
 import { type NormalizeEnv, nativeOf, toMessage } from './normalize.ts';
 import { toContent, toGroupMetadata, toQuoted, toWAKey } from './outgoing.ts';
@@ -182,7 +184,7 @@ export class BaileysTransport implements Transport {
     // Os nomes persistem no auth state da sessão, que o logout apaga (ADR 0097).
     this.#contacts = new ContactBook({ store: deps.auth, log: deps.log });
     this.#events = new TypedEmitter<TransportEvents>((error, event) =>
-      this.#log.error('handler de evento do transport falhou', { err: error, event }),
+      this.#log.event(LOG.handlerFailed, { err: error, eventName: event }),
     );
   }
 
@@ -243,7 +245,7 @@ export class BaileysTransport implements Transport {
     socket.ev.on('creds.update', () => {
       if (!current()) return;
       saving = saving.then(saveCreds).catch((error: unknown) => {
-        this.#log.error('falha ao gravar as credenciais da sessão', { err: error });
+        this.#log.event(LOG.credsSaveFailed, { err: error });
       });
     });
 
@@ -251,9 +253,9 @@ export class BaileysTransport implements Transport {
     // chegada, que a fila de entrada do bot preserva por chat. Reação, edição e apagamento entram
     // na mesma fila: a edição de uma mensagem não passa à frente dela.
     let inbound = Promise.resolve();
-    const enqueue = (work: () => Promise<void>, failure: string, messageId?: string | null) => {
+    const enqueue = (work: () => Promise<void>, failure: LogEvent, messageId?: string | null) => {
       inbound = inbound.then(work).catch((error: unknown) => {
-        this.#log.error(failure, { err: error, messageId });
+        this.#log.event(failure, { err: error, messageId: messageId ?? undefined });
       });
     };
     const env = this.#normalizeEnv(socket, state, logger);
@@ -275,8 +277,8 @@ export class BaileysTransport implements Transport {
             if (pollUpdateOf(raw) !== null) {
               const vote = await toPollVote(raw, polls, env, contacts);
               if (vote === null) {
-                this.#log.debug('voto de enquete desconhecida; descartado', {
-                  messageId: raw.key.id,
+                this.#log.event(LOG.pollVoteUnknown, {
+                  messageId: raw.key.id ?? undefined,
                 });
               } else if (current()) {
                 this.#events.emit('poll.vote', vote);
@@ -293,7 +295,7 @@ export class BaileysTransport implements Transport {
             if (contact !== null) this.#events.emit('contact.updated', contact);
             this.#events.emit('message', message);
           },
-          'falha ao normalizar mensagem do Baileys; descartada',
+          LOG.messageNormalizeFailed,
           raw.key.id,
         );
       }
@@ -308,7 +310,7 @@ export class BaileysTransport implements Transport {
         for (const update of learnContacts(list, contacts)) {
           if (current()) this.#events.emit('contact.updated', update);
         }
-      }, 'falha ao aprender nomes de contatos do Baileys; descartados');
+      }, LOG.contactsLearnFailed);
     };
     socket.ev.on('contacts.upsert', learn);
     socket.ev.on('contacts.update', learn);
@@ -322,7 +324,7 @@ export class BaileysTransport implements Transport {
             const reaction = await toReaction(item, env, contacts);
             if (reaction !== null && current()) this.#events.emit('reaction', reaction);
           },
-          'falha ao converter reação do Baileys; descartada',
+          LOG.reactionConvertFailed,
           item.key.id,
         );
       }
@@ -338,7 +340,7 @@ export class BaileysTransport implements Transport {
               const message = await toEdited(item, env, contacts);
               if (message !== null && current()) this.#events.emit('message.edited', message);
             },
-            'falha ao converter edição do Baileys; descartada',
+            LOG.editConvertFailed,
             item.key.id,
           );
         } else if (item.update.messageStubType === WAMessageStubType.REVOKE) {
@@ -347,7 +349,7 @@ export class BaileysTransport implements Transport {
               const deleted = await toDeleted(item, env, contacts);
               if (deleted !== null && current()) this.#events.emit('message.deleted', deleted);
             },
-            'falha ao converter apagamento do Baileys; descartado',
+            LOG.deleteConvertFailed,
             item.key.id,
           );
         }
@@ -361,7 +363,7 @@ export class BaileysTransport implements Transport {
       for (const { id } of groups) {
         enqueue(async () => {
           if (current()) this.#events.emit('group.joined', { chat: chatOf(id) });
-        }, 'falha ao repassar grupo novo');
+        }, LOG.groupJoinedFailed);
       }
     });
     socket.ev.on('groups.update', (updates) => {
@@ -372,7 +374,7 @@ export class BaileysTransport implements Transport {
         if (changed === null) continue;
         enqueue(async () => {
           if (current()) this.#events.emit('group.updated', changed);
-        }, 'falha ao repassar alteração de grupo');
+        }, LOG.groupUpdatedFailed);
       }
     });
     socket.ev.on('group-participants.update', (update) => {
@@ -383,7 +385,7 @@ export class BaileysTransport implements Transport {
         if (!current()) return;
         if (self !== null) this.#events.emit(self, { chat: chatOf(update.id) });
         if (others !== null) this.#events.emit('group.participants', others);
-      }, 'falha ao converter alteração de participantes do Baileys; descartada');
+      }, LOG.participantsConvertFailed);
     });
 
     socket.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
@@ -439,7 +441,7 @@ export class BaileysTransport implements Transport {
     this.#releaseConsole?.();
     this.#releaseConsole = undefined;
     socket.end(undefined).catch((error: unknown) => {
-      this.#log.warn('falha ao encerrar o socket do Baileys', { err: error });
+      this.#log.event(LOG.socketEndFailed, { err: error });
     });
   }
 
@@ -463,7 +465,7 @@ export class BaileysTransport implements Transport {
   #pnForLid(socket: BaileysSocket, lid: string): Promise<string | null> {
     return socket.signalRepository.lidMapping.getPNForLID(lid).catch((error: unknown) => {
       // Sem o par, o contato segue com `phone: null`: os papéis falham fechados (ADR 0042).
-      this.#log.warn('falha ao resolver o telefone de um LID', { err: error, lid });
+      this.#log.event(LOG.lidResolveFailed, { err: error, lid });
       return null;
     });
   }
@@ -475,7 +477,7 @@ export class BaileysTransport implements Transport {
       },
       (error: unknown) => {
         // Sem código, a tentativa expira (`qr-timeout`) e a próxima pede outro.
-        this.#log.error('falha ao pedir o código de pareamento', { err: error });
+        this.#log.event(LOG.pairingCodeFailed, { err: error });
       },
     );
   }

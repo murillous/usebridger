@@ -33,6 +33,7 @@ import {
   TypedEmitter,
 } from '@usebridger/core/adapter';
 import { bearerToken, InvalidTokenError, type TokenVerifier, type WebAuth } from './jwt.ts';
+import * as LOG from './log-events.ts';
 import { MediaStore, type StoredMedia } from './media-store.ts';
 import { Outbox } from './outbox.ts';
 import {
@@ -140,7 +141,7 @@ export class WebTransport implements Transport {
     this.#log = log;
     this.#maxBytes = options.media?.maxBytes ?? DEFAULT_MEDIA_MAX_BYTES;
     this.#events = new TypedEmitter<TransportEvents>((error, event) =>
-      this.#log.error('handler de evento do transport falhou', { err: error, event }),
+      this.#log.event(LOG.handlerFailed, { err: error, eventName: event }),
     );
     // Na fábrica (ADR 0072): a porta abre antes do `connect()`, e as rotas respondem 503 até lá.
     routes.ws('/chat', (request) => this.#accept(request));
@@ -322,18 +323,18 @@ export class WebTransport implements Transport {
 
   #refuse(connection: Connection, error: unknown): void {
     if (error instanceof ForbiddenError) {
-      this.#log.debug('conexão recusada sem o claim de tenant', { reason: error.message });
+      this.#log.event(LOG.tenantMissing, { reason: error.message });
       this.#close(connection, CLOSE_FORBIDDEN, error.message);
       return;
     }
     if (error instanceof InvalidTokenError) {
       // Debug: token vencido é rotina (aba aberta de ontem), não incidente.
-      this.#log.debug('token recusado', { reason: error.message });
+      this.#log.event(LOG.tokenRejected, { reason: error.message });
       this.#close(connection, CLOSE_UNAUTHORIZED, 'token inválido');
       return;
     }
     // Falha na busca do JWKS, por exemplo: o cliente tenta de novo, e o log diz o que houve.
-    this.#log.warn('não deu para verificar o token', { err: error });
+    this.#log.event(LOG.tokenVerifyFailed, { err: error });
     this.#close(connection, CLOSE_UNAUTHORIZED, 'não deu para verificar o token');
   }
 
@@ -522,7 +523,7 @@ export class WebTransport implements Transport {
     } catch (error) {
       if (error instanceof ForbiddenError) return text(error.message, 403, cors);
       if (error instanceof InvalidTokenError) return text('token inválido', 401, cors);
-      this.#log.warn('não deu para verificar o token do upload', { err: error });
+      this.#log.event(LOG.uploadVerifyFailed, { err: error });
       return text('não deu para verificar o token', 503, cors);
     }
     const mimetype = request.headers.get('content-type')?.split(';')[0]?.trim();

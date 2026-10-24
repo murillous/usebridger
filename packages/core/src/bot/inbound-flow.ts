@@ -17,6 +17,7 @@ import {
 } from '#conversations/conversations.ts';
 import type { EventBus } from '#events/bus.ts';
 import type { ListenerExtras, PluginErrorEvent } from '#events/types.ts';
+import * as LOG from '#logger/events.ts';
 import { createMessage } from '#message/create.ts';
 import type { Chat, Contact, Message } from '#message/types.ts';
 import type { MiddlewarePipeline } from '#middleware/pipeline.ts';
@@ -184,7 +185,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
         result.done
           .then((outcome) => afterCommand(ctx, outcome, probe))
           .catch((error: unknown) =>
-            ctx.log.error('falha ao concluir o comando em segundo plano', {
+            ctx.log.event(LOG.commandBackgroundFailed, {
               plugin: result.command.plugin,
               command: result.command.name,
               err: error,
@@ -196,7 +197,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     if (result.status === 'rejected' && result.reply !== null) {
       // Sem await: a resposta espera a taxa da fila de saída, e o chat não precisa esperar.
       ctx.reply(result.reply).catch((error: unknown) =>
-        ctx.log.warn('falha ao enviar a recusa do comando', {
+        ctx.log.event(LOG.commandRefusalFailed, {
           plugin: result.command.plugin,
           command: result.command.name,
           err: error,
@@ -348,7 +349,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     const { chat, sender, actionId } = interaction;
     const target = actions.resolve(actionId, chat.id);
     if (target === undefined) {
-      log().debug('clique em botão vencido ou desconhecido; descartado', { chatId: chat.id });
+      log().event(LOG.buttonUnknown, { chat: chat.id });
       return;
     }
     const message = createMessage({
@@ -395,7 +396,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
       const started = startProbe(queuedMs);
       const result = await router.dispatch(ctx, { command, rawArgs: args });
       if (!result.consumed) {
-        ctx.log.debug('comando nativo que não existe mais; descartado', { command });
+        ctx.log.event(LOG.nativeCommandGone, { command });
         return;
       }
       await afterCommand(ctx, result, started);
@@ -411,7 +412,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     if (target.kind === 'command') {
       const result = await router.dispatch(ctx, { command: target.command, args: target.args });
       if (!result.consumed) {
-        ctx.log.debug('botão de comando que não existe mais; descartado', {
+        ctx.log.event(LOG.commandButtonGone, {
           command: target.command,
         });
         return;
@@ -421,7 +422,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
     }
     const run = conversations.find(target.plugin, target.step);
     if (run === undefined) {
-      ctx.log.debug('botão de passo que não existe mais; descartado', {
+      ctx.log.event(LOG.stepButtonGone, {
         plugin: target.plugin,
         step: target.step,
       });

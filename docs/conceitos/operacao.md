@@ -6,7 +6,9 @@ está em [Rodar em produção](/usebridger/comecando/producao/).
 ## A tabela de boot
 
 No `start()`, o bot decide quais plugins sobem, em ordem, e loga uma tabela com uma linha por
-plugin: nome, versão e situação. A situação é `carregado`, `carregado; sem ...` ou `ignorado`, com
+plugin: nome, versão e situação. No JSON, ela vai no campo `report` do evento `plugin.boot.report`
+(ou `plugin.boot.review`, em `warn`, quando há plugin ignorado ou comando de fora), e a lista
+estruturada em `plugins`; o formato `pretty` a mostra abaixo da linha. A situação é `carregado`, `carregado; sem ...` ou `ignorado`, com
 o motivo ([Plugins no core](../../packages/core/docs/plugins.md#boot-start)).
 
 A decisão tem duas etapas, e a ordem importa:
@@ -83,7 +85,7 @@ ctx.observe('outbound.sent', (s) => {
   // s.replyTo: id da mensagem respondida, só nas respostas por ctx.reply
 });
 ctx.observe('log', (s) => {
-  // s.level, s.time (Date.now()), s.message, s.fields (campos + bindings: plugin, chatId...)
+  // s.level, s.time (Date.now()), s.message, s.fields (campos + bindings: plugin, chat...)
 });
 ```
 

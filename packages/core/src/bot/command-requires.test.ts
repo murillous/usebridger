@@ -98,9 +98,9 @@ describe('requires por comando (ADR 0086)', () => {
         unregistered: [{ command: 'fig', missing: ['send.sticker'] }],
       }),
     ]);
-    const table = lines.find((line) => line.message.startsWith('Plugins:'));
+    const table = lines.find((line) => line.fields['event'] === 'plugin.boot.review');
     expect(table?.level).toBe('warn');
-    expect(table?.message).toContain('carregado; sem fig (send.sticker)');
+    expect(table?.fields['report']).toContain('carregado; sem fig (send.sticker)');
   });
 
   it('com todas as capabilities, registra como qualquer comando', async () => {

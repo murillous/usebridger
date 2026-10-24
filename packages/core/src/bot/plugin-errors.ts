@@ -1,5 +1,6 @@
 import type { EventBus } from '#events/bus.ts';
 import type { PluginErrorEvent } from '#events/types.ts';
+import * as LOG from '#logger/events.ts';
 import type { Logger } from '#logger/types.ts';
 import type { PluginLifecycleError } from '#plugin/report.ts';
 
@@ -8,10 +9,11 @@ import type { PluginLifecycleError } from '#plugin/report.ts';
 
 /** Registra a falha no log do kernel. */
 export function logPluginError(log: Logger, event: PluginErrorEvent): void {
-  log.error(`plugin "${event.plugin}" falhou (${event.phase})`, {
+  log.event(LOG.pluginFailed, {
     plugin: event.plugin,
     phase: event.phase,
-    event: event.event,
+    // `event` é a chave do nome do evento de log (ADR 0118); o do barramento vai em `eventName`.
+    eventName: event.event,
     timedOut: event.timedOut,
     err: event.error,
   });

@@ -157,7 +157,7 @@ describe('Bot: fluxo da mensagem (§5.3)', () => {
     ]);
     expect(sentTexts(transport)).toEqual(['chamou?']);
     const heard = logger.lines.filter((line) => line.message === 'ouvido');
-    expect(heard[0]?.fields).toMatchObject({ plugin: 'eco', chatId: 'g@test' });
+    expect(heard[0]?.fields).toMatchObject({ plugin: 'eco', chat: 'g@test' });
   });
 
   it('middleware que interrompe impede comando e listeners', async () => {

@@ -27,6 +27,20 @@ export function validateSession(session: string): string {
   return session;
 }
 
+// Chaves que o logger já escreve ou que o bot põe sozinho (ADR 0118): um binding do app não as
+// pode ocupar, senão a linha sai com chave repetida ou com o `bot` trocado.
+const RESERVED_LOG_KEYS = ['bot', 'event', 'level', 'time', 'msg'];
+
+/** `logBindings` não pode usar chave reservada do contrato de log. */
+export function validateLogBindings(bindings: BotConfig['logBindings']): void {
+  const reserved = Object.keys(bindings ?? {}).filter((key) => RESERVED_LOG_KEYS.includes(key));
+  if (reserved.length > 0) {
+    throw new BotConfigError(
+      `logBindings não pode usar chave reservada: ${reserved.map((key) => `"${key}"`).join(', ')}`,
+    );
+  }
+}
+
 /** Instância pronta, ou a que a fábrica monta; fábrica que lança é erro de config. */
 export function resolveTransport(
   transport: BotConfig['transport'],

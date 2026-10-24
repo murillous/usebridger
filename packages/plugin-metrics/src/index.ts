@@ -16,6 +16,8 @@ export {
   type MetricsSnapshot,
 } from '#types.ts';
 
+import * as LOG from './log-events.ts';
+
 // Um runtime por contexto: o mesmo objeto de plugin serve a vários bots e a reloads.
 const runtimes = new WeakMap<object, { flush: () => Promise<void>; timer: NodeJS.Timeout }>();
 
@@ -62,13 +64,13 @@ export const metrics: PluginDefinition = definePlugin({
         const { high, normal, low } = ctx.stats().outbound.pending;
         m.gauge('bridger.outbound.pending', {}, high + normal + low);
       } catch (error) {
-        ctx.log.error('falha ao amostrar a fila de saída', { error });
+        ctx.log.event(LOG.outboundSampleFailed, { err: error });
       }
       try {
         active.sync();
       } catch (error) {
         // Não impede o flush do resto; o delta fica no tracker e entra no próximo.
-        ctx.log.error('falha ao somar ativos do dia ao agregado', { error });
+        ctx.log.event(LOG.activeSyncFailed, { err: error });
       }
       await runtime.flush();
     };
@@ -141,9 +143,7 @@ export const metrics: PluginDefinition = definePlugin({
         () =>
           new Response(
             renderPrometheus(runtime.totals(), gauges(), (name) =>
-              ctx.log.warn('métrica fora do /metrics: nome saneado colide com outro tipo', {
-                name,
-              }),
+              ctx.log.event(LOG.prometheusCollision, { metric: name }),
             ),
             {
               headers: { 'content-type': 'text/plain; version=0.0.4; charset=utf-8' },
@@ -153,12 +153,12 @@ export const metrics: PluginDefinition = definePlugin({
     } catch (error) {
       // Sem servidor HTTP o bot ainda mede e grava; só o scrape fica indisponível.
       if (!(error instanceof BotConfigError)) throw error;
-      ctx.log.info('sem http no bot: GET /metrics desligado');
+      ctx.log.event(LOG.httpMissing);
     }
 
     const timer = setInterval(() => {
       // O flush já registra falhas de gravação e de exportador; isto evita rejeição solta.
-      flush().catch((error: unknown) => ctx.log.error('flush de métricas falhou', { error }));
+      flush().catch((error: unknown) => ctx.log.event(LOG.flushFailed, { err: error }));
     }, ctx.config.flushIntervalMs);
     timer.unref();
     ctx.signal.addEventListener('abort', () => clearInterval(timer), { once: true });

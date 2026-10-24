@@ -2,6 +2,7 @@
 // enviar, os métodos das capabilities que declara), e `defineTransport` monta o `Transport`
 // completo: emissor, `on()`, `self`, a checagem de capability e o `UnsupportedError` do resto.
 
+import * as LOG from '#logger/events.ts';
 import type { Chat, Contact, Message } from '#message/types.ts';
 import {
   assertCanSend,
@@ -76,7 +77,7 @@ export function defineTransport(
 ): (deps: TransportDeps) => Transport {
   return (deps) => {
     const events = new TypedEmitter<TransportEvents>((error, event) =>
-      deps.log.error('handler de evento do transport falhou', { err: error, event }),
+      deps.log.event(LOG.transportHandlerFailed, { err: error, eventName: event }),
     );
     let self: Contact | null = null;
     const spec = build(deps, {

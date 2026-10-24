@@ -74,6 +74,9 @@ function write(logger: ILogger, method: Method, args: readonly unknown[]): void 
   const fields = { source: 'libsignal' };
   // `console.error` do libsignal é falha de migração de sessão: vale um aviso. O resto é a
   // rotina de abrir e fechar sessões.
+  // O texto é do libsignal, repassado ao logger do Baileys (ADR 0087): não há evento do kernel.
+  // biome-ignore lint/plugin: linha de terceiro, sem evento próprio (ADR 0118)
   if (method === 'error') logger.warn(fields, text);
+  // biome-ignore lint/plugin: linha de terceiro, sem evento próprio (ADR 0118)
   else logger.debug(fields, text);
 }

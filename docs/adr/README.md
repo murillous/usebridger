@@ -137,3 +137,4 @@ Um ADR novo entra no fim da lista.
 - [0115](0115-testes-de-componente-do-dashboard-no-happy-dom.md) — Testes de componente do dashboard no happy-dom
 - [0116](0116-giveup-da-reconexao-leva-ao-estado-failed.md) — O giveUp da reconexão leva o bot ao estado `failed`
 - [0117](0117-segredos-cifrados-editaveis-pelo-dashboard.md) — Segredos cifrados no storage, editáveis pelo dashboard
+- [0118](0118-contrato-de-log-estruturado.md) — Contrato de log estruturado: `event` estável, campos padronizados e formato para o Loki

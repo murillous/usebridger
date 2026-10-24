@@ -6,9 +6,10 @@
 // entra por override: o storage guarda em texto puro (ADR 0028).
 
 import type { z } from 'zod';
+import * as LOG from '#logger/events.ts';
 import { createNoopLogger, MIN_SECRET_LENGTH } from '#logger/logger.ts';
 import type { SecretSet } from '#logger/secrets.ts';
-import type { Logger } from '#logger/types.ts';
+import type { LogEvent, Logger } from '#logger/types.ts';
 import type { PluginChangeResult } from '#plugin/host.ts';
 import { PREFIX_PLACEHOLDER, placeholders } from '#plugin/messages.ts';
 import type { PluginDefinition, PluginMessages } from '#plugin/types.ts';
@@ -336,7 +337,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
 
   for (const name of Object.keys(file)) {
     if (!byName.has(name)) {
-      log.warn(`pluginConfig cita "${name}", que não existe entre os plugins`, { plugin: name });
+      log.event(LOG.configUnknownPlugin, { plugin: name });
     }
   }
 
@@ -556,11 +557,11 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
       if (warnedLegacy.has(key)) continue;
       warnedLegacy.add(key);
       // Só o caminho: o valor é segredo e ainda não está no `SecretSet`.
-      log.warn(
-        `override do plugin "${definition.name}" tem o campo secreto "${label}", ignorado; ` +
-          `defina pela env ${envName(definition.name, path)} ou pelo arquivo`,
-        { plugin: definition.name, field: label },
-      );
+      log.event(LOG.configLegacySecret, {
+        plugin: definition.name,
+        field: label,
+        envVar: envName(definition.name, path),
+      });
     }
     return clean;
   }
@@ -579,11 +580,11 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
       const key = `${definition.name}:${label}`;
       if (warnedShort.has(key)) continue;
       warnedShort.add(key);
-      log.warn(
-        `campo secreto "${label}" do plugin "${definition.name}" tem menos de ` +
-          `${MIN_SECRET_LENGTH} caracteres e não é censurado no log`,
-        { plugin: definition.name, field: label },
-      );
+      log.event(LOG.configShortSecret, {
+        plugin: definition.name,
+        field: label,
+        minLength: MIN_SECRET_LENGTH,
+      });
     }
   }
 
@@ -672,11 +673,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
       return [{ path: label, source: first[1] }];
     });
     if (fields.length === 0) return;
-    log.warn(
-      `override do plugin "${name}" sem efeito em ` +
-        `${fields.map((field) => `"${field.path}" (vale ${field.source})`).join(', ')}`,
-      { plugin: name, fields },
-    );
+    log.event(LOG.configOverrideShadowed, { plugin: name, fields });
   }
 
   async function runSetOverrides(
@@ -725,7 +722,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
     definition: PluginDefinition,
     next: Record<string, JsonValue>,
     fields: PlainObject,
-    action: string,
+    done: LogEvent,
     label: string,
     lenient = false,
   ): Promise<PluginChangeResult | undefined> {
@@ -739,7 +736,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
     if (Object.keys(next).length === 0) await secretKv.delete(name);
     else await secretKv.set(name, next);
     // Nunca o valor: só quem, onde e de qual camada.
-    log.info(`segredo do plugin "${name}" ${action}`, {
+    log.event(done, {
       plugin: name,
       field: label,
       source: 'secret',
@@ -803,7 +800,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
       ...stored,
       [label]: encrypt(keys.current, `${name}:${label}`, JSON.stringify(value)),
     };
-    return commitSecrets(definition, next, fields, 'salvo', label);
+    return commitSecrets(definition, next, fields, LOG.configSecretSaved, label);
   }
 
   async function runClearSecret(
@@ -828,7 +825,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
     if (!saved) return undefined;
     const { [label]: _removed, ...next } = stored;
     const fields = decryptStored(name, stored, label, true);
-    return commitSecrets(definition, next, fields, 'removido', label, brokenCount > 0);
+    return commitSecrets(definition, next, fields, LOG.configSecretRemoved, label, brokenCount > 0);
   }
 
   async function runRotate(): Promise<number> {
@@ -849,7 +846,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
           migrated++;
         } catch {
           // Fica como está: a resolução do plugin reporta `undecryptable` com o caminho.
-          log.warn('segredo com a chave anterior não decifra; não migrado', {
+          log.event(LOG.configSecretNotMigrated, {
             plugin: name,
             field: label,
           });
@@ -857,7 +854,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
       }
       if (changed) await secretKv.set(name, next);
     }
-    log.info(`rotação da chave mestra: ${migrated} segredo(s) migrado(s)`, { migrated });
+    log.event(LOG.configKeyRotated, { migrated });
     return migrated;
   }
 

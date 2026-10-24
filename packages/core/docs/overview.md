@@ -57,7 +57,7 @@ Fora do bot: StoragePort (sqlite, postgres, memória) e HttpServer (um por proce
   rotas e WebSockets. → [HTTP e WebSocket](http.md)
 - **Config de plugin** junta env, arquivo, overrides e defaults sob o schema Zod do plugin.
   → [Config](config.md)
-- **Logger** é estruturado, com `plugin` e `chatId` no contexto e segredos censurados.
+- **Logger** é estruturado, com `plugin` e `chat` no contexto e segredos censurados.
   → [Logger](logger.md)
 
 O caminho completo de uma mensagem, com prazos e erros de cada etapa, está em

@@ -6,7 +6,7 @@ import type { BotMessageContext } from '#context.ts';
 import type { HttpServer } from '#http/types.ts';
 import type { LoggerOptions } from '#logger/logger.ts';
 import type { SecretSet } from '#logger/secrets.ts';
-import type { Logger, LogLevel } from '#logger/types.ts';
+import type { LogFields, Logger, LogLevel } from '#logger/types.ts';
 import type { ChatFilterOptions } from '#middleware/chat-filter.ts';
 import type { Middleware } from '#middleware/pipeline.ts';
 import type { RateLimitOptions } from '#middleware/rate-limit.ts';
@@ -141,6 +141,13 @@ export interface BotConfig {
    * logger próprio só censura os segredos da config se for criado com o mesmo `secrets`.
    */
   readonly logger?: Logger;
+  /**
+   * Campos em toda linha de log do bot (ADR 0118), além do `bot` (a `session`), que o bot põe
+   * sozinho. Para o agregador saber de onde veio a linha: `{ service: 'lumabot', version, env }`.
+   * `bot`, `event`, `level`, `time` e `msg` são reservados: o `createBot` lança `BotConfigError`.
+   * O core não lê variável de ambiente nem o `package.json` do app: quem sabe é o app.
+   */
+  readonly logBindings?: LogFields;
   /** Nível do logger criado pelo bot. Padrão: `'info'`. */
   readonly logLevel?: LogLevel;
   /**

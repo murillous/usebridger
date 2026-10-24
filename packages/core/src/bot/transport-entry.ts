@@ -5,6 +5,7 @@
 import type { ConversationRegistry } from '#conversations/conversations.ts';
 import type { EventBus } from '#events/bus.ts';
 import type { BotEvents } from '#events/types.ts';
+import * as LOG from '#logger/events.ts';
 import type { Logger } from '#logger/types.ts';
 import type { Chat, Contact, Message } from '#message/types.ts';
 import type { Observers } from '#observers/observers.ts';
@@ -71,8 +72,8 @@ export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
       ),
     );
     if (result !== 'queued') {
-      deps.log().warn('mensagem descartada pela fila de entrada', {
-        chatId: item.chat.id,
+      deps.log().event(LOG.messageDropped, {
+        chat: item.chat.id,
         messageId: item.id,
         reason: result,
       });
@@ -96,8 +97,8 @@ export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
     );
     if (result === 'queued') return;
     deps.conversations.expire(chat.id, sender.id);
-    deps.log().warn('expiração de espera descartada pela fila de entrada; onExpire não roda', {
-      chatId: chat.id,
+    deps.log().event(LOG.expireDropped, {
+      chat: chat.id,
       reason: result,
     });
   }
@@ -153,17 +154,15 @@ export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
         deps.recordQr?.(payload.expiresAt);
         // Quem lê o log em info (agregador, arquivo) pareia o número com o QR enquanto ele vale:
         // o valor fica em debug e no barramento (`connection.qr`), para quem exibe a tela.
-        deps.log().info('QR de pareamento recebido; exiba-o pelo evento connection.qr');
-        deps.log().debug('valor do QR de pareamento', { qr: payload.qr });
+        deps.log().event(LOG.pairingQr);
+        deps.log().event(LOG.pairingQrValue, { qr: payload.qr });
         void deps.bus.emit('connection.qr', payload);
       }),
       deps.transport.on('connection.pairing-code', (payload) => {
         // Mesma tentativa de pareamento que o QR (ADR 0046), e o mesmo risco no log.
         deps.reconnector?.onQr();
-        deps
-          .log()
-          .info('código de pareamento recebido; exiba-o pelo evento connection.pairing-code');
-        deps.log().debug('valor do código de pareamento', { code: payload.code });
+        deps.log().event(LOG.pairingCode);
+        deps.log().event(LOG.pairingCodeValue, { code: payload.code });
         void deps.bus.emit('connection.pairing-code', payload);
       }),
     ];

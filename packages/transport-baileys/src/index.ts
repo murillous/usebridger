@@ -4,6 +4,7 @@
 import type { LogLevel } from '@usebridger/core';
 import type { Transport, TransportDeps } from '@usebridger/core/adapter';
 import { Browsers, fetchLatestBaileysVersion, makeWASocket, type WAVersion } from 'baileys';
+import * as LOG from './log-events.ts';
 import { isLogLevel } from './logger.ts';
 import { type BaileysDriver, type BaileysPairing, BaileysTransport } from './transport.ts';
 
@@ -62,7 +63,7 @@ function driver(fixed: WAVersion | undefined, deps: TransportDeps): BaileysDrive
       // Uma busca por transport: a versão não muda entre reconexões do mesmo processo.
       latest ??= fetchLatestBaileysVersion().then(({ version, error }) => {
         if (error !== undefined) {
-          deps.log.warn('não deu para buscar a versão do WhatsApp Web; usando a do Baileys', {
+          deps.log.event(LOG.versionFetchFailed, {
             err: error,
           });
         }

@@ -16,6 +16,7 @@ import {
   jidNormalizedUser,
   type WAMessageUpdate,
 } from 'baileys';
+import * as LOG from './log-events.ts';
 import {
   authorJid,
   authorOf,
@@ -37,7 +38,7 @@ const FLUSH_DELAY_MS = 2000;
 export interface ContactBookOptions {
   /** Onde os nomes persistem; sem ele o livro vive só em memória. */
   readonly store?: Pick<AuthStateStore, 'getKeys' | 'setKeys'>;
-  readonly log?: Pick<Logger, 'warn'>;
+  readonly log?: Pick<Logger, 'event'>;
 }
 
 /**
@@ -225,7 +226,7 @@ export class ContactBook {
     try {
       await store.setKeys({ [NAME_KEY]: Object.fromEntries(batch) });
     } catch (error) {
-      this.#log?.warn('falha ao gravar os nomes de contatos; tenta de novo na próxima gravação', {
+      this.#log?.event(LOG.contactNamesSaveFailed, {
         err: error,
         count: batch.size,
       });
@@ -270,7 +271,7 @@ export class ContactBook {
       }
     } catch (error) {
       // Sem marcar como consultado: a próxima menção deste id tenta de novo.
-      this.#log?.warn('falha ao ler os nomes de contatos do auth state; segue sem nome', {
+      this.#log?.event(LOG.contactNamesReadFailed, {
         err: error,
       });
     } finally {

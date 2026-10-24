@@ -94,8 +94,8 @@ describe('ctx.admin', () => {
   it('avisa de nome em adminPlugins que não existe', async () => {
     const { bot, log } = setup({ adminPlugins: ['dash', 'fantasma'] });
     await bot.start();
-    const warns = log.lines.filter((l) => l.level === 'warn').map((l) => l.message);
-    expect(warns).toContain('adminPlugins cita "fantasma", que não existe entre os plugins');
+    const warns = log.lines.filter((l) => l.fields['event'] === 'plugin.admin.unknown');
+    expect(warns.map((l) => [l.level, l.fields['plugin']])).toEqual([['warn', 'fantasma']]);
   });
 
   it('sem adminPlugins, todos veem undefined', async () => {

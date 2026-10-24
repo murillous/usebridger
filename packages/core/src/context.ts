@@ -31,6 +31,6 @@ export interface BotMessageContext extends MessageContext {
    * `debug`; para saber que a reação não saiu, use `ctx.send.react` (ADR 0089).
    */
   react(emoji: string | null): Promise<void>;
-  /** Logger com `chatId` (e `plugin`, em comandos e listeners) no contexto. */
+  /** Logger com `chat` (e `plugin`, em comandos e listeners) no contexto. */
   readonly log: Logger;
 }

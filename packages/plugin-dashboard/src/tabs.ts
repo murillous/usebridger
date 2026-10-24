@@ -7,6 +7,7 @@ import {
 import type { z } from '@usebridger/core/zod';
 import { sameOrigin } from '#auth.ts';
 import { readLimited } from '#body.ts';
+import * as LOG from './log-events.ts';
 
 // Contrato do ponto `dashboard.tabs` (ADRs 0104, 0109 e 0114). Quem contribui importa só estes tipos.
 
@@ -189,7 +190,7 @@ export function registerTabRoutes(
     const id = `${key}|${why}`;
     if (warned.has(id)) return;
     warned.add(id);
-    log.warn(`dashboard: aba "${key}" ignorada: ${why}`);
+    log.event(LOG.tabIgnored, { tab: key, reason: why });
   };
 
   const visible = (): OwnedTab[] => {
@@ -288,7 +289,7 @@ export function registerTabRoutes(
           })),
         );
       } catch (error) {
-        log.error('dashboard: falha ao montar o manifesto de abas', { err: error });
+        log.event(LOG.tabsManifestFailed, { err: error });
         return text('erro interno', 500);
       }
     }),
@@ -306,9 +307,7 @@ export function registerTabRoutes(
 
   const failed = (what: string, ctx: { plugin: string; key: string }, error: unknown): Response => {
     // Mensagem genérica ao browser: o erro do plugin pode trazer dado sensível.
-    log.error(`dashboard: falha em ${what} da aba do plugin "${ctx.plugin}" (${ctx.key})`, {
-      err: error,
-    });
+    log.event(LOG.widgetFailed, { action: what, target: ctx.plugin, tab: ctx.key, err: error });
     return text('erro no widget', 500);
   };
 
@@ -327,12 +326,10 @@ export function registerTabRoutes(
     const all = Array.isArray(items) ? items : [];
     const list = all.filter(valid) as T[];
     if (list.length < all.length) {
-      log.warn(
-        `dashboard: widget "${ctx.key}" devolveu ${all.length - list.length} itens fora do contrato; descartados`,
-      );
+      log.event(LOG.widgetInvalidItems, { tab: ctx.key, dropped: all.length - list.length });
     }
     if (list.length <= max) return list;
-    log.warn(`dashboard: widget "${ctx.key}" devolveu ${list.length} itens; cortado em ${max}`);
+    log.event(LOG.widgetTruncated, { tab: ctx.key, items: list.length, max });
     return list.slice(0, max);
   };
 

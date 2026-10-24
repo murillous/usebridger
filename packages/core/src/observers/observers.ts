@@ -44,7 +44,7 @@ export interface LogSignal {
   /** `Date.now()` de quando a linha foi emitida. */
   readonly time: number;
   readonly message: string;
-  /** Campos da chamada mais os bindings do logger filho (`plugin`, `chatId`, `transport`...). */
+  /** Campos da chamada mais os bindings do logger filho (`plugin`, `chat`, `transport`...). */
   readonly fields: LogFields;
 }
 

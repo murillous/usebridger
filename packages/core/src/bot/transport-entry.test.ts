@@ -93,9 +93,9 @@ describe('createTransportEntry', () => {
 
     expect(t.flow.handleMessage).toHaveBeenCalledTimes(1);
     const warn = t.lines.find((line) => line.level === 'warn');
-    expect(warn?.message).toBe('mensagem descartada pela fila de entrada');
     expect(warn?.fields).toMatchObject({
-      chatId: 'chat@test',
+      event: 'message.dropped',
+      chat: 'chat@test',
       messageId: (second as Message).id,
       reason: 'full',
     });
@@ -228,10 +228,11 @@ describe('createTransportEntry', () => {
       expect(t.flow.expireReply).not.toHaveBeenCalled();
       expect(t.conversations.expire).toHaveBeenCalledWith(CHAT.id, SENDER.id);
       const warn = t.lines.find((line) => line.level === 'warn');
-      expect(warn?.message).toBe(
-        'expiração de espera descartada pela fila de entrada; onExpire não roda',
-      );
-      expect(warn?.fields).toMatchObject({ chatId: CHAT.id, reason: 'full' });
+      expect(warn?.fields).toMatchObject({
+        event: 'conversation.expire.dropped',
+        chat: CHAT.id,
+        reason: 'full',
+      });
       hold.resolve();
     });
   });

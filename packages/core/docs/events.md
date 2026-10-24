@@ -41,7 +41,7 @@ Em `message`, `message:<tipo>` e `message.edited`, o contexto traz também
 | `reply` | responde no chat, citando a mensagem, pela fila de saída |
 | `react` | reage à mensagem (capability `reactions`; sem ela, não faz nada e registra em `debug`) |
 | `expectReply` | manda a próxima mensagem do remetente, neste chat, a um passo do plugin ([Conversas](conversations.md)) |
-| `log` | logger com `plugin` e `chatId` |
+| `log` | logger com `plugin` e `chat` |
 | `t` | texto de `messages` do plugin com os placeholders preenchidos ([Config](config.md#placeholders)) |
 
 ```ts
@@ -194,7 +194,7 @@ listener vai para o log do bot. Por dentro (interno do kernel, não exportado ([
 import { createEventBus } from '#events/bus.ts';
 
 const bus = createEventBus({
-  onError: (e) => log.error({ plugin: e.plugin, event: e.event, err: e.error }, 'listener falhou'),
+  onError: (e) => logPluginError(log, e), // evento `plugin.failed`, com `eventName` e `err`
   listenerTimeoutMs: 30_000, // padrão
 });
 
