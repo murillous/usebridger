@@ -422,7 +422,12 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
     for (const [dependency, range] of Object.entries(definition.optionalDependsOn ?? {})) {
       const version = byName.get(dependency)?.entry.definition.version;
       if (version === undefined || satisfies(version, range)) continue;
-      log.event(LOG.pluginOptionalVersion, { plugin: definition.name, dependency, range, version });
+      log.event(LOG.pluginOptionalVersion, {
+        plugin: definition.name,
+        dependency,
+        range,
+        loaded: version,
+      });
     }
   }
 

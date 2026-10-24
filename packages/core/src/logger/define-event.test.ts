@@ -36,6 +36,18 @@ describe('defineLogEvent', () => {
       defineLogEvent({ name: name as LogEvent['name'], level: 'info', message: 'x' }),
     ).toThrow(TypeError);
   });
+
+  it.each(['verbose', 'silent', '', undefined])('recusa o nível %s', (level) => {
+    expect(() =>
+      defineLogEvent({ name: 'command.timeout', level: level as LogEvent['level'], message: 'x' }),
+    ).toThrow(TypeError);
+  });
+
+  it.each(['', undefined, 3])('recusa a mensagem %s', (message) => {
+    expect(() =>
+      defineLogEvent({ name: 'command.timeout', level: 'info', message: message as string }),
+    ).toThrow(TypeError);
+  });
 });
 
 describe('catálogo do core', () => {

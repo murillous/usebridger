@@ -78,8 +78,12 @@ function formatRecord(
     // Erro sob outra chave (`{ error }`) e texto de várias linhas (a tabela de boot em `report`)
     // vão para as linhas seguintes: numa linha só, escapados, não dá para ler.
     if (isSerializedError(value)) below.push(`${key}: ${formatError(value)}`);
-    else if (typeof value === 'string' && value.includes('\n')) below.push(value);
-    else fields.push(paint('gray', `${key}=${formatValue(value)}`));
+    else if (typeof value === 'string' && value.includes('\n')) {
+      // A tabela de boot (`report`) é lida como bloco; qualquer outro campo precisa do nome, senão
+      // o texto fica solto sob a linha, sem dizer de quem é.
+      const text = escapeControls(value);
+      below.push(key === 'report' ? text : `${key}:\n${text}`);
+    } else fields.push(paint('gray', `${key}=${formatValue(value)}`));
   }
   let text = [...parts, ...fields].join(' ');
   for (const block of below) text += `\n${indent(block)}`;
@@ -110,6 +114,16 @@ function formatError(err: unknown): string {
   const { type, message, stack, cause } = err as SerializedError;
   const own = stack ?? (message === undefined ? JSON.stringify(err) : `${type}: ${message}`);
   return cause === undefined ? own : `${own}\ncausa: ${formatError(cause)}`;
+}
+
+// Controles (ESC, CR, ...) vindos de um campo poderiam injetar ANSI no terminal; só o `\n`, que é
+// a quebra de linha do bloco, é mantido.
+function escapeControls(text: string): string {
+  return text.replaceAll(
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: casar controles é o propósito
+    /[\u0000-\u0008\u000b-\u001f\u007f]/g,
+    (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
 }
 
 function indent(text: string): string {

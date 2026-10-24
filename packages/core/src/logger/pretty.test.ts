@@ -70,6 +70,22 @@ describe("createLogger({ format: 'pretty' })", () => {
     );
   });
 
+  it('põe o nome do campo antes do texto de várias linhas que não é o report', () => {
+    const { log, raw } = capture();
+    log.info('resposta', { body: 'linha 1\nlinha 2' });
+    expect(raw[0]?.slice(9)).toBe('INFO  resposta\n    body:\n    linha 1\n    linha 2\n');
+  });
+
+  it('escapa controles no texto de várias linhas, menos o \\n', () => {
+    const { log, raw } = capture();
+    log.info('resposta', { body: 'a\u001b[31mb\r\nc\u007f' });
+    expect(raw[0]).not.toContain('\u001b');
+    expect(raw[0]).not.toContain('\r');
+    expect(raw[0]?.slice(9)).toBe(
+      'INFO  resposta\n    body:\n    a\\u001b[31mb\\u000d\n    c\\u007f\n',
+    );
+  });
+
   it('censura os segredos igual ao JSON', () => {
     const { log, raw } = capture('info', ['sk-segredo-123']);
     log.info('chamando com sk-segredo-123', { token: 'sk-segredo-123' });

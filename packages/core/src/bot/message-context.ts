@@ -27,7 +27,7 @@ export interface MessageContextDeps {
   readonly quote: boolean;
   /** O transport tem a capability `reactions`; sem ela, `react` vira no-op (ADR 0089). */
   readonly reactions: boolean;
-  /** Logger raiz; o contexto cria o filho com `chatId` sob demanda. */
+  /** Logger raiz; o contexto cria o filho com `chat` sob demanda. */
   readonly log: () => Logger;
   /**
    * Resolve as ações do `reply` (ADR 0058) em nome do plugin dono do contexto, ou de ninguém
@@ -136,7 +136,7 @@ export function messageExtras(ctx: KernelMessageContext): WithKernelContext {
 }
 
 /**
- * Descritores do `log` de um plugin: filho do logger do plugin com o `chatId` da mensagem, criado
+ * Descritores do `log` de um plugin: filho do logger do plugin com o `chat` da mensagem, criado
  * no primeiro acesso e fixado no próprio objeto. Calculados uma vez por plugin.
  */
 function pluginLogDescriptor(pluginLog: Logger): PropertyDescriptor {
@@ -380,7 +380,7 @@ export function commandViewFactory(
   type View = ExpiringView & { readonly command: string; readonly message: Message };
   const scope: Scope<View> = (view) => ({
     label: `comando "${view.command}"`,
-    fields: { command: view.command },
+    fields: { command: view.command, context: 'command' },
   });
   const runDescriptors = executionDescriptors<View>(plugin, pluginLog, expect, text, scope);
   return {
@@ -405,7 +405,7 @@ export function stepViewFactory(
   type View = ExpiringView & { readonly step: string; readonly message: Message };
   const scope: Scope<View> = (view) => ({
     label: `passo "${view.step}"`,
-    fields: { step: view.step },
+    fields: { step: view.step, context: 'step' },
   });
   const descriptors = executionDescriptors<View>(plugin, pluginLog, expect, text, scope);
   return (ctx, deadline, step, data) => {
@@ -455,7 +455,7 @@ export function listenerViewFactory(
   const kernel = (view: View): KernelMessageContext | undefined => view[KERNEL_CONTEXT];
   const scope: Scope<View> = (view) => ({
     label: `listener de "${view.event}"`,
-    fields: { eventName: view.event },
+    fields: { eventName: view.event, context: 'listener' },
   });
   const descriptors: PropertyDescriptorMap = {
     message: {
@@ -524,7 +524,7 @@ export function expireViewFactory(
     const { chat, sender } = origin;
     const log = pluginLog.child({ chat: chat.id });
     const label = `onExpire do passo "${step}"`;
-    const fields: LogFields = { step };
+    const fields: LogFields = { step, context: 'expire' };
     const refuse = refuser(plugin, { log }, deadline, () => ({ label, fields }));
     return {
       chat,

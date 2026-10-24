@@ -154,7 +154,7 @@ ações do `reply` — mora em `src/bot/inbound-flow.ts` (`createInboundFlow`), 
 shutdown.
 
 - Cada mensagem ganha um contexto (`BotMessageContext`): `message`, `text` (o texto de
-  trabalho), `reply` e `log` (com `chatId`). `reply` e `log` só são criados se alguém os ler.
+  trabalho), `reply` e `log` (com `chat`). `reply` e `log` só são criados se alguém os ler.
 - **`ctx.text`** começa igual a `message.text`. Um middleware pode reescrevê-lo — o `sanitize`
   grava ali o texto truncado — e o roteador e os listeners leem o resultado. `message` nunca muda.
 - **Middleware que não chama `next()`** barra a mensagem: nem comando nem listeners a veem.
@@ -198,7 +198,7 @@ shutdown.
   plugins). Um middleware que nunca chama `next()` nem resolve segura o chat dele na fila de
   entrada; quem escreve middleware assíncrono responde por limitar o próprio I/O.
 - **Listeners** de eventos de mensagem recebem, além de `payload`/`claimed`/`claim()`/`signal`,
-  os campos `message`, `text`, `reply` e `log` (este com `plugin` e `chatId`).
+  os campos `message`, `text`, `reply` e `log` (este com `plugin` e `chat`).
 - **`message.edited`** passa pelas mesmas barreiras da mensagem nova: entra na fila do chat
   (em série com as mensagens dele), espera o fim do boot e roda os middlewares — `ignoreSelf` e
   `chatFilter` a barram, o `sanitize` trunca o `text` e o `rateLimit` a conta como uma mensagem.
@@ -207,7 +207,7 @@ shutdown.
 - Os demais eventos do transport vão ao barramento sem fila nem middlewares, mas com os filtros
   da config de middlewares ([ADR 0034](../../../docs/adr/0034-filtro-de-eventos-no-kernel.md)).
   Veja [Eventos que não são mensagem](#eventos-que-não-são-mensagem).
-- Erro de middleware (ou do próprio roteador) vai para o log em `error`, com o `chatId`; o chat
+- Erro de middleware (ou do próprio roteador) vai para o log em `error`, com o `chat`; o chat
   segue para a próxima mensagem.
 - O chat só libera a próxima mensagem quando a atual termina (comando ou todos os listeners). A
   resposta de recusa do roteador não é esperada: ela aguarda a taxa da fila de saída.
@@ -276,7 +276,7 @@ instância, sempre em nome do plugin:
 | `config` | config validada (`PluginConfigError` derruba o boot; num reload, ignora o plugin; ADR 0098) |
 | `log` | logger do bot com `{ plugin }` |
 | `signal` | aborta no descarte do contexto (teardown, reload, `setup` que falhou ou estourou o prazo) |
-| `commands.add` | roteador do bot; o `run`/`onReject` recebem `log` com `plugin` e `chatId` |
+| `commands.add` | roteador do bot; o `run`/`onReject` recebem `log` com `plugin` e `chat` |
 | `conversations.define` | passos de conversa do bot ([Conversas](conversations.md)); o passo recebe `log` do plugin, `signal` e `expectReply` |
 | `roles.define` | papéis do roteador ([papéis custom](commands.md#papéis-custom)); o `check` recebe `log` do plugin dono e `signal` |
 | `events` | barramento do bot |

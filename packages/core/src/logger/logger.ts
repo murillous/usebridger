@@ -75,7 +75,7 @@ export function createLogger(options: LoggerOptions = {}): Logger {
     },
     destination,
   );
-  return wrap(options.bindings ? root.child(options.bindings) : root);
+  return wrap(options.bindings ? root.child(withoutReserved(options.bindings, true)) : root);
 }
 
 // O serializer do pino só cobre o `err`. Um `Error` sob outra chave (`{ error }`) sairia `{}`,
@@ -139,6 +139,22 @@ function toNeedles(secrets: readonly string[]): string[] {
     .sort((a, b) => b.length - a.length);
 }
 
+// Chaves que o pino já escreve na linha: repeti-las nos campos geraria chave duplicada no JSON, e
+// quem lê fica com a última (o `level` é rótulo de stream no Loki, então errar aqui custa caro).
+// Nos bindings o `event` também é reservado: quem o escreve é o `logger.event`.
+// Checagem direta com `in`, sem iterar um Set: o caminho comum não aloca nada, nem iterador.
+export function withoutReserved(fields: LogFields, bindings = false): LogFields {
+  const reserved =
+    'level' in fields || 'time' in fields || 'msg' in fields || (bindings && 'event' in fields);
+  if (!reserved) return fields;
+  return Object.fromEntries(
+    Object.entries(fields).filter(
+      ([key]) =>
+        key !== 'level' && key !== 'time' && key !== 'msg' && !(bindings && key === 'event'),
+    ),
+  );
+}
+
 function wrap(log: PinoLogger): Logger {
   // Sem campos, chama o pino só com a mensagem: evita alocar um objeto vazio por linha. Em nível
   // desabilitado o método do pino já é um no-op, então nada é serializado.
@@ -146,18 +162,27 @@ function wrap(log: PinoLogger): Logger {
     get level(): LogLevel {
       return log.level as LogLevel;
     },
-    trace: (message, fields) => (fields ? log.trace(fields, message) : log.trace(message)),
-    debug: (message, fields) => (fields ? log.debug(fields, message) : log.debug(message)),
-    info: (message, fields) => (fields ? log.info(fields, message) : log.info(message)),
-    warn: (message, fields) => (fields ? log.warn(fields, message) : log.warn(message)),
-    error: (message, fields) => (fields ? log.error(fields, message) : log.error(message)),
-    fatal: (message, fields) => (fields ? log.fatal(fields, message) : log.fatal(message)),
+    trace: (message, fields) =>
+      fields ? log.trace(withoutReserved(fields), message) : log.trace(message),
+    debug: (message, fields) =>
+      fields ? log.debug(withoutReserved(fields), message) : log.debug(message),
+    info: (message, fields) =>
+      fields ? log.info(withoutReserved(fields), message) : log.info(message),
+    warn: (message, fields) =>
+      fields ? log.warn(withoutReserved(fields), message) : log.warn(message),
+    error: (message, fields) =>
+      fields ? log.error(withoutReserved(fields), message) : log.error(message),
+    fatal: (message, fields) =>
+      fields ? log.fatal(withoutReserved(fields), message) : log.fatal(message),
     // O nível é checado antes: em nível desabilitado, nem o objeto com o `event` é alocado.
     event: (event, fields) => {
       if (log.isLevelEnabled(event.level))
-        log[event.level]({ ...fields, event: event.name }, event.message);
+        log[event.level](
+          { ...(fields && withoutReserved(fields)), event: event.name },
+          event.message,
+        );
     },
-    child: (bindings) => wrap(log.child(bindings)),
+    child: (bindings) => wrap(log.child(withoutReserved(bindings, true))),
   };
 }
 

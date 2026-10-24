@@ -53,7 +53,8 @@ ctx.log.event(ReportFailed, { chat, err });
 
 - **Nome:** `<área>.<coisa>.<verbo>` em kebab-case, com pelo menos dois segmentos
   (`command.timeout`, `plugin.reload.failed`). A área de um plugin é o nome dele. Nome fora da
-  regra faz o `defineLogEvent` lançar `TypeError`, no carregamento do módulo.
+  regra faz o `defineLogEvent` lançar `TypeError`, no carregamento do módulo. O mesmo vale para
+  um `level` fora de `trace`…`fatal` e para uma `message` vazia ou que não é texto.
 - **Nível fixo:** o mesmo `event` sai sempre no mesmo nível, então um alerta pode ser escrito só
   sobre o nome.
 - **Mensagem fixa:** texto em PT para quem lê, sem valores. O valor vai em campo: `command=imagem`,
@@ -61,6 +62,9 @@ ctx.log.event(ReportFailed, { chat, err });
   cabe na mensagem.
 - **`event` é reservado:** um campo `event` passado nos campos é sobrescrito pelo nome. Para o nome
   de um evento do barramento ou do transport, use `eventName`.
+- **`level`, `time` e `msg` também:** são do pino. Se vierem nos campos (de `log.event` ou dos
+  métodos por nível), são descartados, para a linha não ter chave duplicada nem um `level`
+  trocado, que é rótulo de stream no Loki.
 - Em nível desabilitado, `log.event` volta antes de ler os campos.
 
 O nome é contrato com quem filtra e alerta: evento novo é minor, renomear ou remover quebra. Os
@@ -137,7 +141,8 @@ pluginLog.child({ chat: message.chat.id }).event(ForecastSent, { cidade });
 // {"level":"info",...,"plugin":"clima","chat":"grupo-1","cidade":"Recife","event":"clima.forecast.sent",...}
 ```
 
-O filho herda nível, destino e redação do pai. Repetir uma chave num filho (`child({ chat })`
+As chaves `event`, `level`, `time` e `msg` nos bindings do `child` são descartadas. O filho herda
+nível, destino e redação do pai. Repetir uma chave num filho (`child({ chat })`
 sobre um logger que já tem `chat`) gera a chave duas vezes na linha; leitores de JSON ficam com a
 última. Crie o filho a partir do logger do plugin, não do filho de outro chat.
 
@@ -187,8 +192,9 @@ curto não protege nada de qualquer forma.
 
 ## Logger próprio
 
-`config.logger` aceita qualquer objeto com a interface `Logger`, que inclui o `event`. Quem
-embrulha outro logger repassa assim:
+`config.logger` aceita qualquer objeto com a interface `Logger`, que inclui o `event`. O bot chama
+o `event` do seu logger (o sinal `log` dos observadores sai à parte, depois). Quem embrulha outro
+logger repassa assim:
 
 ```ts
 event: (event, fields) => inner[event.level](event.message, { ...fields, event: event.name }),
@@ -227,7 +233,9 @@ muda).
   ruído constante, e o `event` é para o agregador.
 - O `err` sai nas linhas seguintes, recuado: a stack e, em seguida, a de cada `causa`. Um erro
   sob outra chave sai ali também, prefixado com o nome do campo (`error: Error: ...`). Texto de
-  várias linhas, como a tabela de boot no campo `report`, também.
+  várias linhas também: a tabela de boot no campo `report` sai sem rótulo; qualquer outro campo
+  com `\n` sai com `campo:` antes do bloco. Caracteres de controle (exceto `\n`) viram `\u00XX`,
+  para um valor não injetar ANSI no terminal.
 - Colorido só no stdout de um terminal; `NO_COLOR` desliga. Com `destination` próprio, texto puro.
 - A conversão roda sobre a linha JSON já censurada: `secrets` e `redact` valem igual.
 

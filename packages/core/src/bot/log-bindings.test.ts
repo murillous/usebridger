@@ -1,6 +1,7 @@
 // ADR 0118: bindings base em toda linha do bot.
 
 import { afterEach, describe, expect, it } from 'vitest';
+import { BotConfigError } from '#config/owners.ts';
 import { createLogger, type LogDestination } from '#logger/logger.ts';
 import { definePlugin } from '#plugin/define.ts';
 import { type Bot, type BotConfig, createBot } from './bot.ts';
@@ -78,5 +79,13 @@ describe('bindings base do log (ADR 0118)', () => {
       plugin: 'eco',
     });
     expect(Object.keys(ready ?? {}).slice(0, 4)).toEqual(['level', 'time', 'bot', 'service']);
+  });
+});
+
+describe('logBindings reservados (ADR 0118)', () => {
+  it.each(['bot', 'event', 'level', 'time', 'msg'])('recusa a chave "%s"', (key) => {
+    expect(() =>
+      createBot({ transport: new RecordingTransport(), env: {}, logBindings: { [key]: 'x' } }),
+    ).toThrow(BotConfigError);
   });
 });

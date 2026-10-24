@@ -45,7 +45,7 @@ cada linha seguem o [dicionário do logger](logger.md#campos).
 | `middleware.late-rejection` | `error` | middleware rejeitou depois do prazo |
 | `message.react.skipped` | `debug` | react ignorado: o transport não tem a capability "reactions" |
 | `outbound.typing.failed` | `debug` | falha ao enviar "digitando" |
-| `context.expired` | `warn` | operação recusada: o contexto já expirou |
+| `context.expired` | `warn` | operação recusada: o contexto já expirou; `context` diz qual (`command`, `step`, `expire`, `listener`, `plugin`) |
 | `command.timeout` | `error` | comando rejeitou depois do prazo |
 | `command.background.failed` | `error` | falha ao concluir o comando em segundo plano |
 | `command.refusal.failed` | `warn` | falha ao enviar a recusa do comando |
@@ -74,7 +74,7 @@ cada linha seguem o [dicionário do logger](logger.md#campos).
 | `plugin.disabled` | `info` | plugin desligado |
 | `plugin.enabled` | `info` | plugin ligado |
 | `plugin.dependency.exact-range` | `warn` | faixa de dependência aceita só uma versão exata; para acompanhar o 0.x da dependência, use "0.x" ou ">=0.0.0 <1.0.0" |
-| `plugin.dependency.optional-mismatch` | `warn` | optionalDependsOn não aceita a versão carregada; o plugin sobe e o serviço dela segue visível |
+| `plugin.dependency.optional-mismatch` | `warn` | optionalDependsOn não aceita a versão carregada (campo `loaded`); o plugin sobe e o serviço dela segue visível |
 | `plugin.disabled.unknown` | `warn` | disabledPlugins cita um plugin que não existe |
 | `plugin.admin.unknown` | `warn` | adminPlugins cita um plugin que não existe |
 | `config.plugin.unknown` | `warn` | pluginConfig cita um plugin que não existe |

@@ -43,6 +43,7 @@ import {
   callConnect,
   isBootConflict,
   resolveTransport,
+  validateLogBindings,
   validateSession,
 } from './bot-setup.ts';
 import type { Bot, BotConfig, BotState, BotStats } from './config.ts';
@@ -102,6 +103,7 @@ const TRANSPORT_ROUTE_OWNER = '$transport';
  */
 export function createBot(config: BotConfig): Bot {
   const session = validateSession(config.session ?? DEFAULT_SESSION);
+  validateLogBindings(config.logBindings);
   // Todo o estado vive neste closure (ADR 0003): duas instâncias nunca se enxergam.
   const hooks: RegisteredStopHook[] = [];
   let state: BotState = 'idle';
@@ -514,7 +516,8 @@ export function createBot(config: BotConfig): Bot {
   async function runStart(): Promise<void> {
     try {
       // Bindings base em toda linha (ADR 0118): `bot` é a sessão; o app acrescenta `service`,
-      // `version` e `env`. Valem também sobre o logger próprio do app.
+      // `version` e `env`. Valem também sobre o logger próprio do app. O `createBot` já recusou
+      // `bot` em `logBindings`, então o spread não o sobrescreve.
       log = logTap
         .wrap(
           config.logger ??

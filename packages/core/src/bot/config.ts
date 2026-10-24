@@ -144,6 +144,7 @@ export interface BotConfig {
   /**
    * Campos em toda linha de log do bot (ADR 0118), além do `bot` (a `session`), que o bot põe
    * sozinho. Para o agregador saber de onde veio a linha: `{ service: 'lumabot', version, env }`.
+   * `bot`, `event`, `level`, `time` e `msg` são reservados: o `createBot` lança `BotConfigError`.
    * O core não lê variável de ambiente nem o `package.json` do app: quem sabe é o app.
    */
   readonly logBindings?: LogFields;

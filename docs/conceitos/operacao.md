@@ -85,7 +85,7 @@ ctx.observe('outbound.sent', (s) => {
   // s.replyTo: id da mensagem respondida, só nas respostas por ctx.reply
 });
 ctx.observe('log', (s) => {
-  // s.level, s.time (Date.now()), s.message, s.fields (campos + bindings: plugin, chatId...)
+  // s.level, s.time (Date.now()), s.message, s.fields (campos + bindings: plugin, chat...)
 });
 ```
 

@@ -268,7 +268,7 @@ describe('services por comando (ADR 0095)', () => {
           plugin: 'download',
           dependency: 'sticker',
           range: '^2.0.0',
-          version: '1.0.0',
+          loaded: '1.0.0',
         }),
       }),
     );

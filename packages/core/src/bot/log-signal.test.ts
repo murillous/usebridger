@@ -10,7 +10,7 @@ import type { LogSignal } from '#observers/observers.ts';
 import { definePlugin } from '#plugin/define.ts';
 import type { PluginContext } from '#plugin/types.ts';
 import { type Bot, type BotConfig, createBot } from './bot.ts';
-import { RecordingTransport, recordingLogger } from './harness.test-support.ts';
+import { message, RecordingTransport, recordingLogger } from './harness.test-support.ts';
 
 const bots: Bot[] = [];
 
@@ -362,5 +362,24 @@ describe('ctx.observe("log") (ADR 0105)', () => {
     // O `eco` vence antes: o loop que o dispara rearma o timer do `aviso`.
     ctx.log.info('gatilho');
     await vi.waitFor(() => expect(lines.map((l) => l.message)).toContain('aviso disparou'));
+  });
+
+  it('o log de um listener de mensagem leva `chat` e não `chatId`', async () => {
+    const lines: LogSignal[] = [];
+    const transport = new RecordingTransport();
+    await startBot(
+      (ctx) => {
+        ctx.observe('log', (signal) => lines.push(signal));
+        ctx.events.on('message', (c) => {
+          c.log.warn('x');
+        });
+      },
+      { transport },
+    );
+    transport.emit('message', message('oi'));
+    await vi.waitFor(() => expect(lines.some((l) => l.message === 'x')).toBe(true));
+    const line = lines.find((l) => l.message === 'x');
+    expect(line?.fields['chat']).toBe('chat@test');
+    expect(line?.fields).not.toHaveProperty('chatId');
   });
 });

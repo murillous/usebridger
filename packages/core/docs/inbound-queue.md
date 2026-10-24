@@ -11,7 +11,7 @@ Peça interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-bibli
 import { InboundQueue } from '#queue/inbound.ts';
 
 const queue = new InboundQueue({
-  onError: (error, chatId) => logger.error({ err: error, chatId }, 'falha ao processar mensagem'),
+  onError: (error, chat) => log.event(LOG.messageFailed, { chat, err: error }),
   maxPendingPerChat: 100, // padrão
 });
 
@@ -22,7 +22,7 @@ transport.onMessage((message) => {
 ```
 
 No `Bot`, cada evento `message` do transport vira uma tarefa no chat dele, a fila é configurada
-por `createBot({ inbound })`, o erro de uma tarefa vai para o log com o `chatId` e o `stop()` a
+por `createBot({ inbound })`, o erro de uma tarefa vai para o log com o `chat` e o `stop()` a
 fecha e drena antes do teardown dos plugins ([Bot](bot.md#fluxo-de-uma-mensagem)).
 
 ## Ordem e paralelismo

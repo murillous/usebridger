@@ -254,6 +254,41 @@ describe('createLogger: formato e eventos (ADR 0118)', () => {
   });
 });
 
+describe('createLogger: chaves reservadas', () => {
+  const count = (raw: string, key: string): number => raw.split(`"${key}":`).length - 1;
+
+  it('log.event descarta level, time e msg dos campos: cada chave aparece uma vez', () => {
+    const { log, raw, lines } = capture();
+    log.event(TIMEOUT, { level: 'fake', time: 'x', msg: 'y', chat: 'c1' });
+    const line = raw[0] as string;
+    for (const key of ['level', 'time', 'msg', 'event']) expect(count(line, key)).toBe(1);
+    expect(lines()[0]).toMatchObject({ level: 'error', msg: TIMEOUT.message, chat: 'c1' });
+  });
+
+  it('os métodos por nível também descartam level, time e msg', () => {
+    const { log, raw, lines } = capture();
+    log.warn('aviso', { level: 'fake', time: 'x', msg: 'y', chat: 'c1' });
+    const line = raw[0] as string;
+    for (const key of ['level', 'time', 'msg']) expect(count(line, key)).toBe(1);
+    expect(lines()[0]).toMatchObject({ level: 'warn', msg: 'aviso', chat: 'c1' });
+  });
+
+  it('child descarta event, level, time e msg dos bindings', () => {
+    const { log, raw, lines } = capture();
+    log.child({ event: 'x', level: 'fake', time: 't', msg: 'y', chat: 'c1' }).event(TIMEOUT);
+    const line = raw[0] as string;
+    for (const key of ['level', 'time', 'msg', 'event']) expect(count(line, key)).toBe(1);
+    expect(lines()[0]).toMatchObject({ level: 'error', event: 'command.timeout', chat: 'c1' });
+  });
+
+  it('bindings do createLogger também descartam level: a chave aparece uma vez', () => {
+    const { log, raw } = capture({ bindings: { level: 'x', app: 'bot' } });
+    log.info('oi');
+    expect(count(raw[0] as string, 'level')).toBe(1);
+    expect(JSON.parse(raw[0] as string)).toMatchObject({ level: 'info', app: 'bot' });
+  });
+});
+
 describe('createNoopLogger', () => {
   it('descarta tudo e devolve a si mesmo como filho', () => {
     const log = createNoopLogger();

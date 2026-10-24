@@ -158,6 +158,23 @@ describe('defineTransport', () => {
     );
   });
 
+  it('handler que lança vira transport.handler.failed com eventName e err', () => {
+    const log = recordingLogger();
+    const { transport, kit } = echo({}, log);
+    const boom = new Error('boom');
+    transport.on('connection.qr', () => {
+      throw boom;
+    });
+
+    kit.emit('connection.qr', { qr: 'x' });
+    const line = log.lines.find((l) => l.fields['event'] === 'transport.handler.failed');
+    expect(line?.fields).toMatchObject({
+      event: 'transport.handler.failed',
+      eventName: 'connection.qr',
+      err: boom,
+    });
+  });
+
   it.each([
     [
       'capability desconhecida',
