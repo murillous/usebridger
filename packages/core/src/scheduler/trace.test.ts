@@ -42,13 +42,16 @@ describe('scheduler e trace', () => {
       },
     };
     const seen: (string | undefined)[] = [];
-    const svc = createSchedulerService({
-      storage: flaky,
-      onError: () => undefined,
-      onStorageError: () => seen.push(currentTrace()),
-      jobTimeoutMs: 1000,
-      storageRetryMs: 1000,
-    });
+    // Serviço criado dentro de outro trace: sem `outsideTrace`, o loop herdaria o 'b'.
+    const svc = runInTrace('b'.repeat(32), () =>
+      createSchedulerService({
+        storage: flaky,
+        onError: () => undefined,
+        onStorageError: () => seen.push(currentTrace()),
+        jobTimeoutMs: 1000,
+        storageRetryMs: 1000,
+      }),
+    );
     service = svc;
     svc.forPlugin('p').on('j', () => undefined);
     svc.start();

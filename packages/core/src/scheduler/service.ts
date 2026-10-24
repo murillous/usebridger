@@ -278,8 +278,9 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
       return;
     }
     disarm();
-    loop = outsideTrace(() =>
-      detached(async () => {
+    // `detached` restaura o store do trace, então o `outsideTrace` vai por dentro dele.
+    loop = detached(() =>
+      outsideTrace(async () => {
         do {
           rerun = false;
           await tick();

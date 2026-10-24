@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createNoopLogger } from '#logger/logger.ts';
-import { createHttp, type SessionHttp, sessionHttp } from './server.ts';
+import { createHttp, type SessionHttp, sessionHttp, withTraceparent } from './server.ts';
 
 const attached: SessionHttp[] = [];
 const ID = '4bf92f3577b34da6a3ce929d0e0e4736';
@@ -42,13 +42,29 @@ describe('traceparent da resposta', () => {
     expect(response.headers.get('traceparent')).toMatch(/^00-[0-9a-f]{32}-/);
   });
 
-  it('Response.error() não derruba o servidor', async () => {
-    const url = await serve(() => Response.error());
-    // O servidor segue de pé: o fetch resolve, nunca cai num 500 do próprio traceparent.
-    const first = await fetch(url);
-    const second = await fetch(url);
-    expect(typeof first.status).toBe('number');
-    expect(typeof second.status).toBe('number');
+  it('withTraceparent: mutável, imutável e irreparável', () => {
+    const mutable = new Response('x');
+    expect(withTraceparent(mutable, ID)).toBe(mutable);
+    expect(mutable.headers.get('traceparent')).toMatch(/^00-[0-9a-f]{32}-/);
+
+    // Response.redirect tem headers mutáveis no Node; simula o `immutable` de um `fetch` repassado.
+    const redirect = Response.redirect('http://127.0.0.1/d', 302);
+    Object.defineProperty(redirect, 'headers', {
+      value: {
+        set: () => {
+          throw new TypeError('immutable');
+        },
+        [Symbol.iterator]: () => [][Symbol.iterator](),
+      },
+    });
+    const copy = withTraceparent(redirect, ID, '00');
+    expect(copy).not.toBe(redirect);
+    expect(copy.status).toBe(302);
+    expect(copy.headers.get('traceparent')).toMatch(/-00$/);
+
+    const error = Response.error();
+    expect(withTraceparent(error, ID)).toBe(error);
+    expect(error.status).toBe(0);
   });
 
   it('recusa traceparent com maiúsculas e gera outro trace', async () => {

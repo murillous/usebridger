@@ -453,7 +453,8 @@ function mount(app: Hono, entry: RouteEntry, upgradeWebSocket: typeof UpgradeWeb
 // O `Response` do handler pode ter headers imutáveis (`fetch`, `Response.redirect`): tenta o `set`
 // direto e só então copia, com o corpo seguindo como stream. Se nem a cópia vale (`Response.error()`
 // tem status 0 e o construtor recusa), devolve a resposta original, sem o header.
-function withTraceparent(response: Response, trace: string, flags?: string): Response {
+// Exportada só para o teste dos três ramos; fora do índice do pacote.
+export function withTraceparent(response: Response, trace: string, flags?: string): Response {
   const value = formatTraceparent(trace, flags);
   try {
     response.headers.set('traceparent', value);
@@ -462,6 +463,8 @@ function withTraceparent(response: Response, trace: string, flags?: string): Res
     // Headers imutáveis: segue para a cópia abaixo.
     void 0;
   }
+  // O `Response` do node-server não recusa o status 0 e viraria um 200: o erro de rede fica como está.
+  if (response.type === 'error') return response;
   try {
     const headers = new Headers(response.headers);
     headers.set('traceparent', value);
