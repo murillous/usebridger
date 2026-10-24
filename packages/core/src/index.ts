@@ -105,6 +105,8 @@ export type {
 } from '#http/types.ts';
 export { defineLogEvent } from '#logger/define-event.ts';
 export { createLogger, type LogDestination, type LoggerOptions } from '#logger/logger.ts';
+export { isPersonalId, redactPersonalIds } from '#logger/personal-id.ts';
+export type { Pseudonym, PseudonymKind } from '#logger/pseudonym.ts';
 export { createSecretSet, type SecretSet, type SecretSource } from '#logger/secrets.ts';
 export type {
   EmitLevel,

@@ -38,6 +38,7 @@ import type { Groups } from '#groups/groups.ts';
 import type { SessionHttp } from '#http/server.ts';
 import type { HttpRoutes } from '#http/types.ts';
 import * as LOG from '#logger/events.ts';
+import type { Pseudonym } from '#logger/pseudonym.ts';
 import { createRedactor } from '#logger/redact.ts';
 import type { SecretSource } from '#logger/secrets.ts';
 import type { Logger } from '#logger/types.ts';
@@ -122,6 +123,8 @@ export interface PluginContextDeps {
   /** Observadores do bot; os do plugin saem no `dispose` (ADR 0102). */
   readonly observers: Observers;
   readonly unsafe: UnsafeAccess;
+  /** Pseudônimo estável de ids para logs (ADR 0119). */
+  readonly pseudonym: Pseudonym;
   /** Plugins que recebem `ctx.admin` (ADR 0107) e o controle que ele entrega. */
   readonly adminPlugins: ReadonlySet<string>;
   readonly admin: PluginAdmin;
@@ -211,11 +214,11 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
     // `{prefix}` lido a cada chamada: um `ctx.prefixes.set` vale já para a mensagem seguinte.
     const text: PluginText = (message, key, values) =>
       formatMessage(messages, key, values, deps.prefixes.get(message.chat));
-    const commandViews = commandViewFactory(name, log, expect, text);
-    const listenerView = listenerViewFactory(name, log, expect, text);
-    const stepView = stepViewFactory(name, log, expect, text);
-    const expireView = expireViewFactory(name, log, expect, text);
-    const roleView = roleViewFactory(log);
+    const commandViews = commandViewFactory(name, log, expect, text, deps.pseudonym);
+    const listenerView = listenerViewFactory(name, log, expect, text, deps.pseudonym);
+    const stepView = stepViewFactory(name, log, expect, text, deps.pseudonym);
+    const expireView = expireViewFactory(name, log, expect, text, deps.pseudonym);
+    const roleView = roleViewFactory(log, deps.pseudonym);
     // Nos eventos de mensagem, cada listener recebe a visão com `message`/`text`/`reply`/`log`
     // do plugin; o barramento a cria (uma por listener) e pendura nela o `Deadline`.
     const events = deps.bus.forPlugin(name, {
@@ -373,6 +376,7 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         return deps.observers.add(name, signal, observer);
       },
       unsafe: deps.unsafe.forPlugin(plugin),
+      pseudonym: deps.pseudonym,
       admin: deps.adminPlugins.has(name) ? liveAdmin(name, deps.admin, live, redact) : undefined,
     };
 

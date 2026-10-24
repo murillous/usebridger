@@ -11,6 +11,7 @@ import type {
 import { ContextExpiredError, DEADLINE, type Deadline, deadlineOf } from '#deadline.ts';
 import type { MessageListenerFields } from '#events/types.ts';
 import * as LOG from '#logger/events.ts';
+import type { Pseudonym } from '#logger/pseudonym.ts';
 import type { LogFields, Logger } from '#logger/types.ts';
 import type { Message } from '#message/types.ts';
 import type { SanitizedContext, SanitizedFields } from '#middleware/sanitize.ts';
@@ -29,6 +30,8 @@ export interface MessageContextDeps {
   readonly reactions: boolean;
   /** Logger raiz; o contexto cria o filho com `chat` sob demanda. */
   readonly log: () => Logger;
+  /** Pseudônimo dos ids no `chat`/`sender` do log da mensagem (ADR 0119); sem ele, ids crus. */
+  readonly pseudonym?: Pseudonym;
   /**
    * Resolve as ações do `reply` (ADR 0058) em nome do plugin dono do contexto, ou de ninguém
    * (`null`) no contexto do kernel, que os middlewares veem.
@@ -49,6 +52,19 @@ interface State {
 /** O contexto concreto: o de mensagem do bot com o resultado do `sanitize`. */
 export interface KernelMessageContext extends BotMessageContext, SanitizedContext {
   text: string | null;
+}
+
+/** Bindings `chat` e `sender` do log da mensagem: pseudônimos, com o tipo vindo do `isGroup`. */
+function messageBindings(
+  pseudonym: Pseudonym | undefined,
+  chat: Message['chat'],
+  sender: Message['sender'],
+): LogFields {
+  if (pseudonym === undefined) return { chat: chat.id, sender: sender.id };
+  return {
+    chat: pseudonym(chat.id, chat.isGroup ? 'group' : 'user'),
+    sender: pseudonym(sender.id),
+  };
 }
 
 /** Cria o contexto de uma mensagem; `reply` e `log` só existem quando lidos. */
@@ -80,7 +96,9 @@ class MessageContextImpl implements KernelMessageContext {
 
   get log(): Logger {
     const state = this[STATE];
-    state.log ??= state.deps.log().child({ chat: this.message.chat.id });
+    state.log ??= state.deps
+      .log()
+      .child(messageBindings(state.deps.pseudonym, this.message.chat, this.message.sender));
     return state.log;
   }
 
@@ -139,11 +157,13 @@ export function messageExtras(ctx: KernelMessageContext): WithKernelContext {
  * Descritores do `log` de um plugin: filho do logger do plugin com o `chat` da mensagem, criado
  * no primeiro acesso e fixado no próprio objeto. Calculados uma vez por plugin.
  */
-function pluginLogDescriptor(pluginLog: Logger): PropertyDescriptor {
+function pluginLogDescriptor(pluginLog: Logger, pseudonym?: Pseudonym): PropertyDescriptor {
   return {
     configurable: true,
     get(this: { readonly message: Message }): Logger {
-      const log = pluginLog.child({ chat: this.message.chat.id });
+      const log = pluginLog.child(
+        messageBindings(pseudonym, this.message.chat, this.message.sender),
+      );
       Object.defineProperty(this, 'log', { value: log });
       return log;
     },
@@ -345,9 +365,10 @@ function executionDescriptors<V extends ExpiringView & { readonly message: Messa
   expect: PluginExpect,
   text: PluginText,
   scope: Scope<V>,
+  pseudonym?: Pseudonym,
 ): PropertyDescriptorMap {
   return {
-    log: pluginLogDescriptor(pluginLog),
+    log: pluginLogDescriptor(pluginLog, pseudonym),
     t: textDescriptor(text),
     signal: signalDescriptor,
     reply: expiringReplyDescriptor<V>(
@@ -376,13 +397,21 @@ export function commandViewFactory(
   pluginLog: Logger,
   expect: PluginExpect,
   text: PluginText,
+  pseudonym?: Pseudonym,
 ): CommandViews {
   type View = ExpiringView & { readonly command: string; readonly message: Message };
   const scope: Scope<View> = (view) => ({
     label: `comando "${view.command}"`,
     fields: { command: view.command, context: 'command' },
   });
-  const runDescriptors = executionDescriptors<View>(plugin, pluginLog, expect, text, scope);
+  const runDescriptors = executionDescriptors<View>(
+    plugin,
+    pluginLog,
+    expect,
+    text,
+    scope,
+    pseudonym,
+  );
   return {
     run(ctx, deadline) {
       const view = Object.create(ctx, runDescriptors) as { [DEADLINE]?: Deadline };
@@ -401,13 +430,14 @@ export function stepViewFactory(
   pluginLog: Logger,
   expect: PluginExpect,
   text: PluginText,
+  pseudonym?: Pseudonym,
 ): <C extends object>(ctx: C, deadline: Deadline, step: string, data: JsonValue) => C {
   type View = ExpiringView & { readonly step: string; readonly message: Message };
   const scope: Scope<View> = (view) => ({
     label: `passo "${view.step}"`,
     fields: { step: view.step, context: 'step' },
   });
-  const descriptors = executionDescriptors<View>(plugin, pluginLog, expect, text, scope);
+  const descriptors = executionDescriptors<View>(plugin, pluginLog, expect, text, scope, pseudonym);
   return (ctx, deadline, step, data) => {
     const view = Object.create(ctx, descriptors) as { [DEADLINE]?: Deadline };
     Object.assign(view, { step, data });
@@ -422,9 +452,10 @@ export function stepViewFactory(
  */
 export function roleViewFactory(
   pluginLog: Logger,
+  pseudonym?: Pseudonym,
 ): <C extends object>(ctx: C, deadline: Deadline) => C {
   const descriptors: PropertyDescriptorMap = {
-    log: pluginLogDescriptor(pluginLog),
+    log: pluginLogDescriptor(pluginLog, pseudonym),
     signal: signalDescriptor,
   };
   return (ctx, deadline) => {
@@ -445,6 +476,7 @@ export function listenerViewFactory(
   pluginLog: Logger,
   expect: PluginExpect,
   text: PluginText,
+  pseudonym?: Pseudonym,
 ): <C extends object>(ctx: C) => C {
   type View = Partial<WithKernelContext> &
     ExpiringView & {
@@ -479,7 +511,7 @@ export function listenerViewFactory(
     ),
     react: expiringReactDescriptor<View>(plugin, kernel, scope),
     expectReply: expectReplyDescriptor<View>(plugin, expect, scope),
-    log: pluginLogDescriptor(pluginLog),
+    log: pluginLogDescriptor(pluginLog, pseudonym),
     t: textDescriptor(text),
   } satisfies Record<keyof MessageListenerFields, PropertyDescriptor>;
   return (ctx) => Object.create(ctx, descriptors);
@@ -519,10 +551,11 @@ export function expireViewFactory(
   pluginLog: Logger,
   expect: PluginExpect,
   text: PluginText,
+  pseudonym?: Pseudonym,
 ): (origin: ExpireOrigin, deadline: Deadline, step: string, data: JsonValue) => ExpireContext {
   return (origin, deadline, step, data) => {
     const { chat, sender } = origin;
-    const log = pluginLog.child({ chat: chat.id });
+    const log = pluginLog.child(messageBindings(pseudonym, chat, sender));
     const label = `onExpire do passo "${step}"`;
     const fields: LogFields = { step, context: 'expire' };
     const refuse = refuser(plugin, { log }, deadline, () => ({ label, fields }));

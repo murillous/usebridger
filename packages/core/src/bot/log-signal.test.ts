@@ -379,7 +379,7 @@ describe('ctx.observe("log") (ADR 0105)', () => {
     transport.emit('message', message('oi'));
     await vi.waitFor(() => expect(lines.some((l) => l.message === 'x')).toBe(true));
     const line = lines.find((l) => l.message === 'x');
-    expect(line?.fields['chat']).toBe('chat@test');
+    expect(line?.fields['chat']).toMatch(/^u_[\w-]{22}$/);
     expect(line?.fields).not.toHaveProperty('chatId');
   });
 });

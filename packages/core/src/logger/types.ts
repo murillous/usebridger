@@ -25,9 +25,9 @@ export interface StandardLogFields {
   readonly env?: string;
   readonly plugin?: string;
   readonly transport?: string;
-  /** Id do chat. */
+  /** Pseudônimo do chat (o logger do bot troca o id; ADR 0119). */
   readonly chat?: string;
-  /** Id de quem enviou a mensagem. */
+  /** Pseudônimo de quem enviou a mensagem (ADR 0119). */
   readonly sender?: string;
   readonly messageId?: string;
   readonly command?: string;

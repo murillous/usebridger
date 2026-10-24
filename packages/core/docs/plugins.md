@@ -408,6 +408,7 @@ setup(ctx) {
 | `ctx.send.typing(chatId, kind)` | "digitando" (`text`) ou "gravando áudio" (`voice`) | `typing` | sim |
 | `ctx.groups.metadata(groupId)` | nome (`title`), descrição, participantes (se a plataforma lista) | `groups` | não (leitura) |
 | `ctx.groups.updateParticipants(groupId, ids, action)` | add, remove, promote, demote | `groups.add`, `groups.remove` ou `groups.promote` (também para `demote`) | sim |
+| `ctx.pseudonym(id, kind?)` | pseudônimo estável do id (`u_…`, ou `g_…` com `'group'`) para logar sem expor o id ([logger](logger.md#pseudônimo-do-usuário)) | — | — |
 | `ctx.commands.list()` | comandos de todos os plugins (`plugin`, `name`, `aliases`, `description`, `role`) | — | — |
 | `ctx.commands.list({ for: message })` | só os que o remetente passa no papel ([commands.md](commands.md#comandos-que-o-remetente-pode-rodar)); `Promise` | — | — |
 | `ctx.self` | contato da sessão; `null` até a primeira conexão | — | — |

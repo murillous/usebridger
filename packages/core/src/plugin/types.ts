@@ -19,6 +19,7 @@ import type { Conversations } from '#conversations/conversations.ts';
 import type { BotEventName, EventSubscriber, ListenerContext } from '#events/types.ts';
 import type { Groups } from '#groups/groups.ts';
 import type { HttpRoutes } from '#http/types.ts';
+import type { PseudonymKind } from '#logger/pseudonym.ts';
 import type { Logger } from '#logger/types.ts';
 import type { Contact, Message } from '#message/types.ts';
 import type { Observer, ObserverSignalName } from '#observers/observers.ts';
@@ -74,6 +75,11 @@ export interface PluginContext<
   readonly config: TConfig;
   /** Logger com `plugin` no contexto (M1-14). */
   readonly log: Logger;
+  /**
+   * Pseudônimo estável de um id de chat ou usuário (`u_…`, ou `g_…` com `'group'`), para o
+   * plugin logar ou rotular algo do usuário sem expor o id (ADR 0119). Só vai do id ao pseudônimo.
+   */
+  pseudonym(id: string, kind?: PseudonymKind): string;
   /**
    * Aborta quando o contexto é descartado: no `teardown`/reload, ou quando o `setup` falha ou
    * estoura o prazo (`reason` = o erro do `setup`). Repasse ao trabalho de fundo do plugin

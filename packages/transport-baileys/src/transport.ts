@@ -465,7 +465,8 @@ export class BaileysTransport implements Transport {
   #pnForLid(socket: BaileysSocket, lid: string): Promise<string | null> {
     return socket.signalRepository.lidMapping.getPNForLID(lid).catch((error: unknown) => {
       // Sem o par, o contato segue com `phone: null`: os papéis falham fechados (ADR 0042).
-      this.#log.event(LOG.lidResolveFailed, { err: error, lid });
+      // Sem o `lid` nos campos: é id pessoal e o transport não pseudonimiza (ADR 0119).
+      this.#log.event(LOG.lidResolveFailed, { err: error });
       return null;
     });
   }

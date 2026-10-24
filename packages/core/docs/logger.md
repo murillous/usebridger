@@ -86,8 +86,8 @@ O mesmo nome para a mesma coisa em core, transports e plugins (`StandardLogField
 | `bot` | `string` | Sessão do bot; posto pelo bot |
 | `plugin` | `string` | Plugin que logou (binding do `ctx.log`) |
 | `transport` | `string` | Transport (binding do logger do transport) |
-| `chat` | `string` | Id do chat (binding do `log` por mensagem) |
-| `sender` | `string` | Id de quem mandou a mensagem |
+| `chat` | `string` | Pseudônimo do chat (binding do `log` por mensagem; ver [Pseudônimo](#pseudônimo-do-usuário)) |
+| `sender` | `string` | Pseudônimo de quem mandou a mensagem |
 | `messageId` | `string` | Id da mensagem |
 | `command` | `string` | Nome do comando |
 | `step` | `string` | Passo de conversa |
@@ -145,6 +145,37 @@ As chaves `event`, `level`, `time` e `msg` nos bindings do `child` são descarta
 nível, destino e redação do pai. Repetir uma chave num filho (`child({ chat })`
 sobre um logger que já tem `chat`) gera a chave duas vezes na linha; leitores de JSON ficam com a
 última. Crie o filho a partir do logger do plugin, não do filho de outro chat.
+
+## Pseudônimo do usuário
+
+Os logs não carregam telefone nem JID ([ADR 0119](../../../docs/adr/0119-pseudonimo-estavel-nos-logs.md)).
+O logger do bot troca os campos `chat` e `sender`, em chamadas e em `child`, por um **pseudônimo
+estável**: `u_` (usuário) ou `g_` (grupo) + 22 caracteres base64url do HMAC-SHA256 do id. A chave
+é derivada por HKDF da `BRIDGER_SECRET_KEY` (a mesma dos [segredos](config.md)); o mesmo id dá o
+mesmo pseudônimo entre restarts, e ids diferentes dão pseudônimos diferentes.
+
+- **Trocar a `BRIDGER_SECRET_KEY` muda todos os pseudônimos**: o histórico antigo no Loki não casa
+  com os novos. Sem a chave, os pseudônimos valem só até o restart e o bot loga
+  `bot.pseudonym.ephemeral`.
+- **No plugin:** `ctx.pseudonym(id)` (o tipo vem do formato do id: `@g.us` é grupo; force com `ctx.pseudonym(id, 'group')`) devolve o mesmo valor que o
+  core põe em `chat`/`sender`. Use-o para logar ou rotular algo do usuário sem expor o id.
+- **Achar um usuário:** o comando `bridger-pseudonym <id>` (instalado com `@usebridger/core`) calcula
+  o pseudônimo com a `BRIDGER_SECRET_KEY` do ambiente; `--group` para grupo. Passe o id por inteiro,
+  como o transport o usa (`5565999998888@s.whatsapp.net`, `123@lid`):
+
+  ```sh
+  BRIDGER_SECRET_KEY=… npx bridger-pseudonym 5565999998888@s.whatsapp.net
+  # u_rUSbV8Bla-rDWdpH0FuuNw
+  ```
+
+  A conversão é só do id ao pseudônimo; ele não volta a telefone.
+- **Redação de reserva:** o `createLogger` troca por `[REDACTED]` qualquer JID (`@s.whatsapp.net`,
+  `@g.us`, `@lid`) e telefone (10 a 15 dígitos, com sufixo de device `.0`/`_1.0`) que escape em campo,
+  mensagem ou `err`; o sinal `log` dos observadores recebe a mesma redação.
+  `isPersonalId(valor)` e `redactPersonalIds(texto)` expõem o reconhecedor. É heurística de formato:
+  um número longo que não é telefone, dentro de texto, também é trocado, e um id opaco fora desses
+  formatos passa. Um `config.logger` próprio do app recebe `chat`/`sender` pseudonimizados, mas não
+  essa redação.
 
 ## Erros
 
