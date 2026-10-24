@@ -41,7 +41,7 @@ Os eventos mais usados:
 | `group.joined` / `group.left` | O bot entrou ou saiu de um grupo | `{ chat }` |
 | `group.participants` | Entrou, saiu, virou admin | `{ chat, action, participants, actor }` |
 | `command` | Um comando rodou (só observação, sem `reply`) | `{ plugin, name, invokedAs, status, message }` |
-| `plugin.error` | Um handler de algum plugin falhou | `{ plugin, phase, event, error, timedOut }` |
+| `plugin.error` | Um handler de algum plugin falhou | `{ plugin, phase, event, error, timedOut, trace? }` |
 
 A lista completa está em [Eventos](../../packages/core/docs/events.md#eventos).
 

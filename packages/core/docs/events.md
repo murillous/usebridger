@@ -92,7 +92,7 @@ nenhum prazo resolve isso.
 | `connection.status` / `connection.qr` | `ConnectionStatus` / `{ qr }` |
 | `connection.pairing-code` | `{ code }` (pareamento por código, ADR 0046) |
 | `command` | `CommandEvent`: `{ plugin, name, invokedAs, status, message }` ([abaixo](#comandos-command)) |
-| `plugin.error` | `PluginErrorEvent`: `{ plugin, phase, event, error, timedOut }`; `phase` é `listener`, `command`, `step` (passo de conversa), `role`, `setup`, `teardown`, `scheduler` ou `http` (rota ou WebSocket do plugin; `event` é a rota, como `'POST /webhook'`) |
+| `plugin.error` | `PluginErrorEvent`: `{ plugin, phase, event, error, timedOut, trace? }` (`trace`: o da mensagem, request ou job em que o erro ocorreu, ausente sem trace ativo); `phase` é `listener`, `command`, `step` (passo de conversa), `role`, `setup`, `teardown`, `scheduler` ou `http` (rota ou WebSocket do plugin; `event` é a rota, como `'POST /webhook'`) |
 
 O `interaction` do transport (clique num botão) não chega aos plugins como evento: o kernel roda
 o comando ou o passo do botão ([Ações e botões](actions.md)).
@@ -176,7 +176,7 @@ podem terminar fora de ordem. Quem guarda histórico por conversa e precisa de o
 ## Isolamento e `plugin.error`
 
 Exceção síncrona, rejeição ou timeout de um listener não afetam os demais: o bus monta um
-`PluginErrorEvent` (`phase: 'listener'`, nome do plugin, evento, `timedOut`), entrega ao `onError`
+`PluginErrorEvent` (`phase: 'listener'`, nome do plugin, evento, `timedOut`, `trace` ativo, quando houver), entrega ao `onError`
 do bus e emite `plugin.error` para quem quiser assinar (ex.: dashboard).
 
 - O timeout não cancela o listener (não há como); ele segue rodando, mas já foi reportado, e o

@@ -2,6 +2,8 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { command } from '#commands/command.ts';
+import { BotConfigError } from '#config/owners.ts';
+import type { PluginErrorEvent } from '#events/types.ts';
 import { createHttp } from '#http/server.ts';
 import { createLogger } from '#logger/logger.ts';
 import { definePlugin } from '#plugin/define.ts';
@@ -246,7 +248,32 @@ describe('trace: unidade', () => {
 
   it('recusa trail inválido', () => {
     expect(() => createBot({ transport: new RecordingTransport(), trail: 'x' as never })).toThrow(
-      TypeError,
+      BotConfigError,
     );
+  });
+});
+
+describe('trace no payload do plugin.error', () => {
+  it('o listener de plugin.error recebe o trace da mensagem em que o erro ocorreu', async () => {
+    const errors: PluginErrorEvent[] = [];
+    const { lines, transport, bot } = await start((ctx) => {
+      ctx.commands.add(
+        command({
+          name: 'quebra',
+          run: () => {
+            throw new Error('falhou');
+          },
+        }),
+      );
+      ctx.events.on('plugin.error', (e) => {
+        errors.push(e.payload);
+      });
+    });
+    transport.emit('message', message('!quebra'));
+    await vi.waitFor(() => expect(errors).toHaveLength(1));
+    await bot.settled();
+
+    expect(errors[0]?.trace).toMatch(TRACE);
+    expect(errors[0]?.trace).toBe(byEvent(lines, 'plugin.failed')[0]?.['trace']);
   });
 });

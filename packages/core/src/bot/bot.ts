@@ -341,6 +341,7 @@ export function createBot(config: BotConfig): Bot {
     dropsBots,
     stopping: () => state === 'stopping' || state === 'stopped' || state === 'failed',
     failed: () => state === 'failed',
+    trail,
     log: getLog,
   });
 

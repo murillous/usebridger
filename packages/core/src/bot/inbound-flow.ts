@@ -167,7 +167,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
   function handled(
     ctx: KernelMessageContext,
     probe: Probe,
-    route: MessageHandledSignal['route'],
+    route: MessageHandledSignal['route'] | 'edit',
     status: MessageHandledSignal['status'],
     detail: { readonly command?: string; readonly step?: string } = {},
   ): void {
@@ -182,7 +182,8 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
         durationMs: Math.round(durationMs * 100) / 100,
       });
     }
-    if (probe.queuedMs === undefined) return;
+    // A edição fica só na trilha: o sinal `message.handled` não tem rota `edit`.
+    if (probe.queuedMs === undefined || route === 'edit') return;
     const { message } = ctx;
     deps.observers.emit('message.handled', {
       messageId: message.id,
@@ -470,8 +471,11 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
    * `rateLimit` a conta), mas não dispara comando: só os listeners de `message.edited`.
    */
   function handleEdited(message: Message): Promise<void> {
+    received(message.chat, message.sender, message.id, message.type);
     return admit(message, async (ctx) => {
-      await bus.emit('message.edited', ctx.message, listenerExtras(ctx));
+      const probe = startProbe(undefined);
+      const emitted = await bus.emit('message.edited', ctx.message, listenerExtras(ctx));
+      handled(ctx, probe, 'edit', emitted.failed > 0 ? 'failed' : 'ok');
     });
   }
 
