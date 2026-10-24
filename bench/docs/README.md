@@ -58,7 +58,9 @@ coisa.
 | --- | --- | --- |
 | `overhead` | p99 < 1 ms | Uma mensagem por vez, do `emit` do transport até o `bot.settled()`: middlewares, roteador, listeners e fila de saída. 20 mil mensagens depois de 5 mil de aquecimento |
 | `overhead-observed` | p99 < 1 ms | O `overhead` com um observador vazio em `message.handled` e em `outbound.sent` (ADR 0102) |
+| `overhead-metrics` | p99 < 1 ms | O `overhead` com o `plugin-metrics` carregado ([abaixo](#com-o-plugin-metrics)) |
 | `throughput` | ≥ 5.000 msg/s | Rajadas de 5 mil mensagens (10 por chat), esperando o bot assentar entre elas. 200 mil mensagens depois de 20 mil de aquecimento |
+| `throughput-metrics` | ≥ 5.000 msg/s | O `throughput` com o `plugin-metrics` carregado ([abaixo](#com-o-plugin-metrics)) |
 | `idle-memory` | < 80 MB | RSS do processo com o bot no ar e ocioso, depois de um `gc()` |
 | `memory-growth` | < 5 MB | Heap depois de 1M mensagens menos o heap depois de 100 mil de aquecimento, ambos após `gc()` |
 | `boot` | < 500 ms | Do `createBot` ao fim do `start()` com os 20 plugins, num processo frio (sem contar o `import`) |
@@ -78,6 +80,37 @@ Como ler as metas:
 O `boot` mede também o primeiro uso do Zod pelas configs dos plugins, como num processo de
 produção. Por isso o runner não cria schema Zod ao carregar: aquecido antes da medida, o Zod
 tirava ~3 ms (12%) do `boot`.
+
+## Com o plugin-metrics
+
+`overhead-metrics` e `throughput-metrics` sobem o bot de referência com o `plugin-metrics`
+oficial, com a config padrão e o storage em memória do `createTestBot`. Medem o caminho da
+mensagem com os observadores dele em `message.handled` e `outbound.sent`: contadores, histograma
+de duração e o rastreio de ativos. O flush periódico fica fora da janela medida: o workload
+configura `flushIntervalMs` em 24 h, para o número não depender de quando o timer dispara. O
+flush do `teardown` roda no `stop()`, depois da medida. O flush, o `query` e o `/metrics` não
+entram nestes cenários.
+
+Não há meta própria no plano §7: valem as do `overhead` e do `throughput`, e a regra de não
+piorar mais de 10% sobre a base. Para medir só eles:
+
+```sh
+pnpm bench --only overhead,overhead-metrics,throughput,throughput-metrics
+```
+
+Linha de base no `plugin-metrics` 0.2.0 (Linux, desktop, sem preparar a máquina), com o bot sem
+o plugin na mesma rodada para comparar:
+
+```
+overhead       0.201 ms (meta < 1; execuções: 0.251, 0.201, 0.202, 0.199, 0.208, 0.197, 0.191, 0.197, 0.201) ok
+overhead-metrics 0.298 ms (meta < 1; execuções: 0.321, 0.304, 0.261, 0.294, 0.298, 0.260, 0.278, 0.309, 0.299) ok
+throughput     11531 msg/s (meta ≥ 5000; execuções: 11446, 11708, 11621, 11284, 11531) ok
+throughput-metrics 7798 msg/s (meta ≥ 5000; execuções: 7332, 7740, 7820, 7798, 7924) ok
+```
+
+O plugin custa ~48% no p99 do `overhead` e ~32% na vazão. As mudanças do redesenho da M6
+(`prom-client`, histórico por delta) comparam com esta base pelo `pnpm bench --baseline`, com
+um checkout de antes delas.
 
 ## Comparar com um baseline
 

@@ -34,7 +34,9 @@ export interface Scenario {
 export type ScenarioName =
   | 'overhead'
   | 'overhead-observed'
+  | 'overhead-metrics'
   | 'throughput'
+  | 'throughput-metrics'
   | 'throughput-logged'
   | 'throughput-logged-off'
   | 'idle-memory'
@@ -200,6 +202,17 @@ export const SCENARIOS: readonly Scenario[] = [
     run: () => overhead({ observed: true }),
   },
   {
+    // O `overhead` com o `plugin-metrics` (config padrão, storage em memória): o caminho da
+    // mensagem com os observadores dele. Sem meta nova no plano; a régua é não piorar > 10%.
+    name: 'overhead-metrics',
+    description: 'Overhead do kernel por mensagem com o plugin-metrics (p99)',
+    unit: 'ms',
+    target: { max: 1 },
+    runs: 9,
+    checksRegression: true,
+    run: () => overhead({ metrics: true }),
+  },
+  {
     name: 'throughput',
     description: 'Vazão sintética em 500 chats',
     unit: 'msg/s',
@@ -207,6 +220,15 @@ export const SCENARIOS: readonly Scenario[] = [
     runs: 5,
     checksRegression: true,
     run: () => throughput(),
+  },
+  {
+    name: 'throughput-metrics',
+    description: 'Vazão sintética em 500 chats com o plugin-metrics',
+    unit: 'msg/s',
+    target: { min: 5_000 },
+    runs: 5,
+    checksRegression: true,
+    run: () => throughput({ metrics: true }),
   },
   {
     // A vazão com logger em `info` e destino nulo: o bench padrão usa `silent` e não paga as

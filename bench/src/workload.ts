@@ -11,6 +11,7 @@ import {
   type PluginDefinition,
 } from '@usebridger/core';
 import { createMessage } from '@usebridger/core/adapter';
+import { metrics } from '@usebridger/plugin-metrics';
 import { createTestBot, type TestBot } from '@usebridger/testing/bot';
 import { z } from 'zod';
 
@@ -34,7 +35,15 @@ export interface WorkloadOptions {
   readonly logged?: boolean;
   /** Modo da trilha (ADR 0120); só aparece no custo com `logged`. */
   readonly trail?: 'info' | 'off';
+  /** O `plugin-metrics` carregado, com storage em memória e os observadores dele ativos. */
+  readonly metrics?: boolean;
 }
+
+/**
+ * Flush do `plugin-metrics` longe da janela medida: a medida não pode depender de o timer
+ * disparar no meio dela. Abaixo de 2^31 ms, senão o `setInterval` vira 1 ms.
+ */
+const METRICS_FLUSH_MS = 24 * 60 * 60 * 1000;
 
 /** Sobe o bot de referência sobre o `FakeTransport`, com a fila de saída sem intervalo (D43). */
 export async function createWorkload(options: WorkloadOptions = {}): Promise<Workload> {
@@ -59,7 +68,10 @@ export async function createWorkload(options: WorkloadOptions = {}): Promise<Wor
       logger: createLogger({ level: 'info', destination: { write: () => undefined } }),
     }),
     ...(options.trail !== undefined && { trail: options.trail }),
-    plugins: [observer, ...plugins],
+    plugins: [observer, ...(options.metrics === true ? [metrics] : []), ...plugins],
+    ...(options.metrics === true && {
+      pluginConfig: { metrics: { flushIntervalMs: METRICS_FLUSH_MS } },
+    }),
     middlewares: {
       // `rateLimit` por remetente com teto alto: entra no caminho sem barrar mensagem, e o
       // cenário de memória pega um `Map` por remetente que nunca se limpa (o vazamento do

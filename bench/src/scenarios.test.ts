@@ -9,7 +9,9 @@ describe('cenários', () => {
     expect(SCENARIOS.map((scenario) => scenario.name)).toEqual([
       'overhead',
       'overhead-observed',
+      'overhead-metrics',
       'throughput',
+      'throughput-metrics',
       'throughput-logged',
       'throughput-logged-off',
       'idle-memory',
@@ -31,6 +33,11 @@ describe('cenários', () => {
     const load = { warmup: 500, messages: 3_000, logged: true };
     expect(await throughput({ ...load, trail: 'info' })).toBeGreaterThan(0);
     expect(await throughput({ ...load, trail: 'off' })).toBeGreaterThan(0);
+  });
+
+  it('overhead e vazão com o plugin-metrics carregado', async () => {
+    expect(await overhead({ warmup: 30, messages: 300, metrics: true })).toBeGreaterThan(0);
+    expect(await throughput({ warmup: 500, messages: 3_000, metrics: true })).toBeGreaterThan(0);
   });
 
   it('crescimento de memória devolve MB', async () => {

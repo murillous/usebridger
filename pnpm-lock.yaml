@@ -199,6 +199,9 @@ importers:
       '@usebridger/core':
         specifier: workspace:*
         version: link:../packages/core
+      '@usebridger/plugin-metrics':
+        specifier: workspace:*
+        version: link:../packages/plugin-metrics
       '@usebridger/testing':
         specifier: workspace:*
         version: link:../packages/testing

@@ -2,5 +2,9 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": { "rootDir": "src", "outDir": ".tsbuild" },
   "include": ["src"],
-  "references": [{ "path": "../packages/core" }, { "path": "../packages/testing" }]
+  "references": [
+    { "path": "../packages/core" },
+    { "path": "../packages/plugin-metrics" },
+    { "path": "../packages/testing" }
+  ]
 }
