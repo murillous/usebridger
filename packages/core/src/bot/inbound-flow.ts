@@ -470,8 +470,11 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
    * `rateLimit` a conta), mas não dispara comando: só os listeners de `message.edited`.
    */
   function handleEdited(message: Message): Promise<void> {
+    received(message.chat, message.sender, message.id, message.type);
     return admit(message, async (ctx) => {
-      await bus.emit('message.edited', ctx.message, listenerExtras(ctx));
+      const probe = startProbe(undefined);
+      const emitted = await bus.emit('message.edited', ctx.message, listenerExtras(ctx));
+      handled(ctx, probe, 'edit', emitted.failed > 0 ? 'failed' : 'ok');
     });
   }
 

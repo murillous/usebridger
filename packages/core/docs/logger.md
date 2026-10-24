@@ -247,7 +247,7 @@ em nível nenhum):
 | `event` | Campos |
 | --- | --- |
 | `message.received` | `chat`, `sender`, `chatType`, `kind`, `messageId` |
-| `message.handled` | `route`, `command`, `step`, `status`, `durationMs` |
+| `message.handled` | `route` (`command`, `step`, `message` ou `edit`), `command`, `step`, `status`, `durationMs` |
 | `outbound.sent` | `kind`, `status`, `replyTo`, `durationMs` (espera na fila até o despacho) |
 | `step.entered` / `step.expired` | `plugin`, `step` |
 | `job.run` | `job`, `plugin`, `status`, `durationMs`, `cause` |
@@ -255,7 +255,11 @@ em nível nenhum):
 
 São 2 a 3 linhas por mensagem. `createBot({ trail })` ajusta: `'info'` (padrão), `'debug'` (a
 trilha sai em `debug`, ligue com `logLevel: 'debug'` quando investigar) e `'off'`. Os erros e
-avisos não mudam. O `/health` e o WebSocket não geram `http.request`.
+avisos não mudam. Uma edição (`message.edited`) gera o mesmo par, com `route: 'edit'`. Um
+`message.received` sem `message.handled` indica que um middleware cortou a cadeia (ou que a
+mensagem foi descartada antes do tratamento). A espera de um passo que vence gera `step.expired`
+também quando a fila do chat está cheia: a espera some sem rodar o `onExpire`, e a linha avisa.
+O `/health` e o WebSocket não geram `http.request`.
 
 ### Investigar no Grafana
 
