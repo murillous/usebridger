@@ -1,0 +1,34 @@
+language js
+
+// O kernel loga só por `log.event` (ADR 0118): o nível e a mensagem fixa vêm do evento, e o valor
+// vai em campo. Chamada direta de nível sobre um logger perde o `event` e abre espaço para valor
+// interpolado na mensagem. A regex do Grit casa o texto inteiro do callee e não aceita grupo (o
+// parêntese vira captura): por isso uma regex por forma, só com classes de caractere. A mensagem
+// do `defineLogEvent` também não leva valor: nem template nem variável.
+or {
+  `$callee($...)` as $call where {
+    $callee <: or {
+      r".*[.]trace",
+      r".*[.]debug",
+      r".*[.]info",
+      r".*[.]warn",
+      r".*[.]error",
+      r".*[.]fatal"
+    },
+    // Receptor que é um logger: `log`, `ctx.log`, `deps.log()`, `this.#log()?`, `pluginLog`.
+    $callee <: or {
+      r"#?log[^.]*[.][a-z]+",
+      r".*[^A-Za-z0-9_]#?log[^.]*[.][a-z]+",
+      r".*[a-z]Log[^.]*[.][a-z]+"
+    },
+    register_diagnostic(span=$call, message="log sem event no kernel: defina o evento com defineLogEvent e chame log.event(evento, campos) (ADR 0118).", severity="error")
+  },
+  `defineLogEvent($arg)` where {
+    $arg <: contains `message: $message`,
+    $message <: or {
+      JsTemplateExpression(),
+      contains JsIdentifierExpression()
+    },
+    register_diagnostic(span=$message, message="mensagem de evento de log com valor: use texto fixo e passe o valor em campo (ADR 0118).", severity="error")
+  }
+}

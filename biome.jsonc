@@ -45,7 +45,19 @@
       }
     }
   },
-  "plugins": ["./tooling/biome/no-swallowed-catch.grit"],
+  "plugins": [
+    "./tooling/biome/no-swallowed-catch.grit",
+    {
+      // Logs do kernel só por evento (ADR 0118); os testes e a implementação do logger ficam de fora.
+      "path": "./tooling/biome/log-event.grit",
+      "includes": [
+        "**/src/**/*.ts",
+        "!**/*.test.ts",
+        "!**/*.test-support.ts",
+        "!**/core/src/logger/**"
+      ]
+    }
+  ],
   "assist": {
     "enabled": true,
     "actions": { "source": { "organizeImports": "on" } }

@@ -116,7 +116,11 @@ O `tsc` só checa tipos; o JS publicado sai do tsdown, com as dependências fora
 Além do preset recomendado, viram erro: `export default` (exceto em `*.config.ts`), import
 relativo ascendente, `process.env` fora da camada de config (`src/config.ts` ou `src/config/`)
 e `catch` sem nenhuma instrução — inclusive só com comentário (plugin em
-[`tooling/biome/`](tooling/biome/no-swallowed-catch.grit)).
+[`tooling/biome/`](tooling/biome/no-swallowed-catch.grit)). No `src` dos pacotes, fora dos testes,
+o log é só por `log.event` e a mensagem do `defineLogEvent` não leva valor
+([ADR 0118](docs/adr/0118-contrato-de-log-estruturado.md),
+[`log-event.grit`](tooling/biome/log-event.grit)); linha de terceiro repassada (libsignal) suprime
+com `biome-ignore lint/plugin`.
 
 ### Changesets
 

@@ -24,7 +24,8 @@ Commits em Conventional Commits, descrição em PT-BR, com o ID do roadmap:
 
 ## Convenções
 
-O Biome barra default export, `../`, `process.env` fora da config e `catch` vazio. Além dele:
+O Biome barra default export, `../`, `process.env` fora da config, `catch` vazio e log sem `event`
+no kernel ([ADR 0118](docs/adr/0118-contrato-de-log-estruturado.md)). Além dele:
 
 - Comentários em PT-BR explicando o **porquê**; o óbvio fica sem comentário.
 - Erro sempre tem destino: tratado, relançado ou registrado com fallback explícito.
