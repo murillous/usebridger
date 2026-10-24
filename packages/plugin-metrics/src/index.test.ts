@@ -23,6 +23,7 @@ function fakeLog(): { log: Logger; calls: { level: string; message: string }[] }
       warn: fn('warn'),
       error: fn('error'),
       fatal: fn('fatal'),
+      event: (event) => fn(event.level)(event.message),
       child: mk,
     };
   };

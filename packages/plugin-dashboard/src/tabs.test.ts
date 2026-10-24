@@ -311,10 +311,11 @@ describe('abas de plugins: contrato defensivo', () => {
     });
     const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
     const get = (path: string) => fetch(`${url}${path}`, { headers: { cookie } });
-    const warns = async () =>
-      ((await (await get('/api/logs?level=warn')).json()) as { message: string }[]).map(
-        (l) => l.message,
-      );
+    // As linhas de aviso pelo `event`, com o motivo (ADR 0118).
+    const warns = async (event: string) =>
+      ((await (await get('/api/logs?level=warn')).json()) as { fields: Record<string, unknown> }[])
+        .filter((l) => l.fields['event'] === event)
+        .map((l) => l.fields);
     return { get, warns };
   }
   const R = '/api/tabs/rude/rude';
@@ -327,14 +328,18 @@ describe('abas de plugins: contrato defensivo', () => {
     expect(tab?.order).toBe(0);
     expect(tab?.widgets.map((w) => w.id)).not.toContain('quebra');
     expect(tab?.widgets.map((w) => w.id)).toContain('chave');
-    expect((await warns()).some((m) => m.includes('widget "quebra" ignorado'))).toBe(true);
+    expect(
+      (await warns('dashboard.tab.ignored')).some((f) =>
+        String(f['reason']).includes('widget "quebra" ignorado'),
+      ),
+    ).toBe(true);
   });
 
   it('descarta itens fora do contrato do load, com warn', async () => {
     const { get, warns } = await startRude();
     expect(await (await get(`${R}/stats`)).json()).toEqual([{ label: 'ok', value: 1 }]);
     expect(await (await get(`${R}/linhas`)).json()).toEqual({ rows: [{ id: 'x', a: 1 }] });
-    expect((await warns()).filter((m) => m.includes('fora do contrato'))).toHaveLength(2);
+    expect(await warns('dashboard.widget.invalid-items')).toHaveLength(2);
   });
 
   it('corta em 50 stats, 500 linhas e 1000 pontos, com warn; days fora da faixa é limitado', async () => {
@@ -343,7 +348,7 @@ describe('abas de plugins: contrato defensivo', () => {
     const table = (await (await get(`${R}/grande`)).json()) as { rows: unknown[] };
     expect(table.rows.length).toBe(500);
     expect(((await (await get(`${R}/pontos`)).json()) as unknown[]).length).toBe(1000);
-    expect((await warns()).filter((m) => m.includes('cortado em'))).toHaveLength(3);
+    expect(await warns('dashboard.widget.truncated')).toHaveLength(3);
     const label = async (q: string) =>
       ((await (await get(`${R}/pontos${q}`)).json()) as { label: string }[])[0]?.label;
     expect(await label('?days=99999')).toBe('365');

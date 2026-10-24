@@ -11,6 +11,7 @@ const silent: Logger = {
   warn: () => undefined,
   error: () => undefined,
   fatal: () => undefined,
+  event: () => undefined,
   child: () => silent,
 };
 

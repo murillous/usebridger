@@ -2,6 +2,7 @@ import type { HttpHandler, Logger, ServiceAccess } from '@usebridger/core';
 // Só tipos: o `plugin-metrics` é dependência opcional (ADR 0103) e nada dele é carregado em runtime.
 // O import também traz o `declare module` que tipa `services.get('metrics')`.
 import type { MetricRow } from '@usebridger/plugin-metrics';
+import * as LOG from './log-events.ts';
 
 const DEFAULT_DAYS = 7;
 const MAX_DAYS = 90;
@@ -61,7 +62,7 @@ export function registerMetricsRoutes(
         const view: MetricsView = { ...range, metrics };
         return Response.json({ available: true, ...view });
       } catch (error) {
-        log.error('dashboard: falha ao ler as métricas', { error });
+        log.event(LOG.metricsReadFailed, { err: error });
         return new Response('erro interno', { status: 500 });
       }
     }),

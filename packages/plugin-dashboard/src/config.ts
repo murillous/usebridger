@@ -12,6 +12,7 @@ import {
 import { sameOrigin } from '#auth.ts';
 import { readLimited } from '#body.ts';
 import { serializeResult } from '#plugins.ts';
+import * as LOG from './log-events.ts';
 
 const MAX_CONFIG_BODY = 64 * 1024;
 
@@ -62,7 +63,7 @@ export function registerConfigRoutes(
 
   const fail = (what: string, name: string, error: unknown, body = 'erro interno'): Response => {
     // O erro inteiro (stack incluso): o logger do core já censura os secrets.
-    ctx.log.error(`dashboard: falha ao ${what} config do plugin "${name}"`, { err: error });
+    ctx.log.event(LOG.configFailed, { action: what, target: name, err: error });
     return text(body, 500);
   };
 

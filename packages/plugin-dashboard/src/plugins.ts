@@ -8,6 +8,7 @@ import {
   type PluginReportEntry,
 } from '@usebridger/core';
 import { sameOrigin } from '#auth.ts';
+import * as LOG from './log-events.ts';
 
 const ACTIONS = ['enable', 'disable', 'reload'] as const;
 
@@ -60,7 +61,7 @@ export function registerPluginRoutes(
   log: Logger,
   guarded: (handler: HttpHandler) => HttpHandler,
 ): void {
-  if (admin === undefined) log.warn(`dashboard: ${NO_ADMIN}`);
+  if (admin === undefined) log.event(LOG.adminMissing);
   const unavailable = () => new Response(NO_ADMIN, { status: 503 });
   const plugins = admin?.plugins;
 
@@ -96,9 +97,7 @@ export function registerPluginRoutes(
           if (error instanceof PluginHostStateError) {
             return new Response(error.message.slice(0, 300), { status: 409 });
           }
-          log.error(`dashboard: falha em ${action} do plugin "${name}"`, {
-            err: error,
-          });
+          log.event(LOG.pluginActionFailed, { action, target: name, err: error });
           return new Response('erro interno', { status: 500 });
         }
       }),

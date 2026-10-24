@@ -202,9 +202,13 @@ describe('casos de falha', () => {
     const logs = (await (
       await fetch(`${base}/api/logs?level=error`, { headers: { cookie } })
     ).json()) as {
-      message: string;
+      fields: Record<string, unknown>;
     }[];
-    expect(logs.some((l) => l.message.includes('falha ao gravar config'))).toBe(true);
+    expect(
+      logs.some(
+        (l) => l.fields['event'] === 'dashboard.config.failed' && l.fields['action'] === 'gravar',
+      ),
+    ).toBe(true);
   });
 
   it('falhas de setup/teardown saem só no formato combinado, sem stack nem cause', async () => {
@@ -258,7 +262,7 @@ describe('ctx.admin com falha', () => {
     const errors: unknown[][] = [];
     const ctx = {
       plugin: { name: 'dashboard' },
-      log: { error: (...args: unknown[]) => errors.push(args) },
+      log: { event: (...args: unknown[]) => errors.push(args) },
       http: { route: (m: string, p: string, h: HttpHandler) => routes.set(`${m} ${p}`, h) },
       admin: {
         plugins: () => [{ name: 'target' }],
@@ -299,6 +303,6 @@ describe('ctx.admin com falha', () => {
     const boom = new Error('boom');
     const { put, errors } = fake(() => Promise.reject(boom));
     expect((await put()).status).toBe(500);
-    expect(errors[0]?.[1]).toEqual({ err: boom });
+    expect(errors[0]?.[1]).toMatchObject({ err: boom });
   });
 });

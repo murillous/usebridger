@@ -197,7 +197,7 @@ describe('serialização segura e erros', () => {
       { plugins, config: {} } as unknown as PluginAdmin,
       {
         warn: () => undefined,
-        error: (...a: unknown[]) => void errors.push(a),
+        event: (...a: unknown[]) => void errors.push(a),
       } as unknown as Logger,
       (h) => h,
     );
