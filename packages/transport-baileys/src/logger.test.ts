@@ -18,6 +18,7 @@ function recordingLogger(level: LogLevel, lines: string[] = []): Logger & { line
     warn: at('warn'),
     error: at('error'),
     fatal: at('fatal'),
+    event: (event) => at(event.level)(event.message),
     child: () => recordingLogger(level, lines),
   };
 }
