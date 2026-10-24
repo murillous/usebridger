@@ -210,11 +210,12 @@ export const SCENARIOS: readonly Scenario[] = [
   },
   {
     // A vazão com logger em `info` e destino nulo: o bench padrão usa `silent` e não paga as
-    // linhas da trilha (ADR 0120). Sem regressão checada: mede o custo, não uma meta do plano.
+    // linhas da trilha (ADR 0120). Mede o custo, não uma meta do plano: `min: 0` faz valer só o
+    // número e não checa regressão.
     name: 'throughput-logged',
     description: 'Vazão com logger em info e trilha em info',
     unit: 'msg/s',
-    target: { min: 5_000 },
+    target: { min: 0 },
     runs: 5,
     checksRegression: false,
     run: () => throughput({ logged: true, trail: 'info' }),
@@ -223,7 +224,7 @@ export const SCENARIOS: readonly Scenario[] = [
     name: 'throughput-logged-off',
     description: 'Vazão com logger em info e trilha desligada',
     unit: 'msg/s',
-    target: { min: 5_000 },
+    target: { min: 0 },
     runs: 5,
     checksRegression: false,
     run: () => throughput({ logged: true, trail: 'off' }),

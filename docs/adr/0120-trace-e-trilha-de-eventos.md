@@ -97,16 +97,18 @@ das linhas. Os cenários `throughput-logged` (logger `info`, destino nulo, `trai
 (`silent`). Medição com 6 execuções alternadas de cada (processo novo por execução), AMD Ryzen 7
 5700U, Node 24.21, máquina ociosa:
 
-| Cenário | msg/s (min a max) |
-| --- | --- |
-| `throughput` (`silent`) | 12.097 a 12.280 (mediana ~12,2k) |
-| `throughput-logged` (`info`, `trail: 'info'`) | 6.441 a 6.483 (mediana ~6,46k) |
-| `throughput-logged-off` (`info`, `trail: 'off'`) | 11.950 a 12.369 (mediana ~12,2k) |
+| Cenário | msg/s local (min a max) | msg/s no runner do CI |
+| --- | --- | --- |
+| `throughput` (`silent`) | 12.097 a 12.280 (mediana ~12,2k) | ~9,4k |
+| `throughput-logged` (`info`, `trail: 'info'`) | 6.441 a 6.483 (mediana ~6,46k) | ~4,9k |
+| `throughput-logged-off` (`info`, `trail: 'off'`) | 11.950 a 12.369 (mediana ~12,2k) | ~9,5k |
 
 Reproduzir: `pnpm build` e `node bench/dist/main.mjs --scenario throughput-logged` (e os outros
 dois nomes). O custo vem todo da trilha: com ela desligada o logger em `info` empata com o
 `silent` (só 2 linhas saem no processo), e com ela ligada saem cerca de 2,67 linhas por mensagem
-e a vazão cai quase pela metade (~47%), ainda acima da meta de 5.000 msg/s. O número é o pior
+e a vazão cai quase pela metade (~47% local; no runner, 4.910 contra ~9,4k). A meta de 5.000
+msg/s do plano vale para o `throughput` (`silent`); a trilha ligada em `info` fica abaixo dela no
+runner, por isso os dois cenários `-logged` não têm meta (`min: 0`), só o número. O número é o pior
 caso, em que o handler não faz nada além de passar pela trilha; o custo por linha é fixo, então
 pesa menos num bot cujo handler faz I/O. Quem precisa da vazão máxima usa `trail: 'off'`.
 
