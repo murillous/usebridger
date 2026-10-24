@@ -128,7 +128,7 @@ describe('edições', () => {
 
 describe('fila de entrada cheia', () => {
   it('a expiração descartada emite step.expired', () => {
-    const emitted: string[] = [];
+    const emitted: { name: string; fields: unknown }[] = [];
     const hold = deferred();
     const inbound = new InboundQueue({ onError: () => undefined, maxPendingPerChat: 0 });
     inbound.enqueue('chat@test', () => hold.promise);
@@ -139,12 +139,16 @@ describe('fila de entrada cheia', () => {
       gate: new ReadyGate(),
       stopping: () => false,
       log: () => ({ event: () => undefined }),
-      trail: { enabled: () => true, emit: (event: { name: string }) => emitted.push(event.name) },
+      trail: {
+        enabled: () => true,
+        emit: (event: { name: string }, fields: unknown) =>
+          emitted.push({ name: event.name, fields }),
+      },
     } as never);
 
     entry.expireWait({ id: 'chat@test' } as never, { id: 'u@test' } as never);
 
-    expect(emitted).toEqual([LOG.stepExpired.name]);
+    expect(emitted).toEqual([{ name: LOG.stepExpired.name, fields: { plugin: 'p', step: 's' } }]);
     hold.resolve();
   });
 });

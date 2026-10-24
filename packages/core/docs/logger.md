@@ -255,9 +255,9 @@ em nível nenhum):
 
 São 2 a 3 linhas por mensagem. `createBot({ trail })` ajusta: `'info'` (padrão), `'debug'` (a
 trilha sai em `debug`, ligue com `logLevel: 'debug'` quando investigar) e `'off'`. Os erros e
-avisos não mudam. Uma edição (`message.edited`) gera o mesmo par, com `route: 'edit'`. Um
+avisos não mudam. Uma edição (`message.edited`) gera o mesmo par, com `route: 'edit'` (só na trilha; o sinal `message.handled` dos observers não o emite). Um
 `message.received` sem `message.handled` indica que um middleware cortou a cadeia (ou que a
-mensagem foi descartada antes do tratamento). A espera de um passo que vence gera `step.expired`
+mensagem foi descartada antes do tratamento). A espera de um passo com `onExpire` que vence gera `step.expired`
 também quando a fila do chat está cheia: a espera some sem rodar o `onExpire`, e a linha avisa.
 O `/health` e o WebSocket não geram `http.request`.
 

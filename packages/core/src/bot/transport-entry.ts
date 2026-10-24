@@ -105,18 +105,18 @@ export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
     );
     if (result === 'queued') return;
     const expired = deps.conversations.expire(chat.id, sender.id);
-    // A espera some sem o `onExpire`, mas o fato é da trilha; trace próprio, como a tarefa da fila.
-    if (expired !== undefined) {
-      work(chat.tenantId, () =>
+    // A espera some sem o `onExpire`, mas o fato é da trilha; um trace só para a trilha e o aviso.
+    work(chat.tenantId, () => {
+      if (expired !== undefined) {
         (deps.trail ?? NO_TRAIL).emit(LOG.stepExpired, {
           plugin: expired.plugin,
           step: expired.step,
-        }),
-      );
-    }
-    deps.log().event(LOG.expireDropped, {
-      chat: chat.id,
-      reason: result,
+        });
+      }
+      deps.log().event(LOG.expireDropped, {
+        chat: chat.id,
+        reason: result,
+      });
     });
   }
 

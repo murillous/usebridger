@@ -13,7 +13,7 @@ export interface MessageHandledSignal {
   readonly senderId: string;
   readonly chatType: 'group' | 'private';
   /** O que consumiu a mensagem. */
-  readonly route: 'command' | 'step' | 'message' | 'edit';
+  readonly route: 'command' | 'step' | 'message';
   /** Nome canônico do comando, nunca o `invokedAs`. */
   readonly command?: string;
   readonly status: 'ok' | 'failed' | 'refused' | 'timeout';
