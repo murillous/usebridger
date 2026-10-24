@@ -486,6 +486,22 @@ o M5 (exceto M5-4 e M5-6) e a virada (V1-1, V1-2 e V1-4) vivem no `murillous/Lum
 - #M5-4 `plugin-dashboard`
 - #M5-6 `plugin-metrics` — serviço `metrics`, métricas do kernel pelos observadores do core (D102), `/metrics` Prometheus, retenção de 90 dias (D103)
 
+### M6 — Métricas sobre o `prom-client` (D121)
+
+- #M6-1 ADR 0121: `plugin-metrics` redesenhado sobre o `prom-client` (#233)
+- #M6-2 Bench: linha de base do caminho de mensagem com o `plugin-metrics` (#234)
+- #M6-3 Dashboard atual: remover a seção de métricas (#235)
+- #M6-4 Serviço declarativo sobre o `prom-client` e `/metrics` da registry (#236)
+- #M6-5 Histórico por hora e dia a partir do delta da registry (#237)
+- #M6-6 `query` com `where`/`groupBy`, percentil interpolado e `catalog()` (#238)
+- #M6-7 Métricas do runtime do Node no `/metrics` e no histórico (#239)
+- #M6-8 `scrapeToken` no `GET /metrics` (#240)
+- #M6-9 Reconhecedor de id pessoal do core no lugar do regex local (#241)
+
+### M7 — Dashboard refeito do zero
+
+- Novo `plugin-dashboard` sobre o `query` e o `catalog()` do D121, sem compatibilidade com o atual
+
 ### v1.0
 
 - #V1-3 Release 1.0.0 de todos os pacotes públicos via Changesets, depois do contrato validado pelo `transport-web` (M3-5, D51)
