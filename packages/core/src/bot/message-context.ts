@@ -10,6 +10,7 @@ import type {
 } from '#conversations/conversations.ts';
 import { ContextExpiredError, DEADLINE, type Deadline, deadlineOf } from '#deadline.ts';
 import type { MessageListenerFields } from '#events/types.ts';
+import * as LOG from '#logger/events.ts';
 import type { LogFields, Logger } from '#logger/types.ts';
 import type { Message } from '#message/types.ts';
 import type { SanitizedContext, SanitizedFields } from '#middleware/sanitize.ts';
@@ -79,7 +80,7 @@ class MessageContextImpl implements KernelMessageContext {
 
   get log(): Logger {
     const state = this[STATE];
-    state.log ??= state.deps.log().child({ chatId: this.message.chat.id });
+    state.log ??= state.deps.log().child({ chat: this.message.chat.id });
     return state.log;
   }
 
@@ -88,7 +89,7 @@ class MessageContextImpl implements KernelMessageContext {
     // Reação aqui é enfeite de andamento: sem a capability, não falha. Quem precisa saber que
     // não saiu usa o `ctx.send.react`, que continua estrito (ADR 0089).
     if (!deps.reactions) {
-      this.log.debug('react ignorado: o transport não tem a capability "reactions"', { emoji });
+      this.log.event(LOG.reactSkipped, { emoji });
       return Promise.resolve();
     }
     // Prioridade do `reply`: a reação responde a quem escreveu, como ele.
@@ -142,7 +143,7 @@ function pluginLogDescriptor(pluginLog: Logger): PropertyDescriptor {
   return {
     configurable: true,
     get(this: { readonly message: Message }): Logger {
-      const log = pluginLog.child({ chatId: this.message.chat.id });
+      const log = pluginLog.child({ chat: this.message.chat.id });
       Object.defineProperty(this, 'log', { value: log });
       return log;
     },
@@ -198,7 +199,7 @@ function refuser<V extends ExpiringView>(
   return (operation) => {
     const { label, fields } = scope(view);
     const error = new ContextExpiredError(plugin, operation, label, deadline.reason);
-    view.log.warn(`${operation} recusado: ${label} já expirou`, {
+    view.log.event(LOG.contextExpired, {
       ...fields,
       operation,
       err: error,
@@ -282,7 +283,7 @@ function expectReplyDescriptor<V extends ExpiringView & { readonly message: Mess
         if (deadline?.expired) {
           const { label, fields } = scope(this);
           const error = new ContextExpiredError(plugin, 'expectReply', label, deadline.reason);
-          this.log.warn(`expectReply recusado: ${label} já expirou`, {
+          this.log.event(LOG.contextExpired, {
             ...fields,
             operation: 'expectReply',
             err: error,
@@ -454,7 +455,7 @@ export function listenerViewFactory(
   const kernel = (view: View): KernelMessageContext | undefined => view[KERNEL_CONTEXT];
   const scope: Scope<View> = (view) => ({
     label: `listener de "${view.event}"`,
-    fields: { event: view.event },
+    fields: { eventName: view.event },
   });
   const descriptors: PropertyDescriptorMap = {
     message: {
@@ -521,7 +522,7 @@ export function expireViewFactory(
 ): (origin: ExpireOrigin, deadline: Deadline, step: string, data: JsonValue) => ExpireContext {
   return (origin, deadline, step, data) => {
     const { chat, sender } = origin;
-    const log = pluginLog.child({ chatId: chat.id });
+    const log = pluginLog.child({ chat: chat.id });
     const label = `onExpire do passo "${step}"`;
     const fields: LogFields = { step };
     const refuse = refuser(plugin, { log }, deadline, () => ({ label, fields }));
@@ -539,7 +540,7 @@ export function expireViewFactory(
         // Como no passo: um `onExpire` que estourou o prazo não abre conversa que ninguém pediu.
         if (deadline.expired) {
           const error = new ContextExpiredError(plugin, 'expectReply', label, deadline.reason);
-          log.warn(`expectReply recusado: ${label} já expirou`, {
+          log.event(LOG.contextExpired, {
             ...fields,
             operation: 'expectReply',
             err: error,

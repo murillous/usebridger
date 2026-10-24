@@ -19,13 +19,14 @@ describe('logPluginError', () => {
     expect(log.lines).toEqual([
       {
         level: 'error',
-        message: 'plugin "ping" falhou (command)',
+        message: 'plugin falhou',
         fields: {
           plugin: 'ping',
           phase: 'command',
-          event: 'message.received',
+          eventName: 'message.received',
           timedOut: false,
           err: event.error,
+          event: 'plugin.failed',
         },
       },
     ]);

@@ -6,6 +6,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { BotConfigError } from '#config/owners.ts';
+import * as LOG from '#logger/events.ts';
 import type { Logger } from '#logger/types.ts';
 import type { StoragePort } from '#storage/types.ts';
 
@@ -55,7 +56,7 @@ export async function acquireSessionLease(
       );
     }
     if (waited === 0) {
-      log.warn('sessão travada por outro processo; esperando a trava vencer', {
+      log.event(LOG.sessionLocked, {
         session,
         ttlMs: SESSION_LEASE_TTL_MS,
       });
@@ -73,7 +74,7 @@ export async function acquireSessionLease(
       onLost();
     } catch (error) {
       // Falha de I/O não é perda: a trava vale por mais duas renovações, e o próximo tick tenta.
-      log.warn('falha ao renovar a trava da sessão; tentando no próximo intervalo', {
+      log.event(LOG.sessionRenewFailed, {
         session,
         err: error,
       });

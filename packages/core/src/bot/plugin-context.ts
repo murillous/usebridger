@@ -37,6 +37,7 @@ import type { BotEventName, EventSubscriber, PluginErrorEvent } from '#events/ty
 import type { Groups } from '#groups/groups.ts';
 import type { SessionHttp } from '#http/server.ts';
 import type { HttpRoutes } from '#http/types.ts';
+import * as LOG from '#logger/events.ts';
 import { createRedactor } from '#logger/redact.ts';
 import type { SecretSource } from '#logger/secrets.ts';
 import type { Logger } from '#logger/types.ts';
@@ -192,8 +193,9 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
     /** Rejeição (com log) de uma operação assíncrona do contexto descartado. */
     const refuse = (operation: string): Promise<never> => {
       const error = new ContextExpiredError(name, operation, 'contexto do plugin', lifetime.reason);
-      log.warn(`${operation} recusado: contexto do plugin já foi descartado`, {
+      log.event(LOG.contextExpired, {
         operation,
+        context: 'plugin',
         err: error,
       });
       return Promise.reject(error);
@@ -241,10 +243,7 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
           if (missing.length > 0) {
             // `warn`, e não `info`: o comando some sem resposta para quem o digita, e só o
             // operador pode notar. A tabela de boot repete o aviso junto do plugin.
-            log.warn(
-              `comando "${definition.name}" não registrado: capability ausente no transport`,
-              { command: definition.name, missing },
-            );
+            log.event(LOG.commandMissingCapability, { command: definition.name, missing });
             unregistered.push({ command: definition.name, missing });
             return;
           }
@@ -253,7 +252,7 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
           // quando o provedor sobe é o reload em cascata do `optionalDependsOn` (ADR 0095).
           const absent = (definition.services ?? []).filter((service) => !services.has(service));
           if (absent.length > 0) {
-            log.warn(`comando "${definition.name}" não registrado: serviço não provido`, {
+            log.event(LOG.commandMissingService, {
               command: definition.name,
               services: absent,
             });
@@ -719,7 +718,7 @@ function wrapRoleCheck(
         deadline.expire(error);
         return error;
       },
-      (error) => log.error(`papel "${role}" rejeitou depois do prazo`, { role, err: error }),
+      (error) => log.event(LOG.roleTimeout, { role, err: error }),
       deps.armed,
     );
     if (!(settled instanceof Promise)) return settled === true;
@@ -755,7 +754,7 @@ function wrapStep(
       (error) => {
         // A recusa de um contexto expirado já foi logada quando aconteceu (ADR 0029).
         if (error instanceof ContextExpiredError) return;
-        log.error(`passo "${step}" rejeitou depois do prazo`, { step, err: error });
+        log.event(LOG.stepTimeout, { step, err: error });
       },
       deps.armed,
       deadline,
@@ -791,7 +790,7 @@ function wrapExpire(
       (error) => {
         // A recusa de um contexto expirado já foi logada quando aconteceu (ADR 0029).
         if (error instanceof ContextExpiredError) return;
-        log.error(`onExpire do passo "${step}" rejeitou depois do prazo`, { step, err: error });
+        log.event(LOG.stepExpireTimeout, { step, err: error });
       },
       deps.armed,
       deadline,

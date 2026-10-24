@@ -6,6 +6,7 @@
 
 import type { BotMessageContext } from '#context.ts';
 import { ExecutionTimeoutError } from '#deadline.ts';
+import * as LOG from '#logger/events.ts';
 import type { Logger } from '#logger/types.ts';
 import type { Chat, Contact } from '#message/types.ts';
 import type { Reply } from '#outbound/types.ts';
@@ -415,7 +416,7 @@ export class ConversationRegistry<C, O = unknown> {
     try {
       records = await this.#waitsStore().find();
     } catch (error) {
-      this.#log()?.error('conversas: falha ao ler as esperas persistidas; seguem fora da memória', {
+      this.#log()?.event(LOG.waitsReadFailed, {
         err: error,
       });
       return;
@@ -521,11 +522,7 @@ export class ConversationRegistry<C, O = unknown> {
   }
 
   #warnOrphan(wait: Wait): void {
-    this.#log()?.warn(
-      `conversas: espera descartada; o plugin "${wait.plugin}" não tem o passo "${wait.step}" ` +
-        '(desligado, removido ou passo renomeado)',
-      { plugin: wait.plugin, step: wait.step },
-    );
+    this.#log()?.event(LOG.waitOrphan, { plugin: wait.plugin, step: wait.step });
   }
 
   /**
@@ -538,8 +535,7 @@ export class ConversationRegistry<C, O = unknown> {
       .then(() => op(this.#waitsStore()))
       .then(
         () => undefined,
-        (error: unknown) =>
-          this.#log()?.warn('conversas: falha ao gravar espera no storage', { err: error }),
+        (error: unknown) => this.#log()?.event(LOG.waitWriteFailed, { err: error }),
       )
       .finally(() => {
         if (this.#writes.get(key) === next) this.#writes.delete(key);

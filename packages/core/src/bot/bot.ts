@@ -11,6 +11,7 @@ import { createEventBus } from '#events/bus.ts';
 import { createGroups } from '#groups/groups.ts';
 import { sessionHttp } from '#http/server.ts';
 import { createDeferredLogger } from '#logger/deferred.ts';
+import * as LOG from '#logger/events.ts';
 import { createLogger, createNoopLogger } from '#logger/logger.ts';
 import { createSecretSet } from '#logger/secrets.ts';
 import { createLogSignalTap } from '#logger/signal.ts';
@@ -125,8 +126,7 @@ export function createBot(config: BotConfig): Bot {
   // catálogo, que junta os avisos em lote.
   const catalog = createCommandCatalog({
     list: () => registry.list(),
-    onError: (error) =>
-      log.error('listener de commands.onChange do transport falhou', { err: error }),
+    onError: (error) => log.event(LOG.transportCommandsListenerFailed, { err: error }),
   });
   const registry = createCommandRegistry({ onChange: () => catalog.changed() });
   // Rotas da sessão no servidor do processo (ADR 0072); só entram nele no start().
@@ -146,7 +146,7 @@ export function createBot(config: BotConfig): Bot {
           }
           return `/transports/${encodeURIComponent(resolvedTransport.name)}`;
         },
-        (error, route) => log.error(`rota ${route} do transport falhou`, { err: error }),
+        (error, route) => log.event(LOG.transportRouteFailed, { route, err: error }),
       ),
     }),
   });
@@ -201,16 +201,16 @@ export function createBot(config: BotConfig): Bot {
     isGroupAdmin: groupAdminPort(
       transport,
       commandTimeoutMs,
-      (error) => log.warn('consulta de admin do grupo falhou depois do prazo', { err: error }),
+      (error) => log.event(LOG.groupAdminTimeout, { err: error }),
       armed,
     ),
     // O comando é recusado de todo jeito (fail-closed); o log diz ao autor o que falta.
     onUnknownRole: (role, command) =>
-      log.error(
-        `comando "${command.name}" exige o papel "${role}", que nenhum plugin carregado define: ` +
-          `declare dependsOn no plugin dono do papel (em "${command.plugin}")`,
-        { plugin: command.plugin, command: command.name, role },
-      ),
+      log.event(LOG.commandUnknownRole, {
+        plugin: command.plugin,
+        command: command.name,
+        role,
+      }),
   });
   // A espera com `onExpire` que vence entra na fila do chat como uma mensagem (ADR 0093). As de
   // passo com `persist` ficam no storage da sessão (ADR 0094); a coleção só abre no primeiro uso.
@@ -236,11 +236,10 @@ export function createBot(config: BotConfig): Bot {
   const dropsBots = config.middlewares?.ignoreBots !== false;
   const inbound = new InboundQueue({
     maxPendingPerChat: config.inbound?.maxPendingPerChat,
-    onError: (error, chatId) => log.error('falha ao processar mensagem', { chatId, err: error }),
+    onError: (error, chat) => log.event(LOG.messageFailed, { chat, err: error }),
   });
   const outbound = new OutboundQueue({
-    onTypingError: (error, chatId) =>
-      log.debug('falha ao enviar "digitando"', { chatId, err: error }),
+    onTypingError: (error, chat) => log.event(LOG.typingFailed, { chat, err: error }),
     ...config.outbound,
     transport,
     observers,
@@ -260,7 +259,7 @@ export function createBot(config: BotConfig): Bot {
     jobTimeoutMs: timeouts.jobMs,
     onError: pluginErrors.report,
     onLateError: (event) => logPluginError(log, event),
-    onStorageError: (error) => log.error('scheduler: falha no storage', { err: error }),
+    onStorageError: (error) => log.event(LOG.schedulerStorageFailed, { err: error }),
   });
   const gate = new ReadyGate();
   const flow = createInboundFlow({
@@ -480,11 +479,7 @@ export function createBot(config: BotConfig): Bot {
       onLateCommandError: (plugin, command, error) => {
         // A recusa de um contexto expirado já foi logada quando aconteceu (ADR 0029).
         if (error instanceof ContextExpiredError) return;
-        log.error(`comando "${command}" rejeitou depois do prazo`, {
-          plugin,
-          command,
-          err: error,
-        });
+        log.event(LOG.commandTimeout, { plugin, command, err: error });
       },
     });
     const pluginHost = createPluginHost({
@@ -518,14 +513,18 @@ export function createBot(config: BotConfig): Bot {
 
   async function runStart(): Promise<void> {
     try {
-      log = logTap.wrap(
-        config.logger ??
-          createLogger({
-            level: config.logLevel ?? 'info',
-            ...(config.logFormat && { format: config.logFormat }),
-            secrets,
-          }),
-      );
+      // Bindings base em toda linha (ADR 0118): `bot` é a sessão; o app acrescenta `service`,
+      // `version` e `env`. Valem também sobre o logger próprio do app.
+      log = logTap
+        .wrap(
+          config.logger ??
+            createLogger({
+              level: config.logLevel ?? 'info',
+              ...(config.logFormat && { format: config.logFormat }),
+              secrets,
+            }),
+        )
+        .child({ bot: session, ...config.logBindings });
       transportLog = log.child({ transport: transport.name });
       // Antes de `booted`: um bot recusado aqui não fecha o storage do bot que usa a sessão.
       releaseSession = claimSession(storage, session);
@@ -534,7 +533,7 @@ export function createBot(config: BotConfig): Bot {
       http?.attach(() => state);
       httpAttached = http !== undefined;
       if (config.storage === undefined) {
-        log.warn('sem storage configurado: usando memória, os dados somem ao reiniciar');
+        log.event(LOG.storageMissing);
       }
       // Sem conexão até o primeiro `open`: o `connect()` resolve ao iniciar a tentativa, e os
       // envios do setup e dos jobs vencidos iriam para um socket ainda fechado (ADR 0044). O
@@ -550,14 +549,14 @@ export function createBot(config: BotConfig): Bot {
         log,
         signal: bootAbort.signal,
         onLost: () => {
-          log.error('outro processo assumiu a trava da sessão; parando o bot', { session });
-          bot.stop().catch((error: unknown) => log.error('falha ao parar o bot', { err: error }));
+          log.event(LOG.sessionTaken, { session });
+          bot.stop().catch((error: unknown) => log.event(LOG.stopFailed, { err: error }));
         },
       });
     } catch (error) {
       // Nada conectou ainda: só desfaz o que foi registrado.
       await shutdown().catch((cleanup: unknown) =>
-        log.error('falha ao encerrar após erro no start', { err: cleanup }),
+        log.event(LOG.startCleanupFailed, { err: cleanup }),
       );
       throw error;
     }
@@ -568,7 +567,7 @@ export function createBot(config: BotConfig): Bot {
     try {
       await bootPlugins();
     } catch (error) {
-      log.error('falha ao carregar os plugins; encerrando', { err: error });
+      log.event(LOG.pluginsLoadFailed, { err: error });
       // O transport nunca conectou: o encerramento não chama `disconnect()`.
       await failBoot(error);
     }
@@ -578,7 +577,7 @@ export function createBot(config: BotConfig): Bot {
     try {
       await http?.listen();
     } catch (error) {
-      log.error('falha ao abrir a porta HTTP; encerrando', { err: error });
+      log.event(LOG.httpOpenFailedOnBoot, { err: error });
       await failBoot(error);
     }
     // Daqui em diante, mudança na lista de comandos avisa o transport.
@@ -633,7 +632,7 @@ export function createBot(config: BotConfig): Bot {
     // Os jobs ficam no storage para o próximo boot, como no `abandonInternals`.
     void scheduler.stop(AbortSignal.abort());
     failedDisconnect = transport.disconnect().catch((error: unknown) => {
-      log.error('falha ao desconectar o transport no estado failed', { err: error });
+      log.event(LOG.failedDisconnectFailed, { err: error });
     });
   }
 

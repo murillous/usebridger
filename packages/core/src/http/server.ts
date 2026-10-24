@@ -10,6 +10,7 @@ import type { Context, Hono } from 'hono';
 import type { WSContext, WSEvents } from 'hono/ws';
 import type { WebSocketServer } from 'ws';
 import { BotConfigError } from '#config/owners.ts';
+import * as LOG from '#logger/events.ts';
 import type { Logger } from '#logger/types.ts';
 import { DEFAULT_SESSION } from '#storage/namespace.ts';
 import type {
@@ -258,7 +259,7 @@ class HttpHub {
     this.#app = undefined;
     if (this.#armed && this.#listening === undefined && this.#hasRoutes()) {
       this.#listen().catch((error: unknown) =>
-        this.#log()?.error('http: falha ao abrir a porta', {
+        this.#log()?.event(LOG.httpListenFailed, {
           err: error,
           port: this.#options.port,
         }),
@@ -310,7 +311,7 @@ class HttpHub {
         resolve();
       });
     });
-    server.on('error', (error) => this.#log()?.error('http: erro no servidor', { err: error }));
+    server.on('error', (error) => this.#log()?.event(LOG.httpServerError, { err: error }));
     this.#server = server;
     this.#wss = wss;
   }
@@ -362,7 +363,7 @@ class HttpHub {
       for (const entry of session.entries()) mount(app, entry, lib.upgradeWebSocket);
     }
     app.onError((error, c) => {
-      this.#log()?.error('http: erro fora de um handler', { err: error });
+      this.#log()?.event(LOG.httpUnhandled, { err: error });
       return c.text('Internal Server Error', 500);
     });
     return app;

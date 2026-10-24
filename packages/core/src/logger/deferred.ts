@@ -16,6 +16,7 @@ export function createDeferredLogger(resolve: () => Logger): Logger {
     warn: (message, fields) => resolve().warn(message, fields),
     error: (message, fields) => resolve().error(message, fields),
     fatal: (message, fields) => resolve().fatal(message, fields),
+    event: (event, fields) => resolve().event(event, fields),
     child: (bindings) => createDeferredLogger(childOf(resolve, bindings)),
   };
 }

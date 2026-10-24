@@ -2,6 +2,7 @@
 // limpa a sessão quando é o caso e reconecta, ou desiste e para. Um timer por vez, e nenhum
 // depois do `stop()`.
 
+import * as LOG from '#logger/events.ts';
 import type { LogFields, Logger } from '#logger/types.ts';
 import {
   type ReconnectionDecision,
@@ -95,7 +96,7 @@ export function createReconnector({
       await transport.connect();
       return false;
     } catch (error) {
-      log().error('reconexão falhou', { err: error, action: decision.action });
+      log().event(LOG.reconnectFailed, { err: error, action: decision.action });
       return true;
     }
   }
@@ -111,25 +112,13 @@ export function createReconnector({
   ): void {
     switch (cause) {
       case 'replaced':
-        log().error(
-          'conexão encerrada (replaced): outra conexão assumiu esta sessão (o mesmo número ' +
-            'rodando em outro processo?); o bot passa a failed em vez de derrubá-la',
-          fields,
-        );
+        log().event(LOG.connectionReplaced, fields);
         return;
       case 'fatal':
-        log().fatal(
-          'conexão encerrada por erro fatal do transport (token sem permissão, intents, porta?); ' +
-            'reconectar não resolve: corrija a configuração. O bot passa a failed (plugins e HTTP seguem no ar)',
-          fields,
-        );
+        log().event(LOG.connectionFatal, fields);
         return;
       case 'auth-failed':
-        log().fatal(
-          'conexão encerrada (auth-failed): credenciais rejeitadas, e o transport não pareia de ' +
-            'novo (token inválido?); limpar a sessão não resolve. O bot passa a failed (plugins e HTTP seguem no ar)',
-          fields,
-        );
+        log().event(LOG.connectionAuthFailed, fields);
         return;
     }
   }
@@ -151,18 +140,11 @@ export function createReconnector({
       return;
     }
     if (decision.action === 'clean-session' && clearSession === undefined) {
-      log().error(
-        `conexão encerrada (${status.reason}): a sessão precisa ser pareada de novo e não há ` +
-          'clearSession configurado; o bot passa a failed',
-        fields,
-      );
+      log().event(LOG.connectionUnpaired, fields);
       giveUp(decision);
       return;
     }
-    log().warn(
-      `conexão fechada (${status.reason}): reconectando em ${decision.delayMs} ms`,
-      fields,
-    );
+    log().event(LOG.connectionClosed, fields);
     schedule(decision);
   }
 
@@ -172,10 +154,10 @@ export function createReconnector({
         case 'open':
           pending = undefined;
           policy.connected();
-          log().info('conexão aberta');
+          log().event(LOG.connectionOpened);
           return;
         case 'connecting':
-          log().debug('conectando');
+          log().event(LOG.connectionConnecting);
           return;
         case 'closed':
           handleClosed(status);

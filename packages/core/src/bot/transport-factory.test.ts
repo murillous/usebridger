@@ -76,7 +76,7 @@ describe('createBot({ transport: fábrica })', () => {
     expect(logger.lines.at(-1)).toEqual({
       level: 'warn',
       message: 'depois',
-      fields: { transport: 'test', chatId: 'c1', n: 1 },
+      fields: { bot: 'default', transport: 'test', chatId: 'c1', n: 1 },
     });
   });
 

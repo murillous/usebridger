@@ -52,7 +52,7 @@ const CENSOR = '[REDACTED]';
 export const MIN_SECRET_LENGTH = 4;
 
 /**
- * Logger estruturado em JSON. `child({ plugin })` e `child({ chatId })` acumulam contexto; um
+ * Logger estruturado em JSON. `child({ plugin })` e `child({ chat })` acumulam contexto; um
  * `Error` nos campos, sob qualquer chave, é serializado com `type`, `message`, `stack` e `cause`.
  * A convenção é o campo `err`.
  */
@@ -64,7 +64,11 @@ export function createLogger(options: LoggerOptions = {}): Logger {
       // `errWithCause` mantém a `cause` como objeto estruturado (com stack própria), em vez de
       // concatená-la na mensagem como o serializer padrão.
       serializers: { err: stdSerializers.errWithCause },
-      formatters: { log: serializeErrors },
+      // Formato do ADR 0118: nível em texto e hora ISO UTC, que o Loki e o Grafana leem sem
+      // pipeline extra. `pid` e `hostname` saem: quem identifica a origem são os bindings base.
+      base: null,
+      timestamp: pino.stdTimeFunctions.isoTime,
+      formatters: { level: (label) => ({ level: label }), log: serializeErrors },
       ...(options.redact && options.redact.length > 0
         ? { redact: { paths: [...options.redact], censor: CENSOR } }
         : {}),
@@ -148,6 +152,11 @@ function wrap(log: PinoLogger): Logger {
     warn: (message, fields) => (fields ? log.warn(fields, message) : log.warn(message)),
     error: (message, fields) => (fields ? log.error(fields, message) : log.error(message)),
     fatal: (message, fields) => (fields ? log.fatal(fields, message) : log.fatal(message)),
+    // O nível é checado antes: em nível desabilitado, nem o objeto com o `event` é alocado.
+    event: (event, fields) => {
+      if (log.isLevelEnabled(event.level))
+        log[event.level]({ ...fields, event: event.name }, event.message);
+    },
     child: (bindings) => wrap(log.child(bindings)),
   };
 }
@@ -166,6 +175,7 @@ const NOOP_LOGGER: Logger = Object.freeze({
   warn: noop,
   error: noop,
   fatal: noop,
+  event: noop,
   child: (): Logger => NOOP_LOGGER,
 });
 

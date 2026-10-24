@@ -188,7 +188,7 @@ async function say(started: Started, text: string): Promise<void> {
 }
 
 const orphanWarnings = (lines: readonly LogLine[]): LogLine[] =>
-  lines.filter((line) => line.level === 'warn' && line.message.includes('espera descartada'));
+  lines.filter((line) => line.fields['event'] === 'conversation.wait.orphan');
 
 describe('Bot: esperas persistidas (ADR 0094)', () => {
   it('a espera de passo com persist sobrevive ao restart sobre o mesmo storage', async () => {
@@ -614,7 +614,7 @@ describe('Bot: esperas persistidas (ADR 0094)', () => {
     expect(started.lines).toContainEqual(
       expect.objectContaining({
         level: 'warn',
-        message: 'conversas: falha ao gravar espera no storage',
+        fields: expect.objectContaining({ event: 'conversation.wait.write-failed' }),
       }),
     );
   });
@@ -637,7 +637,10 @@ describe('Bot: esperas persistidas (ADR 0094)', () => {
 
     expect(started.bot.state).toBe('running');
     expect(started.lines).toContainEqual(
-      expect.objectContaining({ level: 'error', message: expect.stringContaining('conversas:') }),
+      expect.objectContaining({
+        level: 'error',
+        fields: expect.objectContaining({ event: 'conversation.waits.read-failed' }),
+      }),
     );
   });
 

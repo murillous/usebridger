@@ -36,6 +36,7 @@ function fakeLogger(lines: LogLine[] = []): Logger & { lines: LogLine[] } {
     warn: at('warn'),
     error: at('error'),
     fatal: at('fatal'),
+    event: (event, fields) => at(event.level)(event.message, { ...fields, event: event.name }),
     child: () => logger,
   };
   return logger;
@@ -180,7 +181,9 @@ describe('createPluginHost — boot', () => {
   it('tudo carregado: tabela em info', async () => {
     const { host: h, log } = host([plugin('ping')]);
     await h.start();
-    expect(log.lines.find((line) => line.message.startsWith('Plugins:'))?.level).toBe('info');
+    const table = log.lines.find((line) => line.fields?.['event'] === 'plugin.boot.report');
+    expect(table?.level).toBe('info');
+    expect(table?.fields?.['report']).toMatch(/^Plugins: 1 carregado/);
   });
 
   it('comando deixado de fora pelo contexto entra na linha do plugin e põe a tabela em warn', async () => {
@@ -214,9 +217,9 @@ describe('createPluginHost — boot', () => {
         setupMs: expect.any(Number),
       },
     ]);
-    const tableLine = log.lines.find((line) => line.message.startsWith('Plugins:'));
+    const tableLine = log.lines.find((line) => line.fields?.['event'] === 'plugin.boot.review');
     expect(tableLine?.level).toBe('warn');
-    expect(tableLine?.message).toContain(
+    expect(tableLine?.fields?.['report']).toContain(
       'carregado; sem fig (send.sticker), enquete (polls, reactions)',
     );
     expect(tableLine?.fields?.['plugins']).toContainEqual({
@@ -246,7 +249,10 @@ describe('createPluginHost — boot', () => {
     expect(statusOf(await h.start())).toEqual({ ping: 'disabled', pong: 'loaded' });
     expect(setup).not.toHaveBeenCalled();
     expect(log.lines).toContainEqual(
-      expect.objectContaining({ level: 'warn', message: expect.stringContaining('"pnig"') }),
+      expect.objectContaining({
+        level: 'warn',
+        fields: { plugin: 'pnig', event: 'plugin.disabled.unknown' },
+      }),
     );
   });
 
@@ -261,11 +267,19 @@ describe('createPluginHost — boot', () => {
       'sticker-text': 'loaded',
       ok: 'loaded',
     });
-    const warnings = log.lines.filter((line) => line.message.includes('versão exata'));
+    const warnings = log.lines.filter(
+      (line) => line.fields?.['event'] === 'plugin.dependency.exact-range',
+    );
     expect(warnings).toEqual([
       expect.objectContaining({
         level: 'warn',
-        fields: { plugin: 'sticker-text', dependency: 'sticker', range: '^0.0.0' },
+        fields: {
+          plugin: 'sticker-text',
+          field: 'dependsOn',
+          dependency: 'sticker',
+          range: '^0.0.0',
+          event: 'plugin.dependency.exact-range',
+        },
       }),
     ]);
   });

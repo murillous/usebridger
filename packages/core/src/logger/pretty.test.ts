@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { defineLogEvent } from './define-event.ts';
 import { createLogger, type LogDestination } from './logger.ts';
 
 function capture(level: 'info' | 'trace' = 'info', secrets?: readonly string[]) {
@@ -49,6 +50,24 @@ describe("createLogger({ format: 'pretty' })", () => {
     expect(rest[0]).toBe('    error: Error: manifesto inválido');
     expect(rest.length).toBeGreaterThan(1);
     expect(rest.every((line) => line.startsWith('    '))).toBe(true);
+  });
+
+  it('esconde o event e os bindings base, que são para o agregador (ADR 0118)', () => {
+    const { log, raw } = capture();
+    const sent = defineLogEvent({ name: 'clima.forecast.sent', level: 'info', message: 'enviada' });
+    log
+      .child({ bot: 'principal', service: 'lumabot', version: '1.0.0', env: 'production' })
+      .child({ plugin: 'clima' })
+      .event(sent, { cidade: 'Recife' });
+    expect(raw[0]?.slice(9)).toBe('INFO  [clima] enviada cidade=Recife\n');
+  });
+
+  it('põe texto de várias linhas nas linhas seguintes, recuado', () => {
+    const { log, raw } = capture();
+    log.info('plugins carregados', { report: 'Plugins: 1 carregado(s)\n  ping  1.0.0  carregado' });
+    expect(raw[0]?.slice(9)).toBe(
+      'INFO  plugins carregados\n    Plugins: 1 carregado(s)\n      ping  1.0.0  carregado\n',
+    );
   });
 
   it('censura os segredos igual ao JSON', () => {

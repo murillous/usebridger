@@ -6,11 +6,10 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Observers } from '#observers/observers.ts';
 import { MIN_SECRET_LENGTH } from './logger.ts';
 import type { SecretSource } from './secrets.ts';
-import type { LogFields, Logger, LogLevel } from './types.ts';
+import type { EmitLevel, LogFields, Logger, LogLevel } from './types.ts';
 
 const CENSOR = '[REDACTED]';
 const MAX_DEPTH = 6;
-type EmitLevel = Exclude<LogLevel, 'silent'>;
 const LEVELS: readonly LogLevel[] = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'];
 
 export interface LogSignalTap {
@@ -115,6 +114,13 @@ export function createLogSignalTap(observers: Observers, secrets: SecretSource):
       warn: at('warn'),
       error: at('error'),
       fatal: at('fatal'),
+      // Pelo método do nível, e não pelo `event` do logger embrulhado: o sinal sai igual, e o
+      // `event` chega a ele como campo. Nível desabilitado sai antes de alocar os campos.
+      event: (event, fields) => {
+        const min = LEVELS.indexOf(logger.level);
+        if (min < 0 || LEVELS.indexOf(event.level) < min) return;
+        at(event.level)(event.message, { ...fields, event: event.name });
+      },
       child: (more) => wrap(logger.child(more), { ...bindings, ...more }),
     };
   };

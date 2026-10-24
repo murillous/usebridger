@@ -1,5 +1,6 @@
 import type { BotOwner } from '#config/owners.ts';
 import type { BotMessageContext, MessageContext } from '#context.ts';
+import * as LOG from '#logger/events.ts';
 import type { Chat, Contact, Media, Message } from '#message/types.ts';
 import { parseArgs } from './args.ts';
 import {
@@ -309,7 +310,7 @@ export function createCommandRouter(options: CommandRouterOptions = {}): Command
           { ...ctx, command: name },
           { plugin: entry.plugin, name, invokedAs: name },
         ).catch((error: unknown) => {
-          ctx.log.warn(`consulta do papel "${role}" falhou: comando fora da lista`, {
+          ctx.log.event(LOG.roleFailed, {
             role,
             command: name,
             err: error,

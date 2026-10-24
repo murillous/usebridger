@@ -29,6 +29,7 @@ export function recordingLogger(lines: LogLine[] = []): Logger & { readonly line
       warn: at('warn'),
       error: at('error'),
       fatal: at('fatal'),
+      event: (event, fields) => at(event.level)(event.message, { ...fields, event: event.name }),
       child: (more) => make({ ...bindings, ...more }),
     };
   };
