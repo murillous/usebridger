@@ -21,6 +21,9 @@ describe('bridger-pseudonym', () => {
       err: [],
     });
     expect(exec(['--group', '1@g.us'], env).out).toEqual([pseudonym('1@g.us', 'group')]);
+    // Sem --group, o tipo vem do formato do id, como em ctx.pseudonym.
+    expect(exec(['1@g.us'], env).out).toEqual([pseudonym('1@g.us', 'group')]);
+    expect(exec(['--group', 'abc'], env).out[0]).toMatch(/^g_/);
   });
 
   it('sem chave, chave malformada ou sem id falha com código 1 sem ecoar a chave', () => {

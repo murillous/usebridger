@@ -31,13 +31,17 @@ Nos logs, usuário e grupo aparecem por **pseudônimo estável**.
   pseudônimo: seria mais um segredo em repouso sem o cuidado do ADR 0117.
 - **Aplicação automática:** o logger do bot troca os campos `chat` e `sender` (em chamadas e em
   `child`) por pseudônimo, para o core, os transports, os plugins e o sinal `log` dos
-  observadores (o pseudônimo é aplicado antes do tap). O tipo (`u_`/`g_`) vem do id: `@g.us` e id
-  começado em `-` são grupo; o resto, usuário. Valor que já tem a forma de pseudônimo
-  (`ctx.pseudonym`) passa como está. O `chatId` cru deixa de ser binding.
+  observadores (o pseudônimo é aplicado antes do tap). O log por mensagem (e o do `onExpire`) leva os
+  bindings `chat` e `sender`, e o tipo do `chat` vem de `chat.isGroup`. Fora disso (campo avulso,
+  `ctx.pseudonym` sem `kind`, CLI) o tipo vem do formato do id: `@g.us` e id começado em `-` são
+  grupo; o resto, usuário; `kind` explícito (`--group`) sempre vale. Valor que já tem a forma de
+  pseudônimo passa como está. O `chatId` cru deixa de ser binding.
 - **API para plugins:** `ctx.pseudonym(id, kind?)`.
 - **Redação de reserva:** o logger do core troca por `[REDACTED]`, na linha final, JIDs
   (`@s.whatsapp.net`, `@g.us`, `@lid`, `@c.us`, `@broadcast`, `@newsletter`) e telefones de 10 a 15
-  dígitos, em campos, mensagem, bindings e `err`. O reconhecedor por formato do `plugin-metrics`
+  dígitos (com sufixo opcional de agente `_N` e device `.N`, o endereço Signal que o Baileys loga),
+  em campos, mensagem, bindings e `err`. A mesma redação vale para o sinal `log` dos observadores
+  (e, por ele, para o `/api/logs` do dashboard). O reconhecedor por formato do `plugin-metrics`
   foi promovido ao core (`isPersonalId`, `redactPersonalIds`); trocar o regex local do
   `plugin-metrics` por ele fica para a #241.
 - **O que conta como id pessoal:** `chatId`/`senderId` (campos `chat`/`sender`), o `lid`, o
@@ -55,6 +59,9 @@ Nos logs, usuário e grupo aparecem por **pseudônimo estável**.
 
 - Um número de 10 a 15 dígitos que não é telefone (epoch em ms, id de pedido) dentro de **texto** é
   trocado. Número em valor JSON (depois de `:` ou `,`) e dígitos dentro de palavra não são.
+- Número JSON puro (`"x":5565999998888`, depois de `:` ou `,`) não é trocado. Um LID solto de 16 a
+  18 dígitos, sem `@lid` nem sufixo de device, passa; já um decimal longo (`1234567890123.45678`)
+  não é cortado, mas `1234567890.5` (10 a 15 dígitos, ponto e 1 a 3 dígitos) é trocado.
 - Um id opaco fora dos formatos (UUID de usuário, handle sem `@`) passa; quem os loga usa
   `ctx.pseudonym`.
 - O CLI recebe o id por inteiro, como o transport o usa. Com endereçamento por LID, o `chat` do

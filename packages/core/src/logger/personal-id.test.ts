@@ -50,3 +50,16 @@ describe('redação de reserva no logger', () => {
     expect(JSON.parse(out[0] ?? '')).toMatchObject({ chat: '[REDACTED]' });
   });
 });
+
+describe('endereço do protocolo Signal (Baileys `addr`)', () => {
+  it('troca telefone e LID com sufixo de device', () => {
+    expect(redactPersonalIds('addr 5565999998888.0 e 123456789012345_1.0 ok')).toBe(
+      'addr [REDACTED] e [REDACTED] ok',
+    );
+    expect(redactPersonalIds('{"addr":"5565999998888.12"}')).toBe('{"addr":"[REDACTED]"}');
+  });
+
+  it('não corta a parte inteira de um decimal longo', () => {
+    expect(redactPersonalIds('valor 1234567890123.45678')).toBe('valor 1234567890123.45678');
+  });
+});

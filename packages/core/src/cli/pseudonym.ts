@@ -3,6 +3,8 @@
 // começar uma investigação ("o cliente 5565... reclamou") buscando o pseudônimo no Loki (ADR 0119).
 // Só vai do id ao pseudônimo; a chave vem de `BRIDGER_SECRET_KEY`, a mesma do bot.
 
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { type ConfigEnv, processEnv, readSecretKeys } from '#config/env.ts';
 import { BotConfigError } from '#config/owners.ts';
@@ -47,7 +49,7 @@ export function run(argv: readonly string[], io: CliIo): number {
       return 1;
     }
     const { pseudonym } = createPseudonymizer(() => current);
-    io.out(pseudonym(id, parsed.values.group ? 'group' : 'user'));
+    io.out(pseudonym(id, parsed.values.group ? 'group' : undefined));
     return 0;
   } catch (error) {
     // Chave malformada: a mensagem não ecoa o valor (ver `parseSecretKey`).
@@ -67,7 +69,18 @@ function parse(argv: readonly string[]) {
   });
 }
 
-if (import.meta.main) {
+// `import.meta.main` só existe no Node >= 24.2 e o `engines` é `>=24`; o bin chega por symlink,
+// então compara os caminhos reais.
+function isMain(): boolean {
+  try {
+    return realpathSync(process.argv[1] ?? '') === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    // argv[1] ausente ou ilegível: importado como biblioteca (testes), não roda o CLI.
+    return false;
+  }
+}
+
+if (isMain()) {
   process.exitCode = run(process.argv.slice(2), {
     env: processEnv(),
     out: (text) => process.stdout.write(`${text}\n`),

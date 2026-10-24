@@ -214,11 +214,11 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
     // `{prefix}` lido a cada chamada: um `ctx.prefixes.set` vale já para a mensagem seguinte.
     const text: PluginText = (message, key, values) =>
       formatMessage(messages, key, values, deps.prefixes.get(message.chat));
-    const commandViews = commandViewFactory(name, log, expect, text);
-    const listenerView = listenerViewFactory(name, log, expect, text);
-    const stepView = stepViewFactory(name, log, expect, text);
-    const expireView = expireViewFactory(name, log, expect, text);
-    const roleView = roleViewFactory(log);
+    const commandViews = commandViewFactory(name, log, expect, text, deps.pseudonym);
+    const listenerView = listenerViewFactory(name, log, expect, text, deps.pseudonym);
+    const stepView = stepViewFactory(name, log, expect, text, deps.pseudonym);
+    const expireView = expireViewFactory(name, log, expect, text, deps.pseudonym);
+    const roleView = roleViewFactory(log, deps.pseudonym);
     // Nos eventos de mensagem, cada listener recebe a visão com `message`/`text`/`reply`/`log`
     // do plugin; o barramento a cria (uma por listener) e pendura nela o `Deadline`.
     const events = deps.bus.forPlugin(name, {

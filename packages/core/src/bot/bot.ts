@@ -281,6 +281,7 @@ export function createBot(config: BotConfig): Bot {
       quote: hasCapability(transport, 'quoted'),
       reactions: hasCapability(transport, 'reactions'),
       log: getLog,
+      pseudonym: pseudonymizer.pseudonym,
     },
     maxButtons,
     ready: () => gate.ready || gate.promise,

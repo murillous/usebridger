@@ -8,7 +8,7 @@ import { FakeDriver } from './fake-socket.test-support.ts';
 import { toBaileysLogger } from './logger.ts';
 import { BaileysTransport } from './transport.ts';
 
-const RAW = /@lid|@s\.whatsapp\.net|@g\.us|5511999998888/;
+const RAW = /@lid|@s\.whatsapp\.net|@g\.us|5511999998888|123456789012345/;
 
 function capture() {
   const out: string[] = [];
@@ -56,7 +56,10 @@ describe('privacidade dos logs do transport-baileys', () => {
       'sent to 5511999998888',
     );
     baileys.warn({ participant: '123456789@lid' }, 'participante 123456789@lid saiu');
-    expect(out).toHaveLength(2);
+    // `addr` do libsignal: telefone e LID com sufixo de device, sem `@`.
+    baileys.info({ addr: '5511999998888.0' }, 'session');
+    baileys.info({ addr: '123456789012345_1.0' }, 'session');
+    expect(out).toHaveLength(4);
     expect(out.join('\n')).not.toMatch(RAW);
     expect(out[0]).toContain('[REDACTED]');
   });

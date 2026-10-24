@@ -5,6 +5,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Observers } from '#observers/observers.ts';
 import { MIN_SECRET_LENGTH, withoutReserved } from './logger.ts';
+import { redactPersonalIds } from './personal-id.ts';
 import type { SecretSource } from './secrets.ts';
 import type { EmitLevel, LogFields, Logger, LogLevel } from './types.ts';
 
@@ -39,7 +40,8 @@ export function createLogSignalTap(observers: Observers, secrets: SecretSource):
     }
     let out = text;
     for (const needle of needles) out = out.replaceAll(needle, CENSOR);
-    return out;
+    // Redação de reserva do ADR 0119: o sinal chega ao dashboard, fora do `createLogger`.
+    return redactPersonalIds(out);
   };
 
   // Cópia com os segredos trocados; `Error` vira objeto simples, como o `err` do log.

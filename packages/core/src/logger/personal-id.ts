@@ -11,7 +11,9 @@ const PERSONAL_ID_RE = /@|^\+?\d{7,}$|^-\d{5,}$/;
 const JID_RE = /[\w.:+-]+@(?:s\.whatsapp\.net|c\.us|g\.us|lid|broadcast|newsletter)/g;
 // Telefone em texto livre: 10 a 15 dígitos, com `+` opcional. O lookbehind deixa de fora número
 // JSON (`"ms":1730000000000`, que vem depois de `:` ou `,`) e dígitos dentro de palavra/id.
-const PHONE_RE = /(?<![\w.:,[])\+?\d{10,15}(?!\w|\.\d)/g;
+// Cobre também o endereço do protocolo Signal que o Baileys loga (`5565999998888.0`,
+// `<lid>_1.0`): sufixo de agente `_N` e de device `.N`.
+const PHONE_RE = /(?<![\w.:,[])\+?\d{10,15}(?:_\d+)?(?:\.\d{1,3}(?!\d))?(?!\w|\.\d)/g;
 
 /** `true` se `value` inteiro parece id de chat/usuário (JID, telefone ou id numérico longo). */
 export function isPersonalId(value: string): boolean {

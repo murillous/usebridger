@@ -8,7 +8,7 @@ import type { LogFields, Logger } from './types.ts';
 /** `user` vira `u_…`; `group` vira `g_…`. */
 export type PseudonymKind = 'user' | 'group';
 
-/** Pseudônimo de um id; `kind` padrão é `user`. */
+/** Pseudônimo de um id; sem `kind`, `@g.us` e id começado em `-` são grupo, o resto usuário. */
 export type Pseudonym = (id: string, kind?: PseudonymKind) => string;
 
 // Rótulo próprio: a chave de pseudônimo não serve para cifrar segredo, nem o contrário.
@@ -21,9 +21,14 @@ export function derivePseudonymKey(master: Buffer): Buffer {
   return Buffer.from(hkdfSync('sha256', master, Buffer.alloc(0), HKDF_INFO, 32));
 }
 
-/** Pseudônimo com a chave já derivada. */
+// Transport-agnóstico só no que dá: JID de grupo do WhatsApp e id negativo (Telegram) são grupo.
+/** Tipo padrão de um id sem `kind`. */
+export const guessKind = (id: string): PseudonymKind =>
+  id.endsWith('@g.us') || id.startsWith('-') ? 'group' : 'user';
+
+/** Pseudônimo com a chave já derivada; sem `kind`, o tipo vem do formato do id. */
 export function pseudonymWith(key: Buffer): Pseudonym {
-  return (id, kind = 'user') =>
+  return (id, kind = guessKind(id)) =>
     `${kind === 'group' ? 'g_' : 'u_'}${createHmac('sha256', key)
       .update(id)
       .digest()
@@ -58,17 +63,13 @@ export function createPseudonymizer(masterKey: () => Buffer | undefined): Pseudo
   return { pseudonym: (id, kind) => resolve().fn(id, kind), ephemeral: () => resolve().ephemeral };
 }
 
-// Transport-agnóstico só no que dá: JID de grupo do WhatsApp e id negativo (Telegram) são grupo.
-const guessKind = (id: string): PseudonymKind =>
-  id.endsWith('@g.us') || id.startsWith('-') ? 'group' : 'user';
-
 function mapFields(fields: LogFields, pseudonym: Pseudonym): LogFields {
   let out = fields;
   for (const key of ['chat', 'sender'] as const) {
     const value = fields[key];
     if (typeof value !== 'string' || SHAPE_RE.test(value)) continue;
     if (out === fields) out = { ...fields };
-    (out as Record<string, unknown>)[key] = pseudonym(value, guessKind(value));
+    (out as Record<string, unknown>)[key] = pseudonym(value);
   }
   return out;
 }
