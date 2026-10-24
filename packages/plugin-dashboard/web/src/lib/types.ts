@@ -76,27 +76,6 @@ export interface ChangeResult {
   teardownErrors: LifecycleError[];
 }
 
-export type MetricRowView =
-  | { type: 'counter'; day: string; labels: Record<string, string>; value: number }
-  | {
-      type: 'histogram';
-      day: string;
-      labels: Record<string, string>;
-      count: number;
-      sum: number;
-      buckets: number[];
-    }
-  | { type: 'gauge'; day: string; labels: Record<string, string>; last: number; max: number };
-
-export type MetricsResponse =
-  | { available: false; reason?: 'version' }
-  | {
-      available: true;
-      from: string;
-      to: string;
-      metrics: { name: string; rows: MetricRowView[]; plugin?: string }[];
-    };
-
 export interface ConfigIssue {
   path: string;
   message: string;

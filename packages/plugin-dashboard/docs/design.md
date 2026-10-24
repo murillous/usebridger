@@ -7,6 +7,10 @@ interface ou criar uma aba nova segue este documento e o canvas. Decisões de ba
 [ADR 0092](../../../docs/adr/0092-pontos-de-extensao-em-servicos.md) e
 [ADR 0103](../../../docs/adr/0103-plugins-oficiais-de-metricas-e-dashboard.md).
 
+> A seção de métricas (quadro Métricas, KPIs de "Hoje" da Visão geral e a entrada Métricas da
+> navegação) saiu do app até o dashboard novo da M7; ver [docs/README.md](README.md#métricas). O
+> que este guia diz sobre ela descreve o canvas, não o app atual.
+
 ## Canvas
 
 **https://claude.ai/artifact/9mHnZZqd33jPZ1Mn7vERy7**

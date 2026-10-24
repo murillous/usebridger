@@ -1,28 +1,17 @@
 // @vitest-environment happy-dom
-import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initialLive, type LiveState } from '#web/lib/live.ts';
-import type { LogEntry, MetricsResponse, StatusView } from '#web/lib/types.ts';
+import type { LogEntry, StatusView } from '#web/lib/types.ts';
 import { LiveBadge } from './LiveBadge.tsx';
 import { Overview } from './Overview.tsx';
 
 const NOW = new Date('2026-05-10T12:00:00').getTime();
 
-// `useMetrics` chama `fetch('api/metrics?days=1')`; cada teste escolhe a resposta.
-let metrics: MetricsResponse | 'erro';
-let metricsCalls: number;
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.setSystemTime(NOW);
-  metrics = { available: false };
-  metricsCalls = 0;
-  vi.stubGlobal('fetch', async (url: string) => {
-    metricsCalls++;
-    if (url !== 'api/metrics?days=1' || metrics === 'erro')
-      return new Response('falha', { status: 500 });
-    return new Response(JSON.stringify(metrics), { status: 200 });
-  });
 });
 afterEach(() => {
   cleanup();
@@ -51,51 +40,7 @@ const log = (message: string, over: Partial<LogEntry> = {}): LogEntry => ({
   message,
   ...over,
 });
-// `Kpis` devolve null também enquanto carrega: antes de afirmar a ausência, espera a chamada e a
-// atualização de estado dela.
-const metricsSettled = async () => {
-  await waitFor(() => expect(metricsCalls).toBe(1));
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(50);
-  });
-};
 const hora = (ms: number) => new Date(ms).toLocaleTimeString();
-
-const kernelMetrics: MetricsResponse = {
-  available: true,
-  from: '2026-05-10',
-  to: '2026-05-10',
-  metrics: [
-    {
-      name: 'bridger.messages.handled',
-      rows: [
-        { type: 'counter', day: '2026-05-10', labels: {}, value: 1200 },
-        { type: 'counter', day: '2026-05-10', labels: {}, value: 34 },
-      ],
-    },
-    {
-      name: 'bridger.active.users',
-      rows: [{ type: 'gauge', day: '2026-05-10', labels: {}, last: 3, max: 7 }],
-    },
-    {
-      name: 'bridger.active.groups',
-      rows: [{ type: 'gauge', day: '2026-05-10', labels: {}, last: 1, max: 2 }],
-    },
-    {
-      name: 'bridger.messages.handle_duration_ms',
-      rows: [
-        {
-          type: 'histogram',
-          day: '2026-05-10',
-          labels: {},
-          count: 10,
-          sum: 400,
-          buckets: [0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        },
-      ],
-    },
-  ],
-};
 
 describe('Overview: card do bot', () => {
   it('sem status mostra o aviso de espera', () => {
@@ -247,50 +192,6 @@ describe('Overview: pareamento', () => {
     expect(screen.getByText('ABCD-1234')).toBeTruthy();
     await vi.advanceTimersByTimeAsync(2100);
     expect(await screen.findByRole('button', { name: 'Copiar' })).toBeTruthy();
-  });
-});
-
-describe('Overview: KPIs de Hoje', () => {
-  it('sem plugin de métricas a seção some', async () => {
-    metrics = { available: false };
-    render(<Overview live={live({ status: status({ outboundPending: 4 }) })} />);
-    await metricsSettled();
-    expect(screen.queryByRole('heading', { name: 'Hoje (UTC)' })).toBeNull();
-  });
-
-  it('erro na chamada também esconde a seção, sem derrubar o resto', async () => {
-    metrics = 'erro';
-    render(<Overview live={live({ status: status() })} />);
-    await metricsSettled();
-    expect(screen.queryByRole('heading', { name: 'Hoje (UTC)' })).toBeNull();
-    expect(screen.getByRole('article', { name: 'Bot Luma' })).toBeTruthy();
-  });
-
-  it('mostra os KPIs do dia e a fila de saída ao vivo', async () => {
-    metrics = kernelMetrics;
-    const { rerender } = render(
-      <Overview live={live({ status: status({ outboundPending: 12 }) })} />,
-    );
-    const secao = await screen.findByRole('region', { name: 'Hoje (UTC)' });
-    const kpi = (nome: string) => within(secao).getByText(nome).nextElementSibling?.textContent;
-    expect(kpi('Mensagens')).toBe('1.234');
-    expect(kpi('Usuários ativos')).toBe('7');
-    expect(kpi('Grupos ativos')).toBe('2');
-    expect(kpi('Latência p95')).toBe('50 ms');
-    expect(kpi('Fila de saída')).toBe('12');
-    expect(within(secao).getByRole('link', { name: 'Ver métricas' }).getAttribute('href')).toBe(
-      '#/metricas',
-    );
-    // A fila vem do status ao vivo, não da chamada de métricas: muda sem novo fetch.
-    rerender(<Overview live={live({ status: status({ outboundPending: 0 }) })} />);
-    expect(kpi('Fila de saída')).toBe('0');
-  });
-
-  it('sem outboundPending (backend antigo) a fila mostra "-"', async () => {
-    metrics = kernelMetrics;
-    render(<Overview live={live({ status: status() })} />);
-    const secao = await screen.findByRole('region', { name: 'Hoje (UTC)' });
-    expect(within(secao).getByText('Fila de saída').nextElementSibling?.textContent).toBe('-');
   });
 });
 
