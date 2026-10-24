@@ -48,7 +48,9 @@ describe('catálogo do core', () => {
 
   it('a lista de eventos da doc tem todo evento do core', () => {
     const doc = readFileSync(new URL('../../docs/log-events.md', import.meta.url), 'utf8');
-    const missing = events.map((event) => event.name).filter((name) => !doc.includes(`\`${name}\``));
+    const missing = events
+      .map((event) => event.name)
+      .filter((name) => !doc.includes(`\`${name}\``));
     expect(missing).toEqual([]);
   });
 });
