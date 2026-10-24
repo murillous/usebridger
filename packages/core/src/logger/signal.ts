@@ -4,6 +4,7 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Observers } from '#observers/observers.ts';
+import { currentTrace } from '#trace/scope.ts';
 import { MIN_SECRET_LENGTH, withoutReserved } from './logger.ts';
 import { redactPersonalIds } from './personal-id.ts';
 import type { SecretSource } from './secrets.ts';
@@ -88,6 +89,11 @@ export function createLogSignalTap(observers: Observers, secrets: SecretSource):
     }
   };
 
+  const traceField = (): LogFields => {
+    const trace = currentTrace();
+    return trace === undefined ? {} : { trace };
+  };
+
   const wrap = (logger: Logger, bindings: LogFields): Logger => {
     // Emite o sinal à parte do log: quem loga é o método do logger embrulhado (inclusive o `event`
     // de um `config.logger` próprio). `eventName` entra nos campos só quando o sinal sai.
@@ -109,7 +115,7 @@ export function createLogSignalTap(observers: Observers, secrets: SecretSource):
           message: censor(message),
           // Mesmo filtro da linha: o sinal não mostra `level`/`time`/`msg` que a linha descartou.
           fields: safeFields(
-            { ...bindings },
+            { ...bindings, ...traceField() },
             eventName === undefined
               ? fields && withoutReserved(fields)
               : { ...(fields && withoutReserved(fields)), event: eventName },

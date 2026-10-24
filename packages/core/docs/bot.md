@@ -33,6 +33,7 @@ Só `transport` é obrigatório; `createBot({ transport })` sobe um bot sem plug
 | `prefix` | `'!'` | Prefixo de comando: um texto para todo chat, ou `{ dm, group }` por tipo de chat; vazio é permitido ([Comandos](commands.md#prefixo-por-chat)) |
 | `logger` | criado pelo bot | `Logger` pronto. Sem ele, `createLogger({ level: logLevel, format: logFormat, secrets })` no `start()` |
 | `logLevel` | `'info'` | Nível do logger criado pelo bot |
+| `trail` | `'info'` | Trilha de eventos por mensagem, envio, passo, job e request (`'info'`, `'debug'` ou `'off'`; [Trace e trilha](logger.md#trace-e-trilha)) |
 | `logBindings` | — | Campos em toda linha de log, além do `bot` (a `session`), que o bot põe sozinho: `{ service, version, env }` para o agregador separar os bots ([Logger](logger.md#bindings-base)) |
 | `logFormat` | `'json'` | Formato do logger criado pelo bot; `'pretty'` para ler no terminal ([Logger](logger.md#saída-legível-em-dev)) |
 | `secrets` | um novo | `SecretSet` compartilhado entre a config de plugin e o logger (ver abaixo) |

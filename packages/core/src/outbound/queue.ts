@@ -3,6 +3,8 @@
 // informou, ADR 0063) e humanização opcional.
 
 import { AsyncLocalStorage } from 'node:async_hooks';
+import * as LOG from '#logger/events.ts';
+import { NO_TRAIL, type Trail } from '#logger/trail.ts';
 import type { Observers, OutboundSentSignal } from '#observers/observers.ts';
 import type { MessageText } from '#text/format.ts';
 import { assertCanSend } from '#transport/capabilities.ts';
@@ -98,6 +100,11 @@ export interface OutboundQueueOptions {
   readonly random?: () => number;
   /** Destino do sinal `outbound.sent` de cada `send` (ADR 0102). */
   readonly observers?: Pick<Observers, 'has' | 'emit'>;
+  /**
+   * Trilha de eventos (ADR 0120): o `outbound.sent` sai na hora que o sinal sai, no trace de quem
+   * enfileirou. Padrão: desligada.
+   */
+  readonly trail?: Trail;
 }
 
 /**
@@ -223,6 +230,7 @@ export class OutboundQueue implements Sender {
   readonly #album: AlbumSplitter;
   readonly #config: OutboundConfig;
   readonly #observers: Pick<Observers, 'has' | 'emit'> | undefined;
+  readonly #trail: Trail;
 
   // Só chats com mensagem aguardando ou em andamento: ao esvaziar, saem (o vazamento do
   // rateLimiter do legacy).
@@ -263,6 +271,7 @@ export class OutboundQueue implements Sender {
     this.#text = new TextLimiter(options.transport);
     this.#album = new AlbumSplitter(options.transport);
     this.#observers = options.observers;
+    this.#trail = options.trail ?? NO_TRAIL;
   }
 
   /**
@@ -302,9 +311,10 @@ export class OutboundQueue implements Sender {
         content,
       }),
     );
-    const track: Track | undefined = this.#observers?.has('outbound.sent')
-      ? { startedAt: this.#config.clock(), dispatchedAt: Number.NaN, retries: 0 }
-      : undefined;
+    const track: Track | undefined =
+      this.#observers?.has('outbound.sent') || this.#trail.enabled()
+        ? { startedAt: this.#config.clock(), dispatchedAt: Number.NaN, retries: 0 }
+        : undefined;
     const sending = this.#push(chatId, options?.priority, {
       ...(head as JobPart),
       rest,
@@ -319,12 +329,21 @@ export class OutboundQueue implements Sender {
     if (track === undefined) return sending;
     const emit = (status: OutboundSentSignal['status']): void => {
       const end = Number.isNaN(track.dispatchedAt) ? this.#config.clock() : track.dispatchedAt;
-      this.#observers?.emit('outbound.sent', {
+      const queuedMs = end - track.startedAt;
+      // Aqui o `durationMs` é a espera na fila até o despacho (taxa anti-ban e retries inclusos).
+      this.#trail.emit(LOG.outboundSent, {
+        kind: content.type,
+        status,
+        ...(origin?.messageId !== undefined && { replyTo: origin.messageId }),
+        durationMs: Math.round(queuedMs * 100) / 100,
+      });
+      if (!this.#observers?.has('outbound.sent')) return;
+      this.#observers.emit('outbound.sent', {
         chatId,
         ...(origin !== undefined && { chatType: origin.chatType }),
         kind: content.type,
         status,
-        queuedMs: end - track.startedAt,
+        queuedMs,
         retries: track.retries,
         ...(origin?.messageId !== undefined && { replyTo: origin.messageId }),
       });

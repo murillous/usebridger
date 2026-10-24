@@ -9,9 +9,12 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { ContextExpiredError, Deadline, JobTimeoutError } from '#deadline.ts';
 import type { PluginErrorEvent } from '#events/types.ts';
+import * as LOG from '#logger/events.ts';
+import { NO_TRAIL, type Trail } from '#logger/trail.ts';
 import { kernelStorage } from '#storage/namespace.ts';
 import type { Collection, JsonValue, StoragePort, Where, WithId } from '#storage/types.ts';
 import { TenantScope } from '#tenant/scope.ts';
+import { currentTrace, newTraceId, runInTrace } from '#trace/scope.ts';
 import type { Unsubscribe } from '#transport/types.ts';
 import { nextOccurrence, normalizeRule, type RecurrenceRule } from './rule.ts';
 import type { JobContext, JobHandler, Scheduler } from './types.ts';
@@ -40,6 +43,8 @@ type JobDocument = {
   tenant?: string;
   /** Presente só em série (`every`): o documento é a série e `fireAt` a ocorrência pendente. */
   rule?: RecurrenceRule;
+  /** Trace de quem agendou (ADR 0120): vira o `cause` do `job.run`. Ausente: fora de um trace. */
+  cause?: string;
 };
 
 type StoredJob = WithId<JobDocument>;
@@ -74,6 +79,8 @@ export interface SchedulerServiceOptions {
    * no escopo dele. Padrão: um escopo próprio, sem tenant.
    */
   readonly tenants?: TenantScope;
+  /** Trilha de eventos: uma linha `job.run` por execução. Padrão: desligada. */
+  readonly trail?: Trail;
   /** Prazo de cada handler em ms. Padrão: 30000. */
   readonly jobTimeoutMs?: number;
   /** Espera antes de reconsultar o storage depois de uma falha, em ms. Padrão: 5000. */
@@ -186,6 +193,7 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
   const { onError, onStorageError } = options;
   const onLateError = options.onLateError ?? onError;
   const tenants = options.tenants ?? new TenantScope();
+  const trail = options.trail ?? NO_TRAIL;
   const jobTimeoutMs = validTimeout('jobTimeoutMs', options.jobTimeoutMs ?? DEFAULT_JOB_TIMEOUT_MS);
   const retryMs = validTimeout(
     'storageRetryMs',
@@ -408,7 +416,21 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
    * rejeita: toda falha já foi entregue ao `onError`. Estourado o prazo (ou abandonado), o
    * `signal` do job aborta (ADR 0029).
    */
-  function run(doc: StoredJob, { handler, lifetime }: RegisteredHandler): Promise<boolean> {
+  function run(doc: StoredJob, registered: RegisteredHandler): Promise<boolean> {
+    // Trace próprio por execução; o do agendamento fica no `cause`.
+    return runInTrace(newTraceId(), () => runTraced(doc, registered));
+  }
+
+  function runTraced(doc: StoredJob, { handler, lifetime }: RegisteredHandler): Promise<boolean> {
+    const startedAt = performance.now();
+    const ended = (status: 'ok' | 'failed' | 'timeout'): void =>
+      trail.emit(LOG.jobRun, {
+        job: doc.job,
+        plugin: doc.plugin,
+        status,
+        durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
+        ...(doc.cause !== undefined && { cause: doc.cause }),
+      });
     const deadline = new Deadline(lifetime);
     const job: JobContext = {
       scheduledAt: new Date(doc.fireAt),
@@ -423,9 +445,13 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
       result = tenants.run(doc.tenant, () => handler(doc.payload, job));
     } catch (error) {
       fail(doc, error, false);
+      ended('failed');
       return Promise.resolve(true);
     }
-    if (!isThenable(result)) return Promise.resolve(true);
+    if (!isThenable(result)) {
+      ended('ok');
+      return Promise.resolve(true);
+    }
     return new Promise<boolean>((resolve) => {
       let settled = false;
       const settle = (finished: boolean): void => {
@@ -439,6 +465,7 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
         settle(true);
         deadline.expire(error);
         fail(doc, error, true);
+        ended('timeout');
       }, jobTimeoutMs);
       abandons.set(doc.id, (reason) => {
         settle(false);
@@ -446,12 +473,15 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
       });
       result.then(
         () => {
-          if (!settled) settle(true);
+          if (settled) return;
+          settle(true);
+          ended('ok');
         },
         (error: unknown) => {
           if (!settled) {
             settle(true);
             fail(doc, error, false);
+            ended('failed');
             return;
           }
           // Rejeição depois do prazo: já reportado como timeout; o erro tardio vai só ao
@@ -476,12 +506,14 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
         assertJobName(job);
         assertJsonValue(payload, 'payload', new Set());
         const tenant = tenants.current;
+        const cause = currentTrace();
         const id = await jobs.insert({
           plugin,
           job,
           fireAt,
           payload,
           ...(tenant !== undefined && { tenant }),
+          ...(cause !== undefined && { cause }),
         });
         scheduleWake(fireAt);
         return id;
@@ -492,6 +524,7 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
         assertJobName(job);
         assertJsonValue(payload, 'payload', new Set());
         const tenant = tenants.current;
+        const cause = currentTrace();
         const now = Date.now();
         const fireAt = nextOccurrence(normalized, now, now);
         const id = await jobs.insert({
@@ -501,6 +534,7 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
           payload,
           rule: normalized,
           ...(tenant !== undefined && { tenant }),
+          ...(cause !== undefined && { cause }),
         });
         scheduleWake(fireAt);
         return id;

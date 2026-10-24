@@ -422,3 +422,41 @@ export const httpUnhandled: LogEvent = defineLogEvent({
   level: 'error',
   message: 'erro HTTP fora de um handler',
 });
+
+// Trilha de eventos por unidade de trabalho (ADR 0120). Só fatos e metadados, nunca o conteúdo
+// da mensagem. O nível `info` é o padrão; `trail: 'debug'` rebaixa todos (ver `createTrail`).
+export const messageReceived: LogEvent = defineLogEvent({
+  name: 'message.received',
+  level: 'info',
+  message: 'mensagem recebida',
+});
+export const messageHandled: LogEvent = defineLogEvent({
+  name: 'message.handled',
+  level: 'info',
+  message: 'mensagem tratada',
+});
+export const outboundSent: LogEvent = defineLogEvent({
+  name: 'outbound.sent',
+  level: 'info',
+  message: 'envio concluído',
+});
+export const stepEntered: LogEvent = defineLogEvent({
+  name: 'step.entered',
+  level: 'info',
+  message: 'passo de conversa aguardando resposta',
+});
+export const stepExpired: LogEvent = defineLogEvent({
+  name: 'step.expired',
+  level: 'info',
+  message: 'passo de conversa expirou',
+});
+export const jobRun: LogEvent = defineLogEvent({
+  name: 'job.run',
+  level: 'info',
+  message: 'job executado',
+});
+export const httpRequest: LogEvent = defineLogEvent({
+  name: 'http.request',
+  level: 'info',
+  message: 'requisição HTTP atendida',
+});

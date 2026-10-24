@@ -64,6 +64,13 @@ retentativa trata o erro no handler e chama `at` de novo com o atraso que quiser
 
 Jobs vencidos disparam em ordem de horário e sem esperar um pelo outro.
 
+### Trace e `cause`
+
+Cada execução de handler ganha um `trace` próprio, e o `job.run` registra `job`, `plugin`, `status`
+(`ok`, `failed`, `timeout`), `durationMs` e `cause`: o `trace` de quem chamou `at` ou `every`
+(ausente se foi fora de um trace). Assim a mensagem que agendou o job e a execução dele se ligam
+([ADR 0120](../../../docs/adr/0120-trace-e-trilha-de-eventos.md)).
+
 ### Prazo e `signal`
 
 O segundo argumento do handler (`JobContext`) traz `signal: AbortSignal`, que aborta quando o

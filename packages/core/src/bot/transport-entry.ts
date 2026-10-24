@@ -12,6 +12,7 @@ import type { Observers } from '#observers/observers.ts';
 import type { OutboundQueue } from '#outbound/queue.ts';
 import type { InboundQueue } from '#queue/inbound.ts';
 import type { TenantScope } from '#tenant/scope.ts';
+import { newTraceId, runInTrace } from '#trace/scope.ts';
 import type { ConnectionStatus, Interaction, Transport } from '#transport/types.ts';
 import { DIRECT_EVENTS, type DirectEvent } from './direct-events.ts';
 import type { InboundFlow } from './inbound-flow.ts';
@@ -56,6 +57,10 @@ export interface TransportEntry {
 }
 
 export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
+  // Cada unidade de trabalho nasce com o trace próprio, dentro do escopo do tenant.
+  const work = <R>(tenant: string | undefined, fn: () => R): R =>
+    runInTrace(newTraceId(), () => deps.tenants.run(tenant, fn));
+
   /**
    * Põe a mensagem (nova ou editada) ou o clique na fila do chat dele: o mesmo chat anda em
    * série. A tarefa roda no escopo do tenant do chat (ADR 0068). Com observador de
@@ -67,7 +72,7 @@ export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
   ): void {
     const enqueuedAt = deps.observers?.has('message.handled') ? performance.now() : undefined;
     const result = deps.inbound.enqueue(item.chat.id, () =>
-      deps.tenants.run(item.chat.tenantId, () =>
+      work(item.chat.tenantId, () =>
         handle(item, enqueuedAt === undefined ? undefined : performance.now() - enqueuedAt),
       ),
     );
@@ -93,7 +98,7 @@ export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
       return;
     }
     const result = deps.inbound.enqueue(chat.id, () =>
-      deps.tenants.run(chat.tenantId, () => deps.flow.expireReply(chat, sender)),
+      work(chat.tenantId, () => deps.flow.expireReply(chat, sender)),
     );
     if (result === 'queued') return;
     deps.conversations.expire(chat.id, sender.id);
@@ -118,7 +123,7 @@ export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
       // Os listeners rodam no escopo do tenant do chat (ADR 0068). Ele vem do payload, não da
       // origem: entrada e saída do grupo passam pelo filtro sem chat, mas são de um tenant.
       const tenant = 'chat' in payload ? payload.chat.tenantId : undefined;
-      deps.tenants.run(tenant, () => {
+      work(tenant, () => {
         if (deps.gate.ready) {
           void deps.bus.emit(event, payload);
           return;

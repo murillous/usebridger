@@ -89,6 +89,16 @@ cada linha seguem o [dicionário do logger](logger.md#campos).
 | `http.listen.failed` | `error` | falha ao abrir a porta HTTP |
 | `http.server.error` | `error` | erro no servidor HTTP |
 | `http.unhandled` | `error` | erro HTTP fora de um handler |
+| `message.received` | `info` | mensagem recebida |
+| `message.handled` | `info` | mensagem tratada |
+| `outbound.sent` | `info` | envio concluído |
+| `step.entered` | `info` | passo de conversa aguardando resposta |
+| `step.expired` | `info` | passo de conversa expirou |
+| `job.run` | `info` | job executado |
+| `http.request` | `info` | requisição HTTP atendida |
+
+Os sete últimos são a [trilha de eventos](logger.md#trace-e-trilha) (ADR 0120): saem em `debug`
+com `trail: 'debug'` e somem com `trail: 'off'`.
 
 ## Transports
 

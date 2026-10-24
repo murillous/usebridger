@@ -96,7 +96,7 @@ O mesmo nome para a mesma coisa em core, transports e plugins (`StandardLogField
 | `status` | `string \| number` | Status (HTTP, plugin, conexão) |
 | `reason` | `string` | Motivo em texto curto; o erro vai em `err` |
 | `durationMs` | `number` | Duração |
-| `trace` | `string` | Id de correlação; reservado, ainda sem uso |
+| `trace` | `string` | Id de correlação da unidade de trabalho (ver [Trace e trilha](#trace-e-trilha)) |
 
 Outros nomes continuam livres. O dicionário tem tipo: `{ chat: 1 }` não compila.
 
@@ -221,6 +221,54 @@ censura também o texto que coincidir com ele. Valores com menos de 4
 caracteres são ignorados: censurar `"1"` ou `"on"` apagaria pedaços de todo log, e um valor tão
 curto não protege nada de qualquer forma.
 
+## Trace e trilha
+
+[ADR 0120](../../../docs/adr/0120-trace-e-trilha-de-eventos.md). Para juntar tudo o que uma
+mensagem causou, o core dá um `trace` (32 hex, o formato do W3C Trace Context) a cada unidade de
+trabalho: a mensagem (ou clique, ou expiração de passo), o request HTTP, a execução de um job e o
+boot dos plugins. Ele fica num `AsyncLocalStorage` e entra sozinho em toda linha de um logger do
+`createLogger` (o do bot ou o que o app passa em `config.logger`), inclusive o `ctx.log` dos
+plugins, e nos `fields` do sinal `log`. O plugin não repassa nada.
+
+- **Envio:** a fila de saída executa o envio no trace de quem o enfileirou, então o log do
+  transport e o `outbound.sent` saem no trace da mensagem que gerou a resposta.
+- **Job:** `at` e `every` guardam o trace de quem agendou como `cause`. A execução ganha um trace
+  próprio, e o `job.run` leva o `cause`: o elo entre a mensagem e o job.
+- **HTTP:** o `traceparent` válido do request é adotado (o Traefik pode gerá-lo), e a resposta
+  devolve o header com o mesmo `trace-id`. Sem header, ou com header malformado, o core gera um.
+- **`plugin.error`:** a linha do erro sai no trace do trabalho que falhou. O payload do evento do
+  barramento não muda.
+- **Logger próprio** que não vem do `createLogger`: a linha só leva o `trace` se ele o ler do
+  contexto; o sinal `log` o leva de qualquer jeito.
+
+A trilha são os eventos `info` do core, só com fatos e metadados (**nunca o texto da mensagem**,
+em nível nenhum):
+
+| `event` | Campos |
+| --- | --- |
+| `message.received` | `chat`, `sender`, `chatType`, `kind`, `messageId` |
+| `message.handled` | `route`, `command`, `step`, `status`, `durationMs` |
+| `outbound.sent` | `kind`, `status`, `replyTo`, `durationMs` (espera na fila até o despacho) |
+| `step.entered` / `step.expired` | `plugin`, `step` |
+| `job.run` | `job`, `plugin`, `status`, `durationMs`, `cause` |
+| `http.request` | `method`, `route`, `status`, `durationMs` (rota é o padrão, sem query string nem corpo) |
+
+São 2 a 3 linhas por mensagem. `createBot({ trail })` ajusta: `'info'` (padrão), `'debug'` (a
+trilha sai em `debug`, ligue com `logLevel: 'debug'` quando investigar) e `'off'`. Os erros e
+avisos não mudam. O `/health` e o WebSocket não geram `http.request`.
+
+### Investigar no Grafana
+
+1. Ache o pseudônimo do usuário com `pnpm bridger-pseudonym <telefone ou JID>` (ou `ctx.pseudonym`
+   num plugin).
+2. Veja o que ele fez: `{service="lumabot"} | json | chat="u_7Hq2…"`. Cada `message.received`
+   traz um `trace`.
+3. Pegue o `trace` da mensagem com erro e abra a jornada inteira, com os logs dos plugins, os
+   envios e os erros: `{service="lumabot"} | json | trace="3f2a…"`.
+4. Um `job.run` com `cause` aponta o trace da mensagem que agendou o job: troque o filtro pelo
+   `cause` e siga de volta.
+5. No HTTP, cole o `traceparent` da linha do Traefik: o `trace-id` dele é o `trace` do bot.
+
 ## Logger próprio
 
 `config.logger` aceita qualquer objeto com a interface `Logger`, que inclui o `event`. O bot chama
@@ -277,7 +325,7 @@ O padrão segue `'json'`, que é o que agregadores e arquivos de log esperam. O 
 
 Com Grafana Alloy → Loki, os rótulos de stream ficam só com o que tem baixa cardinalidade:
 `service`, `bot`, `env`, `level` e `plugin`. `event`, `chat`, `command` e `trace` ficam no corpo e
-são filtrados com `| json`. O pipeline do Alloy está em
+são filtrados com `| json` (o roteiro está em [Trace e trilha](#investigar-no-grafana)). O pipeline do Alloy está em
 [Rodar em produção](/usebridger/comecando/producao/#loki).
 
 ```logql

@@ -11,8 +11,10 @@ import type { WSContext, WSEvents } from 'hono/ws';
 import type { WebSocketServer } from 'ws';
 import { BotConfigError } from '#config/owners.ts';
 import * as LOG from '#logger/events.ts';
+import { NO_TRAIL, type Trail } from '#logger/trail.ts';
 import type { Logger } from '#logger/types.ts';
 import { DEFAULT_SESSION } from '#storage/namespace.ts';
+import { formatTraceparent, newTraceId, parseTraceparent, runInTrace } from '#trace/scope.ts';
 import type {
   HttpHandler,
   HttpMethod,
@@ -65,6 +67,8 @@ interface RouteEntry {
   readonly base: () => string;
   readonly target: HttpHandler | { readonly ws: HttpSocketAccept };
   readonly onError: (error: unknown) => void;
+  /** Trilha do bot dono da rota (ADR 0120). */
+  readonly trail: Trail;
   /** Conexões abertas, fechadas quando a rota sai. */
   readonly sockets: Set<WSContext>;
 }
@@ -92,12 +96,17 @@ export function createHttp(options: HttpOptions): HttpServer {
 }
 
 /** Tabela de rotas de uma sessão nesse servidor; sem efeito até o `attach`. */
-export function sessionHttp(server: HttpServer, session: string, log: () => Logger): SessionHttp {
+export function sessionHttp(
+  server: HttpServer,
+  session: string,
+  log: () => Logger,
+  trail: Trail = NO_TRAIL,
+): SessionHttp {
   const hub = hubs.get(server);
   if (hub === undefined) {
     throw new BotConfigError('http: passe o servidor criado por `createHttp({ port })`');
   }
-  return new SessionHttp(hub, session, log);
+  return new SessionHttp(hub, session, log, trail);
 }
 
 /** Prefixo das rotas da sessão: nenhum na `default`, para a URL não mudar quando entra outro bot. */
@@ -119,13 +128,15 @@ export class SessionHttp {
   readonly #hub: HttpHub;
   readonly #prefix: string;
   readonly #entries = new Map<string, RouteEntry>();
+  readonly #trail: Trail;
   #state: () => string = () => 'idle';
   #attached = false;
 
-  constructor(hub: HttpHub, session: string, log: () => Logger) {
+  constructor(hub: HttpHub, session: string, log: () => Logger, trail: Trail) {
     this.#hub = hub;
     this.session = session;
     this.log = log;
+    this.#trail = trail;
     this.#prefix = sessionPrefix(session);
   }
 
@@ -150,6 +161,7 @@ export class SessionHttp {
         base,
         target,
         onError: (error) => onError(error, `${method} ${path}`),
+        trail: this.#trail,
         sockets: new Set(),
       });
       if (this.#attached) this.#hub.changed();
@@ -376,15 +388,38 @@ function mount(app: Hono, entry: RouteEntry, upgradeWebSocket: typeof UpgradeWeb
   const info = (c: Context): HttpRequestInfo => ({ params: c.req.param() });
   const { target } = entry;
   if (typeof target === 'function') {
-    app.on(entry.method, path, async (c) => {
-      try {
-        const response = await target(c.req.raw, info(c));
-        if (response instanceof Response) return response;
-        throw new TypeError(`o handler de ${entry.method} ${entry.path} não devolveu um Response`);
-      } catch (error) {
-        entry.onError(error);
-        return c.text('Internal Server Error', 500);
-      }
+    const handler = target;
+    app.on(entry.method, path, (c) => {
+      const trace = parseTraceparent(c.req.header('traceparent')) ?? newTraceId();
+      // Um trace por request (ADR 0120): o `traceparent` válido de entrada é adotado, para a linha
+      // do proxy e a do bot se cruzarem; o header volta na resposta.
+      return runInTrace(trace, async () => {
+        const started = performance.now();
+        let response: Response;
+        try {
+          const result = await handler(c.req.raw, info(c));
+          if (!(result instanceof Response)) {
+            throw new TypeError(
+              `o handler de ${entry.method} ${entry.path} não devolveu um Response`,
+            );
+          }
+          response = result;
+        } catch (error) {
+          entry.onError(error);
+          response = new Response('Internal Server Error', {
+            status: 500,
+            headers: { 'content-type': 'text/plain; charset=UTF-8' },
+          });
+        }
+        // Rota e método, nunca query string nem corpo: o `path` é o padrão, sem os valores.
+        entry.trail.emit(LOG.httpRequest, {
+          method: entry.method,
+          route: path,
+          status: response.status,
+          durationMs: Math.round((performance.now() - started) * 100) / 100,
+        });
+        return withTraceparent(response, trace);
+      });
     });
     return;
   }
@@ -405,6 +440,18 @@ function mount(app: Hono, entry: RouteEntry, upgradeWebSocket: typeof UpgradeWeb
       onError: (error) => entry.onError(error),
     });
     return (await upgrade(c, next)) ?? c.text('Internal Server Error', 500);
+  });
+}
+
+// O `Response` do handler pode ter headers imutáveis (`fetch`, `Response.redirect`): a cópia só
+// troca os headers, o corpo segue como stream.
+function withTraceparent(response: Response, trace: string): Response {
+  const headers = new Headers(response.headers);
+  headers.set('traceparent', formatTraceparent(trace));
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
   });
 }
 
