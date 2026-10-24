@@ -35,6 +35,8 @@ export type ScenarioName =
   | 'overhead'
   | 'overhead-observed'
   | 'throughput'
+  | 'throughput-logged'
+  | 'throughput-logged-off'
   | 'idle-memory'
   | 'memory-growth'
   | 'boot';
@@ -68,7 +70,7 @@ export async function overhead(options: OverheadOptions = {}): Promise<number> {
   return percentile(latencies, 99);
 }
 
-export interface ThroughputOptions {
+export interface ThroughputOptions extends WorkloadOptions {
   readonly warmup?: number;
   readonly messages?: number;
 }
@@ -80,7 +82,7 @@ export interface ThroughputOptions {
 export async function throughput(options: ThroughputOptions = {}): Promise<number> {
   // Aquecimento fora da medida: o JIT ainda não otimizou o caminho nas primeiras mensagens.
   const { warmup = 20_000, messages = 200_000 } = options;
-  const workload = await createWorkload();
+  const workload = await createWorkload(options);
   const warmupReplies = await drive(workload, 0, warmup);
   const start = performance.now();
   const replies = await drive(workload, warmup, messages);
@@ -205,6 +207,26 @@ export const SCENARIOS: readonly Scenario[] = [
     runs: 5,
     checksRegression: true,
     run: () => throughput(),
+  },
+  {
+    // A vazão com logger em `info` e destino nulo: o bench padrão usa `silent` e não paga as
+    // linhas da trilha (ADR 0120). Sem regressão checada: mede o custo, não uma meta do plano.
+    name: 'throughput-logged',
+    description: 'Vazão com logger em info e trilha em info',
+    unit: 'msg/s',
+    target: { min: 5_000 },
+    runs: 5,
+    checksRegression: false,
+    run: () => throughput({ logged: true, trail: 'info' }),
+  },
+  {
+    name: 'throughput-logged-off',
+    description: 'Vazão com logger em info e trilha desligada',
+    unit: 'msg/s',
+    target: { min: 5_000 },
+    runs: 5,
+    checksRegression: false,
+    run: () => throughput({ logged: true, trail: 'off' }),
   },
   {
     name: 'idle-memory',

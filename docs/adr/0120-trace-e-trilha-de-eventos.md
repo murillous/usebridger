@@ -25,7 +25,9 @@ coisas:
   `TenantScope` (ADR 0068), mas **do módulo, não do bot**. É a exceção ao "nada global" do ADR
   0003, deliberada: o store não guarda estado do bot, só o id da unidade de trabalho de cada
   contexto assíncrono, então dois bots no processo não se enxergam. Em troca, todo `createLogger`
-  carimba o `trace` sem o app configurar nada, inclusive um `config.logger` criado com `createLogger`. Uma **unidade de trabalho** é: a mensagem (também o clique, o comando nativo e a
+  carimba o `trace` sem o app configurar nada, inclusive um `config.logger` criado com `createLogger`.
+
+  Uma **unidade de trabalho** é: a mensagem (também o clique, o comando nativo e a
   expiração de um passo, que passam pela fila do chat), o evento direto do transport, o request
   HTTP de uma rota, a execução de um job e o boot dos plugins. Cada uma abre o próprio `trace`.
 - **Propagação sem o plugin repassar nada:**
@@ -90,20 +92,23 @@ O `AsyncLocalStorage` roda uma vez por unidade de trabalho (a mensagem já pagav
 id vem de `randomUUID`, e as linhas da trilha só custam quando o nível as emite.
 
 O bench padrão usa logger `silent` (`packages/testing/src/test-bot.ts`), então não enxerga o custo
-das linhas. Medição do cenário `throughput` com `createLogger({ level: 'info' })` e destino nulo
-(`write: () => undefined`), contra o `silent` atual, 8 execuções alternadas de cada (processo novo
-por execução), AMD Ryzen 7 5700U, 16 threads, Node 24.21, máquina ociosa:
+das linhas. Os cenários `throughput-logged` (logger `info`, destino nulo, `trail: 'info'`) e
+`throughput-logged-off` (o mesmo, com `trail: 'off'`) medem esse custo contra o `throughput`
+(`silent`). Medição com 6 execuções alternadas de cada (processo novo por execução), AMD Ryzen 7
+5700U, Node 24.21, máquina ociosa:
 
-| Logger | msg/s (min a max) |
+| Cenário | msg/s (min a max) |
 | --- | --- |
-| `silent` | 10.648 a 12.352 (mediana ~11.9k) |
-| `info`, destino nulo | 6.316 a 6.430 (mediana ~6.4k) |
+| `throughput` (`silent`) | 12.097 a 12.280 (mediana ~12,2k) |
+| `throughput-logged` (`info`, `trail: 'info'`) | 6.441 a 6.483 (mediana ~6,46k) |
+| `throughput-logged-off` (`info`, `trail: 'off'`) | 11.950 a 12.369 (mediana ~12,2k) |
 
-Montar e serializar as linhas da trilha em `info` custa cerca de 46% da vazão do bot de referência
-(500 chats, 20 plugins), ainda acima da meta de 5.000 msg/s. O número vale para o pior caso, em
-que a mensagem não faz nada além de passar pela trilha; o custo absoluto é fixo por linha, então
-pesa menos num bot cujo handler faz I/O. Quem precisar da vazão máxima rebaixa a trilha (`off`).
-A medição foi pontual, com uma alteração local do bench que não foi commitada.
+Reproduzir: `pnpm build` e `node bench/dist/main.mjs --scenario throughput-logged` (e os outros
+dois nomes). O custo vem todo da trilha: com ela desligada o logger em `info` empata com o
+`silent` (só 2 linhas saem no processo), e com ela ligada saem cerca de 2,67 linhas por mensagem
+e a vazão cai quase pela metade (~47%), ainda acima da meta de 5.000 msg/s. O número é o pior
+caso, em que o handler não faz nada além de passar pela trilha; o custo por linha é fixo, então
+pesa menos num bot cujo handler faz I/O. Quem precisa da vazão máxima usa `trail: 'off'`.
 
 ### Relação com o `ctx.audit` (#224)
 
