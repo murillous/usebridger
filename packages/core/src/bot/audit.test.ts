@@ -134,3 +134,75 @@ describe('trava de sessão perdida', () => {
     }
   });
 });
+
+describe('boot e shutdown da auditoria', () => {
+  it('avisa audit.unkeyed no boot sem BRIDGER_SECRET_KEY, e não com ela', async () => {
+    const lines = recordingLogger();
+    const bot = createBot({
+      transport: new RecordingTransport(),
+      logger: lines,
+      env: {},
+      plugins: [],
+    });
+    bots.push(bot);
+    await bot.start();
+    expect(lines.lines.some((l) => l.fields['event'] === 'audit.unkeyed')).toBe(true);
+
+    const keyed = recordingLogger();
+    const other = createBot({
+      transport: new RecordingTransport(),
+      logger: keyed,
+      env: { BRIDGER_SECRET_KEY: Buffer.alloc(32, 3).toString('base64') },
+      plugins: [],
+    });
+    bots.push(other);
+    await other.start();
+    expect(keyed.lines.some((l) => l.fields['event'] === 'audit.unkeyed')).toBe(false);
+  });
+
+  it('o prazo do audit.stop é limitado pelo shutdown.timeoutMs total', async () => {
+    const inner = openMemory();
+    const storage = {
+      ...inner,
+      forNamespace(namespace: string) {
+        const ns = inner.forNamespace(namespace);
+        if (namespace !== '$audit') return ns;
+        return {
+          ...ns,
+          collection: (name: string, options?: { indexes?: readonly string[] }) => ({
+            ...ns.collection(name, options),
+            insert: () => new Promise<string>(() => undefined),
+          }),
+        };
+      },
+    } as unknown as StoragePort;
+    const log = recordingLogger();
+    const plugin = definePlugin({
+      name: 'p',
+      version: '1.0.0',
+      engine: '>=0.0.0',
+      setup(ctx) {
+        ctx.audit.record({ action: 'p.a' });
+      },
+    });
+    const bot = createBot({
+      transport: new RecordingTransport(),
+      logger: log,
+      env: {},
+      storage,
+      plugins: [plugin],
+      shutdown: { hookTimeoutMs: 30_000, timeoutMs: 300 },
+    });
+    bots.push(bot);
+    await bot.start();
+    const started = Date.now();
+    await bot.stop();
+    expect(Date.now() - started).toBeLessThan(3000);
+    // O plugin (e o observador dele) já desceu: o descarte aparece no log.
+    expect(
+      log.lines.some(
+        (l) => l.fields['event'] === 'audit.dropped' && l.fields['reason'] === 'shutdown',
+      ),
+    ).toBe(true);
+  });
+});
