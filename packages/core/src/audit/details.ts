@@ -6,16 +6,15 @@ import type { SecretSource } from '#logger/secrets.ts';
 import type { JsonValue } from '#storage/types.ts';
 
 const CENSOR = '[REDACTED]';
-const SECRET_KEYS: ReadonlySet<string> = new Set([
-  'password',
-  'passwd',
-  'token',
-  'secret',
-  'apikey',
-  'api_key',
-  'authorization',
-  'cookie',
-]);
+// Por sufixo (ADR 0123): chaves derivadas como `accessToken` e `clientSecret` também são segredo.
+const SECRET_SUFFIXES = ['password', 'passwd', 'token', 'secret', 'apikey'] as const;
+const SECRET_KEYS: ReadonlySet<string> = new Set(['authorization', 'cookie']);
+
+/** Sem diferenciar maiúscula nem separador: `API_KEY`, `api-key` e `apiKey` viram `apikey`. */
+function isSecretKey(key: string): boolean {
+  const normalized = key.toLowerCase().replace(/[_-]/g, '');
+  return SECRET_KEYS.has(normalized) || SECRET_SUFFIXES.some((s) => normalized.endsWith(s));
+}
 const MAX_DEPTH = 16;
 
 type Details = { readonly [key: string]: JsonValue };
@@ -52,9 +51,7 @@ export function createDetailsRedactor(secrets: SecretSource): DetailsRedactor {
         if (key === '__proto__' || key.includes('\u0000')) {
           throw new TypeError(`audit: details com chave inválida "${key}"`);
         }
-        out[key] = SECRET_KEYS.has(key.toLowerCase())
-          ? CENSOR
-          : clean(item, includeContent, depth + 1);
+        out[key] = isSecretKey(key) ? CENSOR : clean(item, includeContent, depth + 1);
       }
       return out;
     }
