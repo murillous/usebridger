@@ -472,6 +472,21 @@ export const auditDropped: LogEvent = defineLogEvent({
   level: 'error',
   message: 'eventos de auditoria descartados',
 });
+export const auditPurged: LogEvent = defineLogEvent({
+  name: 'audit.purged',
+  level: 'info',
+  message: 'auditoria vencida expurgada',
+});
+export const auditPurgeSkipped: LogEvent = defineLogEvent({
+  name: 'audit.purge.skipped',
+  level: 'warn',
+  message: 'expurgação da auditoria adiada: o registro kernel.audit.purge não foi gravado',
+});
+export const auditPurgeFailed: LogEvent = defineLogEvent({
+  name: 'audit.purge.failed',
+  level: 'error',
+  message: 'falha na expurgação da auditoria; tenta de novo na próxima passada',
+});
 export const auditUnkeyed: LogEvent = defineLogEvent({
   name: 'audit.unkeyed',
   level: 'warn',

@@ -1,5 +1,6 @@
 import { ActionRegistry } from '#actions/actions.ts';
 import { AUDIT_COLLECTION, AUDIT_INDEXES, createAudit } from '#audit/audit.ts';
+import { createAuditRetention, validateRetentionDays } from '#audit/retention.ts';
 import { createCommandCatalog } from '#commands/catalog.ts';
 import { createPrefixStore } from '#commands/prefixes.ts';
 import { createCommandRegistry } from '#commands/registry.ts';
@@ -273,17 +274,26 @@ export function createBot(config: BotConfig): Bot {
   // agendados seguem ele.
   const tenants = new TenantScope();
   // Auditoria (ADR 0122): uma cadeia por sessão, no namespace do kernel.
+  const auditCollection = () =>
+    kernelStorage(scoped, AUDIT_COLLECTION).collection(AUDIT_COLLECTION, {
+      indexes: AUDIT_INDEXES,
+    });
   const audit = createAudit({
-    collection: () =>
-      kernelStorage(scoped, AUDIT_COLLECTION).collection(AUDIT_COLLECTION, {
-        indexes: AUDIT_INDEXES,
-      }),
+    collection: auditCollection,
+    onFlushed: () => auditRetention.tick(),
     session,
     tenants,
     log: getLog,
     observers,
     secrets,
     masterKeys: () => readSecretKeys(config.env ?? processEnv()),
+  });
+  // Expurgação diária, disparada pela gravação (sem timer; ver docs/audit.md).
+  const auditRetention = createAuditRetention({
+    audit,
+    collection: auditCollection,
+    retentionDays: validateRetentionDays(config.audit?.retentionDays),
+    log: getLog,
   });
   const scheduler = createSchedulerService({
     storage: scoped,
@@ -446,6 +456,7 @@ export function createBot(config: BotConfig): Bot {
     void outbound.close({ drain: false });
     // Gancho que não coube no prazo: o que resta na fila vira `audit.dropped`.
     audit.close();
+    auditRetention.stop();
   }
 
   async function bootPlugins(): Promise<void> {
@@ -615,6 +626,7 @@ export function createBot(config: BotConfig): Bot {
 
     // Depois da trava, o único escritor da cadeia: lê o topo e liga o flush (ADR 0122).
     audit.start();
+    auditRetention.start();
 
     // Plugins primeiro, connect depois (plano §5.3): um plugin quebrado (conflito de comando,
     // manifesto inválido, ciclo) derruba o boot antes de o transport abrir sessão — sem QR nem
@@ -726,6 +738,7 @@ export function createBot(config: BotConfig): Bot {
       config.shutdown?.hookTimeoutMs ?? DEFAULT_HOOK_TIMEOUT_MS,
       totalDeadline - Date.now(),
     );
+    auditRetention.stop();
     await audit.stop(auditMs > 0 ? AbortSignal.timeout(auditMs) : AbortSignal.abort());
     await abandonInternals();
     // Em `failed` o transport já foi desconectado; o storage só fecha depois disso.

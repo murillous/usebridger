@@ -95,6 +95,31 @@ O que ela promete e o que não:
 - O `verify` aceita o buraco no início deixado por uma expurgação: o primeiro elo restante tem
   `prevHash === lastHash` e `seq === toSeq + 1` de um `kernel.audit.purge` gravado depois.
 
+## Retenção e expurgação
+
+```ts
+createBot({ audit: { retentionDays: 365 } }); // padrão 1825 (5 anos); inteiro positivo
+```
+
+Valor inválido lança `BotConfigError`. A expurgação roda no máximo uma vez a cada 24 h (ator
+`system`, sessão e cadeia do bot), disparada pela primeira gravação da auditoria depois do boot
+e de cada dia seguinte:
+
+1. Acha o maior `seq` com `at` anterior ao corte (`toSeq`) e o `hash` desse elo (`lastHash`). O
+   corte é por `at`, mas o que sai é o prefixo `seq <= toSeq`: se o relógio voltou, o prefixo
+   inclui eventos mais novos, para a cadeia continuar contígua. Nada vencido: não grava nada.
+2. Grava `kernel.audit.purge` com `details: { fromSeq, toSeq, count, lastHash }` e faz `flush`.
+3. Só se o evento aparece gravado (o `record` pode ter sido descartado, o storage pode ter
+   falhado), apaga `seq <= toSeq`. Senão sai o log `warn` `audit.purge.skipped` e a próxima
+   passada tenta de novo. Queda no meio deixa um purge sem buraco, inofensivo.
+
+Logs: `audit.purged` (`info`), `audit.purge.skipped` (`warn`), `audit.purge.failed` (`error`).
+
+Não é um job do `ctx.scheduler`: ele persiste e é por plugin, então agendar a cada boot duplicaria
+a série, e o core não tem job interno como precedente; além disso, o boot do bot não pode deixar
+timer vivo (os testes de ciclo de vida contam). Sem gravação não há o que vencer, então o gatilho
+pela gravação não perde expurgação; o controle das 24 h vive na memória e recomeça a cada boot.
+
 ## Verificar por script do app
 
 O core não abre o banco, então o app monta o próprio script com o `StoragePort` que já usa:

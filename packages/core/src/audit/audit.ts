@@ -78,6 +78,8 @@ export interface AuditDeps {
   readonly masterKeys: () => { readonly current?: Buffer; readonly previous?: Buffer };
   /** Relógio do servidor; injetável nos testes. */
   readonly now?: () => Date;
+  /** Depois de um dreno que gravou algo (gancho da expurgação); não deve lançar. */
+  readonly onFlushed?: () => void;
 }
 
 /** O que o resto do core usa; o plugin só vê o `forPlugin`. */
@@ -132,6 +134,7 @@ export function createAudit(deps: AuditDeps): Audit {
   let timer: NodeJS.Timeout | undefined;
   let retryMs = 0;
   let draining: Promise<void> | undefined;
+  let wrote = false;
   // Descartes antes de haver observador: saem no primeiro sinal depois do registro.
   let beforeObserver = 0;
   // Quantas vezes seguidas o storage recusou o mesmo evento.
@@ -211,6 +214,7 @@ export function createAudit(deps: AuditDeps): Audit {
         inserting = false;
         lastSeq = body.seq;
         lastHash = hash;
+        wrote = true;
         rejects = 0;
         if (queue[0] === item) queue.shift();
       }
@@ -241,6 +245,10 @@ export function createAudit(deps: AuditDeps): Audit {
   function run(): Promise<void> {
     draining ??= drain().finally(() => {
       draining = undefined;
+      if (wrote) {
+        wrote = false;
+        deps.onFlushed?.();
+      }
       // Registro que chegou enquanto o dreno terminava não pode ficar sem timer.
       if (queue.length > 0 && started && closedReason === undefined && retryMs === 0) {
         if (queue.length >= AUDIT_FLUSH_SIZE) void run();
