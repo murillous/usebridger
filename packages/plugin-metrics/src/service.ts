@@ -101,8 +101,9 @@ export function seriesKey(labels: Labels): string {
 
 const NAME_RE = /^[a-zA-Z_:][a-zA-Z0-9_:]*$/;
 const LABEL_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-// Do runtime do Node (#239), que o `collectDefaultMetrics` preenche.
-const RESERVED_PREFIXES = ['process_', 'nodejs_'];
+// Do runtime do Node (#239): o `collectDefaultMetrics` preenche `process_`/`nodejs_` e o plugin
+// grava `bridger_runtime_*` no histórico; um plugin com o mesmo nome gravaria a série duas vezes.
+const RESERVED_PREFIXES = ['process_', 'nodejs_', 'bridger_runtime_'];
 
 // Ids de chat/usuário reconhecidos pelo formato, porque o core não expõe um reconhecedor:
 // JID/handle com `@` (`...@s.whatsapp.net`, `...@g.us`, `...@lid`), telefone ou id numérico

@@ -51,7 +51,7 @@ export const exportersListFailed: LogEvent = defineLogEvent({
 export const runtimeConfigIgnored: LogEvent = defineLogEvent({
   name: 'metrics.runtime.config-ignored',
   level: 'warn',
-  message: 'config do runtime diferente da do primeiro bot; vale a do primeiro para o processo',
+  message: 'config do runtime diferente da de quem criou a registry; vale a dela enquanto viver',
 });
 export const runtimeSampleFailed: LogEvent = defineLogEvent({
   name: 'metrics.runtime.sample-failed',

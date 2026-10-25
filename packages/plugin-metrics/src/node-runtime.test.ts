@@ -2,6 +2,7 @@
 // `bridger_runtime_*` no histórico. Arquivo próprio: a registry do runtime é singleton do módulo,
 // e a ordem dos bots aqui decide a config que vale para o processo.
 
+import { PerformanceObserver } from 'node:perf_hooks';
 import { createHttp, definePlugin, type Logger, type PluginDefinition } from '@usebridger/core';
 import { createTestBot } from '@usebridger/testing';
 import { collectDefaultMetrics } from 'prom-client';
@@ -100,6 +101,21 @@ describe('GET /metrics com o runtime', () => {
     }
     await a.stop();
     await b.stop();
+  });
+
+  it('o último bot a parar desliga o coletor e o próximo o recria', async () => {
+    const disable = vi.spyOn(PerformanceObserver.prototype, 'disconnect');
+    const calls = vi.mocked(collectDefaultMetrics).mock.calls.length;
+    const a = await createTestBot({ plugins: [metrics] });
+    const b = await createTestBot({ plugins: [metrics] });
+    await a.stop();
+    expect(disable).not.toHaveBeenCalled();
+    await b.stop();
+    expect(disable).toHaveBeenCalled();
+
+    const c = await createTestBot({ plugins: [metrics] });
+    expect(collectDefaultMetrics).toHaveBeenCalledTimes(calls + 2);
+    await c.stop();
   });
 
   it('config divergente entre bots gera warn uma vez', async () => {

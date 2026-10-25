@@ -9,7 +9,12 @@ import {
   type HistoryDoc,
   isTimeZone,
 } from '#history.ts';
-import { createRuntimeSampler, nodeRegistry, runtimeDeclarations } from '#node-runtime.ts';
+import {
+  createRuntimeSampler,
+  nodeRegistry,
+  releaseNodeRegistry,
+  runtimeDeclarations,
+} from '#node-runtime.ts';
 import { CORE_OWNER, createMetrics, type Declaration, type Sample } from '#service.ts';
 
 export type {
@@ -262,7 +267,14 @@ export const metrics: PluginDefinition = definePlugin({
       history.flush().catch((error: unknown) => ctx.log.event(LOG.flushFailed, { err: error }));
     }, ctx.config.flushIntervalMs);
     timer.unref();
-    const stop = (): void => node?.sampler.stop();
+    // Roda no abort e no teardown; a registry do processo só pode ser solta uma vez por setup.
+    let stopped = !node;
+    const stop = (): void => {
+      if (stopped) return;
+      stopped = true;
+      node?.sampler.stop();
+      releaseNodeRegistry();
+    };
     ctx.signal.addEventListener(
       'abort',
       () => {

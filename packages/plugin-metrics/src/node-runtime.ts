@@ -1,7 +1,7 @@
 // Métricas do runtime do Node (#239): o `collectDefaultMetrics` do `prom-client` no `/metrics` e
 // um amostrador próprio para o histórico.
 
-import { monitorEventLoopDelay } from 'node:perf_hooks';
+import perfHooks, { monitorEventLoopDelay, PerformanceObserver } from 'node:perf_hooks';
 import type { Logger } from '@usebridger/core';
 import { collectDefaultMetrics, Registry } from 'prom-client';
 import { CORE_OWNER, type Declaration, type Sample } from '#service.ts';
@@ -12,26 +12,71 @@ export interface NodeRuntimeConfig {
   readonly gcDurationBuckets?: readonly number[] | undefined;
 }
 
-// Uma registry por processo: o `collectDefaultMetrics` liga o `monitorEventLoopDelay` e o observer
-// de GC sem oferecer `stop`, então ela vive até o fim do processo e serve a todo bot e reload.
-let shared: { registry: Registry; key: string; warned: boolean } | undefined;
+// Uma registry por processo, contada por referência: bots e reloads a dividem, e o último a soltar
+// desliga o coletor.
+let shared:
+  | { registry: Registry; key: string; warned: boolean; refs: number; stop: () => void }
+  | undefined;
 
-/** A registry do runtime, criada na primeira chamada com a config dela; as seguintes a reaproveitam. */
-export function nodeRegistry(config: NodeRuntimeConfig, log: Logger): Registry {
-  const key = JSON.stringify([config.eventLoopMonitoringPrecision, config.gcDurationBuckets]);
-  if (!shared) {
-    const registry = new Registry();
+/**
+ * Roda o `collectDefaultMetrics` capturando o `monitorEventLoopDelay` e o observer de GC que ele
+ * liga, porque o `prom-client` não oferece `stop`. shortcut: depende de o `prom-client` buscar os
+ * dois em `perf_hooks` na hora da chamada (15.x); se mudar, o `stop` não os alcança e o coletor
+ * só vive até o fim do processo, como antes.
+ */
+function collectStoppable(registry: Registry, config: NodeRuntimeConfig): () => void {
+  const histograms: ReturnType<typeof monitorEventLoopDelay>[] = [];
+  const observers: PerformanceObserver[] = [];
+  const { monitorEventLoopDelay: monitor } = perfHooks;
+  const { observe } = PerformanceObserver.prototype;
+  perfHooks.monitorEventLoopDelay = (options) => {
+    const histogram = monitor(options);
+    histograms.push(histogram);
+    return histogram;
+  };
+  PerformanceObserver.prototype.observe = function (this: PerformanceObserver, options) {
+    observers.push(this);
+    return observe.call(this, options);
+  };
+  try {
     collectDefaultMetrics({
       register: registry,
       eventLoopMonitoringPrecision: config.eventLoopMonitoringPrecision,
       ...(config.gcDurationBuckets ? { gcDurationBuckets: [...config.gcDurationBuckets] } : {}),
     });
-    shared = { registry, key, warned: false };
+  } finally {
+    perfHooks.monitorEventLoopDelay = monitor;
+    PerformanceObserver.prototype.observe = observe;
+  }
+  return () => {
+    for (const h of histograms) h.disable();
+    for (const o of observers) o.disconnect();
+  };
+}
+
+/**
+ * A registry do runtime, criada na primeira chamada com a config dela; as seguintes a reaproveitam.
+ * Cada chamada pede um `releaseNodeRegistry()`.
+ */
+export function nodeRegistry(config: NodeRuntimeConfig, log: Logger): Registry {
+  const key = JSON.stringify([config.eventLoopMonitoringPrecision, config.gcDurationBuckets]);
+  if (!shared) {
+    const registry = new Registry();
+    const stop = collectStoppable(registry, config);
+    shared = { registry, key, warned: false, refs: 0, stop };
   } else if (key !== shared.key && !shared.warned) {
     shared.warned = true;
     log.event(LOG.runtimeConfigIgnored);
   }
+  shared.refs++;
   return shared.registry;
+}
+
+/** Solta uma referência; a última desliga o coletor e o próximo bot recria a registry. */
+export function releaseNodeRegistry(): void {
+  if (!shared || --shared.refs > 0) return;
+  shared.stop();
+  shared = undefined;
 }
 
 const GAUGES = [

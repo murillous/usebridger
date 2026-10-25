@@ -46,7 +46,7 @@ Declaração inválida lança `TypeError`:
 - `name` segue `^[a-zA-Z_:][a-zA-Z0-9_:]*$`, com a unidade no nome (`_seconds`, `_bytes`). Tempo
   vai em segundos, a convenção do Prometheus.
 - O contador termina em `_total`.
-- Os prefixos `process_` e `nodejs_` são reservados ao runtime do Node.
+- Os prefixos `process_`, `nodejs_` e `bridger_runtime_` são reservados ao runtime do Node.
 - `help` é texto não vazio.
 - `labelNames` segue `^[a-zA-Z_][a-zA-Z0-9_]*$`, sem repetição. Histograma não aceita `le`, o
   rótulo dos baldes.
@@ -309,16 +309,18 @@ O `collectDefaultMetrics` do `prom-client`, com os nomes padrão `process_*` e `
 dashboards prontos do Grafana funcionam sem ajuste), por exemplo `process_cpu_user_seconds_total`,
 `process_resident_memory_bytes`, `nodejs_heap_size_used_bytes`,
 `nodejs_eventloop_lag_p99_seconds` e `nodejs_gc_duration_seconds`. Os prefixos são reservados
-ao runtime: o serviço recusa declarar `process_*`/`nodejs_*`.
+ao runtime: o serviço recusa declarar `process_*`/`nodejs_*`, e também `bridger_runtime_*`,
+os gauges do histórico.
 
 - **Uma registry por processo**, criada quando o primeiro bot sobe com `runtime.enabled`. Bots
   novos e reloads do plugin a reaproveitam, sem coletor duplicado, e todo bot com o runtime ligado
   expõe os mesmos valores (o processo é um só).
-- **Vive até o fim do processo**: o coletor liga o `monitorEventLoopDelay` e o observer de GC sem
-  oferecer `stop`. Parar o bot ou o plugin não o desliga.
-- **A config do primeiro bot vale para o processo.** Um bot posterior com
+- **O último bot a parar desliga o coletor**: o `monitorEventLoopDelay` e o observer de GC que o
+  `collectDefaultMetrics` liga são desligados quando nenhum bot com o runtime ligado sobra. O
+  próximo bot recria a registry, com a config dele e contadores do zero.
+- **A config de quem cria a registry vale enquanto ela vive.** Um bot posterior com
   `eventLoopMonitoringPrecision` ou `gcDurationBuckets` diferente recebe
-  `metrics.runtime.config-ignored` (`warn`) uma vez só no processo.
+  `metrics.runtime.config-ignored` (`warn`) uma vez por registry.
 - Falha ao ler a registry do runtime no scrape vai para o log (`metrics.runtime.scrape-failed`) e
   o resto do `/metrics` sai.
 
