@@ -23,14 +23,14 @@ export interface MetricsRuntimeOptions {
   readonly log: Logger;
   readonly maxSeriesPerMetric: number;
   /** Chamado na primeira declaração de uma métrica e quando o dono dela muda. */
-  readonly onDescribe?: (descriptor: MetricDescriptor) => void;
+  readonly onDescribe?: (descriptor: Declaration) => void;
 }
 
 type Kind = 'counter' | 'histogram' | 'gauge';
 type Labels = Readonly<Record<string, string>>;
 
 /** Descritor de uma métrica, como vai para a coleção `catalog`. */
-export interface MetricDescriptor {
+export interface Declaration {
   readonly name: string;
   readonly type: Kind;
   readonly help: string;
@@ -51,20 +51,27 @@ export interface Sample {
   readonly fields: Readonly<Record<string, number>>;
 }
 
+/** A parte de escrita do serviço; a leitura (`query`, `catalog`) vem do histórico. */
+export type MetricsWriter = Omit<MetricsService, 'query' | 'catalog'>;
+
 /** Dono das métricas que o próprio plugin-metrics declara (kernel). */
 export const CORE_OWNER = 'core';
 
 export interface MetricsRuntime {
   /** Serviço do próprio plugin-metrics: o que ele declara tem o dono `core`. */
-  readonly service: MetricsService;
+  readonly service: MetricsWriter;
   /** Serviço de um plugin consumidor: a primeira declaração de uma métrica grava `caller` como dono. */
-  scoped(caller: string): MetricsService;
+  scoped(caller: string): MetricsWriter;
   /** O caller saiu: sai das métricas que declarou, e a que fica sem ninguém sai da registry. */
   release(caller: string): void;
   /** Quem declarou primeiro, entre os que ainda estão; `undefined` se a métrica não existe. */
   ownerOf(name: string): string | undefined;
   /** Lê a registry e devolve, por série, o que mudou desde a leitura anterior. */
   collect(): Promise<Sample[]>;
+  /** O que o próximo `collect` devolveria, sem avançar a leitura (o `query` soma ao gravado). */
+  peek(): Promise<Sample[]>;
+  /** Declarações vivas, com o dono atual. */
+  declarations(): Declaration[];
 }
 
 interface Series {
@@ -76,7 +83,7 @@ interface Entry {
   readonly kind: Kind;
   /** Especificação serializada: a redeclaração só devolve o handle se for igual. */
   readonly spec: string;
-  readonly descriptor: Omit<MetricDescriptor, 'owner'>;
+  readonly descriptor: Omit<Declaration, 'owner'>;
   readonly handle: Counter<string> | Histogram<string> | Gauge<string>;
   readonly metric: PromCounter | PromHistogram | PromGauge;
   /** Plugins que declararam, em ordem; o primeiro é o dono. */
@@ -267,13 +274,13 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
     return handle;
   }
 
-  // Delta de uma métrica contra o que o `collect` anterior já entregou.
-  async function read(name: string, entry: Entry, out: Sample[]): Promise<void> {
+  // Delta de uma métrica contra o que o `collect` anterior já entregou; `commit` avança a base.
+  async function read(name: string, entry: Entry, out: Sample[], commit: boolean): Promise<void> {
     if (entry.kind === 'gauge') {
       for (const g of entry.gauges.values()) {
         out.push({ metric: name, type: 'gauge', labels: g.labels, fields: g.fields });
       }
-      entry.gauges.clear();
+      if (commit) entry.gauges.clear();
       return;
     }
     const { values } = await entry.metric.get();
@@ -307,7 +314,7 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
     }
     for (const [key, s] of current) {
       const base = entry.baseline.get(key);
-      entry.baseline.set(key, s.fields);
+      if (commit) entry.baseline.set(key, s.fields);
       const fields: Record<string, number> = {};
       for (const [field, total] of Object.entries(s.fields)) {
         const delta = total - (base?.[field] ?? 0);
@@ -321,12 +328,20 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
 
   async function collect(): Promise<Sample[]> {
     const out: Sample[] = [];
-    for (const [name, entry] of [...entries, ...retired.splice(0)]) await read(name, entry, out);
+    for (const [name, entry] of [...entries, ...retired.splice(0)]) {
+      await read(name, entry, out, true);
+    }
+    return out;
+  }
+
+  async function peek(): Promise<Sample[]> {
+    const out: Sample[] = [];
+    for (const [name, entry] of [...entries, ...retired]) await read(name, entry, out, false);
     return out;
   }
 
   // Os casts ligam o handle genérico ao `L` da chamada; o `admit` faz a checagem em runtime.
-  const serviceFor = (caller: string): MetricsService => ({
+  const serviceFor = (caller: string): MetricsWriter => ({
     counter: <L extends string>(spec: MetricSpec<L>) =>
       declare('counter', spec, caller) as Counter<L>,
     histogram: <L extends string>(spec: HistogramSpec<L>) =>
@@ -358,5 +373,8 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
     release,
     ownerOf: (name) => entries.get(name)?.declarers[0],
     collect,
+    peek,
+    declarations: () =>
+      [...entries.values()].map((e) => ({ ...e.descriptor, owner: e.declarers[0] ?? CORE_OWNER })),
   };
 }
