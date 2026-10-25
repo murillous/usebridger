@@ -65,6 +65,10 @@ describe('declaração', () => {
       'prefixo nodejs_',
       () => setup().m.counter({ name: 'nodejs_x_total', help: 'h', labelNames: [] }),
     ],
+    [
+      'prefixo bridger_runtime_',
+      () => setup().m.gauge({ name: 'bridger_runtime_rss_bytes', help: 'h', labelNames: [] }),
+    ],
     ['help vazio', () => setup().m.gauge({ name: 'a', help: '', labelNames: [] })],
     ['rótulo inválido', () => setup().m.gauge({ name: 'a', help: 'h', labelNames: ['a-b'] })],
     ['rótulo repetido', () => setup().m.gauge({ name: 'a', help: 'h', labelNames: ['x', 'x'] })],

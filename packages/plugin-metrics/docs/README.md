@@ -46,7 +46,7 @@ Declaração inválida lança `TypeError`:
 - `name` segue `^[a-zA-Z_:][a-zA-Z0-9_:]*$`, com a unidade no nome (`_seconds`, `_bytes`). Tempo
   vai em segundos, a convenção do Prometheus.
 - O contador termina em `_total`.
-- Os prefixos `process_` e `nodejs_` são reservados ao runtime do Node.
+- Os prefixos `process_`, `nodejs_` e `bridger_runtime_` são reservados ao runtime do Node.
 - `help` é texto não vazio.
 - `labelNames` segue `^[a-zA-Z_][a-zA-Z0-9_]*$`, sem repetição. Histograma não aceita `le`, o
   rótulo dos baldes.
@@ -103,6 +103,9 @@ Pela config do plugin (`pluginConfig.metrics`):
 | `retention.hourDays` | `7` | Dias mantidos na coleção `hourly` |
 | `retention.dayDays` | `90` | Dias mantidos na coleção `daily` |
 | `maxSeriesPerMetric` | `1000` | Limite de séries por métrica |
+| `runtime.enabled` | `true` | Liga as métricas do runtime do Node neste bot ([Runtime do Node](#runtime-do-node)) |
+| `runtime.eventLoopMonitoringPrecision` | `10` (mín. `1`) | Resolução do atraso do event loop, em ms |
+| `runtime.gcDurationBuckets` | padrão do `prom-client` | Baldes do histograma de GC, em segundos |
 
 ## Histórico
 
@@ -295,12 +298,58 @@ virada: o que chegou entre esse flush e a meia-noite não entra.
 **Restart no meio do dia superestima:** o conjunto recomeça vazio e quem já tinha sido contado
 conta de novo.
 
+## Runtime do Node
+
+CPU, memória, heap, atraso do event loop e GC do processo, para separar fila cheia de event loop
+travado, achar vazamento num plugin e confirmar um OOM.
+
+### No `/metrics`
+
+O `collectDefaultMetrics` do `prom-client`, com os nomes padrão `process_*` e `nodejs_*` (os
+dashboards prontos do Grafana funcionam sem ajuste), por exemplo `process_cpu_user_seconds_total`,
+`process_resident_memory_bytes`, `nodejs_heap_size_used_bytes`,
+`nodejs_eventloop_lag_p99_seconds` e `nodejs_gc_duration_seconds`. Os prefixos são reservados
+ao runtime: o serviço recusa declarar `process_*`/`nodejs_*`, e também `bridger_runtime_*`,
+os gauges do histórico.
+
+- **Uma registry por processo**, criada quando o primeiro bot sobe com `runtime.enabled`. Bots
+  novos e reloads do plugin a reaproveitam, sem coletor duplicado, e todo bot com o runtime ligado
+  expõe os mesmos valores (o processo é um só).
+- **O último bot a parar desliga o coletor**: o `monitorEventLoopDelay` e o observer de GC que o
+  `collectDefaultMetrics` liga são desligados quando nenhum bot com o runtime ligado sobra. O
+  próximo bot recria a registry, com a config dele e contadores do zero.
+- **A config de quem cria a registry vale enquanto ela vive.** Um bot posterior com
+  `eventLoopMonitoringPrecision` ou `gcDurationBuckets` diferente recebe
+  `metrics.runtime.config-ignored` (`warn`) uma vez por registry.
+- Falha ao ler a registry do runtime no scrape vai para o log (`metrics.runtime.scrape-failed`) e
+  o resto do `/metrics` sai.
+
+### No histórico
+
+Gauges do kernel (dono `core`), amostrados a cada flush e gravados no storage de cada bot:
+
+| Métrica | Fonte |
+| --- | --- |
+| `bridger_runtime_rss_bytes` | `process.memoryUsage().rss` |
+| `bridger_runtime_heap_used_bytes` | `process.memoryUsage().heapUsed` |
+| `bridger_runtime_eventloop_lag_p99_seconds` | `monitorEventLoopDelay` do plugin, zerado a cada flush |
+| `bridger_runtime_cpu_ratio` | `process.cpuUsage()` entre dois flushes ÷ tempo de parede (passa de 1 com vários núcleos) |
+| `bridger_runtime_active_handles` | `process.getActiveResourcesInfo().length` |
+
+A fonte é do plugin, não a registry do `prom-client`, que zera o histograma do event loop a cada
+leitura: o flush e o scrape não roubam a janela um do outro. O `query()` lê o valor corrente sem
+fechar a janela. Uma fonte que falha vai para o log (`metrics.runtime.sample-failed`) e as outras
+seguem.
+
+`runtime.enabled: false` tira o runtime do `/metrics` e do histórico **daquele** bot; os outros bots
+do processo não mudam.
+
 ## `GET /metrics`
 
 Registrado no HTTP do core ([ADR 0018](../../../docs/adr/0018-http-unico-hono.md),
 [HTTP](../../core/docs/http.md)), sob a base do plugin: `/plugins/metrics/metrics` na sessão
 `default` e `/sessions/<sessão>/plugins/metrics/metrics` nas outras. O corpo é o
-`registry.metrics()` do `prom-client`, no formato de texto do Prometheus (`content-type` de
+`registry.metrics()` do `prom-client` (a do bot e, com o runtime ligado, a do processo), no formato de texto do Prometheus (`content-type` de
 `registry.contentType`), com `# HELP` e `# TYPE` de cada métrica. Sem `http` no bot a rota não
 existe (`metrics.http.missing`, `info` no log) e o resto do plugin segue.
 
