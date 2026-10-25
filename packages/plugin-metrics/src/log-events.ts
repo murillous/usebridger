@@ -48,3 +48,18 @@ export const exportersListFailed: LogEvent = defineLogEvent({
   level: 'error',
   message: 'falha ao listar exportadores de métricas',
 });
+export const runtimeConfigIgnored: LogEvent = defineLogEvent({
+  name: 'metrics.runtime.config-ignored',
+  level: 'warn',
+  message: 'config do runtime diferente da do primeiro bot; vale a do primeiro para o processo',
+});
+export const runtimeSampleFailed: LogEvent = defineLogEvent({
+  name: 'metrics.runtime.sample-failed',
+  level: 'error',
+  message: 'falha ao amostrar o runtime do Node para o histórico',
+});
+export const runtimeScrapeFailed: LogEvent = defineLogEvent({
+  name: 'metrics.runtime.scrape-failed',
+  level: 'error',
+  message: 'falha ao ler a registry do runtime no scrape; o resto do /metrics segue',
+});

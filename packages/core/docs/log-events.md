@@ -167,3 +167,6 @@ As linhas saem com `plugin=dashboard` ou `plugin=metrics`.
 | `metrics.sample.failed` | `error` | falha ao amostrar as filas para o histórico |
 | `metrics.exporter.failed` | `error` | exportador de métricas falhou |
 | `metrics.exporters.list-failed` | `error` | falha ao listar exportadores de métricas |
+| `metrics.runtime.config-ignored` | `warn` | config do runtime diferente da do primeiro bot; vale a do primeiro para o processo |
+| `metrics.runtime.sample-failed` | `error` | falha ao amostrar o runtime do Node para o histórico |
+| `metrics.runtime.scrape-failed` | `error` | falha ao ler a registry do runtime no scrape; o resto do /metrics segue |

@@ -9,6 +9,7 @@ import {
   type HistoryDoc,
   isTimeZone,
 } from '#history.ts';
+import { createRuntimeSampler, nodeRegistry, runtimeDeclarations } from '#node-runtime.ts';
 import { CORE_OWNER, createMetrics, type Declaration, type Sample } from '#service.ts';
 
 export type {
@@ -41,7 +42,10 @@ import * as LOG from './log-events.ts';
 const HANDLE_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30];
 
 // Um runtime por contexto: o mesmo objeto de plugin serve a vários bots e a reloads.
-const runtimes = new WeakMap<object, { flush: () => Promise<void>; timer: NodeJS.Timeout }>();
+const runtimes = new WeakMap<
+  object,
+  { flush: () => Promise<void>; timer: NodeJS.Timeout; stop: () => void }
+>();
 
 /** Plugin oficial `metrics` (ADR 0103, ADR 0121): provê o serviço `metrics`. */
 export const metrics: PluginDefinition = definePlugin({
@@ -62,11 +66,31 @@ export const metrics: PluginDefinition = definePlugin({
       .default({ hourDays: 7, dayDays: 90 }),
     // Séries (combinações de rótulos) por métrica; passou, a amostra nova é descartada com aviso.
     maxSeriesPerMetric: z.number().int().min(1).default(1000),
+    // Runtime do Node (#239): o coletor padrão do `prom-client` no `/metrics` e gauges no histórico.
+    runtime: z
+      .object({
+        enabled: z.boolean().default(true),
+        // Resolução do atraso do event loop, em ms.
+        eventLoopMonitoringPrecision: z.number().int().min(1).default(10),
+        // Baldes do histograma de GC, em segundos; ausente, o padrão do `prom-client`.
+        gcDurationBuckets: z.array(z.number().positive()).nonempty().optional(),
+      })
+      .default({ enabled: true, eventLoopMonitoringPrecision: 10 }),
   }),
   setup(ctx) {
     // Uma registry por runtime (bot e setup), nunca o `register` global: dois bots no mesmo
     // processo não se enxergam (ADR 0003), e o reload recomeça do zero.
     const registry = new Registry();
+    const node = ctx.config.runtime.enabled
+      ? {
+          registry: nodeRegistry(ctx.config.runtime, ctx.log),
+          sampler: createRuntimeSampler({
+            precisionMs: ctx.config.runtime.eventLoopMonitoringPrecision,
+            log: ctx.log,
+          }),
+          declarations: runtimeDeclarations,
+        }
+      : undefined;
     const periods = createPeriods(ctx.config.timeZone);
     const exporters = ctx.services.extensionPoint('metrics.exporters');
     const indexes = { indexes: ['metric', 'period'] };
@@ -78,9 +102,9 @@ export const metrics: PluginDefinition = definePlugin({
       log: ctx.log,
       periods,
       retention: ctx.config.retention,
-      collect: async () => [...(await runtime.collect()), ...sampled()],
-      peek: async () => [...(await runtime.peek()), ...sampled()],
-      live: () => [...runtime.declarations(), ...kernelGauges],
+      collect: async () => [...(await runtime.collect()), ...sampled(), ...nodeSamples(true)],
+      peek: async () => [...(await runtime.peek()), ...sampled(), ...nodeSamples(false)],
+      live: () => [...runtime.declarations(), ...kernelGauges, ...(node?.declarations ?? [])],
       exporters: () => exporters.list(),
     });
     const runtime = createMetrics({
@@ -194,7 +218,8 @@ export const metrics: PluginDefinition = definePlugin({
       buckets: null,
       owner: CORE_OWNER,
     }));
-    for (const d of kernelGauges) history.describe(d);
+    for (const d of [...kernelGauges, ...(node?.declarations ?? [])]) history.describe(d);
+    const nodeSamples = (consume: boolean): Sample[] => node?.sampler.sample(consume) ?? [];
     const gauge = (metric: string, value: number): Sample => ({
       metric,
       type: 'gauge',
@@ -215,14 +240,17 @@ export const metrics: PluginDefinition = definePlugin({
     };
 
     try {
-      ctx.http.route(
-        'GET',
-        '/metrics',
-        async () =>
-          new Response(await registry.metrics(), {
-            headers: { 'content-type': registry.contentType },
-          }),
-      );
+      ctx.http.route('GET', '/metrics', async () => {
+        let body = await registry.metrics();
+        try {
+          // Os prefixos `process_`/`nodejs_` são reservados, então os nomes não colidem.
+          if (node) body += `\n${await node.registry.metrics()}`;
+        } catch (error) {
+          // Sem o runtime, as métricas do bot ainda saem.
+          ctx.log.event(LOG.runtimeScrapeFailed, { err: error });
+        }
+        return new Response(body, { headers: { 'content-type': registry.contentType } });
+      });
     } catch (error) {
       // Sem servidor HTTP o bot ainda mede; só o scrape fica indisponível.
       if (!(error instanceof BotConfigError)) throw error;
@@ -234,14 +262,26 @@ export const metrics: PluginDefinition = definePlugin({
       history.flush().catch((error: unknown) => ctx.log.event(LOG.flushFailed, { err: error }));
     }, ctx.config.flushIntervalMs);
     timer.unref();
-    ctx.signal.addEventListener('abort', () => clearInterval(timer), { once: true });
-    runtimes.set(ctx.signal, { flush: history.flush, timer });
+    const stop = (): void => node?.sampler.stop();
+    ctx.signal.addEventListener(
+      'abort',
+      () => {
+        clearInterval(timer);
+        stop();
+      },
+      { once: true },
+    );
+    runtimes.set(ctx.signal, { flush: history.flush, timer, stop });
   },
   async teardown(ctx) {
     const entry = runtimes.get(ctx.signal);
     if (!entry) return;
     clearInterval(entry.timer);
     // Flush final: o que somou desde o último flush não se perde no stop nem no reload.
-    await entry.flush();
+    try {
+      await entry.flush();
+    } finally {
+      entry.stop();
+    }
   },
 });
