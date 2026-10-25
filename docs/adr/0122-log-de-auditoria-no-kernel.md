@@ -182,6 +182,7 @@ sem aguardar. Um dreno por vez, nesta instância, grava a fila.
 1. os **valores** secretos conhecidos (as configs `secret` e os segredos do bot);
 2. chaves conhecidas, sem diferenciar maiúscula, em qualquer nível: `password`, `passwd`,
    `token`, `secret`, `apiKey`, `api_key`, `authorization`, `cookie`.
+   *(Ampliado pelo [ADR 0123](0123-redacao-de-details-por-sufixo.md): casa por sufixo.)*
 
 O caminho por schema (`isSecretSchema`, `mapSecrets` e `SECRET_MASK` em `config/plugin-configs.ts`)
 vale **só para o diff de `kernel.config.update`**, onde o schema do plugin existe.

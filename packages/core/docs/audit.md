@@ -28,9 +28,10 @@ ctx.audit.record({
   `actor: { kind: 'plugin', name }`. Não existe campo de ator no `record`. O core (não o
   plugin) entra com o titular num escopo assíncrono interno (request autenticado ou fluxo LGPD):
   ali o ator é o `user`/`contact` e o evento leva `via: <plugin>`, `ip` e `userAgent`. `system` é só das chamadas internas do core.
-- **Redação:** valores dos segredos do bot e chaves `password`, `passwd`, `token`, `secret`,
-  `apiKey`, `api_key`, `authorization`, `cookie` (qualquer nível, sem diferenciar maiúscula)
-  viram `[REDACTED]`. A chave `content` é **removida**; para guardá-la, `includeContent: true` no
+- **Redação:** valores dos segredos do bot e, em qualquer nível, chaves terminadas em
+  `password`, `passwd`, `token`, `secret` ou `apiKey` (`accessToken`, `clientSecret`,
+  `dbPassword`), além de `authorization` e `cookie`, viram `[REDACTED]`. A comparação ignora
+  maiúsculas, `_` e `-` (`API_KEY`, `refresh_token`). Só o sufixo conta: `tokenizer` fica em claro. A chave `content` é **removida**; para guardá-la, `includeContent: true` no
   próprio `record`.
 - `tenant` (ADR 0068), `session`, `trace` (ADR 0120) e `at` (relógio do servidor) vêm do core.
 

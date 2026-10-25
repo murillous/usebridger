@@ -244,6 +244,32 @@ describe('redação de details', () => {
     });
   });
 
+  it('censura chaves derivadas por sufixo e deixa as inocentes', async () => {
+    const { audit, col } = setup();
+    audit.forPlugin('inbox', false).record({
+      action: 'inbox.a',
+      details: {
+        accessToken: 'a',
+        refresh_token: 'r',
+        clientSecret: 'c',
+        dbPassword: 'p',
+        'x-api-key': 'k',
+        tokenizer: 'bpe',
+        secretary: 'ana',
+      },
+    });
+    await audit.flush();
+    expect((await stored(col))[0]?.details).toEqual({
+      accessToken: '[REDACTED]',
+      refresh_token: '[REDACTED]',
+      clientSecret: '[REDACTED]',
+      dbPassword: '[REDACTED]',
+      'x-api-key': '[REDACTED]',
+      tokenizer: 'bpe',
+      secretary: 'ana',
+    });
+  });
+
   it('includeContent mantém content, ação por ação', async () => {
     const { audit, col } = setup();
     const plugin = audit.forPlugin('inbox', false);
