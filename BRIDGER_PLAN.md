@@ -499,9 +499,22 @@ o M5 (exceto M5-4 e M5-6) e a virada (V1-1, V1-2 e V1-4) vivem no `murillous/Lum
 - #M6-8 `scrapeToken` no `GET /metrics` (#240)
 - #M6-9 Reconhecedor de id pessoal do core no lugar do regex local (#241)
 
-### M7 — Dashboard refeito do zero
+### M7 — API HTTP do core e dashboard como cliente (D125)
 
-- Novo `plugin-dashboard` sobre o `query` e o `catalog()` do D121, sem compatibilidade com o atual
+Tudo o que o dashboard mostra sai da API pública do core, descrita em OpenAPI: um app que consome
+o Bridger chega às mesmas informações sem o `plugin-dashboard`. O dashboard vira cliente genérico,
+sem rota nem auth próprias. Atendimento humano fica com cada app (ex.: Chatwoot), fora do kernel.
+
+- #M7-1 Pesquisa e protótipo: OpenAPI a partir do Zod, SSE na spec e Refine (#273)
+- #M7-2 ADR 0125: API HTTP do core em OpenAPI e dashboard como cliente (#274)
+- #M7-3 Base da API HTTP, problem+json e `/openapi.json` (#275)
+- #M7-4 Autenticação da API: usuários, sessões, API keys e papéis (#223)
+- #M7-5 Conexão e tempo real por SSE: status, QR, pareamento, logs ao vivo (#276)
+- #M7-6 Plugins e configuração na API, com segredos (#277)
+- #M7-7 Histórico de logs e métricas na API (#278)
+- #M7-8 Ponto de extensão `api.resources` no lugar do `dashboard.tabs` (#279)
+- #M7-9 Auditoria na API: consulta, exportação e `verify` (#261)
+- #M7-10 `plugin-dashboard` refeito como cliente genérico da API (#280)
 
 ### v1.0
 
@@ -540,7 +553,8 @@ Vive no `murillous/LumaBot`, com o M4 e o M5 (D80, D82).
 ## 12. Sugestão de organização do GitHub Project
 
 - **Milestones**: `M0 Fundação`, `M1 Core`, `M2 Baileys + SQLite + Testing`,
-  `M3 Postgres + HTTP + DX`, `M4 Plugins`, `M5 Luma + Dashboard`, `v1.0 Virada`.
+  `M3 Postgres + HTTP + DX`, `M4 Plugins`, `M5 Luma + Dashboard`, `M6 Métricas`,
+  `M7 API e Dashboard`, `v1.0 Virada`.
 - **Issues**: uma por item `#Mx-y` acima (épico/entrega), com os critérios de aceite.
 - **Sub-issues**: os bullets dentro de cada item.
 - **Labels**:
