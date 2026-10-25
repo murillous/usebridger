@@ -168,6 +168,11 @@ export function createAudit(deps: AuditDeps): Audit {
     closedReason ??= reason;
     clearTimeout(timer);
     timer = undefined;
+    // O último lote de fila cheia ainda não logado não pode sumir do log.
+    if (fullPending > 0) {
+      deps.log().event(LOG.auditDropped, { count: fullPending, reason: 'queue-full' });
+      fullPending = 0;
+    }
     // Limite: o evento com insert em voo conta como descartado, embora possa ainda gravar.
     const count = queue.length;
     queue.length = 0;
@@ -188,17 +193,48 @@ export function createAudit(deps: AuditDeps): Audit {
     const [top] = await col().find({ orderBy: { field: 'seq', direction: 'desc' }, limit: 1 });
     lastSeq = typeof top?.['seq'] === 'number' ? top['seq'] : 0;
     lastHash = typeof top?.['hash'] === 'string' ? top['hash'] : GENESIS_HASH;
-    if (top !== undefined && queue[0]?.eventId === top['eventId']) queue.shift();
+    if (top === undefined) return;
+    // O topo é um evento da fila: o insert ambíguo entrou. Se não é a cabeça, a sonda de
+    // `dropPoisoned` entrou antes de a resposta chegar, e as cabeças que a precediam são as
+    // recusadas.
+    const landed = queue.findIndex((pending) => pending.eventId === top['eventId']);
+    if (landed < 0) return;
+    queue.splice(0, landed + 1);
+    if (landed > 0) drop(landed, 'rejected');
+  }
+
+  /**
+   * A cabeça falhou `AUDIT_MAX_REJECTS` vezes seguidas. Recusa do evento ou storage com a escrita
+   * fora do ar? A sonda grava o evento seguinte no lugar dela: se entra, a culpa é da cabeça
+   * (descartada, cadeia continua); se falha, ou se não há seguinte, é o storage e nada se descarta.
+   */
+  async function dropPoisoned(head: Pending): Promise<void> {
+    try {
+      // O último insert pode ter entrado em silêncio: o seq da sonda sai do topo real.
+      await reload();
+      const next = queue[1];
+      if (queue[0] !== head || next === undefined) return;
+      const body = { ...next, seq: lastSeq + 1, prevHash: lastHash };
+      const hash = chainHash(getKeys().current, lastHash, body);
+      await col().insert(JSON.parse(canonical({ ...body, hash })) as JsonObject);
+      lastSeq = body.seq;
+      lastHash = hash;
+      needReload = false;
+      retryMs = 0;
+      queue.splice(0, 2);
+      drop(1, 'rejected');
+    } catch {
+      // Storage: o erro já foi logado como `audit.flush.failed`; segue o backoff.
+      needReload = true;
+    }
   }
 
   async function drain(): Promise<void> {
-    let reloaded = false;
     let inserting = false;
     try {
       if (needReload) {
         await reload();
         needReload = false;
-        reloaded = true;
       }
       while (queue.length > 0 && closedReason === undefined) {
         const item = queue[0] as Pending;
@@ -220,15 +256,14 @@ export function createAudit(deps: AuditDeps): Audit {
       needReload = true;
       retryMs = Math.min(retryMs === 0 ? RETRY_MIN_MS : retryMs * 2, RETRY_MAX_MS);
       deps.log().event(LOG.auditFlushFailed, { err: error, queued: queue.length, retryMs });
-      // Evento que o storage recusa sempre (com o banco respondendo à leitura) travaria a cadeia.
+      // Evento que o storage recusa sempre travaria a cadeia: ver `dropPoisoned`.
       const head = queue[0];
-      if (inserting && reloaded && head !== undefined) {
+      if (inserting && head !== undefined) {
         rejects = rejectedId === head.eventId ? rejects + 1 : 1;
         rejectedId = head.eventId;
         if (rejects >= AUDIT_MAX_REJECTS) {
-          queue.shift();
           rejects = 0;
-          drop(1, 'rejected');
+          await dropPoisoned(head);
         }
       }
       // O timer de 1 s armado por um `record` antes da falha atropelaria a espera.
@@ -383,7 +418,12 @@ export function createAudit(deps: AuditDeps): Audit {
       // Sem `start()` (a trava falhou no boot) a cadeia não é nossa: nada é gravado.
       while (started && queue.length > 0 && !signal.aborted && closedReason === undefined) {
         // Insert pendurado não pode segurar o shutdown além do prazo.
-        await Promise.race([run(), pause(Number.POSITIVE_INFINITY, signal)]);
+        const aborted = whenAborted(signal);
+        try {
+          await Promise.race([run(), aborted.promise]);
+        } finally {
+          aborted.cancel();
+        }
         if (queue.length > 0 && !signal.aborted) await pause(STOP_POLL_MS, signal);
       }
       discard('shutdown');
@@ -398,6 +438,18 @@ export function createAudit(deps: AuditDeps): Audit {
   };
 }
 
+/** Resolve quando o `signal` aborta; `cancel` solta o listener se a corrida acabar antes. */
+function whenAborted(signal: AbortSignal): { promise: Promise<void>; cancel(): void } {
+  let cancel = (): void => undefined;
+  const promise = new Promise<void>((resolve) => {
+    if (signal.aborted) return resolve();
+    const onAbort = (): void => resolve();
+    signal.addEventListener('abort', onAbort, { once: true });
+    cancel = () => signal.removeEventListener('abort', onAbort);
+  });
+  return { promise, cancel: () => cancel() };
+}
+
 /** Espera `ms` ou até o `signal` abortar; nunca rejeita. */
 function pause(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
@@ -407,7 +459,7 @@ function pause(ms: number, signal: AbortSignal): Promise<void> {
       signal.removeEventListener('abort', done);
       resolve();
     };
-    const wait = Number.isFinite(ms) ? setTimeout(done, ms) : undefined;
+    const wait = setTimeout(done, ms);
     signal.addEventListener('abort', done, { once: true });
   });
 }
