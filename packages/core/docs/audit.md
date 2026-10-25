@@ -20,7 +20,7 @@ ctx.audit.record({
   dreno em segundo plano. Valor que não é JSON (função, `bigint`, `Date`) em `details` lança
   `TypeError` na hora.
 - **Custo medido:** `record` com `details` pequeno e storage em memória tem p50 ~0,013 ms e p99
-  ~0,13 ms por chamada (meta do ADR 0122: p99 < 1 ms); o caminho da mensagem fica em p99 ~0,35 ms
+  ~0,15 ms por chamada (meta do ADR 0122: p99 < 1 ms); o caminho da mensagem fica em p99 ~0,33 ms
   (ver [`bench/docs`](../../../bench/docs/README.md#com-o-ctxauditrecord)).
 - **`action`** é `<plugin>.<recurso>.<verbo>`. O core exige o prefixo `<nome do plugin>.` e
   reserva `kernel.` e `audit.`: um plugin não forja a ação de outro nem a do kernel.

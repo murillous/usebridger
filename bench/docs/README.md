@@ -140,14 +140,14 @@ Não há cenário com `storage-sqlite`: o bench todo roda em memória, e o `reco
 Resultado (AMD Ryzen 7 5700U, Linux, Node 24, sem preparar a máquina; mediana de 9 execuções):
 
 ```
-overhead       0.168 ms (meta < 1; execuções: 0.163, 0.197, 0.163, 0.164, 0.168, 0.175, 0.177, 0.164, 0.168) ok
-overhead-audit 0.350 ms (meta < 1; execuções: 0.343, 0.518, 0.350, 0.362, 0.329, 0.337, 0.331, 0.361, 0.350) ok
-audit-record   0.127 ms (meta < 1; execuções: 0.134, 0.127, 0.122, 0.0971, 0.126, 0.132, 0.0978, 0.134, 0.144) ok
+overhead       0.175 ms (meta < 1; execuções: 0.175, 0.164, 0.162, 0.179, 0.190, 0.185, 0.170, 0.194, 0.165) ok
+overhead-audit 0.334 ms (meta < 1; execuções: 0.344, 0.334, 0.332, 0.335, 0.333, 0.329, 0.350, 0.320, 0.384) ok
+audit-record   0.149 ms (meta < 1; execuções: 0.149, 0.148, 0.151, 0.147, 0.158, 0.151, 0.148, 0.149, 0.151) ok
 ```
 
 O p50 (de uma execução avulsa; o runner só reporta o p99) é ~0,013 ms no `record` e ~0,099 ms no
 caminho inteiro. A meta de p99 < 1 ms do `record` é atingida com folga de ~8x. O p99 do caminho
-sobe ~0,18 ms sobre o `overhead`: o listener extra do `bench-0` com o `record`; o flush fica fora do p99.
+sobe ~0,16 ms sobre o `overhead`: o listener extra do `bench-0` com o `record`; o flush fica fora do p99.
 
 ## Comparar com um baseline
 
