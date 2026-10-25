@@ -11,7 +11,6 @@ import {
   type PluginDefinition,
 } from '@usebridger/core';
 import { createMessage } from '@usebridger/core/adapter';
-import { metrics } from '@usebridger/plugin-metrics';
 import { createTestBot, type TestBot } from '@usebridger/testing/bot';
 import { z } from 'zod';
 
@@ -76,12 +75,16 @@ export async function createWorkload(options: WorkloadOptions = {}): Promise<Wor
       }
     },
   });
+  // Import sob demanda: o `prom-client` do plugin soma ~4 MB de RSS a todo processo de cenário,
+  // inclusive ao `idle-memory`, que mede o kernel sem ele (#267).
+  const metrics =
+    options.metrics === true ? [(await import('@usebridger/plugin-metrics')).metrics] : [];
   const bot = await createTestBot({
     ...(options.logged === true && {
       logger: createLogger({ level: 'info', destination: { write: () => undefined } }),
     }),
     ...(options.trail !== undefined && { trail: options.trail }),
-    plugins: [observer, ...(options.metrics === true ? [metrics] : []), ...plugins],
+    plugins: [observer, ...metrics, ...plugins],
     ...(options.metrics === true && {
       pluginConfig: { metrics: { flushIntervalMs: METRICS_FLUSH_MS } },
     }),
