@@ -8,6 +8,11 @@ export const httpMissing: LogEvent = defineLogEvent({
   level: 'info',
   message: 'sem http no bot: GET /metrics desligado',
 });
+export const scrapeOpen: LogEvent = defineLogEvent({
+  name: 'metrics.scrape.open',
+  level: 'warn',
+  message: 'GET /metrics sem scrapeToken: a rota fica aberta a quem alcança o HTTP',
+});
 export const seriesOverflow: LogEvent = defineLogEvent({
   name: 'metrics.series.overflow',
   level: 'warn',

@@ -159,6 +159,7 @@ As linhas saem com `plugin=dashboard` ou `plugin=metrics`.
 | Evento | Nível | Mensagem |
 | --- | --- | --- |
 | `metrics.http.missing` | `info` | sem http no bot: GET /metrics desligado |
+| `metrics.scrape.open` | `warn` | GET /metrics sem scrapeToken: a rota fica aberta a quem alcança o HTTP |
 | `metrics.series.overflow` | `warn` | métrica passou do limite de séries; amostras de séries novas descartadas |
 | `metrics.flush.failed` | `error` | flush de métricas falhou |
 | `metrics.write.failed` | `error` | falha ao gravar métrica; delta mantido para o próximo flush |
