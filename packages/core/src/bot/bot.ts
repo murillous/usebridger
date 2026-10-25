@@ -1,4 +1,5 @@
 import { ActionRegistry } from '#actions/actions.ts';
+import { AUDIT_COLLECTION, AUDIT_INDEXES, createAudit } from '#audit/audit.ts';
 import { createCommandCatalog } from '#commands/catalog.ts';
 import { createPrefixStore } from '#commands/prefixes.ts';
 import { createCommandRegistry } from '#commands/registry.ts';
@@ -65,6 +66,8 @@ import { createReconnector, type Reconnector } from './reconnect.ts';
 import { claimSession, type ReleaseSession } from './session.ts';
 import { acquireSessionLease, type SessionLease } from './session-lease.ts';
 import {
+  DEFAULT_HOOK_TIMEOUT_MS,
+  DEFAULT_SHUTDOWN_TIMEOUT_MS,
   type RegisteredStopHook,
   runStopHooks,
   type StopHook,
@@ -269,6 +272,19 @@ export function createBot(config: BotConfig): Bot {
   // Tenant da mensagem ou do evento em andamento (ADR 0068): o storage dos plugins e os jobs
   // agendados seguem ele.
   const tenants = new TenantScope();
+  // Auditoria (ADR 0122): uma cadeia por sessão, no namespace do kernel.
+  const audit = createAudit({
+    collection: () =>
+      kernelStorage(scoped, AUDIT_COLLECTION).collection(AUDIT_COLLECTION, {
+        indexes: AUDIT_INDEXES,
+      }),
+    session,
+    tenants,
+    log: getLog,
+    observers,
+    secrets,
+    masterKeys: () => readSecretKeys(config.env ?? processEnv()),
+  });
   const scheduler = createSchedulerService({
     storage: scoped,
     tenants,
@@ -428,6 +444,8 @@ export function createBot(config: BotConfig): Bot {
     conversations.close();
     actions.clear();
     void outbound.close({ drain: false });
+    // Gancho que não coube no prazo: o que resta na fila vira `audit.dropped`.
+    audit.close();
   }
 
   async function bootPlugins(): Promise<void> {
@@ -485,6 +503,7 @@ export function createBot(config: BotConfig): Bot {
       botName: config.name ?? transport.name,
       stats,
       observers,
+      audit,
       adminPlugins: new Set(config.adminPlugins ?? []),
       admin: control,
       secrets,
@@ -559,6 +578,10 @@ export function createBot(config: BotConfig): Bot {
       httpAttached = http !== undefined;
       // Chave malformada lança aqui (`BotConfigError`), como já lançaria na config dos plugins.
       if (pseudonymizer.ephemeral()) log.event(LOG.pseudonymEphemeral);
+      // Mesma chave do pseudônimo: sem ela a cadeia de auditoria usa uma chave pública (ADR 0122).
+      if (readSecretKeys(config.env ?? processEnv()).current === undefined) {
+        log.event(LOG.auditUnkeyed);
+      }
       if (config.storage === undefined) {
         log.event(LOG.storageMissing);
       }
@@ -576,6 +599,8 @@ export function createBot(config: BotConfig): Bot {
         log,
         signal: bootAbort.signal,
         onLost: () => {
+          // Outro processo pode ter assumido a cadeia: gravar agora a bifurcaria (ADR 0122).
+          audit.leaseLost();
           log.event(LOG.sessionTaken, { session });
           bot.stop().catch((error: unknown) => log.event(LOG.stopFailed, { err: error }));
         },
@@ -587,6 +612,9 @@ export function createBot(config: BotConfig): Bot {
       );
       throw error;
     }
+
+    // Depois da trava, o único escritor da cadeia: lê o topo e liga o flush (ADR 0122).
+    audit.start();
 
     // Plugins primeiro, connect depois (plano §5.3): um plugin quebrado (conflito de comando,
     // manifesto inválido, ciclo) derruba o boot antes de o transport abrir sessão — sem QR nem
@@ -687,8 +715,18 @@ export function createBot(config: BotConfig): Bot {
     // O teardown tira os comandos de cada plugin: o transport não deve apagar o menu da plataforma.
     catalog.close();
     // LIFO: quem subiu por último depende de quem subiu antes, então desce primeiro.
+    const totalDeadline = Date.now() + (config.shutdown?.timeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS);
     const errors: unknown[] = await runStopHooks(hooks.toReversed(), config.shutdown);
     hooks.length = 0;
+    // Depois do teardown dos plugins, que ainda auditam: drena com o prazo de um gancho
+    // (`shutdown.hookTimeoutMs`) limitado ao que sobrou do prazo total (`shutdown.timeoutMs`);
+    // o que não couber vira `audit.dropped`. Não é um gancho da lista para não competir com os
+    // demais pelo prazo.
+    const auditMs = Math.min(
+      config.shutdown?.hookTimeoutMs ?? DEFAULT_HOOK_TIMEOUT_MS,
+      totalDeadline - Date.now(),
+    );
+    await audit.stop(auditMs > 0 ? AbortSignal.timeout(auditMs) : AbortSignal.abort());
     await abandonInternals();
     // Em `failed` o transport já foi desconectado; o storage só fecha depois disso.
     if (failedDisconnect !== undefined) await failedDisconnect;

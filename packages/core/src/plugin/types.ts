@@ -3,6 +3,7 @@
 // (M1-16). Os campos do contexto vêm dos contratos de cada módulo.
 
 import type { z } from 'zod';
+import type { PluginAudit } from '#audit/types.ts';
 import type { BotStats, PluginAdmin } from '#bot/config.ts';
 import type { ConnectionInfo } from '#bot/connection-info.ts';
 import type {
@@ -184,6 +185,12 @@ export interface PluginContext<
    */
   observe<S extends ObserverSignalName>(signal: S, observer: Observer<S>): Unsubscribe;
   readonly unsafe: Unsafe;
+  /**
+   * Log de auditoria do kernel (ADR 0122). `record` é síncrono, nunca aguardado, e leva o ator do
+   * contexto (o plugin, ou o `user`/`contact` do request); `action` começa com `<plugin>.`.
+   * `query` e `verify` só para quem está em `adminPlugins`.
+   */
+  readonly audit: PluginAudit;
 }
 
 /**
