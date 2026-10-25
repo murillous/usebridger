@@ -22,9 +22,9 @@ ctx.audit.record({
 - **`action`** é `<plugin>.<recurso>.<verbo>`. O core exige o prefixo `<nome do plugin>.` e
   reserva `kernel.` e `audit.`: um plugin não forja a ação de outro nem a do kernel.
 - **Ator:** o `ctx` do plugin já está amarrado ao nome dele, então o evento sai com
-  `actor: { kind: 'plugin', name }`. Não existe campo de ator no `record`. Dentro de
-  `runAsAuditSubject` (request autenticado ou fluxo LGPD) o ator é o `user`/`contact` do escopo e
-  o evento leva `via: <plugin>`, `ip` e `userAgent`. `system` é só das chamadas internas do core.
+  `actor: { kind: 'plugin', name }`. Não existe campo de ator no `record`. O core (não o
+  plugin) entra com o titular num escopo assíncrono interno (request autenticado ou fluxo LGPD):
+  ali o ator é o `user`/`contact` e o evento leva `via: <plugin>`, `ip` e `userAgent`. `system` é só das chamadas internas do core.
 - **Redação:** valores dos segredos do bot e chaves `password`, `passwd`, `token`, `secret`,
   `apiKey`, `api_key`, `authorization`, `cookie` (qualquer nível, sem diferenciar maiúscula)
   viram `[REDACTED]`. A chave `content` é **removida**; para guardá-la, `includeContent: true` no
@@ -53,11 +53,17 @@ ignorando o `tenant` do filtro. Não há `update` nem `delete`.
 - Storage falhou: log `error` `audit.flush.failed`, a fila retém e tenta de novo (1 s, dobrando
   até 30 s). Depois de qualquer erro, inclusive timeout, o topo da cadeia é relido: se o insert
   ambíguo entrou, o evento sai da fila em vez de duplicar o `seq`.
-- Limite de 10.000 eventos em memória: o evento novo é descartado.
+- Limite de 10.000 eventos em memória: o evento novo é descartado. O log `audit.dropped` desse
+  caso sai uma vez a cada 10 s, com a soma; o sinal de observador sai a cada descarte.
+- Evento que o storage recusa sempre (o banco responde à leitura, mas o insert falha 10 vezes
+  seguidas no mesmo evento) é descartado com `reason: 'rejected'` e log `error`, para não travar
+  a cadeia. `details`, `action` e `target` com caractere NUL são recusados no `record`.
 - Trava de sessão perdida (ADR 0070): a fila é descartada sem gravar, para não bifurcar a cadeia.
-- `stop`: drena até o prazo do gancho (`shutdown.hookTimeoutMs`); o resto é descartado.
+- `stop`: drena até `min(shutdown.hookTimeoutMs, o que sobrou de shutdown.timeoutMs)`; insert
+  pendurado não segura o prazo, e o resto é descartado. O evento com insert em voo conta como
+  descartado, embora possa ainda gravar.
 - Todo descarte gera o log `error` `audit.dropped` e o sinal de observador `audit.dropped`
-  (`{ count, reason }`, `count` é o incremento): `queue-full`, `lease-lost`, `shutdown`, ou
+  (`{ count, reason }`, `count` é o incremento): `queue-full`, `lease-lost`, `shutdown`, `rejected`, ou
   `before-observer` para o acumulado de antes de haver observador.
 
 ```ts
@@ -78,8 +84,14 @@ O que ela promete e o que não:
 - Quem tem o banco **e** a chave forja tudo.
 - Quem tem só o banco pode **apagar o final**, ou tudo, sem que a cadeia acuse: falta de eventos
   no fim não é elo quebrado. A defesa é ancorar o topo fora do banco (ponto de extensão futuro).
-- Sem `BRIDGER_SECRET_KEY` a chave é fixa e pública: só detecta edição ingênua.
-- Trocar a chave invalida a verificação do passado; guarde a anterior para verificá-lo.
+- Sem `BRIDGER_SECRET_KEY` a chave é fixa e pública: só detecta edição ingênua, e o boot
+  avisa com `audit.unkeyed`. Adicionar a chave depois faz o `verify` acusar o histórico anterior
+  (com chave presente ele não cai para a chave pública).
+- Rotação: o `verify` aceita `BRIDGER_SECRET_KEY_PREVIOUS` só nos elos antes do primeiro assinado
+  com a atual.
+- O storage não tem índice único em `seq`: um insert tardio de uma tentativa que o dreno já
+  considerou perdida pode, raramente, deixar um `seq` duplicado; o `verify` o aponta.
+- Trocar a chave invalida a verificação do passado; mantenha a anterior em `BRIDGER_SECRET_KEY_PREVIOUS`.
 - O `verify` aceita o buraco no início deixado por uma expurgação: o primeiro elo restante tem
   `prevHash === lastHash` e `seq === toSeq + 1` de um `kernel.audit.purge` gravado depois.
 

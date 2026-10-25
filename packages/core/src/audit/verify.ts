@@ -15,7 +15,7 @@ export const strip = (row: { readonly id: string } & JsonObject): AuditEvent => 
 
 export async function verifyChain(
   col: Collection<JsonObject>,
-  key: Buffer,
+  keys: { readonly current: Buffer; readonly previous?: Buffer },
 ): Promise<AuditVerifyResult> {
   const purges = (await col.find({ where: { action: PURGE_ACTION }, orderBy: 'seq' })).map(strip);
   // Prefixo apagado por uma expurgação legítima: o primeiro elo restante continua o `lastHash`.
@@ -30,6 +30,9 @@ export async function verifyChain(
     });
   let checked = 0;
   let previous: AuditEvent | undefined;
+  // A chave anterior só vale até o primeiro elo assinado com a atual (rotação, ADR 0122): depois
+  // disso um elo com a chave antiga seria forjado por quem a guardou.
+  let signedWithCurrent = false;
   for (let cursor = 0; ; ) {
     const rows = await col.find({
       where: { seq: { gt: cursor } },
@@ -56,7 +59,13 @@ export async function verifyChain(
         return broken('prevHash não confere com o elo anterior');
       }
       const { hash, ...body } = event;
-      if (chainHash(key, event.prevHash, body) !== hash) {
+      if (chainHash(keys.current, event.prevHash, body) === hash) {
+        signedWithCurrent = true;
+      } else if (
+        signedWithCurrent ||
+        keys.previous === undefined ||
+        chainHash(keys.previous, event.prevHash, body) !== hash
+      ) {
         return broken('hash não confere: evento alterado');
       }
       previous = event;

@@ -49,7 +49,12 @@ export function auditKey(master: Buffer | undefined): Buffer {
   return master === undefined ? UNKEYED : deriveSubkey(master, HKDF_INFO);
 }
 
-export type AuditDropReason = 'queue-full' | 'lease-lost' | 'shutdown';
+export type AuditDropReason = 'queue-full' | 'lease-lost' | 'shutdown' | 'rejected';
+
+/** Falhas seguidas do insert do mesmo evento (com o storage respondendo) até descartá-lo. */
+export const AUDIT_MAX_REJECTS = 10;
+/** Janela do log de fila cheia: um `error` por janela, com a soma; o sinal segue exato. */
+const FULL_LOG_WINDOW_MS = 10_000;
 
 /** `query`/`verify` chamados por plugin que não está em `adminPlugins` (ADR 0107). */
 export class AuditPermissionError extends Error {
@@ -70,7 +75,7 @@ export interface AuditDeps {
   readonly observers: Observers;
   readonly secrets: SecretSource;
   /** Chave mestra (`BRIDGER_SECRET_KEY`), lida na primeira necessidade. */
-  readonly masterKey: () => Buffer | undefined;
+  readonly masterKeys: () => { readonly current?: Buffer; readonly previous?: Buffer };
   /** Relógio do servidor; injetável nos testes. */
   readonly now?: () => Date;
 }
@@ -106,8 +111,17 @@ export function createAudit(deps: AuditDeps): Audit {
   const queue: Pending[] = [];
   let collection: Collection<JsonObject> | undefined;
   const col = (): Collection<JsonObject> => (collection ??= deps.collection());
-  let key: Buffer | undefined;
-  const getKey = (): Buffer => (key ??= auditKey(deps.masterKey()));
+  let keys: { readonly current: Buffer; readonly previous?: Buffer } | undefined;
+  const getKeys = (): { readonly current: Buffer; readonly previous?: Buffer } => {
+    if (keys === undefined) {
+      const { current, previous } = deps.masterKeys();
+      keys = {
+        current: auditKey(current),
+        ...(previous !== undefined && { previous: auditKey(previous) }),
+      };
+    }
+    return keys;
+  };
 
   // Topo da cadeia gravado; só avança depois de um insert confirmado.
   let lastSeq = 0;
@@ -120,9 +134,25 @@ export function createAudit(deps: AuditDeps): Audit {
   let draining: Promise<void> | undefined;
   // Descartes antes de haver observador: saem no primeiro sinal depois do registro.
   let beforeObserver = 0;
+  // Quantas vezes seguidas o storage recusou o mesmo evento.
+  let rejectedId: string | undefined;
+  let rejects = 0;
+  // Fila cheia pode descartar milhares por segundo: o log sai por janela, com a soma.
+  let fullSince = 0;
+  let fullPending = 0;
 
   function drop(count: number, reason: AuditDropReason): void {
-    deps.log().event(LOG.auditDropped, { count, reason });
+    if (reason === 'queue-full') {
+      fullPending += count;
+      const t = Date.now();
+      if (t - fullSince >= FULL_LOG_WINDOW_MS) {
+        fullSince = t;
+        deps.log().event(LOG.auditDropped, { count: fullPending, reason });
+        fullPending = 0;
+      }
+    } else {
+      deps.log().event(LOG.auditDropped, { count, reason });
+    }
     if (!deps.observers.has('audit.dropped')) {
       beforeObserver += count;
       return;
@@ -138,6 +168,7 @@ export function createAudit(deps: AuditDeps): Audit {
     closedReason ??= reason;
     clearTimeout(timer);
     timer = undefined;
+    // Limite: o evento com insert em voo conta como descartado, embora possa ainda gravar.
     const count = queue.length;
     queue.length = 0;
     if (count > 0) drop(count, reason);
@@ -161,20 +192,26 @@ export function createAudit(deps: AuditDeps): Audit {
   }
 
   async function drain(): Promise<void> {
+    let reloaded = false;
+    let inserting = false;
     try {
       if (needReload) {
         await reload();
         needReload = false;
+        reloaded = true;
       }
       while (queue.length > 0 && closedReason === undefined) {
         const item = queue[0] as Pending;
         const body = { ...item, seq: lastSeq + 1, prevHash: lastHash };
-        const hash = chainHash(getKey(), lastHash, body);
+        const hash = chainHash(getKeys().current, lastHash, body);
         // O round-trip pelo JSON canônico tira os `undefined` e garante o que o verify recalcula.
         const document = JSON.parse(canonical({ ...body, hash })) as JsonObject;
+        inserting = true;
         await col().insert(document);
+        inserting = false;
         lastSeq = body.seq;
         lastHash = hash;
+        rejects = 0;
         if (queue[0] === item) queue.shift();
       }
       retryMs = 0;
@@ -183,6 +220,20 @@ export function createAudit(deps: AuditDeps): Audit {
       needReload = true;
       retryMs = Math.min(retryMs === 0 ? RETRY_MIN_MS : retryMs * 2, RETRY_MAX_MS);
       deps.log().event(LOG.auditFlushFailed, { err: error, queued: queue.length, retryMs });
+      // Evento que o storage recusa sempre (com o banco respondendo à leitura) travaria a cadeia.
+      const head = queue[0];
+      if (inserting && reloaded && head !== undefined) {
+        rejects = rejectedId === head.eventId ? rejects + 1 : 1;
+        rejectedId = head.eventId;
+        if (rejects >= AUDIT_MAX_REJECTS) {
+          queue.shift();
+          rejects = 0;
+          drop(1, 'rejected');
+        }
+      }
+      // O timer de 1 s armado por um `record` antes da falha atropelaria a espera.
+      clearTimeout(timer);
+      timer = undefined;
       schedule(retryMs);
     }
   }
@@ -190,6 +241,11 @@ export function createAudit(deps: AuditDeps): Audit {
   function run(): Promise<void> {
     draining ??= drain().finally(() => {
       draining = undefined;
+      // Registro que chegou enquanto o dreno terminava não pode ficar sem timer.
+      if (queue.length > 0 && started && closedReason === undefined && retryMs === 0) {
+        if (queue.length >= AUDIT_FLUSH_SIZE) void run();
+        else schedule(AUDIT_FLUSH_MS);
+      }
     });
     return draining;
   }
@@ -213,6 +269,19 @@ export function createAudit(deps: AuditDeps): Audit {
         throw new TypeError(`plugin "${plugin}": action "${action}" deve começar com "${plugin}."`);
       }
     }
+    const { target } = input;
+    if (
+      target !== undefined &&
+      (typeof target !== 'object' ||
+        target === null ||
+        typeof target.type !== 'string' ||
+        typeof target.id !== 'string')
+    ) {
+      throw new TypeError('audit: target deve ser { type: string, id: string }');
+    }
+    for (const text of [action, target?.type, target?.id]) {
+      if (text?.includes('\u0000')) throw new TypeError('audit: texto com caractere NUL');
+    }
     const outcome = input.outcome ?? 'success';
     if (!OUTCOMES.has(outcome)) throw new TypeError(`audit: outcome inválido "${String(outcome)}"`);
     const details =
@@ -232,7 +301,7 @@ export function createAudit(deps: AuditDeps): Audit {
       actor,
       via: subject !== undefined && explicit === undefined ? plugin : undefined,
       action,
-      target: input.target && { type: input.target.type, id: input.target.id },
+      target: target && { type: target.type, id: target.id },
       outcome,
       ip: subject?.ip,
       userAgent: subject?.userAgent,
@@ -241,7 +310,7 @@ export function createAudit(deps: AuditDeps): Audit {
       trace: currentTrace(),
       details,
       actorId: actor.kind === 'system' ? 'system' : actor.kind === 'plugin' ? actor.name : actor.id,
-      targetId: input.target?.id,
+      targetId: target?.id,
     };
   }
 
@@ -256,8 +325,10 @@ export function createAudit(deps: AuditDeps): Audit {
     }
     queue.push(pending);
     if (!started) return;
-    // Em retry o flush de 100 não passa por cima da espera: não martela um storage fora do ar.
-    if (queue.length >= AUDIT_FLUSH_SIZE && retryMs === 0) void run();
+    // Em retry nem o flush de 100 nem o timer de 1 s passam por cima da espera: não martela um
+    // storage fora do ar.
+    if (retryMs > 0) return;
+    if (queue.length >= AUDIT_FLUSH_SIZE) void run();
     else schedule(AUDIT_FLUSH_MS);
   }
 
@@ -277,17 +348,18 @@ export function createAudit(deps: AuditDeps): Audit {
     // No request de um tenant o filtro é do escopo, nunca de quem consulta.
     const tenant = deps.tenants.current ?? filter.tenant;
     if (tenant !== undefined) where['tenant'] = tenant;
-    const limit = Math.min(
-      Math.max(Math.trunc(filter.limit ?? DEFAULT_QUERY_LIMIT), 1),
-      MAX_QUERY_LIMIT,
-    );
+    const requested = filter.limit ?? DEFAULT_QUERY_LIMIT;
+    if (!Number.isInteger(requested) || requested < 1) {
+      throw new TypeError(`audit: limit deve ser inteiro positivo, recebido ${String(requested)}`);
+    }
+    const limit = Math.min(requested, MAX_QUERY_LIMIT);
     const rows = await col().find({ where, orderBy: 'seq', limit });
     const events = rows.map(strip);
     const last = events.at(-1);
     return last === undefined ? { events } : { events, next: last.seq };
   }
 
-  const verify = (): Promise<AuditVerifyResult> => verifyChain(col(), getKey());
+  const verify = (): Promise<AuditVerifyResult> => verifyChain(col(), getKeys());
 
   return {
     record: (input) => enqueue(build(input, undefined, input.actor)),
@@ -308,8 +380,10 @@ export function createAudit(deps: AuditDeps): Audit {
     async stop(signal) {
       clearTimeout(timer);
       timer = undefined;
-      while (queue.length > 0 && !signal.aborted && closedReason === undefined) {
-        await run();
+      // Sem `start()` (a trava falhou no boot) a cadeia não é nossa: nada é gravado.
+      while (started && queue.length > 0 && !signal.aborted && closedReason === undefined) {
+        // Insert pendurado não pode segurar o shutdown além do prazo.
+        await Promise.race([run(), pause(Number.POSITIVE_INFINITY, signal)]);
         if (queue.length > 0 && !signal.aborted) await pause(STOP_POLL_MS, signal);
       }
       discard('shutdown');
@@ -327,12 +401,13 @@ export function createAudit(deps: AuditDeps): Audit {
 /** Espera `ms` ou até o `signal` abortar; nunca rejeita. */
 function pause(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
+    if (signal.aborted) return resolve();
     const done = (): void => {
       clearTimeout(wait);
       signal.removeEventListener('abort', done);
       resolve();
     };
-    const wait = setTimeout(done, ms);
+    const wait = Number.isFinite(ms) ? setTimeout(done, ms) : undefined;
     signal.addEventListener('abort', done, { once: true });
   });
 }
@@ -355,5 +430,9 @@ export function verifyAudit(options: VerifyAuditOptions): Promise<AuditVerifyRes
     AUDIT_COLLECTION,
     { indexes: AUDIT_INDEXES },
   );
-  return verifyChain(collection, auditKey(readSecretKeys(options.env ?? processEnv()).current));
+  const { current, previous } = readSecretKeys(options.env ?? processEnv());
+  return verifyChain(collection, {
+    current: auditKey(current),
+    ...(previous !== undefined && { previous: auditKey(previous) }),
+  });
 }

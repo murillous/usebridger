@@ -9,7 +9,6 @@ export {
   type VerifyAuditOptions,
   verifyAudit,
 } from '#audit/audit.ts';
-export { currentAuditSubject, runAsAuditSubject } from '#audit/scope.ts';
 export type {
   AuditActor,
   AuditEvent,

@@ -30,7 +30,12 @@ export function createDetailsRedactor(secrets: SecretSource): DetailsRedactor {
 
   const clean = (value: unknown, includeContent: boolean, depth: number): JsonValue => {
     if (depth > MAX_DEPTH) throw new TypeError('audit: details fundo demais (ou circular)');
-    if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+      // NUL não entra em texto de banco (Postgres): o insert falharia sempre e travaria a cadeia.
+      if (value.includes('\u0000')) throw new TypeError('audit: details com caractere NUL');
+      return value;
+    }
+    if (value === null || typeof value === 'boolean') return value;
     if (typeof value === 'number') {
       if (!Number.isFinite(value)) throw new TypeError('audit: details com número não finito');
       return value;
@@ -44,6 +49,9 @@ export function createDetailsRedactor(secrets: SecretSource): DetailsRedactor {
       const out: Record<string, JsonValue> = {};
       for (const [key, item] of Object.entries(value)) {
         if (item === undefined || (key === 'content' && !includeContent)) continue;
+        if (key === '__proto__' || key.includes('\u0000')) {
+          throw new TypeError(`audit: details com chave inválida "${key}"`);
+        }
         out[key] = SECRET_KEYS.has(key.toLowerCase())
           ? CENSOR
           : clean(item, includeContent, depth + 1);

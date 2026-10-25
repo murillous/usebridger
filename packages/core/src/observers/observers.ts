@@ -51,7 +51,7 @@ export interface LogSignal {
 /** Eventos de auditoria descartados (ADR 0122); `count` é o incremento deste descarte. */
 export interface AuditDroppedSignal {
   readonly count: number;
-  readonly reason: 'queue-full' | 'lease-lost' | 'shutdown' | 'before-observer';
+  readonly reason: 'queue-full' | 'lease-lost' | 'shutdown' | 'rejected' | 'before-observer';
 }
 
 export interface ObserverSignals {

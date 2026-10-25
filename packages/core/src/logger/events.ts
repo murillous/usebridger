@@ -472,3 +472,9 @@ export const auditDropped: LogEvent = defineLogEvent({
   level: 'error',
   message: 'eventos de auditoria descartados',
 });
+export const auditUnkeyed: LogEvent = defineLogEvent({
+  name: 'audit.unkeyed',
+  level: 'warn',
+  message:
+    'sem BRIDGER_SECRET_KEY: a cadeia de auditoria usa chave pública e só detecta edição ingênua',
+});
