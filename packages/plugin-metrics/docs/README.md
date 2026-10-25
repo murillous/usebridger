@@ -106,6 +106,7 @@ Pela config do plugin (`pluginConfig.metrics`):
 | `runtime.enabled` | `true` | Liga as métricas do runtime do Node neste bot ([Runtime do Node](#runtime-do-node)) |
 | `runtime.eventLoopMonitoringPrecision` | `10` (mín. `1`) | Resolução do atraso do event loop, em ms |
 | `runtime.gcDurationBuckets` | padrão do `prom-client` | Baldes do histograma de GC, em segundos |
+| `scrapeToken` | ausente (rota aberta) | Segredo (`secret()`, mín. 16 caracteres) exigido no `GET /metrics` ([Autenticação](#autenticação)) |
 
 ## Histórico
 
@@ -358,5 +359,50 @@ existe (`metrics.http.missing`, `info` no log) e o resto do plugin segue.
 - As métricas de outros plugins aparecem também, com o nome declarado.
 - `reload`/`restart` do plugin recomeçam a registry e o tracker de ativos: os contadores voltam a
   zero, o que o Prometheus trata como reset de contador, e os ativos do dia superestimam.
-- **Sem autenticação** (autenticação é do plugin, `http.md`): os dados não têm id pessoal, mas
-  proteja a rota no proxy se a instância é pública.
+
+### Autenticação
+
+Com `scrapeToken` na config, o `GET /metrics` inteiro (bot e runtime) exige
+`Authorization: Bearer <token>`:
+
+- O token é comparado em tempo constante (`timingSafeEqual` sobre o SHA-256 dos dois lados, o que
+  também iguala o tamanho). O esquema `Bearer` não diferencia caixa.
+- Cabeçalho ausente, esquema diferente ou token errado respondem `401` com o corpo
+  `unauthorized` e `WWW-Authenticate: Bearer`, sem dizer o motivo. A recusa não registra o
+  cabeçalho recebido.
+- O campo é `secret()` ([ADR 0117](../../../docs/adr/0117-segredos-cifrados-editaveis-pelo-dashboard.md)):
+  mascarado na leitura da config, censurado no log e editável pela camada de segredos.
+
+Sem `scrapeToken` a rota fica aberta e o boot registra `metrics.scrape.open` (`warn`, uma vez por
+`setup`) com o caminho da rota em `path`. Os dados não têm id pessoal, mas o `/metrics` divide o
+servidor HTTP com as rotas que o proxy publica: em produção, configure o token.
+
+### Implantação com Traefik e Grafana Alloy
+
+O Alloy faz o scrape com o token e envia por `prometheus.remote_write` ao backend central:
+
+```alloy
+prometheus.scrape "bridger" {
+  targets           = [{ __address__ = "bot:3000" }]
+  metrics_path      = "/plugins/metrics/metrics"
+  bearer_token_file = "/run/secrets/bridger_scrape_token"
+  forward_to        = [prometheus.remote_write.central.receiver]
+}
+```
+
+O arquivo do segredo tem o mesmo valor de `pluginConfig.metrics.scrapeToken`. Fora da sessão
+`default`, o caminho é `/sessions/<sessão>/plugins/metrics/metrics`: um `prometheus.scrape` (ou
+um alvo) por sessão.
+
+Segunda camada recomendada: o roteador público do Traefik exclui o caminho do `/metrics`, e o
+Alloy alcança o bot pela rede interna, sem passar pelo proxy:
+
+```yaml
+http:
+  routers:
+    bot:
+      rule: "Host(`bot.exemplo.com`) && !PathPrefix(`/plugins/metrics/metrics`)"
+      service: bot
+```
+
+Com sessões, exclua também `/sessions/<sessão>/plugins/metrics/metrics`.

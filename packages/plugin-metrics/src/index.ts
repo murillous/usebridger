@@ -1,4 +1,5 @@
-import { BotConfigError, definePlugin, type PluginDefinition } from '@usebridger/core';
+import { createHash, timingSafeEqual } from 'node:crypto';
+import { BotConfigError, definePlugin, type PluginDefinition, secret } from '@usebridger/core';
 import { z } from '@usebridger/core/zod';
 import { Gauge, Registry } from 'prom-client';
 import { createActiveTracker } from '#active.ts';
@@ -46,6 +47,14 @@ import * as LOG from './log-events.ts';
 // Os limites do histograma de tratamento de antes do ADR 0121 (5 ms … 30 s), agora em segundos.
 const HANDLE_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30];
 
+const sha256 = (text: string): Buffer => createHash('sha256').update(text).digest();
+
+/** `Authorization: Bearer <token>` com o token certo, em tempo constante: o hash iguala o tamanho. */
+function bearerMatches(request: Request, token: string): boolean {
+  const given = /^Bearer (.+)$/i.exec(request.headers.get('authorization') ?? '')?.[1];
+  return given !== undefined && timingSafeEqual(sha256(given), sha256(token));
+}
+
 // Um runtime por contexto: o mesmo objeto de plugin serve a vários bots e a reloads.
 const runtimes = new WeakMap<
   object,
@@ -81,6 +90,8 @@ export const metrics: PluginDefinition = definePlugin({
         gcDurationBuckets: z.array(z.number().positive()).nonempty().optional(),
       })
       .default({ enabled: true, eventLoopMonitoringPrecision: 10 }),
+    // Token do scrape (#240): com ele, o `GET /metrics` exige `Authorization: Bearer <token>`.
+    scrapeToken: secret(z.string().min(16)).optional(),
   }),
   setup(ctx) {
     // Uma registry por runtime (bot e setup), nunca o `register` global: dois bots no mesmo
@@ -245,7 +256,15 @@ export const metrics: PluginDefinition = definePlugin({
     };
 
     try {
-      ctx.http.route('GET', '/metrics', async () => {
+      const { scrapeToken } = ctx.config;
+      ctx.http.route('GET', '/metrics', async (request) => {
+        // Corpo genérico: a recusa não diz se faltou o cabeçalho ou se o token estava errado.
+        if (scrapeToken !== undefined && !bearerMatches(request, scrapeToken)) {
+          return new Response('unauthorized', {
+            status: 401,
+            headers: { 'www-authenticate': 'Bearer' },
+          });
+        }
         let body = await registry.metrics();
         try {
           // Os prefixos `process_`/`nodejs_` são reservados, então os nomes não colidem.
@@ -256,6 +275,9 @@ export const metrics: PluginDefinition = definePlugin({
         }
         return new Response(body, { headers: { 'content-type': registry.contentType } });
       });
+      if (scrapeToken === undefined) {
+        ctx.log.event(LOG.scrapeOpen, { path: `${ctx.http.basePath}/metrics` });
+      }
     } catch (error) {
       // Sem servidor HTTP o bot ainda mede; só o scrape fica indisponível.
       if (!(error instanceof BotConfigError)) throw error;
