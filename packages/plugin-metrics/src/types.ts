@@ -1,17 +1,40 @@
 // Tipos públicos do plugin: o serviço `metrics` e o ponto de extensão `metrics.exporters`.
 
-/** Rótulos de uma série: nome → valor. Nunca id de chat nem de usuário (ADR 0103). */
+/** Rótulos de uma série gravada: nome → valor. Nunca id de chat nem de usuário (ADR 0103). */
 export type MetricLabels = Readonly<Record<string, string>>;
 
-/** Limites superiores (ms) dos baldes do histograma; acima do último vai um balde `+Inf`. */
-export const HISTOGRAM_BUCKETS: readonly number[] = [
-  5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10_000, 30_000,
-];
+/**
+ * Rótulos de uma escrita: só os declarados em `labelNames` e qualquer um pode faltar (fica ausente
+ * na série). Rótulo não declarado não compila e é recusado em runtime.
+ */
+export type LabelValues<L extends string> = { readonly [K in L]?: string };
 
-/** Intervalo de dias inclusivo, `YYYY-MM-DD` em UTC. */
-export interface MetricsRange {
-  readonly from: string;
-  readonly to: string;
+/** Declaração de uma métrica (ADR 0121). */
+export interface MetricSpec<L extends string> {
+  /** Nome Prometheus (`^[a-zA-Z_:][a-zA-Z0-9_:]*$`), com a unidade no nome (`_seconds`, `_bytes`). */
+  readonly name: string;
+  readonly help: string;
+  readonly labelNames: readonly L[];
+}
+
+export interface HistogramSpec<L extends string> extends MetricSpec<L> {
+  /** Limites superiores crescentes e finitos; sem eles, o padrão do `prom-client` (`0.005 … 10`). */
+  readonly buckets?: readonly number[];
+}
+
+export interface Counter<L extends string> {
+  /** Soma `value` (finito, >= 0, padrão 1). */
+  inc(labels: LabelValues<L>, value?: number): void;
+}
+
+export interface Histogram<L extends string> {
+  /** Registra uma observação (finita, >= 0), em segundos se for tempo. */
+  observe(labels: LabelValues<L>, value: number): void;
+}
+
+export interface Gauge<L extends string> {
+  /** Fixa o valor atual (finito, >= 0). */
+  set(labels: LabelValues<L>, value: number): void;
 }
 
 /** Uma série de contador num dia. */
@@ -23,7 +46,7 @@ export interface CounterRow {
   readonly value: number;
 }
 
-/** Uma série de histograma num dia; percentis saem dos baldes (limite superior do balde). */
+/** Uma série de histograma num dia; percentis saem dos baldes. */
 export interface HistogramRow {
   readonly metric: string;
   readonly type: 'histogram';
@@ -34,7 +57,7 @@ export interface HistogramRow {
   readonly p50: number;
   readonly p95: number;
   readonly p99: number;
-  /** Contagem por balde, alinhada a `HISTOGRAM_BUCKETS` mais um `+Inf` no fim. */
+  /** Contagem por balde, alinhada aos limites da métrica mais um `+Inf` no fim. */
   readonly buckets: readonly number[];
 }
 
@@ -60,22 +83,15 @@ export interface MetricsSnapshot {
 /** Contribuição ao ponto `metrics.exporters`. Erro vai para o log e não derruba o flush. */
 export type MetricsExporter = (snapshot: MetricsSnapshot) => void | Promise<void>;
 
+/**
+ * Declara métricas e devolve o handle de escrita. A mesma especificação devolve o mesmo handle
+ * (também a outro plugin); especificação diferente para o mesmo nome lança `TypeError`.
+ */
 export interface MetricsService {
-  /** Soma `value` (>= 0, padrão 1) ao contador. `TypeError` se algum rótulo for id pessoal. */
-  counter(name: string, labels: MetricLabels, value?: number): void;
-  /** Amostra um valor (>= 0): guarda o último e o máximo do dia, por série. */
-  gauge(name: string, labels: MetricLabels, value: number): void;
-  /** Registra uma observação (>= 0, em ms) no histograma. */
-  observe(name: string, labels: MetricLabels, value: number): void;
-  /** Linhas por dia e rótulos: o persistido mais o que ainda está em memória. */
-  query(name: string, range: MetricsRange): Promise<MetricRow[]>;
-  /** Nomes das métricas com dados no intervalo (persistidos ou em memória), em ordem alfabética. */
-  names(range: MetricsRange): Promise<string[]>;
-  /**
-   * Plugin que gravou a métrica primeiro (`core` para as do kernel); `undefined` se o dono já saiu
-   * ou a métrica só existe no histórico. O dono vem do serviço com escopo (ADR 0112), não é declarado.
-   */
-  ownerOf(name: string): string | undefined;
+  /** Contador: o nome termina em `_total`. */
+  counter<const L extends string = never>(spec: MetricSpec<L>): Counter<L>;
+  histogram<const L extends string = never>(spec: HistogramSpec<L>): Histogram<L>;
+  gauge<const L extends string = never>(spec: MetricSpec<L>): Gauge<L>;
 }
 
 declare module '@usebridger/core' {

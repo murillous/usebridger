@@ -158,13 +158,5 @@ As linhas saem com `plugin=dashboard` ou `plugin=metrics`.
 
 | Evento | Nível | Mensagem |
 | --- | --- | --- |
-| `metrics.outbound.sample-failed` | `error` | falha ao amostrar a fila de saída |
-| `metrics.active.sync-failed` | `error` | falha ao somar ativos do dia ao agregado |
-| `metrics.prometheus.name-collision` | `warn` | métrica fora do /metrics: nome saneado colide com outro tipo |
 | `metrics.http.missing` | `info` | sem http no bot: GET /metrics desligado |
-| `metrics.flush.failed` | `error` | flush de métricas falhou |
 | `metrics.series.overflow` | `warn` | métrica passou do limite de séries; amostras de séries novas descartadas |
-| `metrics.write.failed` | `error` | falha ao gravar métrica; mantida em memória |
-| `metrics.purge.failed` | `error` | falha ao apagar métricas antigas |
-| `metrics.exporter.failed` | `error` | exportador de métricas falhou |
-| `metrics.exporters.list-failed` | `error` | falha ao listar exportadores de métricas |
