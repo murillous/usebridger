@@ -362,6 +362,7 @@ Os matchers recebem `bot.sent` ou o próprio `TestBot`:
 | `toContainVideo()` | Algum envio é vídeo |
 | `toContainAudio()` | Algum envio é áudio (`audio`; a nota de voz é `voice`, outro tipo) |
 | `toContainDocument({ fileName?, mimetype? })` | Algum envio é documento. Com `fileName` ou `mimetype`, iguais à string ou casando com a RegExp |
+| `toContainTemplate(name?)` | Algum envio é template (`type: 'template'`). Com `name`, o nome é igual à string ou casa com a RegExp |
 | `toHaveReplied(text?)` | Algum envio cita uma mensagem, como faz o `ctx.reply`. Com `text`, é uma resposta de texto com esse conteúdo |
 
 Todos funcionam com `.not`. Quando um matcher falha, a mensagem lista o que foi enviado:
@@ -424,6 +425,28 @@ const bot = await createTestBot({ transport, plugins: [meuPlugin()] });
 Um método ligado a uma capability que o transport não declara lança `UnsupportedError`, como no
 transport real. Um plugin que exige essa capability no manifesto (`requires`) faz o
 `createTestBot` rejeitar com `PluginBootError`, com o motivo em `reason`.
+
+### Janela de atendimento
+
+Plataformas como o WhatsApp oficial só aceitam conteúdo livre por um tempo após a última
+mensagem do contato (ADR 0124). A opção `window` liga essa regra no transport falso:
+
+```ts
+vi.useFakeTimers();
+const transport = new FakeTransport({ window: { enabled: true, ttlMs: 24 * 60 * 60 * 1000 } });
+const bot = await createTestBot({ transport, plugins: [meuPlugin()] });
+await bot.receive({ text: 'oi' }); // abre a janela do chat em Date.now()
+vi.advanceTimersByTime(25 * 60 * 60 * 1000); // fecha
+```
+
+Cada mensagem recebida (`fromMe: false`) abre ou renova a janela do chat. Com a janela fechada
+(sem mensagem recebida, ou passado o `ttlMs`), o envio que não é template rejeita com
+`ConversationWindowError` (`closedAt` é `null` se o contato nunca escreveu) e não entra em `sent`;
+template passa sempre e entra em `sent` (`expect(bot).toContainTemplate('retomar')`).
+`transport.window(chatId)` (e o `ctx.send.window`) devolve `{ open, expiresAt }`, com `expiresAt`
+`null` se fechada. Sem a opção, ou com `enabled: false`, não há janela: o envio livre passa e
+`window()` resolve `null`. A capability `send.template` está em todas as capabilities por padrão,
+mas em nenhum perfil de plataforma.
 
 O `self` é `null` até o `connect()` e depois vale o `self` passado nas opções, o do perfil ou
 `DEFAULT_SELF`.

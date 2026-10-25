@@ -6,6 +6,7 @@
 import type {
   Capability,
   Contact,
+  ConversationWindow,
   FormattedText,
   GroupMetadata,
   GroupParticipantAction,
@@ -19,6 +20,7 @@ import type {
   TypingKind,
   Unsubscribe,
 } from '@usebridger/core';
+import { ConversationWindowError } from '@usebridger/core';
 import {
   assertCanSend,
   assertCapability,
@@ -75,6 +77,12 @@ export interface FakeTransportOptions {
    * sem perfil, nenhum, e o texto vai inteiro.
    */
   readonly limits?: TextLimits;
+  /**
+   * Janela de atendimento (ADR 0124), como a do WhatsApp oficial: conteúdo que não é template só
+   * passa até `ttlMs` depois da última mensagem recebida (`fromMe: false`) do chat; fora dela, o
+   * envio rejeita com `ConversationWindowError`. Ausente ou `enabled: false`: sem janela.
+   */
+  readonly window?: { readonly enabled: boolean; readonly ttlMs: number };
 }
 
 export class FakeTransport implements Transport {
@@ -110,6 +118,9 @@ export class FakeTransport implements Transport {
   // Por instância e chaveado pelo objeto emitido, como num transport real (ADR 0062).
   readonly #raws = new WeakMap<Message | Interaction, unknown>();
   readonly #emitter = new TypedEmitter<TransportEvents>((error) => this.errors.push(error));
+  readonly #ttlMs: number | null;
+  // Último inbound por chat, em `Date.now()` (o teste controla com `vi.useFakeTimers`).
+  readonly #lastInbound = new Map<string, number>();
   #connected = false;
   #nextId = 0;
 
@@ -120,6 +131,12 @@ export class FakeTransport implements Transport {
     this.#selfOnConnect = options.self ?? profile?.self ?? DEFAULT_SELF;
     const limits = options.limits ?? profile?.limits;
     if (limits !== undefined) this.limits = limits;
+    this.#ttlMs = options.window?.enabled ? options.window.ttlMs : null;
+    if (this.#ttlMs !== null) {
+      this.#emitter.on('message', (message) => {
+        if (!message.fromMe) this.#lastInbound.set(message.chat.id, Date.now());
+      });
+    }
     for (const group of options.groups ?? []) this.setGroup(group);
   }
 
@@ -155,6 +172,15 @@ export class FakeTransport implements Transport {
 
   async send(chatId: string, content: OutgoingContent, options?: SendOptions): Promise<MessageKey> {
     assertCanSend(this, content, options);
+    if (content.type !== 'template' && this.#ttlMs !== null) {
+      const last = this.#lastInbound.get(chatId);
+      if (last === undefined || Date.now() >= last + this.#ttlMs) {
+        throw new ConversationWindowError(
+          chatId,
+          last === undefined ? null : new Date(last + this.#ttlMs),
+        );
+      }
+    }
     this.#nextId++;
     const key: MessageKey = { chatId, id: `fake-${this.#nextId}`, fromMe: true, senderId: null };
     this.sent.push({
@@ -166,6 +192,16 @@ export class FakeTransport implements Transport {
       key,
     });
     return key;
+  }
+
+  /** Estado da janela; `null` sem a opção `window`, como numa plataforma que não tem janela. */
+  async window(chatId: string): Promise<ConversationWindow | null> {
+    if (this.#ttlMs === null) return null;
+    const last = this.#lastInbound.get(chatId);
+    if (last === undefined || Date.now() >= last + this.#ttlMs) {
+      return { open: false, expiresAt: null };
+    }
+    return { open: true, expiresAt: new Date(last + this.#ttlMs) };
   }
 
   async react(key: MessageKey, emoji: string | null): Promise<void> {
