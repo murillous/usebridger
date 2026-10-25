@@ -56,9 +56,9 @@ describe('ctx.audit', () => {
     ctx().audit.record({ action: 'dash.config.update', details: { token: 'abc' } });
     expect(() => ctx().audit.record({ action: 'outro.x' })).toThrow(TypeError);
     const page = await ctx().audit.query();
-    expect(page.events).toEqual([]); // ainda na fila: gravação assíncrona
+    expect(page.events.filter((e) => e.action === 'dash.config.update')).toEqual([]); // ainda na fila: gravação assíncrona
     await bot.stop();
-    const rows = await audited(storage);
+    const rows = (await audited(storage)).filter((row) => !row.action.startsWith('kernel.'));
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       actor: { kind: 'plugin', name: 'dash' },
@@ -128,7 +128,7 @@ describe('trava de sessão perdida', () => {
       await bot.start();
       held = false;
       await vi.advanceTimersByTimeAsync(SESSION_LEASE_RENEW_MS + 100);
-      expect(dropped).toContainEqual({ count: 2, reason: 'lease-lost' });
+      expect(dropped).toContainEqual({ count: 3, reason: 'lease-lost' }); // 2 do plugin + kernel.boot
     } finally {
       vi.useRealTimers();
     }

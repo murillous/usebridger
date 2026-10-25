@@ -239,6 +239,12 @@ export function createAudit(deps: AuditDeps): Audit {
   }
 
   function run(): Promise<void> {
+    // Dreno pedido agora: o timer de 1 s armado pelo `record` fica sem serventia (em retry, a
+    // espera crescente continua valendo).
+    if (retryMs === 0) {
+      clearTimeout(timer);
+      timer = undefined;
+    }
     draining ??= drain().finally(() => {
       draining = undefined;
       // Registro que chegou enquanto o dreno terminava não pode ficar sem timer.
