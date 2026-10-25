@@ -406,7 +406,7 @@ setup(ctx) {
 | `ctx.send.edit(key, text)` | troca o texto (cru ou formatado; não divide) | `message.edit` | sim |
 | `ctx.send.delete(key)` | apaga para todos | `message.delete` | sim |
 | `ctx.send.typing(chatId, kind)` | "digitando" (`text`) ou "gravando áudio" (`voice`) | `typing` | sim |
-| `ctx.send.window(chatId)` | janela de atendimento (`{ open, expiresAt }`); `null` onde a plataforma não tem, trate como aberta. Fora da janela, só `{ type: 'template' }` sai | — | não (leitura) |
+| `ctx.send.window(chatId)` | janela de atendimento (`{ open, expiresAt }`, `expiresAt` é até quando vale e `null` se fechada); `null` onde a plataforma não tem, trate como aberta. Fora da janela, só `{ type: 'template' }` sai | — | não (leitura) |
 | `ctx.groups.metadata(groupId)` | nome (`title`), descrição, participantes (se a plataforma lista) | `groups` | não (leitura) |
 | `ctx.groups.updateParticipants(groupId, ids, action)` | add, remove, promote, demote | `groups.add`, `groups.remove` ou `groups.promote` (também para `demote`) | sim |
 | `ctx.pseudonym(id, kind?)` | pseudônimo estável do id (`u_…`, ou `g_…` com `'group'`) para logar sem expor o id ([logger](logger.md#pseudônimo-do-usuário)) | — | — |

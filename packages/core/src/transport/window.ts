@@ -4,7 +4,10 @@
 /** Estado da janela de um chat. */
 export interface ConversationWindow {
   readonly open: boolean;
-  /** Quando a janela fecha (ou fechou); `null` se nunca houve mensagem do contato no chat. */
+  /**
+   * Até quando a janela vale; `null` se fechada ou sem inbound. A hora em que fechou fica no
+   * `closedAt` do `ConversationWindowError`.
+   */
   readonly expiresAt: Date | null;
 }
 

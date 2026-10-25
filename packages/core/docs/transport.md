@@ -501,7 +501,8 @@ contato; fora da janela, só template
   (`params.header` com `TemplateParam`, `body` com textos, `buttons` com `index` e `payload`). A
   fila não o divide nem formata. O core não sabe se o template existe: inexistente ou pausado é
   erro do transport com `retryable: false`.
-- **`window?(chatId)`:** devolve `{ open, expiresAt }`, ou `null` (plataforma sem janela, sempre
+- **`window?(chatId)`:** devolve `{ open, expiresAt }` (`expiresAt`: até quando a janela vale; `null` se fechada ou sem
+  inbound; a hora em que fechou fica no `closedAt` do erro), ou `null` (plataforma sem janela, sempre
   aberta). Opcional e sem capability. Guarde o último inbound por chat no storage que a fábrica
   recebe ([ADR 0033](../../../docs/adr/0033-transport-por-fabrica.md)); o
   `ctx.send.window` do plugin chega aqui.

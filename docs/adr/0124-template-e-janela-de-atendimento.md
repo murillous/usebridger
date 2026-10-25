@@ -25,6 +25,8 @@ re-tentar a recusa e deixar o plugin saber da janela antes de enviar (inbox, dis
 - **`Transport.window?(chatId)`** opcional, sem capability, como o `isChatAdmin`: ausente ou `null`
   é plataforma sem janela, tratada como sempre aberta. `ctx.send.window(chatId)` o chama direto,
   fora da fila (é leitura, como `ctx.groups.metadata`), e resolve `null` sem o método.
+- **`expiresAt`** é até quando a janela vale; `null` se fechada ou sem inbound. A hora em que
+  fechou fica no `closedAt` do `ConversationWindowError`.
 
 ## Consequências
 
