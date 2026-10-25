@@ -591,6 +591,9 @@ function liveOutbound(outbound: Outbound, live: Live): Outbound {
     typing: live('send.typing', (...args: Parameters<Outbound['typing']>) =>
       outbound.typing(...args),
     ),
+    window: live('send.window', (...args: Parameters<Outbound['window']>) =>
+      outbound.window(...args),
+    ),
   };
 }
 

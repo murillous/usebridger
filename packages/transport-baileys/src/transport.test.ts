@@ -730,7 +730,7 @@ describe('BaileysTransport: eventos (M2-1.6)', () => {
 describe('BaileysTransport: capabilities', () => {
   it('declara as capabilities do Baileys: todas as do core, menos botões e álbum (ADR 0058, 0061)', () => {
     const { transport } = setup();
-    const missing = new Set(['actions', 'send.album']);
+    const missing = new Set(['actions', 'send.album', 'send.template']);
     expect([...transport.capabilities].sort()).toEqual(
       CAPABILITIES.filter((capability) => !missing.has(capability)).sort(),
     );

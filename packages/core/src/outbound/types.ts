@@ -11,6 +11,7 @@ import type {
   SendOptions,
   TypingKind,
 } from '#transport/types.ts';
+import type { ConversationWindow } from '#transport/window.ts';
 
 /** Prioridade na fila: comandos respondem antes de broadcasts. */
 export type SendPriority = 'high' | 'normal' | 'low';
@@ -65,6 +66,12 @@ export interface Outbound extends Sender {
    * no próximo envio ou quando a plataforma o expira (5 s no Telegram).
    */
   typing(chatId: string, kind: TypingKind, options?: ActionOptions): Promise<void>;
+  /**
+   * Janela de atendimento do chat (ADR 0124), para o plugin decidir entre conteúdo livre e
+   * template antes de enviar. `null`: plataforma sem janela, trate como sempre aberta. Leitura:
+   * não passa pela fila nem exige capability.
+   */
+  window(chatId: string): Promise<ConversationWindow | null>;
 }
 
 /** Opções de `ctx.reply`. A citação da mensagem original é automática. */

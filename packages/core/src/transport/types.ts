@@ -9,6 +9,7 @@ import type { Chat, Contact, Message } from '#message/types.ts';
 import type { AuthStateStore } from '#storage/types.ts';
 import type { FormattedText, MessageText } from '#text/format.ts';
 import type { Capability } from './capabilities.ts';
+import type { ConversationWindow } from './window.ts';
 
 /** Cancela a assinatura feita com `on()`. Chamar mais de uma vez é inofensivo. */
 export type Unsubscribe = () => void;
@@ -290,6 +291,34 @@ export type OutgoingContent =
        * Discord não limitam quantas (ADR 0066).
        */
       readonly multiple?: boolean;
+    }
+  | {
+      /**
+       * Template aprovado da plataforma (capability `send.template`, ADR 0124): o único conteúdo
+       * que sai com a janela de atendimento fechada. A fila não o divide nem aplica formatação, e
+       * o core não valida se ele existe: template inexistente ou pausado volta como erro do
+       * transport com `retryable: false`.
+       */
+      readonly type: 'template';
+      /** Nome do template como cadastrado na plataforma. */
+      readonly name: string;
+      /** Idioma/locale do template aprovado (ex.: `'pt_BR'`). */
+      readonly language: string;
+      /** Variáveis por componente, na ordem do template. */
+      readonly params?: {
+        readonly header?: readonly TemplateParam[];
+        readonly body?: readonly string[];
+        readonly buttons?: readonly { readonly index: number; readonly payload: string }[];
+      };
+    };
+
+/** Variável do cabeçalho de um template: texto ou mídia. */
+export type TemplateParam =
+  | { readonly type: 'text'; readonly text: string }
+  | {
+      readonly type: 'image' | 'video' | 'document';
+      readonly media: MediaInput;
+      readonly fileName?: string;
     };
 
 /**
@@ -438,6 +467,13 @@ export interface Transport {
    * contato nos `participants` do `getGroupMetadata` (ADR 0055).
    */
   isChatAdmin?(chat: Chat, contact: Contact): Promise<boolean>;
+  /**
+   * Janela de atendimento do chat (ADR 0124), para plataformas que só deixam enviar conteúdo livre
+   * por um tempo após a última mensagem do contato (WhatsApp oficial, 24 h). Opcional e sem
+   * capability: ausente ou `null` é plataforma sem janela, e o chat conta como sempre aberto. O
+   * transport guarda o último inbound no storage que recebe da fábrica (ADR 0033).
+   */
+  window?(chatId: string): Promise<ConversationWindow | null>;
   /**
    * Capability da ação (`groups.add`, `groups.remove` ou `groups.promote`); o bot precisa ser
    * admin do grupo.

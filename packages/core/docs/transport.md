@@ -32,6 +32,7 @@ interface Transport {
   sendTyping(chatId, kind): Promise<void>;       // typing
   getGroupMetadata(groupId): Promise<GroupMetadata>;            // groups
   isChatAdmin?(chat, contact): Promise<boolean>;                // opcional
+  window?(chatId): Promise<ConversationWindow | null>;         // opcional
   updateGroupParticipants(groupId, ids, action): Promise<void>; // groups.add/remove/promote
 }
 ```
@@ -96,12 +97,12 @@ export function echo(options) {
 
 A descrição (`TransportSpec`) é o contrato sem o `on` e o `self`: `capabilities` em lista, e
 `react`, `edit`, `delete`, `sendTyping`, `getGroupMetadata`, `updateGroupParticipants`, `raw`,
-`isChatAdmin`, `native`, `limits` e `pacing` opcionais. O transport montado:
+`isChatAdmin`, `window`, `native`, `limits` e `pacing` opcionais. O transport montado:
 
 - confere a capability no `send` (a do conteúdo, mais citação, menções e botões) e em cada
   método antes de chamar o do adapter, que roda com `this` na descrição;
 - faz o método não implementado rejeitar com `UnsupportedError`;
-- só expõe `raw`, `isChatAdmin`, `limits` e `pacing` quando a descrição os tem.
+- só expõe `raw`, `isChatAdmin`, `window`, `limits` e `pacing` quando a descrição os tem.
 
 Descrição inválida (capability com erro de digitação, capability sem o método, `send` faltando)
 lança `TypeError` com todos os problemas, e o `createBot` o converte em `BotConfigError`.
@@ -490,6 +491,25 @@ import { messageKey } from '@usebridger/core/adapter';
 await transport.react(messageKey(ctx.message), '👍');
 ```
 
+### Template e janela de atendimento
+
+Plataformas como o WhatsApp oficial só aceitam conteúdo livre por 24 h após a última mensagem do
+contato; fora da janela, só template
+([ADR 0124](../../../docs/adr/0124-template-e-janela-de-atendimento.md)). A regra é do transport.
+
+- **`send.template`:** o transport recebe `{ type: 'template', name, language, params? }`
+  (`params.header` com `TemplateParam`, `body` com textos, `buttons` com `index` e `payload`). A
+  fila não o divide nem formata. O core não sabe se o template existe: inexistente ou pausado é
+  erro do transport com `retryable: false`.
+- **`window?(chatId)`:** devolve `{ open, expiresAt }`, ou `null` (plataforma sem janela, sempre
+  aberta). Opcional e sem capability. Guarde o último inbound por chat no storage que a fábrica
+  recebe ([ADR 0033](../../../docs/adr/0033-transport-por-fabrica.md)); o
+  `ctx.send.window` do plugin chega aqui.
+- **`ConversationWindowError(chatId, closedAt)`:** lance-o em envio livre, ação, botões e mídia
+  com a janela fechada: antes da API, se você conhece a janela, ou convertendo a recusa da
+  plataforma (erro `131047` da Cloud API). `closedAt` é `null` se o contato nunca escreveu.
+  Template nunca recebe esse erro. Tem `retryable: false`, então a fila não re-tenta.
+
 ### Erros de envio
 
 A fila de saída re-tenta o que falha ([Fila de saída](outbound-queue.md#erros-e-retry)), a não
@@ -579,7 +599,7 @@ mantém cache por grupo e o invalida em `group.participants` e `group.updated` (
 `CAPABILITIES` lista as capabilities suportadas pelo kernel (plano §6.10):
 
 `actions`, `groups`, `groups.add`, `groups.remove`, `groups.promote`, `mentions`, `reactions`, `typing`,
-`send.text`, `send.image`, `send.video`, `send.audio`, `send.voice`, `send.sticker`, `send.document`, `send.album`, `media.download`,
+`send.text`, `send.image`, `send.video`, `send.audio`, `send.voice`, `send.sticker`, `send.document`, `send.album`, `send.template`, `media.download`,
 `message.edit`, `message.delete`, `polls`, `quoted`, `pairing`.
 
 `pairing` não é de envio: diz que a sessão se pareia por QR ou código (`connection.qr`,
