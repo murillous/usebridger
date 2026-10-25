@@ -2,10 +2,13 @@
 // situação de cada plugin na tabela do host. O host e as configs nascem só no boot, por isso
 // chegam por getters.
 import type { Audit } from '#audit/audit.ts';
+import { currentAuditSubject } from '#audit/scope.ts';
 import type { AuditActor } from '#audit/types.ts';
 import type { CommandCatalog } from '#commands/catalog.ts';
 import type { PluginConfigs } from '#config/plugin-configs.ts';
 import type { ConversationRegistry, PluginPresence } from '#conversations/conversations.ts';
+import * as LOG from '#logger/events.ts';
+import type { Logger } from '#logger/types.ts';
 import type { PluginChangeResult, PluginHost } from '#plugin/host.ts';
 import type { PluginLifecycleError, PluginReportEntry } from '#plugin/report.ts';
 import type { JsonObject, JsonValue } from '#storage/types.ts';
@@ -24,6 +27,8 @@ export interface PluginControlDeps {
   readonly lifecycleError: (error: PluginLifecycleError) => void;
   /** Auditoria das ações do kernel (ADR 0122); sem ela nada é gravado. */
   readonly audit?: Pick<Audit, 'record'>;
+  /** Para registrar a falha de leitura do diff de config. */
+  readonly log?: () => Logger;
 }
 
 export interface PluginControl {
@@ -35,7 +40,11 @@ export interface PluginControl {
   as(actor: AuditActor): { readonly plugins: BotPlugins; readonly config: BotPluginConfigs };
 }
 
-/** Folhas do objeto por caminho (`a.b`); array e valor simples são folhas. */
+/**
+ * Folhas do objeto por caminho (`a.b`); array e valor simples são folhas.
+ * shortcut: o join por `.` colide com chave que já contém ponto; trocar por caminho em array se
+ * algum schema de plugin precisar disso.
+ */
 function leaves(value: unknown, prefix = '', out: Record<string, JsonValue> = {}) {
   if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
     for (const [key, each] of Object.entries(value)) leaves(each, `${prefix}${key}.`, out);
@@ -109,7 +118,8 @@ export function createPluginControl(deps: PluginControlDeps): PluginControl {
         target: { type: 'plugin', id: plugin },
         outcome,
         details: { plugin, ...details(ok) },
-        ...(actor && { actor }),
+        // Titular do escopo (`user`/`contact`, #223/#225) vence o ator explícito; ele sai com `via`.
+        ...(actor && !currentAuditSubject() && { actor }),
       });
     let result: T;
     try {
@@ -136,13 +146,21 @@ export function createPluginControl(deps: PluginControlDeps): PluginControl {
     return configs;
   }
 
-  /** Visão mascarada pelo schema; falha de leitura não impede a ação (o diff só some). */
+  /** Visão mascarada pelo schema. */
   async function view(plugin: string): Promise<unknown> {
-    try {
-      return (await requireConfigs('describe').describe(plugin)).config;
-    } catch {
-      return undefined;
-    }
+    return (await requireConfigs('describe').describe(plugin)).config;
+  }
+
+  // Ler antes, aplicar e ler depois numa fila só: duas chamadas seguidas não misturam o diff,
+  // e a ordem de aplicação é a da chamada.
+  let overridesTail: Promise<unknown> = Promise.resolve();
+  function serialized<T>(task: () => Promise<T>): Promise<T> {
+    const run = overridesTail.then(task);
+    overridesTail = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
   }
 
   function make(actor?: AuditActor) {
@@ -176,21 +194,32 @@ export function createPluginControl(deps: PluginControlDeps): PluginControl {
       setOverrides: (plugin, overrides) => {
         // Síncrono como antes: sem plugins carregados lança `BotStateError` na hora.
         requireConfigs('setOverrides');
-        const before = view(plugin);
+        let before: unknown;
         let after: unknown;
-        let prev: unknown;
+        let readFailed = false;
+        const read = async (): Promise<unknown> => {
+          try {
+            return await view(plugin);
+          } catch (err) {
+            // A ação segue; o diff vira `null` em vez de comparar com uma leitura que não houve.
+            readFailed = true;
+            deps.log?.().event(LOG.auditConfigDiffFailed, { plugin, err });
+            return undefined;
+          }
+        };
         return audited(
           actor,
           'kernel.config.update',
           plugin,
-          async () => {
-            const previous = await before;
-            const result = await requireConfigs('setOverrides').setOverrides(plugin, overrides);
-            after = await view(plugin);
-            prev = previous;
-            return result;
-          },
-          (ok) => (ok ? { changes: diffConfig(prev, after) } : ({} as JsonObject)),
+          () =>
+            serialized(async () => {
+              before = await read();
+              const result = await requireConfigs('setOverrides').setOverrides(plugin, overrides);
+              after = await read();
+              return result;
+            }),
+          (ok) =>
+            ok ? { changes: readFailed ? null : diffConfig(before, after) } : ({} as JsonObject),
         );
       },
       setSecret: (plugin, path, value) =>

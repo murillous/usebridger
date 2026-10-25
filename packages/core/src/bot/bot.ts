@@ -375,6 +375,7 @@ export function createBot(config: BotConfig): Bot {
     conversations,
     lifecycleError: pluginErrors.lifecycle,
     audit,
+    log: getLog,
   });
 
   // --- Boot ---------------------------------------------------------------------------------

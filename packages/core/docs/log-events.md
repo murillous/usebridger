@@ -25,6 +25,7 @@ cada linha seguem o [dicionário do logger](logger.md#campos).
 | `session.lease.renew-failed` | `warn` | falha ao renovar a trava da sessão; tentando no próximo intervalo |
 | `audit.flush.failed` | `error` | falha ao gravar a auditoria; a fila fica retida e tenta de novo |
 | `audit.dropped` | `error` | eventos de auditoria descartados |
+| `audit.config-diff.failed` | `warn` | não foi possível ler a config para o diff da auditoria; o evento sai com changes: null |
 | `audit.unkeyed` | `warn` | sem BRIDGER_SECRET_KEY: a cadeia de auditoria usa chave pública e só detecta edição ingênua |
 | `connection.opened` | `info` | conexão aberta |
 | `connection.connecting` | `debug` | conectando |
