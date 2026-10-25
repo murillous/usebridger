@@ -1,56 +1,80 @@
 # @usebridger/plugin-metrics — documentação
 
 Plugin oficial que provê o serviço `metrics`, mede o kernel sozinho e expõe o `GET /metrics`
-Prometheus ([ADR 0103](../../../docs/adr/0103-plugins-oficiais-de-metricas-e-dashboard.md)).
+Prometheus ([ADR 0103](../../../docs/adr/0103-plugins-oficiais-de-metricas-e-dashboard.md)). O
+serviço é uma camada fina sobre o [`prom-client`](https://github.com/siimon/prom-client), com as
+métricas declaradas antes do uso ([ADR 0121](../../../docs/adr/0121-plugin-metrics-sobre-o-prom-client.md)).
 
-## Usar
+Nesta versão o plugin não grava nada no storage: o histórico por hora e dia e a leitura (`query`,
+`catalog`) voltam nas próximas versões. O ponto `metrics.exporters` segue declarado, mas ninguém o
+chama até o histórico voltar.
 
-Carregue `metrics` no bot e declare `dependsOn: { metrics: '*' }` no plugin que o consome:
+## Escrever
+
+Carregue `metrics` no bot e declare `dependsOn: { metrics: '*' }` no plugin que o consome.
+Declare as métricas no `setup` e guarde o handle:
 
 ```ts
 const m = ctx.services.get('metrics'); // tipo MetricsService, vem do import do pacote
 
-m.counter('ai.tokens', { model, kind: 'input' }, 120); // value padrão 1, >= 0
-m.observe('ai.latency', { model, ok: 'true' }, 340);   // em ms, >= 0
-const rows = await m.query('ai.latency', { from: '2026-10-01', to: '2026-10-17' });
+const tokens = m.counter({
+  name: 'ai_tokens_total',
+  help: 'Tokens consumidos',
+  labelNames: ['model', 'kind'],
+});
+const latency = m.histogram({
+  name: 'ai_latency_seconds',
+  help: 'Latência da chamada ao modelo',
+  labelNames: ['model', 'ok'],
+  buckets: [0.1, 0.5, 1, 2, 5, 10, 30], // opcional
+});
+const queue = m.gauge({ name: 'ai_queue_size', help: 'Pedidos na fila', labelNames: [] });
+
+tokens.inc({ model, kind: 'input' }, usage.inputTokens); // valor padrão 1
+latency.observe({ model, ok: 'true' }, durationMs / 1000);
+queue.set({}, pending);
 ```
 
-`query` devolve uma linha por dia e conjunto de rótulos, somando o que já foi gravado e o que
-ainda está em memória (`from`/`to` inclusivos, `YYYY-MM-DD` em UTC):
+- O tipo dos rótulos sai do `labelNames`: rótulo não declarado não compila e lança `TypeError`
+  em runtime. Rótulo declarado pode faltar na chamada e fica ausente na série.
+- O valor precisa ser número finito `>= 0`, senão `TypeError` (o gauge também).
+- O valor do rótulo é texto. A ordem das chaves na chamada não cria série nova.
 
-- contador: `{ metric, type: 'counter', day, labels, value }`;
-- histograma: `{ metric, type: 'histogram', day, labels, count, sum, p50, p95, p99, buckets }`;
-- gauge: `{ metric, type: 'gauge', day, labels, last, max }`.
+### Regras da declaração
 
-`gauge(nome, rótulos, valor)` amostra um valor (>= 0) e guarda o último e o máximo do dia por
-série. O gauge vai ao snapshot dos exportadores e ao `GET /metrics` (valor `last`). A exceção é
-`bridger.outbound.pending`, que já sai ao vivo como `bridger_outbound_pending` e fica fora dos dois.
+Declaração inválida lança `TypeError`:
 
-`ownerOf(nome)` devolve o plugin que gravou a métrica primeiro. O serviço `metrics` tem escopo por
-quem chama (ADR 0112): cada plugin recebe uma instância que grava o nome dele como dono na primeira
-escrita, sem declaração. O que o próprio plugin-metrics grava é `core`. Quando o plugin dono sai
-(reload ou disable), a métrica fica sem dono (`undefined`) até alguém gravá-la de novo.
+- `name` segue `^[a-zA-Z_:][a-zA-Z0-9_:]*$`, com a unidade no nome (`_seconds`, `_bytes`). Tempo
+  vai em segundos, a convenção do Prometheus.
+- O contador termina em `_total`.
+- Os prefixos `process_` e `nodejs_` são reservados ao runtime do Node.
+- `help` é texto não vazio.
+- `labelNames` segue `^[a-zA-Z_][a-zA-Z0-9_]*$`, sem repetição. Histograma não aceita `le`, o
+  rótulo dos baldes.
+- `buckets` são finitos e crescentes. Sem `buckets`, vale o padrão do `prom-client`
+  (`0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10`).
+- Os nomes dos gauges ao vivo do kernel (abaixo) não podem ser declarados.
 
-`names({ from, to })` lista os nomes das métricas com dados no intervalo (persistidos ou em memória),
-em ordem alfabética; é como o dashboard descobre métricas de outros plugins.
+### Redeclaração e dono
 
-Uma métrica é contador ou histograma; usar o mesmo nome nos dois lança `TypeError`.
+- A mesma especificação (tipo, `help`, `labelNames` na mesma ordem e `buckets`) devolve o mesmo
+  handle, também a outro plugin. Especificação diferente para o mesmo nome lança `TypeError`.
+- O serviço tem escopo por quem chama ([ADR 0112](../../../docs/adr/0112-servico-com-escopo-por-chamador.md)):
+  o dono de uma métrica é o primeiro plugin que a declarou. O que o próprio plugin-metrics declara
+  tem o dono `core`.
+- Quando um plugin sai (reload ou disable), ele deixa de declarar as métricas dele. Se outro
+  plugin declarou a mesma métrica, ela segue no `/metrics` e esse plugin vira o dono. Sem ninguém,
+  a métrica sai do `/metrics` e volta zerada na próxima declaração, como no `setup` do reload.
 
-## Histograma
-
-Limites fixos em ms, na constante `HISTOGRAM_BUCKETS`:
-`5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000`, mais um balde `+Inf`.
-Os percentis saem na consulta dos baldes e valem o **limite superior** do balde onde cai o
-percentil (sem interpolação); acima de 30 s vale 30000.
+O dono ainda não sai na API pública; ele volta com o `catalog`.
 
 ## Dado pessoal
 
-`counter` e `observe` lançam `TypeError` quando um valor de rótulo é texto que parece id de chat
-ou de usuário. O core não expõe um reconhecedor, então a checagem é por formato: contém `@`
+O handle lança `TypeError` quando um valor de rótulo é texto que parece id de chat ou de usuário.
+O core não expõe um reconhecedor, então a checagem é por formato: contém `@`
 (JID `...@s.whatsapp.net`, `@g.us`, `@lid`), telefone (`+5511...` ou 7+ dígitos) ou id numérico
 negativo longo. Um id opaco fora desses formatos passa: quem usa o serviço é quem responde por
-não pôr id como rótulo. Rótulo que não é texto, valor negativo e valor não finito também lançam
-`TypeError`.
+não pôr id como rótulo.
 
 A checagem olha só os **valores** dos rótulos, não os nomes. Limites conhecidos:
 
@@ -62,32 +86,11 @@ A checagem olha só os **valores** dos rótulos, não os nomes. Limites conhecid
 
 ## Limite de séries
 
-Cada combinação de rótulos é uma série. Passado `maxSeriesPerMetric`, a amostra de uma série
-**nova** é descartada e o plugin registra um `warn` (uma vez por métrica); as séries que já
-existem seguem somando. O contador de séries vale para a vida do processo: não recomeça a cada dia, só no restart
-ou reload do plugin. Rótulo de cardinalidade alta (ids, textos livres) esgota o limite cedo.
-
-## Agregação, flush e armazenamento
-
-`counter`/`observe` só mexem na memória. A cada `flushIntervalMs` (e uma última vez no
-`teardown`) o agregado é gravado com `Collection.increment`
-([ADR 0101](../../../docs/adr/0101-incremento-atomico-na-colecao.md)) na coleção `daily` do
-plugin: um documento por métrica, dia (UTC), série e campo. Nunca há gravação por chamada, e o
-intervalo é parado pelo `ctx.signal`. Gravação que falha volta ao agregado e é tentada no flush
-seguinte (com `error` no log). Dois bots no mesmo storage somam nos mesmos documentos.
-
-## Exportadores
-
-Outro plugin contribui ao ponto `metrics.exporters`, lido só no flush:
-
-```ts
-ctx.services.contribute('metrics.exporters', async ({ at, rows }) => {
-  await enviarParaOtlp(rows); // rows: só o que foi agregado desde o flush anterior
-});
-```
-
-Erro de um exportador vai para o log e não impede os demais nem o flush. Flush sem novidade não
-chama exportador.
+Cada combinação de rótulos é uma série. Passado `maxSeriesPerMetric`, a escrita numa série
+**nova** é descartada e o plugin registra um `warn` (`metrics.series.overflow`, uma vez por
+métrica); as séries que já existem seguem somando. O limite vale para a vida da registry: só
+recomeça no restart ou reload do plugin. Rótulo de cardinalidade alta (ids, textos livres) esgota
+o limite cedo.
 
 ## Config
 
@@ -95,31 +98,41 @@ Pela config do plugin (`pluginConfig.metrics`):
 
 | Campo | Padrão | O que faz |
 | --- | --- | --- |
-| `flushIntervalMs` | `60000` | Intervalo do flush (mínimo 1000) |
-| `retentionDays` | `90` | Dias mantidos; os mais antigos são apagados no primeiro flush de cada dia |
 | `maxSeriesPerMetric` | `1000` | Limite de séries por métrica |
 
 ## Métricas do kernel
 
 O plugin assina `message.handled` e `outbound.sent` com `ctx.observe`
-([ADR 0102](../../../docs/adr/0102-observadores-do-core.md)) e grava no próprio agregado, com
-rótulos de baixa cardinalidade e nunca id de chat ou de usuário:
+([ADR 0102](../../../docs/adr/0102-observadores-do-core.md)), com rótulos de baixa cardinalidade e
+nunca id de chat ou de usuário:
 
 | Métrica | Tipo | Rótulos |
 | --- | --- | --- |
-| `bridger.messages.handled` | contador | `chatType`, `route`, `status`, `command` (se houver) |
-| `bridger.messages.handle_duration_ms` | histograma | `route`, `status` |
-| `bridger.outbound.pending` | gauge | nenhum; itens pendentes na fila de saída (todas as prioridades), amostrados de `ctx.stats()` a cada flush (ADR 0113) |
-| `bridger.outbound.sent` | contador | `kind`, `status`, `chatType` (só em `ctx.reply`) |
-| `bridger.active.users` / `bridger.active.groups` | contador (por dia) | nenhum |
+| `bridger_messages_handled_total` | contador | `chatType`, `route`, `status`, `command` (se houver) |
+| `bridger_message_handle_duration_seconds` | histograma (`0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30`) | `route`, `status` |
+| `bridger_outbound_sent_total` | contador | `kind`, `status`, `chatType` (só em `ctx.reply`) |
+
+Os gauges abaixo são lidos de `ctx.stats()` e do tracker de ativos a cada scrape. Eles ficam na
+registry do bot, fora do serviço:
+
+| Gauge | O que mede |
+| --- | --- |
+| `bridger_inbound_pending` | Tarefas aguardando na fila de entrada |
+| `bridger_inbound_active_chats` | Chats com tarefa rodando |
+| `bridger_outbound_pending{priority}` | Mensagens aguardando na fila de saída, por prioridade |
+| `bridger_outbound_in_flight` | Envios em andamento |
+| `bridger_outbound_paused` | `1` com a fila de saída pausada pela conexão caída |
+| `bridger_active_users` | Usuários ativos hoje (UTC), desde o início do processo |
+| `bridger_active_groups` | Grupos ativos hoje (UTC), desde o início do processo |
+
+Os totais acumulados das filas (`processed`, `failed`, `dropped`...) não são expostos;
+`bridger_messages_handled_total` e `bridger_outbound_sent_total` cobrem o volume e o resultado.
 
 ### Ativos por dia
 
 Cada mensagem tratada põe o HMAC-SHA256 do id do remetente (e do chat, se grupo) num conjunto em
 memória. A chave é aleatória, gerada por dia (UTC), nunca gravada nem logada; na virada a chave
-e o conjunto são trocados. Só a contagem é gravada: a cada flush entra no agregado o que cresceu
-desde o flush anterior (delta), então a mesma contagem nunca soma duas vezes, e a contagem do
-dia que acabou vai para o dia dele. O `query` só enxerga os ativos até o último flush.
+e o conjunto são trocados. Só o tamanho dos conjuntos sai, nos gauges `bridger_active_*`.
 
 **Restart no meio do dia superestima:** o conjunto recomeça vazio e quem já tinha sido contado
 conta de novo.
@@ -128,35 +141,15 @@ conta de novo.
 
 Registrado no HTTP do core ([ADR 0018](../../../docs/adr/0018-http-unico-hono.md),
 [HTTP](../../core/docs/http.md)), sob a base do plugin: `/plugins/metrics/metrics` na sessão
-`default` e `/sessions/<sessão>/plugins/metrics/metrics` nas outras. Responde no formato de
-exposição de texto do Prometheus (0.0.4). Sem `http` no bot a rota não existe (um `info` no log)
-e o resto do plugin segue.
+`default` e `/sessions/<sessão>/plugins/metrics/metrics` nas outras. O corpo é o
+`registry.metrics()` do `prom-client`, no formato de texto do Prometheus (`content-type` de
+`registry.contentType`), com `# HELP` e `# TYPE` de cada métrica. Sem `http` no bot a rota não
+existe (`metrics.http.missing`, `info` no log) e o resto do plugin segue.
 
-- Contadores e histogramas vêm do **acumulado desde o início do processo**, que não zera no
-  flush (o flush só grava o delta). Histograma sai como `_bucket{le=...}` cumulativo, `_sum` e
-  `_count` (unidade ms). Nomes saneados para `[a-zA-Z0-9_:]` (`bridger.messages.handled` vira
-  `bridger_messages_handled`). Métricas de outros plugins aparecem também.
-- Gauges lidos a cada scrape de `ctx.stats()`, para a saúde das filas: `bridger_inbound_pending`,
-  `bridger_inbound_active_chats`, `bridger_outbound_pending{priority}`,
-  `bridger_outbound_in_flight`, `bridger_outbound_paused`, e os ativos do dia
-  `bridger_active_users` e `bridger_active_groups`. Os totais acumulados das filas
-  (`processed`, `failed`, `dropped`...) não são expostos; `bridger_messages_handled` e
-  `bridger_outbound_sent` cobrem o volume e o resultado. Os gauges não são gravados no flush.
-- Nome saneado que colide com outra métrica do mesmo tipo (`a.b` e `a_b`) sai sob um único
-  `# TYPE`; se o tipo for diferente, a segunda é **descartada do `/metrics`** com `warn` no log.
-  Um rótulo `le` de histograma é renomeado para `exported_le` (o `le` é dos baldes).
-- `reload`/`restart` do plugin recomeçam o tracker de ativos e os totais: os ativos do dia
-  superestimam (quem já contou conta de novo) e os contadores voltam a zero, o que o Prometheus
-  trata como reset de contador. O que já foi gravado no storage não se perde.
+- Cada bot (e cada `setup` do plugin) tem a sua `Registry`, nunca o `register` global do
+  `prom-client`: dois bots no mesmo processo não se enxergam.
+- As métricas de outros plugins aparecem também, com o nome declarado.
+- `reload`/`restart` do plugin recomeçam a registry e o tracker de ativos: os contadores voltam a
+  zero, o que o Prometheus trata como reset de contador, e os ativos do dia superestimam.
 - **Sem autenticação** (autenticação é do plugin, `http.md`): os dados não têm id pessoal, mas
   proteja a rota no proxy se a instância é pública.
-
-## Limites conhecidos
-
-
-- O que está só em memória se perde se o processo morrer antes do flush (até `flushIntervalMs`).
-  O flush final roda no `teardown`, que o core não executa se o bot parar com o prazo
-  (`teardownTimeoutMs`) esgotado: nesse caso o agregado ainda não gravado se perde.
-- O `query` espera o flush em andamento e refaz a leitura se um flush rodar durante ela, para não
-  contar um dado em dobro nem perdê-lo.
-- O dia de uma amostra é o UTC do momento da chamada.

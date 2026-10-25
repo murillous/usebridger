@@ -6,8 +6,6 @@ import { createHmac, createSecretKey, type KeyObject, randomBytes } from 'node:c
 
 export interface ActiveTracker {
   record(userId: string, groupId: string | undefined): void;
-  /** Entrega ao agregado o que cresceu desde a última chamada (idempotente entre flushes). */
-  sync(): void;
   /** Tamanho dos conjuntos do dia corrente. */
   sizes(): { users: number; groups: number };
 }
@@ -17,15 +15,9 @@ interface Day {
   readonly key: KeyObject;
   readonly users: Set<string>;
   readonly groups: Set<string>;
-  flushedUsers: number;
-  flushedGroups: number;
 }
 
-export function createActiveTracker(options: {
-  now: () => number;
-  /** Soma `value` ao contador do `day`. */
-  add: (metric: 'users' | 'groups', value: number, day: string) => void;
-}): ActiveTracker {
+export function createActiveTracker(options: { now: () => number }): ActiveTracker {
   const dayOf = (): string => new Date(options.now()).toISOString().slice(0, 10);
   const fresh = (day: string): Day => ({
     day,
@@ -34,27 +26,14 @@ export function createActiveTracker(options: {
     key: createSecretKey(randomBytes(32)),
     users: new Set(),
     groups: new Set(),
-    flushedUsers: 0,
-    flushedGroups: 0,
   });
   let current = fresh(dayOf());
 
-  // Soma só o delta: `sync` repetido não conta duas vezes. O restart zera o conjunto e o mesmo
-  // usuário volta a contar, então restart no meio do dia superestima.
-  function flushDelta(d: Day): void {
-    if (d.users.size > d.flushedUsers) options.add('users', d.users.size - d.flushedUsers, d.day);
-    if (d.groups.size > d.flushedGroups) {
-      options.add('groups', d.groups.size - d.flushedGroups, d.day);
-    }
-    d.flushedUsers = d.users.size;
-    d.flushedGroups = d.groups.size;
-  }
-
+  // O restart zera o conjunto e o mesmo usuário volta a contar, então restart no meio do dia
+  // superestima.
   function roll(): void {
     const day = dayOf();
-    if (day === current.day) return;
-    flushDelta(current); // a contagem do dia que acabou vai para o dia dele
-    current = fresh(day);
+    if (day !== current.day) current = fresh(day);
   }
 
   const hash = (id: string): string =>
@@ -65,10 +44,6 @@ export function createActiveTracker(options: {
       roll();
       current.users.add(hash(userId));
       if (groupId !== undefined) current.groups.add(hash(groupId));
-    },
-    sync() {
-      roll();
-      flushDelta(current);
     },
     sizes() {
       roll();
