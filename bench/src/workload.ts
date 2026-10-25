@@ -26,6 +26,8 @@ export interface Workload {
   readonly bot: TestBot;
   /** `plugin.error` vistos. Um cenário com erro mede o caminho de erro, não o normal. */
   readonly pluginErrors: () => number;
+  /** Duração (ms) de cada `ctx.audit.record` do cenário `audit`, na ordem das mensagens. */
+  readonly auditCosts: number[];
 }
 
 export interface WorkloadOptions {
@@ -37,6 +39,8 @@ export interface WorkloadOptions {
   readonly trail?: 'info' | 'off';
   /** O `plugin-metrics` carregado, com storage em memória e os observadores dele ativos. */
   readonly metrics?: boolean;
+  /** O `bench-0` chama `ctx.audit.record` em toda mensagem, com `details` pequeno (ADR 0122). */
+  readonly audit?: boolean;
 }
 
 /**
@@ -48,7 +52,10 @@ const METRICS_FLUSH_MS = 24 * 60 * 60 * 1000;
 /** Sobe o bot de referência sobre o `FakeTransport`, com a fila de saída sem intervalo (D43). */
 export async function createWorkload(options: WorkloadOptions = {}): Promise<Workload> {
   let pluginErrors = 0;
-  const plugins = Array.from({ length: PLUGIN_COUNT }, (_, i) => benchPlugin(i));
+  const auditCosts: number[] = [];
+  const plugins = Array.from({ length: PLUGIN_COUNT }, (_, i) =>
+    benchPlugin(i, options.audit === true ? auditCosts : undefined),
+  );
   const observer = definePlugin({
     name: 'bench-observer',
     version: '1.0.0',
@@ -57,6 +64,12 @@ export async function createWorkload(options: WorkloadOptions = {}): Promise<Wor
       ctx.events.on('plugin.error', () => {
         pluginErrors++;
       });
+      // Evento de auditoria descartado (fila cheia) deixaria o `record` mais barato que o real.
+      if (options.audit === true) {
+        ctx.observe('audit.dropped', ({ count }) => {
+          pluginErrors += count;
+        });
+      }
       if (options.observed === true) {
         ctx.observe('message.handled', () => undefined);
         ctx.observe('outbound.sent', () => undefined);
@@ -88,7 +101,7 @@ export async function createWorkload(options: WorkloadOptions = {}): Promise<Wor
     const names = skipped.map((entry) => entry.name).join(', ');
     throw new Error(`plugins do benchmark ignorados no boot: ${names}`);
   }
-  return { bot, pluginErrors: () => pluginErrors };
+  return { bot, pluginErrors: () => pluginErrors, auditCosts };
 }
 
 /**
@@ -96,7 +109,7 @@ export async function createWorkload(options: WorkloadOptions = {}): Promise<Wor
  * `!ping` e `oi` geram uma resposta cada, e um listener espera um ciclo do event loop, como um
  * plugin que faz I/O (ADR 0038). Os demais `dependsOn` dele, para o boot ordenar o grafo.
  */
-function benchPlugin(index: number): PluginDefinition {
+function benchPlugin(index: number, auditCosts?: number[]): PluginDefinition {
   const name = `bench-${index}`;
   return definePlugin({
     name,
@@ -125,6 +138,17 @@ function benchPlugin(index: number): PluginDefinition {
         if (index === 0 && e.text === 'oi') await e.reply(ctx.config.greeting);
       });
       ctx.events.on('message:image', () => undefined);
+      if (index === 0 && auditCosts !== undefined) {
+        ctx.events.on('message', (e) => {
+          const start = performance.now();
+          ctx.audit.record({
+            action: 'bench-0.message.handle',
+            target: { type: 'chat', id: e.message.chat.id },
+            details: { kind: 'message', length: e.text?.length ?? 0 },
+          });
+          auditCosts.push(performance.now() - start);
+        });
+      }
       if (index === 0) {
         ctx.events.on('message', async () => {
           await nextTick();
