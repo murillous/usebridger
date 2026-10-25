@@ -1,7 +1,7 @@
 // Núcleo do serviço: camada fina sobre o `prom-client` (ADR 0121). Valida a declaração, guarda o
 // dono e aplica as guardas do handle; a contagem fica com o `prom-client`, na registry do bot.
 
-import type { Logger } from '@usebridger/core';
+import { isPersonalId, type Logger } from '@usebridger/core';
 import {
   Counter as PromCounter,
   Gauge as PromGauge,
@@ -105,12 +105,6 @@ const LABEL_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 // grava `bridger_runtime_*` no histórico; um plugin com o mesmo nome gravaria a série duas vezes.
 const RESERVED_PREFIXES = ['process_', 'nodejs_', 'bridger_runtime_'];
 
-// Ids de chat/usuário reconhecidos pelo formato, porque o core não expõe um reconhecedor:
-// JID/handle com `@` (`...@s.whatsapp.net`, `...@g.us`, `...@lid`), telefone ou id numérico
-// longo (Telegram etc.). shortcut: heurística de formato, um id opaco fora desses formatos
-// passa; quem usa o serviço responde por não pôr id como rótulo. A #241 troca pelo do core.
-const PERSONAL_ID_RE = /@|^\+?\d{7,}$|^-\d{5,}$/;
-
 function assertSpec(kind: Kind, spec: HistogramSpec<string>): void {
   const { name, help, labelNames, buckets } = spec;
   const fail = (why: string): never => {
@@ -170,7 +164,8 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
         if (typeof v !== 'string') {
           throw new TypeError(`métrica "${name}": o rótulo "${k}" precisa ser texto`);
         }
-        if (PERSONAL_ID_RE.test(v)) {
+        // Reconhecedor do core (ADR 0119): uma regra só de id pessoal entre o log e as métricas.
+        if (isPersonalId(v)) {
           throw new TypeError(
             `métrica "${name}": o rótulo "${k}" parece id de chat ou de usuário; dado pessoal não vira rótulo`,
           );

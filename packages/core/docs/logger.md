@@ -172,9 +172,13 @@ mesmo pseudônimo entre restarts, e ids diferentes dão pseudônimos diferentes.
 - **Redação de reserva:** o `createLogger` troca por `[REDACTED]` qualquer JID (`@s.whatsapp.net`,
   `@g.us`, `@lid`) e telefone (10 a 15 dígitos, com sufixo de device `.0`/`_1.0`) que escape em campo,
   mensagem ou `err`; o sinal `log` dos observadores recebe a mesma redação.
-  `isPersonalId(valor)` e `redactPersonalIds(texto)` expõem o reconhecedor. É heurística de formato:
-  um número longo que não é telefone, dentro de texto, também é trocado, e um id opaco fora desses
-  formatos passa. Um `config.logger` próprio do app recebe `chat`/`sender` pseudonimizados, mas não
+  `isPersonalId(valor)` e `redactPersonalIds(texto)` expõem o reconhecedor; o `plugin-metrics` usa o
+  `isPersonalId` para recusar rótulo. É heurística de formato: um número longo que não é telefone,
+  dentro de texto, também é trocado, e um id opaco fora desses formatos passa. O `isPersonalId`
+  julga o valor inteiro (contém `@`, telefone `+5511...` ou 7+ dígitos, id negativo de 6+ dígitos):
+  - Falsos positivos: data compacta (`20261017`), CEP sem hífen, códigos e builds com 7+ dígitos,
+    versões com `@` (`pkg@1.2.3`). Use outra forma (`2026-10-17`, `build-1234567`).
+  - Falsos negativos: telefone formatado (`(11) 99999-9999`) e ids opacos fora desses formatos. Um `config.logger` próprio do app recebe `chat`/`sender` pseudonimizados, mas não
   essa redação.
 
 ## Erros

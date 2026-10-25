@@ -70,19 +70,11 @@ leitura com o `catalog()`.
 
 ## Dado pessoal
 
-O handle lança `TypeError` quando um valor de rótulo é texto que parece id de chat ou de usuário.
-O core não expõe um reconhecedor, então a checagem é por formato: contém `@`
-(JID `...@s.whatsapp.net`, `@g.us`, `@lid`), telefone (`+5511...` ou 7+ dígitos) ou id numérico
-negativo longo. Um id opaco fora desses formatos passa: quem usa o serviço é quem responde por
-não pôr id como rótulo.
-
-A checagem olha só os **valores** dos rótulos, não os nomes. Limites conhecidos:
-
-- Falsos positivos (lançam, mas não são pessoais): data compacta (`20261017`), CEP sem hífen,
-  códigos e builds com 7+ dígitos, versões com `@` (`pkg@1.2.3`). Use outra forma (`2026-10-17`,
-  `build-1234567`).
-- Falsos negativos (passam, mas podem ser pessoais): telefone formatado (`(11) 99999-9999`) e
-  ids opacos fora dos formatos acima.
+O handle lança `TypeError` quando um valor de rótulo é texto que parece id de chat ou de usuário,
+pelo reconhecedor `isPersonalId` do core (JID, telefone, id numérico longo). A checagem olha só os
+**valores** dos rótulos, não os nomes. É heurística de formato: os falsos positivos e negativos
+estão na [doc do logger do core](../../core/docs/logger.md#pseudônimo-do-usuário). Um id opaco fora desses
+formatos passa: quem usa o serviço é quem responde por não pôr id como rótulo.
 
 ## Limite de séries
 
