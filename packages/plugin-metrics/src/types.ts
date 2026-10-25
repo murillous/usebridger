@@ -125,7 +125,7 @@ export interface HistogramQueryRow extends QueryRowBase {
 
 export interface GaugeQueryRow extends QueryRowBase {
   readonly type: 'gauge';
-  /** O valor da série amostrada mais recentemente. */
+  /** O último valor da série; agrupado, a soma do último valor de cada série. */
   readonly last: number;
   readonly max: number;
 }

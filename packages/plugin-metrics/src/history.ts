@@ -25,7 +25,8 @@ export interface HistoryDoc {
   readonly field: string;
   readonly labels: MetricLabels;
   readonly value: number;
-  // No `last` do gauge vai também `at` (ms), para o `query` achar a amostra mais nova.
+  // No `last` do gauge vai também `at` (ms do flush), para o `query` achar a amostra mais nova.
+  // Fica sem campo tipado: a `Collection` exige `JsonValue` e não aceita propriedade opcional.
 }
 
 /** Descritor gravado na coleção `catalog`, um por nome. */
@@ -105,6 +106,8 @@ export function quantile(
   const rank = q * total;
   let below = 0;
   for (const [i, b] of buckets.entries()) {
+    // Balde vazio não tem onde interpolar; com `q = 0` ele daria 0/0.
+    if (b.count === 0) continue;
     if (below + b.count < rank) {
       below += b.count;
       continue;
@@ -144,12 +147,12 @@ function histogram(
   };
 }
 
-// Uma linha em construção: soma dos campos e, no gauge, a idade do `last`.
+// Uma linha em construção: soma dos campos e, no gauge, o `last` mais novo de cada série.
 interface Group {
   readonly period: string;
   readonly labels: MetricLabels;
   readonly fields: Map<string, number>;
-  lastAt: number;
+  readonly lasts: Map<string, { readonly at: number; readonly value: number }>;
 }
 
 /** `true` se o `Intl` conhece o fuso IANA. */
@@ -247,6 +250,7 @@ export function createHistory(options: HistoryOptions): History {
     period: string,
     field: string,
     value: number,
+    at: number,
   ): Promise<void> {
     const where = { metric: p.metric, period, key: p.key, field };
     const doc = { ...where, labels: p.labels, value };
@@ -254,7 +258,6 @@ export function createHistory(options: HistoryOptions): History {
       // O core soma `by` ao `insert`, então ele vai com zero.
       await collection.increment(where, 'value', value, { insert: { ...doc, value: 0 } });
     } else if (field === 'last') {
-      const at = now();
       if ((await collection.update(where, { value, at })) === 0)
         await collection.insert({ ...doc, at });
     } else {
@@ -295,7 +298,7 @@ export function createHistory(options: HistoryOptions): History {
         const written = new Map<string, number>();
         for (const [field, value] of p.fields) {
           try {
-            await write(level.collection, p, slot, field, value);
+            await write(level.collection, p, slot, field, value, at);
             written.set(field, value);
             p.fields.delete(field);
           } catch (error) {
@@ -328,21 +331,30 @@ export function createHistory(options: HistoryOptions): History {
     }
   }
 
-  async function read(q: MetricQuery): Promise<QueryRow[]> {
-    const { name, granularity, where = {}, groupBy } = q;
+  // Fora da fila: um intervalo inválido falha na hora, sem esperar o flush em andamento.
+  function range(q: MetricQuery): { level: (typeof levels)[number]; from: string; to: string } {
+    const { granularity } = q;
     const level = levels.find((l) => l.granularity === granularity);
     if (!level)
       throw new TypeError(`query: granularity "${String(granularity)}" não é hour nem day`);
     const from = toPeriod(q.from, granularity, '00');
     const to = toPeriod(q.to, granularity, '23');
     if (from > to) throw new TypeError(`query: from "${q.from}" depois de to "${q.to}"`);
-    const at = now();
     const days = granularity === 'hour' ? retention.hourDays : retention.dayDays;
-    if (from.slice(0, 10) < periods(at - days * DAY_MS).day) {
+    if (from.slice(0, 10) < periods(now() - days * DAY_MS).day) {
       throw new TypeError(
         `query: from "${q.from}" fora da retenção de ${days} dias em ${granularity}`,
       );
     }
+    return { level, from, to };
+  }
+
+  async function read(
+    q: MetricQuery,
+    { level, from, to }: ReturnType<typeof range>,
+  ): Promise<QueryRow[]> {
+    const { name, granularity, where = {}, groupBy } = q;
+    const at = now();
 
     const groups = new Map<string, Group>();
     let type: Sample['type'] | undefined;
@@ -365,15 +377,17 @@ export function createHistory(options: HistoryOptions): History {
       const id = `${period}|${seriesKey(picked)}`;
       let g = groups.get(id);
       if (!g) {
-        g = { period, labels: picked, fields: new Map(), lastAt: Number.NEGATIVE_INFINITY };
+        g = { period, labels: picked, fields: new Map(), lasts: new Map() };
         groups.set(id, g);
       }
       const seen = g.fields.get(field);
       if (field === 'max') g.fields.set(field, Math.max(seen ?? value, value));
       else if (field !== 'last') g.fields.set(field, (seen ?? 0) + value);
-      else if (sampledAt >= g.lastAt) {
-        g.fields.set(field, value);
-        g.lastAt = sampledAt;
+      else {
+        // Por série: o `last` mais novo dela; o empate fica com o que chegou depois (o delta).
+        const series = seriesKey(labels);
+        const prev = g.lasts.get(series);
+        if (!prev || sampledAt >= prev.at) g.lasts.set(series, { at: sampledAt, value });
       }
     };
 
@@ -412,7 +426,9 @@ export function createHistory(options: HistoryOptions): History {
       const f = (field: string): number => g.fields.get(field) ?? 0;
       if (type === 'counter') rows.push({ ...base, type, value: f('value') });
       else if (type === 'gauge') {
-        const last = g.fields.get('last') ?? f('max');
+        // Agrupado, a soma do valor atual de cada série (a fila por prioridade vira o total).
+        const lasts = [...g.lasts.values()];
+        const last = lasts.length > 0 ? lasts.reduce((sum, l) => sum + l.value, 0) : f('max');
         rows.push({ ...base, type, last, max: g.fields.get('max') ?? last });
       } else rows.push({ ...base, ...histogram(g.fields, limits) });
     }
@@ -468,7 +484,10 @@ export function createHistory(options: HistoryOptions): History {
   return {
     flush: () => enqueue(flush),
     describe,
-    query: (q) => queued(() => read(q)),
+    query: async (q) => {
+      const r = range(q);
+      return queued(() => read(q, r));
+    },
     catalog: () => queued(catalog),
   };
 }

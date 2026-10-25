@@ -144,7 +144,7 @@ Três coleções no namespace do plugin:
 - **`hourly`** e **`daily`**: um documento por (métrica, período, série, campo), para o `increment`
   mexer num campo só. Campos: `metric`, `period`, `key` (a série, rótulos em ordem), `field`
   (`value`, `le:<limite>`, `sum`, `count`, `last` ou `max`), `labels` e `value`; o `last` do
-  gauge leva também `at`, o instante da gravação em ms. O `period` é o
+  gauge leva também `at`, o instante do flush em ms. O `period` é o
   início do período no fuso da config: `YYYY-MM-DDTHH` na hora, `YYYY-MM-DD` no dia. Índices em
   `metric` e `period`.
 - **`catalog`**: um descritor por métrica (`name`, `type`, `help`, `labelNames`, `buckets` ou
@@ -221,8 +221,8 @@ await m.query({
   - contador: `{ type: 'counter', period, labels, value }`;
   - histograma: `{ type: 'histogram', period, labels, count, sum, buckets, p50, p95, p99 }`, com
     `buckets` não cumulativos, somados antes do percentil, e o último `le` em `Infinity`;
-  - gauge: `{ type: 'gauge', period, labels, last, max }`. Agrupado, vale o `max` dos máximos e o
-    `last` da série amostrada mais recentemente.
+  - gauge: `{ type: 'gauge', period, labels, last, max }`. Agrupado, vale o `max` dos máximos e, no
+    `last`, a soma do `last` mais novo de cada série (a fila por prioridade vira o total).
 - **Percentil:** interpolação linear dentro do balde, como o `histogram_quantile` do Prometheus.
   O limite inferior do primeiro balde é `0`, e o percentil que cai no `+Inf` vale o maior limite
   finito. Os limites são os da declaração (os do `catalog`) mais os gravados, então um balde

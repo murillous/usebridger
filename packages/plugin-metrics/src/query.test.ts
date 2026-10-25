@@ -322,11 +322,19 @@ describe('query: histograma', () => {
         { le: inf, count: 0 },
       ]),
     ).toBe(1);
+    // `q = 0` com balde vazio na frente: o limite inferior do primeiro balde com contagem, não NaN.
+    expect(
+      quantile(0, [
+        { le: 1, count: 0 },
+        { le: 2, count: 3 },
+        { le: inf, count: 0 },
+      ]),
+    ).toBe(1);
   });
 });
 
 describe('query: gauge', () => {
-  it('agrupado: max dos máximos e last da série amostrada mais recentemente', async () => {
+  it('agrupado: max dos máximos e soma do last mais novo de cada série', async () => {
     const { bot, m } = await setup();
     const g = m.gauge({ name: 'app_fila', help: 'g', labelNames: ['k'] });
     const q = () => m.query({ name: 'app_fila', ...DAY, groupBy: [] });
@@ -337,12 +345,12 @@ describe('query: gauge', () => {
     g.set({ k: 'b' }, 1);
     await flush(); // gravado depois do "a"
     expect(await q()).toEqual([
-      { type: 'gauge', period: '2026-10-17', labels: {}, last: 1, max: 5 },
+      { type: 'gauge', period: '2026-10-17', labels: {}, last: 3, max: 5 },
     ]);
 
-    g.set({ k: 'a' }, 3); // só na registry: a amostra mais nova
+    g.set({ k: 'a' }, 3); // só na registry: a amostra mais nova do "a"
     expect(await q()).toEqual([
-      { type: 'gauge', period: '2026-10-17', labels: {}, last: 3, max: 5 },
+      { type: 'gauge', period: '2026-10-17', labels: {}, last: 4, max: 5 },
     ]);
     expect(await m.query({ name: 'app_fila', ...DAY })).toEqual([
       { type: 'gauge', period: '2026-10-17', labels: { k: 'a' }, last: 3, max: 5 },
@@ -374,6 +382,24 @@ describe('query: concorrência', () => {
     release.resolve();
     await flushing;
     expect([await before, await during, await value()]).toEqual([3, 4, 4]);
+    await bot.stop();
+  });
+
+  it('intervalo inválido rejeita sem esperar o flush em andamento', async () => {
+    const release = Promise.withResolvers<void>();
+    const held = Promise.withResolvers<void>();
+    const storage = testStorage({ until: release.promise, held: held.resolve });
+    const { bot, m } = await setup({}, storage);
+    m.counter({ name: 'app_x_total', help: 'x', labelNames: [] }).inc({}, 1);
+
+    const flushing = flush();
+    await held.promise;
+    // O flush segue preso: se o `query` entrasse na fila, a rejeição nunca chegaria.
+    await expect(
+      m.query({ name: 'app_x_total', from: 'ontem', to: 'hoje', granularity: 'day' }),
+    ).rejects.toThrow(TypeError);
+    release.resolve();
+    await flushing;
     await bot.stop();
   });
 });
