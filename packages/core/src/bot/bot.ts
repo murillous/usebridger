@@ -456,7 +456,7 @@ export function createBot(config: BotConfig): Bot {
     void outbound.close({ drain: false });
     // Gancho que não coube no prazo: o que resta na fila vira `audit.dropped`.
     audit.close();
-    auditRetention.stop();
+    void auditRetention.stop();
   }
 
   async function bootPlugins(): Promise<void> {
@@ -609,9 +609,11 @@ export function createBot(config: BotConfig): Bot {
         session,
         log,
         signal: bootAbort.signal,
+        onRenewed: () => auditRetention.tick(),
         onLost: () => {
           // Outro processo pode ter assumido a cadeia: gravar agora a bifurcaria (ADR 0122).
           audit.leaseLost();
+          void auditRetention.stop();
           log.event(LOG.sessionTaken, { session });
           bot.stop().catch((error: unknown) => log.event(LOG.stopFailed, { err: error }));
         },
@@ -627,6 +629,7 @@ export function createBot(config: BotConfig): Bot {
     // Depois da trava, o único escritor da cadeia: lê o topo e liga o flush (ADR 0122).
     audit.start();
     auditRetention.start();
+    auditRetention.tick();
 
     // Plugins primeiro, connect depois (plano §5.3): um plugin quebrado (conflito de comando,
     // manifesto inválido, ciclo) derruba o boot antes de o transport abrir sessão — sem QR nem
@@ -738,8 +741,15 @@ export function createBot(config: BotConfig): Bot {
       config.shutdown?.hookTimeoutMs ?? DEFAULT_HOOK_TIMEOUT_MS,
       totalDeadline - Date.now(),
     );
-    auditRetention.stop();
-    await audit.stop(auditMs > 0 ? AbortSignal.timeout(auditMs) : AbortSignal.abort());
+    const auditSignal = auditMs > 0 ? AbortSignal.timeout(auditMs) : AbortSignal.abort();
+    // Uma expurgação em voo termina (ou desiste no próximo passo) antes de a fila ser drenada.
+    await Promise.race([
+      auditRetention.stop(),
+      new Promise<void>((resolve) => {
+        auditSignal.addEventListener('abort', () => resolve(), { once: true });
+      }),
+    ]);
+    await audit.stop(auditSignal);
     await abandonInternals();
     // Em `failed` o transport já foi desconectado; o storage só fecha depois disso.
     if (failedDisconnect !== undefined) await failedDisconnect;

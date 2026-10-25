@@ -136,6 +136,8 @@ describe('gatilho pela gravação', () => {
     await t.add(OLD);
     expect(await t.seqs()).toEqual([1, 2]); // sem start: nada expurgado
 
+    let mono = 1000;
+    vi.spyOn(performance, 'now').mockImplementation(() => mono);
     t.retention.start();
     await t.add(NOW - 2 * DAY); // dispara a primeira passada
     await vi.waitFor(async () => expect(await t.seqs()).toEqual([3, 4]));
@@ -145,9 +147,35 @@ describe('gatilho pela gravação', () => {
     await t.add(NOW - 2 * DAY);
     expect(t.deleted).toHaveLength(1);
 
-    t.today.time += DAY;
+    mono += DAY;
     await t.add(NOW + DAY); // um dia depois: nova passada
     await vi.waitFor(() => expect(t.deleted).toHaveLength(2));
+  });
+});
+
+describe('stop com passada em voo', () => {
+  it('espera a passada, que desiste sem gravar nem apagar depois do stop', async () => {
+    const t = setup();
+    for (const at of [OLD, RECENT]) await t.add(at);
+    t.retention.start();
+    const inFlight = t.retention.purge();
+    await t.retention.stop();
+    expect(await inFlight).toBe(0);
+    audits[0]?.close();
+    expect(t.deleted).toEqual([]);
+    expect(await t.seqs()).toEqual([1, 2]); // nenhum purge gravado
+  });
+
+  it('apaga em lotes de 1000', async () => {
+    const t = setup();
+    for (let i = 0; i < 1500; i++) t.audit.record({ action: 'kernel.test' });
+    await t.audit.flush();
+    await t.audit.flush();
+    // todos com `at` do relógio do audit (NOW): corte futuro os vence
+    t.today.time = NOW + 400 * DAY;
+    expect(await t.retention.purge()).toBe(1500);
+    expect(t.deleted).toHaveLength(2);
+    expect(await t.audit.verify()).toMatchObject({ ok: true });
   });
 });
 

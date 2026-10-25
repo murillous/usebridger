@@ -115,10 +115,15 @@ e de cada dia seguinte:
 
 Logs: `audit.purged` (`info`), `audit.purge.skipped` (`warn`), `audit.purge.failed` (`error`).
 
-Não é um job do `ctx.scheduler`: ele persiste e é por plugin, então agendar a cada boot duplicaria
-a série, e o core não tem job interno como precedente; além disso, o boot do bot não pode deixar
-timer vivo (os testes de ciclo de vida contam). Sem gravação não há o que vencer, então o gatilho
-pela gravação não perde expurgação; o controle das 24 h vive na memória e recomeça a cada boot.
+Não é um job do `ctx.scheduler` nem um timer: o scheduler persiste e é por plugin, então agendar a
+cada boot duplicaria a série, e o boot do bot não pode deixar timer vivo (os testes de ciclo de
+vida contam). O gatilho é a passada de `tick`, chamada (1) no boot, (2) quando a auditoria grava
+eventos e (3) a cada renovação da trava de sessão (ADR 0070), que é o que cobre um bot ligado e
+sem gravar. Em storage sem trava (memória) só valem o boot e a gravação; é aceitável porque esse
+storage não guarda a cadeia entre boots. O intervalo de 24 h é medido em memória (relógio
+monotônico) e recomeça a cada boot; passada que adia ou falha tenta de novo no próximo gatilho.
+O apagamento é em lotes de 1000 `seq`. No `stop` (e na perda da trava) a passada em voo para e o
+shutdown a aguarda, com o prazo da auditoria, antes de drenar a fila.
 
 ## Verificar por script do app
 

@@ -150,8 +150,8 @@ export interface BotConfig {
    */
   readonly logBindings?: LogFields;
   /**
-   * Auditoria (ADR 0122). `retentionDays`: eventos mais velhos que isto são expurgados por um job
-   * diário; inteiro positivo, padrão 1825 (5 anos). Valor inválido lança `BotConfigError`.
+   * Auditoria (ADR 0122). `retentionDays`: eventos mais velhos que isto são expurgados, no máximo uma vez a cada 24 h, a partir
+   * da gravação, da renovação da trava e do boot; inteiro positivo, padrão 1825 (5 anos). Valor inválido lança `BotConfigError`.
    */
   readonly audit?: { readonly retentionDays?: number };
   /** Nível do logger criado pelo bot. Padrão: `'info'`. */
