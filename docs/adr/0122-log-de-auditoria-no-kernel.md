@@ -1,6 +1,6 @@
 # ADR 0122 — Log de auditoria no kernel (`ctx.audit`)
 
-**Status:** Proposto · Issue #224 · Depende do [ADR 0011](0011-escopo-do-core.md) (escopo do core),
+**Status:** Aceito (2026-10-25) · Issue #224 · Depende do [ADR 0011](0011-escopo-do-core.md) (escopo do core),
 do [ADR 0107](0107-acesso-admin-para-plugins.md) (ações admin), do
 [ADR 0068](0068-isolamento-por-tenant.md) (tenant), do [ADR 0070](0070-trava-de-sessao-entre-processos.md)
 (trava de sessão), do [ADR 0118](0118-contrato-de-log-estruturado.md) (log) e do
@@ -186,8 +186,8 @@ vale **só para o diff de `kernel.config.update`**, onde o schema do plugin exis
 
 **Conteúdo de mensagem.** A chave reservada `content` em `details` é **removida por padrão**: a
 auditoria registra o fato, não o texto (ADR 0120). Quem precisa passa `includeContent: true`
-**no próprio `record`**, ação por ação; não há opção global. (Alternativa: cortar a opção e
-proibir conteúdo de vez; fica para o dono se preferir.)
+**no próprio `record`**, ação por ação; não há opção global. Cortar a opção e
+proibir conteúdo de vez foi descartado.
 
 Valor que não é JSON (função, `bigint`) é erro de programação e lança no `record`.
 
@@ -225,7 +225,7 @@ derivada da `BRIDGER_SECRET_KEY` (ver Opções). JSON canônico: chaves ordenada
   monta o próprio script (exemplo em `packages/core/docs/audit.md`) que cria o `StoragePort` e
   chama `verify`. Alternativas: um CLI por adapter (`storage-sqlite`/`postgres` exportam o
   binário) ou um CLI do core que importa um módulo do app que exporta o `StoragePort`. Ambas
-  adicionam um binário para manter; ficam para o dono se quiser.
+  adicionam um binário para manter e foram descartadas.
 - **Limite, em `packages/core/docs/audit.md`:** ver "Integridade". Com HMAC, editar o meio é
   detectado por quem não tem a chave; apagar o final ou tudo não é.
 
