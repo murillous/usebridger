@@ -6,6 +6,7 @@ import { setImmediate as nextTick } from 'node:timers/promises';
 import { collectGarbage, MB, median, percentile } from './stats.ts';
 import {
   createWorkload,
+  kindOf,
   messageAt,
   repliesOf,
   type Workload,
@@ -35,6 +36,8 @@ export type ScenarioName =
   | 'overhead'
   | 'overhead-observed'
   | 'overhead-metrics'
+  | 'overhead-audit'
+  | 'audit-record'
   | 'throughput'
   | 'throughput-metrics'
   | 'throughput-logged'
@@ -70,6 +73,51 @@ export async function overhead(options: OverheadOptions = {}): Promise<number> {
   }
   await finish(workload, warmup + messages, replies);
   return percentile(latencies, 99);
+}
+
+/**
+ * O `overhead` com o `bench-0` chamando `ctx.audit.record` por mensagem. Devolve o p50 e o p99 do
+ * caminho inteiro e do `record` em si (síncrono, medido dentro do handler), em ms.
+ */
+export async function auditOverhead(
+  options: OverheadOptions = {},
+): Promise<{ path: Percentiles; record: Percentiles }> {
+  const { warmup = 5_000, messages = 20_000 } = options;
+  const workload = await createWorkload({ ...options, audit: true });
+  const { bot, auditCosts } = workload;
+  const latencies: number[] = [];
+  let replies = 0;
+  for (let i = 0; i < warmup + messages; i++) {
+    const start = performance.now();
+    bot.transport.emit('message', messageAt(i));
+    await bot.bot.settled();
+    const elapsed = performance.now() - start;
+    if (i >= warmup) latencies.push(elapsed);
+    replies += bot.sent.length;
+    bot.transport.clear();
+  }
+  await finish(workload, warmup + messages, replies);
+  // O roteador consome o comando antes dos listeners: só as demais mensagens passam pelo `record`.
+  let skipped = 0;
+  let expected = 0;
+  for (let i = 0; i < warmup + messages; i++) {
+    if (kindOf(i) === 'command') continue;
+    expected++;
+    if (i < warmup) skipped++;
+  }
+  if (auditCosts.length !== expected) {
+    throw new Error(`${auditCosts.length} record(s), esperava ${expected}`);
+  }
+  const record = auditCosts.slice(skipped);
+  return {
+    path: { p50: percentile(latencies, 50), p99: percentile(latencies, 99) },
+    record: { p50: percentile(record, 50), p99: percentile(record, 99) },
+  };
+}
+
+export interface Percentiles {
+  readonly p50: number;
+  readonly p99: number;
 }
 
 export interface ThroughputOptions extends WorkloadOptions {
@@ -211,6 +259,26 @@ export const SCENARIOS: readonly Scenario[] = [
     runs: 9,
     checksRegression: true,
     run: () => overhead({ metrics: true }),
+  },
+  {
+    // O `overhead` com um `ctx.audit.record` por mensagem (ADR 0122). A meta é a do `overhead`.
+    name: 'overhead-audit',
+    description: 'Overhead do kernel por mensagem com ctx.audit.record (p99)',
+    unit: 'ms',
+    target: { max: 1 },
+    runs: 9,
+    checksRegression: true,
+    run: async () => (await auditOverhead()).path.p99,
+  },
+  {
+    // Só o `record` (síncrono), medido dentro do handler: a meta do ADR 0122 é p99 < 1 ms.
+    name: 'audit-record',
+    description: 'ctx.audit.record por chamada (p99)',
+    unit: 'ms',
+    target: { max: 1 },
+    runs: 9,
+    checksRegression: false,
+    run: async () => (await auditOverhead()).record.p99,
   },
   {
     name: 'throughput',

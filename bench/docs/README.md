@@ -59,6 +59,8 @@ coisa.
 | `overhead` | p99 < 1 ms | Uma mensagem por vez, do `emit` do transport até o `bot.settled()`: middlewares, roteador, listeners e fila de saída. 20 mil mensagens depois de 5 mil de aquecimento |
 | `overhead-observed` | p99 < 1 ms | O `overhead` com um observador vazio em `message.handled` e em `outbound.sent` (ADR 0102) |
 | `overhead-metrics` | p99 < 1 ms | O `overhead` com o `plugin-metrics` carregado ([abaixo](#com-o-plugin-metrics)) |
+| `overhead-audit` | p99 < 1 ms | O `overhead` com o `bench-0` chamando `ctx.audit.record` em cada mensagem que chega aos listeners ([abaixo](#com-o-ctxauditrecord)) |
+| `audit-record` | p99 < 1 ms | O `record` em si (síncrono), cronometrado dentro do handler, na mesma carga do `overhead-audit` |
 | `throughput` | ≥ 5.000 msg/s | Rajadas de 5 mil mensagens (10 por chat), esperando o bot assentar entre elas. 200 mil mensagens depois de 20 mil de aquecimento |
 | `throughput-metrics` | ≥ 5.000 msg/s | O `throughput` com o `plugin-metrics` carregado ([abaixo](#com-o-plugin-metrics)) |
 | `idle-memory` | < 80 MB | RSS do processo com o bot no ar e ocioso, depois de um `gc()` |
@@ -111,6 +113,40 @@ throughput-metrics 7798 msg/s (meta ≥ 5000; execuções: 7332, 7740, 7820, 779
 O plugin custa ~48% no p99 do `overhead` e ~32% na vazão. As mudanças do redesenho da M6
 (`prom-client`, histórico por delta) comparam com esta base pelo `pnpm bench --baseline`, com
 um checkout de antes delas.
+
+## Com o ctx.audit.record
+
+`overhead-audit` e `audit-record` ([ADR 0122](../../docs/adr/0122-log-de-auditoria-no-kernel.md),
+issue #224) rodam a mesma carga do `overhead` com um listener do `bench-0` que chama
+`ctx.audit.record({ action, target, details })` com `details` pequeno (`{ kind, length }`), com o
+storage em memória do `createTestBot`. O roteador consome o comando antes dos listeners, então o
+`record` roda em 2 de cada 3 mensagens (`oi` e o texto solto). Os dois cenários vêm da mesma
+função (`auditOverhead`): um devolve o p99 do caminho inteiro (`emit` até o `settled()`), o outro o
+p99 do `record`. O dreno em segundo plano (flush a cada 100 eventos) fica dentro da janela do
+caminho, e fora do tempo do `record`. Um evento descartado (`audit.dropped`) conta como erro e
+falha o cenário.
+
+Só o `overhead-audit` compara com o baseline (no `audit-record`, 10% de ~0,1 ms é ruído). Para
+medir:
+
+```sh
+pnpm bench --only overhead,overhead-audit,audit-record
+```
+
+Não há cenário com `storage-sqlite`: o bench todo roda em memória, e o `record` só enfileira
+(o insert é do dreno, fora do caminho).
+
+Resultado (AMD Ryzen 7 5700U, Linux, Node 24, sem preparar a máquina; mediana de 9 execuções):
+
+```
+overhead       0.168 ms (meta < 1; execuções: 0.163, 0.197, 0.163, 0.164, 0.168, 0.175, 0.177, 0.164, 0.168) ok
+overhead-audit 0.350 ms (meta < 1; execuções: 0.343, 0.518, 0.350, 0.362, 0.329, 0.337, 0.331, 0.361, 0.350) ok
+audit-record   0.127 ms (meta < 1; execuções: 0.134, 0.127, 0.122, 0.0971, 0.126, 0.132, 0.0978, 0.134, 0.144) ok
+```
+
+O p50 (de uma execução avulsa; o runner só reporta o p99) é ~0,013 ms no `record` e ~0,099 ms no
+caminho inteiro. A meta de p99 < 1 ms do `record` é atingida com folga de ~8x. O p99 do caminho
+sobe ~0,18 ms sobre o `overhead`: o `record` (~0,13 ms no p99) e o flush do dreno em lote.
 
 ## Comparar com um baseline
 
