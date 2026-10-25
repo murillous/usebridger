@@ -179,6 +179,16 @@ describe('stop com passada em voo', () => {
   });
 });
 
+describe('timers', () => {
+  it('o timer de 1 s armado pelo record do purge é cancelado pelo flush', async () => {
+    const t = setup();
+    for (const at of [OLD, RECENT]) await t.add(at);
+    vi.useFakeTimers();
+    await t.retention.purge();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
 describe('purge interrompido entre lotes', () => {
   it('verify passa com o início dentro do intervalo registrado e acusa buraco fora dele', async () => {
     const t = setup();
