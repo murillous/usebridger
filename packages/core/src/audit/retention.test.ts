@@ -179,6 +179,27 @@ describe('stop com passada em voo', () => {
   });
 });
 
+describe('purge interrompido entre lotes', () => {
+  it('verify passa com o início dentro do intervalo registrado e acusa buraco fora dele', async () => {
+    const t = setup();
+    for (let i = 0; i < 1500; i++) t.audit.record({ action: 'kernel.test' });
+    await t.audit.flush();
+    await t.audit.flush();
+    const rows = (await t.col.find({ orderBy: 'seq' })) as unknown as AuditEvent[];
+    t.audit.record({
+      action: 'kernel.audit.purge',
+      details: { fromSeq: 1, toSeq: 1500, count: 1500, lastHash: String(rows[1499]?.hash) },
+    });
+    await t.audit.flush();
+    await t.col.delete({ seq: { lte: 1000 } }); // parou depois do primeiro lote
+    expect(await t.audit.verify()).toMatchObject({ ok: true, checked: 501 });
+
+    // Buraco no meio do intervalo ainda é acusado pelo encadeamento.
+    await t.col.delete({ seq: 1200 });
+    expect(await t.audit.verify()).toMatchObject({ ok: false, brokenAt: { seq: 1201 } });
+  });
+});
+
 describe('audit.retentionDays', () => {
   it('padrão 1825; inteiro positivo ou BotConfigError', () => {
     expect(validateRetentionDays(undefined)).toBe(1825);
