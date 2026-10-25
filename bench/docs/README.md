@@ -122,8 +122,9 @@ issue #224) rodam a mesma carga do `overhead` com um listener do `bench-0` que c
 storage em memória do `createTestBot`. O roteador consome o comando antes dos listeners, então o
 `record` roda em 2 de cada 3 mensagens (`oi` e o texto solto). Os dois cenários vêm da mesma
 função (`auditOverhead`): um devolve o p99 do caminho inteiro (`emit` até o `settled()`), o outro o
-p99 do `record`. O dreno em segundo plano (flush a cada 100 eventos) fica dentro da janela do
-caminho, e fora do tempo do `record`. Um evento descartado (`audit.dropped`) conta como erro e
+p99 do `record`. O `record` que completa 100 eventos inicia o dreno de forma síncrona e paga
+o hash do primeiro (1% das chamadas, na fronteira do p99); o lote inteiro cai em ~0,7% das
+mensagens, acima do p99 do caminho. Um evento descartado (`audit.dropped`) conta como erro e
 falha o cenário.
 
 Só o `overhead-audit` compara com o baseline (no `audit-record`, 10% de ~0,1 ms é ruído). Para
@@ -146,7 +147,7 @@ audit-record   0.127 ms (meta < 1; execuções: 0.134, 0.127, 0.122, 0.0971, 0.1
 
 O p50 (de uma execução avulsa; o runner só reporta o p99) é ~0,013 ms no `record` e ~0,099 ms no
 caminho inteiro. A meta de p99 < 1 ms do `record` é atingida com folga de ~8x. O p99 do caminho
-sobe ~0,18 ms sobre o `overhead`: o `record` (~0,13 ms no p99) e o flush do dreno em lote.
+sobe ~0,18 ms sobre o `overhead`: o listener extra do `bench-0` com o `record`; o flush fica fora do p99.
 
 ## Comparar com um baseline
 
