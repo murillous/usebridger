@@ -1,6 +1,6 @@
 // scrapeToken no GET /metrics (#240): Bearer em tempo constante, 401 genérico e warn sem token.
 
-import { createHttp, type Logger } from '@usebridger/core';
+import { createHttp, definePlugin, type Logger, type PluginContext } from '@usebridger/core';
 import { createTestBot } from '@usebridger/testing';
 import { describe, expect, it } from 'vitest';
 import { metrics } from './index.ts';
@@ -79,6 +79,68 @@ describe('GET /metrics com scrapeToken', () => {
     await bot.stop();
     expect(dump()).not.toContain(TOKEN);
     expect(dump()).not.toContain('cabecalho-recusado-123');
+  });
+});
+
+describe('scrapeToken como segredo (ADR 0117)', () => {
+  const KEY = Buffer.alloc(32, 7).toString('base64');
+  const NEW_TOKEN = 'token-novo-do-scrape-gravado-cifrado';
+
+  // Plugin admin que só guarda o `ctx.admin`, como o dashboard faria.
+  async function bootAdmin(pluginConfig: Record<string, Record<string, unknown>>) {
+    const http = createHttp({ port: 0, hostname: '127.0.0.1' });
+    let admin: PluginContext['admin'];
+    const dash = definePlugin({
+      name: 'dash',
+      version: '1.0.0',
+      engine: '<1.0.0',
+      setup(ctx) {
+        admin = ctx.admin;
+      },
+    });
+    const bot = await createTestBot({
+      plugins: [metrics, dash],
+      http,
+      env: { BRIDGER_SECRET_KEY: KEY },
+      adminPlugins: ['dash'],
+      pluginConfig,
+    });
+    if (!admin) throw new Error('sem admin');
+    const scrape = (token?: string): Promise<number> =>
+      fetch(`http://127.0.0.1:${http.port}/plugins/metrics/metrics`, {
+        headers: token === undefined ? {} : { authorization: `Bearer ${token}` },
+      }).then((res) => res.status);
+    return { bot, config: admin.config, scrape };
+  }
+
+  it('describe mascara o token e o JSON Schema o marca como segredo editável', async () => {
+    const { bot, config } = await bootAdmin({ metrics: { scrapeToken: TOKEN } });
+    const view = await config.describe('metrics');
+    expect((view.config as { scrapeToken: string }).scrapeToken).toBe('********');
+    expect(JSON.stringify(view)).not.toContain(TOKEN);
+    const field = (
+      config.jsonSchema('metrics') as { properties: Record<string, Record<string, unknown>> }
+    ).properties['scrapeToken'];
+    expect(field).toMatchObject({
+      secret: true,
+      writeOnly: true,
+      'x-bridger-set-secret': true,
+    });
+    await bot.stop();
+  });
+
+  it('setSecret liga o token sem reiniciar o bot e clearSecret abre a rota de novo', async () => {
+    const { bot, config, scrape } = await bootAdmin({});
+    expect(await scrape()).toBe(200);
+
+    await config.setSecret('metrics', 'scrapeToken', NEW_TOKEN);
+    expect(await scrape()).toBe(401);
+    expect(await scrape(NEW_TOKEN)).toBe(200);
+    expect(JSON.stringify(await config.describe('metrics'))).not.toContain(NEW_TOKEN);
+
+    await config.clearSecret('metrics', 'scrapeToken');
+    expect(await scrape()).toBe(200);
+    await bot.stop();
   });
 });
 
