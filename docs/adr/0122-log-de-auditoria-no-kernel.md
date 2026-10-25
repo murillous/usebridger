@@ -46,7 +46,9 @@ precisar funcionar sem plugin nenhum, o mesmo argumento do storage e do logger.
    cadeia dali em diante, porque não tem a chave. **Limite real:** quem tem banco **e** a chave
    forja tudo; quem tem só o banco pode apagar o final ou tudo sem que a cadeia acuse (falta de
    eventos não é elo quebrado). Trocar a chave invalida a verificação do passado (a chave anterior
-   precisa ser guardada para o `verify`).
+   precisa ser guardada para o `verify`). Rotação: o `verify` aceita `BRIDGER_SECRET_KEY_PREVIOUS` para
+   os eventos anteriores à troca. Sem `BRIDGER_SECRET_KEY`, a cadeia usa uma chave fixa pública (só
+   a proteção ingênua da opção 2) e o boot emite `warn` `audit.unkeyed`.
 2. SHA-256 puro (`sha256(prevHash + JSON)`, o da issue). Detecta só adulteração ingênua (editar
    um evento sem recalcular): quem tem o banco edita no meio e recalcula tudo dali em diante sem
    ser detectado. Além disso, o mesmo limite de apagar o final.
@@ -153,7 +155,7 @@ sem aguardar. Um dreno por vez, nesta instância, grava a fila.
   ambígua não duplica `seq` nem bifurca a cadeia.
 - **Flush:** a cada **1 s** ou ao chegar a **100 eventos**, o que vier primeiro, e no `stop`.
 - **Limite:** **10.000 eventos** em memória (~10 MB com eventos de ~1 KB).
-- **Storage falhou:** log `error` com `event: 'audit.flush_failed'` (ADR 0118); a fila mantém os
+- **Storage falhou:** log `error` com `event: 'audit.flush.failed'` (ADR 0118); a fila mantém os
   eventos e tenta de novo com espera crescente (1 s até 30 s), relendo o topo como acima.
 - **Passou do limite:** o evento novo é descartado, com log `error` `event: 'audit.dropped'` e o
   sinal `audit.dropped`.
