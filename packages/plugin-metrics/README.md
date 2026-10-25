@@ -1,7 +1,8 @@
 # @usebridger/plugin-metrics
 
 Plugin oficial do [Bridger](https://www.npmjs.com/package/@usebridger/core): o serviço `metrics`
-(contadores, histogramas e gauges declarados sobre o `prom-client`) e o `GET /metrics` do bot.
+(contadores, histogramas e gauges declarados sobre o `prom-client`), o histórico por hora e dia
+no storage do bot e o `GET /metrics`.
 
 ```sh
 npm install @usebridger/plugin-metrics

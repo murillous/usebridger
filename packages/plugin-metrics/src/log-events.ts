@@ -13,3 +13,38 @@ export const seriesOverflow: LogEvent = defineLogEvent({
   level: 'warn',
   message: 'métrica passou do limite de séries; amostras de séries novas descartadas',
 });
+export const flushFailed: LogEvent = defineLogEvent({
+  name: 'metrics.flush.failed',
+  level: 'error',
+  message: 'flush de métricas falhou',
+});
+export const writeFailed: LogEvent = defineLogEvent({
+  name: 'metrics.write.failed',
+  level: 'error',
+  message: 'falha ao gravar métrica; delta mantido para o próximo flush',
+});
+export const purgeFailed: LogEvent = defineLogEvent({
+  name: 'metrics.purge.failed',
+  level: 'error',
+  message: 'falha ao apagar métricas antigas',
+});
+export const catalogFailed: LogEvent = defineLogEvent({
+  name: 'metrics.catalog.write-failed',
+  level: 'error',
+  message: 'falha ao gravar o descritor da métrica no catálogo',
+});
+export const sampleFailed: LogEvent = defineLogEvent({
+  name: 'metrics.sample.failed',
+  level: 'error',
+  message: 'falha ao amostrar as filas para o histórico',
+});
+export const exporterFailed: LogEvent = defineLogEvent({
+  name: 'metrics.exporter.failed',
+  level: 'error',
+  message: 'exportador de métricas falhou',
+});
+export const exportersListFailed: LogEvent = defineLogEvent({
+  name: 'metrics.exporters.list-failed',
+  level: 'error',
+  message: 'falha ao listar exportadores de métricas',
+});

@@ -2,12 +2,21 @@ import { BotConfigError, definePlugin, type PluginDefinition } from '@usebridger
 import { z } from '@usebridger/core/zod';
 import { Gauge, Registry } from 'prom-client';
 import { createActiveTracker } from '#active.ts';
-import { createMetrics } from '#service.ts';
+import {
+  type CatalogDoc,
+  createHistory,
+  createPeriods,
+  type HistoryDoc,
+  isTimeZone,
+} from '#history.ts';
+import { CORE_OWNER, createMetrics, type Sample } from '#service.ts';
 
 export type {
   Counter,
   CounterRow,
   Gauge,
+  GaugeRow,
+  Granularity,
   Histogram,
   HistogramRow,
   HistogramSpec,
@@ -25,12 +34,26 @@ import * as LOG from './log-events.ts';
 // Os limites do histograma de tratamento de antes do ADR 0121 (5 ms … 30 s), agora em segundos.
 const HANDLE_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30];
 
+// Um runtime por contexto: o mesmo objeto de plugin serve a vários bots e a reloads.
+const runtimes = new WeakMap<object, { flush: () => Promise<void>; timer: NodeJS.Timeout }>();
+
 /** Plugin oficial `metrics` (ADR 0103, ADR 0121): provê o serviço `metrics`. */
 export const metrics: PluginDefinition = definePlugin({
   name: 'metrics',
   version: '0.1.0',
   engine: '<1.0.0',
   config: z.object({
+    // Intervalo do flush do histórico, em ms.
+    flushIntervalMs: z.number().int().min(1000).default(60_000),
+    // Fuso IANA da virada da hora e do dia no histórico (e dos ativos do dia).
+    timeZone: z.string().refine(isTimeZone, 'fuso IANA desconhecido').default('UTC'),
+    // Dias mantidos em cada nível; o corte roda no primeiro flush do dia.
+    retention: z
+      .object({
+        hourDays: z.number().int().min(1).default(7),
+        dayDays: z.number().int().min(1).default(90),
+      })
+      .default({ hourDays: 7, dayDays: 90 }),
     // Séries (combinações de rótulos) por métrica; passou, a amostra nova é descartada com aviso.
     maxSeriesPerMetric: z.number().int().min(1).default(1000),
   }),
@@ -38,10 +61,25 @@ export const metrics: PluginDefinition = definePlugin({
     // Uma registry por runtime (bot e setup), nunca o `register` global: dois bots no mesmo
     // processo não se enxergam (ADR 0003), e o reload recomeça do zero.
     const registry = new Registry();
+    const periods = createPeriods(ctx.config.timeZone);
+    const exporters = ctx.services.extensionPoint('metrics.exporters');
+    const indexes = { indexes: ['metric', 'period'] };
+    const active = createActiveTracker({ now: Date.now, dayOf: (ms) => periods(ms).day });
+    const history = createHistory({
+      hourly: ctx.storage.collection<HistoryDoc>('hourly', indexes),
+      daily: ctx.storage.collection<HistoryDoc>('daily', indexes),
+      catalog: ctx.storage.collection<CatalogDoc>('catalog', { indexes: ['name'] }),
+      log: ctx.log,
+      periods,
+      retention: ctx.config.retention,
+      collect: async () => [...(await runtime.collect()), ...sampled()],
+      exporters: () => exporters.list(),
+    });
     const runtime = createMetrics({
       registry,
       log: ctx.log,
       maxSeriesPerMetric: ctx.config.maxSeriesPerMetric,
+      onDescribe: history.describe,
     });
     // Serviço com escopo (ADR 0112): cada plugin recebe uma instância que grava o nome dele como dono.
     ctx.services.provideScoped(
@@ -70,7 +108,6 @@ export const metrics: PluginDefinition = definePlugin({
       help: 'Envios da fila de saída',
       labelNames: ['kind', 'status', 'chatType'],
     });
-    const active = createActiveTracker({ now: Date.now });
 
     ctx.observe('message.handled', (s) => {
       handled.inc({
@@ -127,16 +164,46 @@ export const metrics: PluginDefinition = definePlugin({
     live('bridger_outbound_paused', 'Fila de saída pausada (1) pela conexão caída', () =>
       ctx.stats().outbound.paused ? 1 : 0,
     );
-    live(
-      'bridger_active_users',
-      'Usuários ativos hoje (UTC), desde o início do processo',
-      () => active.sizes().users,
-    );
-    live(
-      'bridger_active_groups',
-      'Grupos ativos hoje (UTC), desde o início do processo',
-      () => active.sizes().groups,
-    );
+    const ACTIVE_USERS = 'Usuários ativos hoje, desde o início do processo';
+    const ACTIVE_GROUPS = 'Grupos ativos hoje, desde o início do processo';
+    const OUTBOUND = 'Mensagens aguardando na fila de saída, somadas as prioridades';
+    live('bridger_active_users', ACTIVE_USERS, () => active.sizes().users);
+    live('bridger_active_groups', ACTIVE_GROUPS, () => active.sizes().groups);
+
+    // Gauges do histórico amostrados no flush, fora do serviço: os ativos do dia e a fila de saída
+    // (ADR 0113), amostrada no timer para a fila pausada ou ociosa também gerar amostra.
+    for (const [name, help] of [
+      ['bridger_active_users', ACTIVE_USERS],
+      ['bridger_active_groups', ACTIVE_GROUPS],
+      ['bridger_outbound_pending', OUTBOUND],
+    ] as const) {
+      history.describe({
+        name,
+        type: 'gauge',
+        help,
+        labelNames: [],
+        buckets: null,
+        owner: CORE_OWNER,
+      });
+    }
+    const gauge = (metric: string, value: number): Sample => ({
+      metric,
+      type: 'gauge',
+      labels: {},
+      fields: { last: value, max: value },
+    });
+    const sampled = (): Sample[] => {
+      const { users, groups } = active.sizes();
+      const out = [gauge('bridger_active_users', users), gauge('bridger_active_groups', groups)];
+      try {
+        const { high, normal, low } = ctx.stats().outbound.pending;
+        out.push(gauge('bridger_outbound_pending', high + normal + low));
+      } catch (error) {
+        // Sem a amostra da fila o resto do flush segue.
+        ctx.log.event(LOG.sampleFailed, { err: error });
+      }
+      return out;
+    };
 
     try {
       ctx.http.route(
@@ -152,5 +219,20 @@ export const metrics: PluginDefinition = definePlugin({
       if (!(error instanceof BotConfigError)) throw error;
       ctx.log.event(LOG.httpMissing);
     }
+
+    const timer = setInterval(() => {
+      // O flush já registra falhas de gravação e de exportador; isto evita rejeição solta.
+      history.flush().catch((error: unknown) => ctx.log.event(LOG.flushFailed, { err: error }));
+    }, ctx.config.flushIntervalMs);
+    timer.unref();
+    ctx.signal.addEventListener('abort', () => clearInterval(timer), { once: true });
+    runtimes.set(ctx.signal, { flush: history.flush, timer });
+  },
+  async teardown(ctx) {
+    const entry = runtimes.get(ctx.signal);
+    if (!entry) return;
+    clearInterval(entry.timer);
+    // Flush final: o que somou desde o último flush não se perde no stop nem no reload.
+    await entry.flush();
   },
 });
