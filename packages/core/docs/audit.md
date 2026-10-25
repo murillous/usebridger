@@ -31,6 +31,22 @@ ctx.audit.record({
   próprio `record`.
 - `tenant` (ADR 0068), `session`, `trace` (ADR 0120) e `at` (relógio do servidor) vêm do core.
 
+## Ações do kernel
+
+O core grava sozinho, com `actor` `system` (chamada direta de `bot.plugins`/`bot.config`) ou
+`{ kind: 'plugin', name }` (via `ctx.admin`, ADR 0107):
+
+| Ação | Alvo | `details` |
+| --- | --- | --- |
+| `kernel.plugin.enable` / `disable` / `reload` | `plugin` | `{ plugin }` |
+| `kernel.config.update` (`setOverrides`) | `plugin` | `{ plugin, changes }`: diff por caminho `{ from, to }`; campos `secret` ficam no `SECRET_MASK` |
+| `kernel.secret.update` (`setSecret`/`clearSecret`) | `plugin` | `{ plugin, path, op: 'set' \| 'clear' }`; nunca o valor |
+| `kernel.boot` / `kernel.stop` | | `{ version, plugins }` (plugins carregados) |
+
+`outcome` é `success` ou `error` (exceção, ou `setup` novo que falhou no `reload`/`enable`). A
+recusa do `ctx.admin` sobre o próprio plugin (ADR 0107) grava `denied`. `kernel.stop` é gravado
+antes do dreno do `stop`, e só se o `kernel.boot` foi gravado.
+
 ## Consultar e verificar (só admin)
 
 `ctx.audit.query` e `ctx.audit.verify` exigem o plugin em `adminPlugins` (ADR 0107); os demais

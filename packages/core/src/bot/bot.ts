@@ -43,6 +43,7 @@ import { newTraceId, runInTrace } from '#trace/scope.ts';
 import { type Capability, hasCapability } from '#transport/capabilities.ts';
 import type { ConnectionStatus, Transport } from '#transport/types.ts';
 import { createUnsafeAccess } from '#unsafe/access.ts';
+import { CORE_VERSION } from '#version.ts';
 import { BackgroundTasks } from './background-tasks.ts';
 import {
   buttonLimit,
@@ -374,6 +375,8 @@ export function createBot(config: BotConfig): Bot {
   let host: PluginHost | undefined;
   let configs: PluginConfigs | undefined;
   let booted = false;
+  // `kernel.stop` só existe se o `kernel.boot` foi gravado.
+  let bootAudited = false;
   const control = createPluginControl({
     host: () => host,
     configs: () => configs,
@@ -381,6 +384,8 @@ export function createBot(config: BotConfig): Bot {
     catalog,
     conversations,
     lifecycleError: pluginErrors.lifecycle,
+    audit,
+    log: getLog,
   });
 
   // --- Boot ---------------------------------------------------------------------------------
@@ -517,6 +522,7 @@ export function createBot(config: BotConfig): Bot {
       audit,
       adminPlugins: new Set(config.adminPlugins ?? []),
       admin: control,
+      adminFor: (plugin) => control.as({ kind: 'plugin', name: plugin }),
       secrets,
       pseudonym: pseudonymizer.pseudonym,
       unsafe: createUnsafeAccess({
@@ -682,6 +688,13 @@ export function createBot(config: BotConfig): Bot {
     scheduler.start();
     gate.settle(true);
     state = 'running';
+    bootAudited = true;
+    audit.record({
+      action: 'kernel.boot',
+      details: { version: CORE_VERSION, plugins: loadedPlugins() },
+    });
+    // Dreno já, sem esperar o timer de 1 s: o boot não deixa timer pendente no caminho quente.
+    void audit.flush();
   }
 
   /**
@@ -718,6 +731,9 @@ export function createBot(config: BotConfig): Bot {
     throw failure;
   }
 
+  const loadedPlugins = (): string[] =>
+    (host?.report() ?? []).filter((each) => each.status === 'loaded').map((each) => each.name);
+
   // --- Shutdown -----------------------------------------------------------------------------
 
   function shutdown(): Promise<void> {
@@ -733,6 +749,13 @@ export function createBot(config: BotConfig): Bot {
     const totalDeadline = Date.now() + (config.shutdown?.timeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS);
     const errors: unknown[] = await runStopHooks(hooks.toReversed(), config.shutdown);
     hooks.length = 0;
+    // Antes do `audit.stop`, para o evento entrar no dreno.
+    if (bootAudited) {
+      audit.record({
+        action: 'kernel.stop',
+        details: { version: CORE_VERSION, plugins: loadedPlugins() },
+      });
+    }
     // Depois do teardown dos plugins, que ainda auditam: drena com o prazo de um gancho
     // (`shutdown.hookTimeoutMs`) limitado ao que sobrou do prazo total (`shutdown.timeoutMs`);
     // o que não couber vira `audit.dropped`. Não é um gancho da lista para não competir com os

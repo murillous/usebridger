@@ -46,7 +46,9 @@ precisar funcionar sem plugin nenhum, o mesmo argumento do storage e do logger.
    cadeia dali em diante, porque não tem a chave. **Limite real:** quem tem banco **e** a chave
    forja tudo; quem tem só o banco pode apagar o final ou tudo sem que a cadeia acuse (falta de
    eventos não é elo quebrado). Trocar a chave invalida a verificação do passado (a chave anterior
-   precisa ser guardada para o `verify`).
+   precisa ser guardada para o `verify`). Rotação: o `verify` aceita `BRIDGER_SECRET_KEY_PREVIOUS` para
+   os eventos anteriores à troca. Sem `BRIDGER_SECRET_KEY`, a cadeia usa uma chave fixa pública (só
+   a proteção ingênua da opção 2) e o boot emite `warn` `audit.unkeyed`.
 2. SHA-256 puro (`sha256(prevHash + JSON)`, o da issue). Detecta só adulteração ingênua (editar
    um evento sem recalcular): quem tem o banco edita no meio e recalcula tudo dali em diante sem
    ser detectado. Além disso, o mesmo limite de apagar o final.
@@ -125,7 +127,7 @@ segue o padrão das ações do kernel: `kernel.audit.purge`.
 - **`plugin`:** vem do `name` da closure do `ctx` de cada plugin, do mesmo jeito que o `observe`
   (`bot/plugin-context.ts`). Sem `AsyncLocalStorage`: o plugin não escolhe o ator porque o `ctx`
   que ele recebe já está amarrado ao nome dele.
-- **`system`:** só nas chamadas internas do core (boot, stop, scheduler, expurgação, ações do
+- **`system`:** só nas chamadas internas do core (boot, stop, jobs, expurgação, ações do
   kernel). O `record` do plugin nunca produz `system`.
 - **`user` e `contact`:** são os que dependem do contexto assíncrono. Um `AsyncLocalStorage` do
   módulo de auditoria, no molde do `TenantScope` (`packages/core/src/tenant/scope.ts`), guarda o
@@ -153,7 +155,7 @@ sem aguardar. Um dreno por vez, nesta instância, grava a fila.
   ambígua não duplica `seq` nem bifurca a cadeia.
 - **Flush:** a cada **1 s** ou ao chegar a **100 eventos**, o que vier primeiro, e no `stop`.
 - **Limite:** **10.000 eventos** em memória (~10 MB com eventos de ~1 KB).
-- **Storage falhou:** log `error` com `event: 'audit.flush_failed'` (ADR 0118); a fila mantém os
+- **Storage falhou:** log `error` com `event: 'audit.flush.failed'` (ADR 0118); a fila mantém os
   eventos e tenta de novo com espera crescente (1 s até 30 s), relendo o topo como acima.
 - **Passou do limite:** o evento novo é descartado, com log `error` `event: 'audit.dropped'` e o
   sinal `audit.dropped`.
@@ -231,16 +233,19 @@ derivada da `BRIDGER_SECRET_KEY` (ver Opções). JSON canônico: chaves ordenada
 
 ### Retenção e expurgação
 
-`audit.retentionDays` na config do core, padrão **1825 (5 anos)**, configurável para menos. Um
-job diário no scheduler faz a expurgação.
+`audit.retentionDays` na config do core, padrão **1825 (5 anos)**, configurável para menos.
+A expurgação roda no máximo uma vez a cada 24 h, sem timer próprio: é disparada pela gravação da
+auditoria, pela renovação da trava da sessão (ADR 0070) e pelo boot. O controle das 24 h fica em
+memória e recomeça a cada boot. Não é job do scheduler, porque ele persiste séries por plugin e
+duplicaria a série a cada boot, e o core não arma timer próprio no boot.
 
 O corte é por `at`, mas a apagada tem de ser um prefixo contíguo em `seq`, e o relógio pode ter
-voltado. O job acha o **maior `seq` com `at < corte`** (`toSeq`) e apaga `seq <= toSeq`.
+voltado. A expurgação acha o **maior `seq` com `at < corte`** (`toSeq`) e apaga `seq <= toSeq`.
 
 Ordem, para a cadeia nunca ficar sem explicação: **grava `kernel.audit.purge` primeiro** (ator
 `system`, `details: { fromSeq, toSeq, count, lastHash }`, em que `lastHash` é o `hash` do elo
 `toSeq`) como evento normal da cadeia, e **só então apaga**. Se o processo cair no meio, sobra um
-`kernel.audit.purge` sem buraco, que é inofensivo e o job refaz.
+`kernel.audit.purge` sem buraco, que é inofensivo e a próxima passada refaz.
 
 O `verify` aceita o buraco no início se o primeiro elo restante tiver `prevHash === lastHash` e
 `seq === toSeq + 1` de um `kernel.audit.purge` gravado depois. Apagar o prefixo é legítimo e

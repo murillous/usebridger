@@ -131,6 +131,8 @@ export interface PluginContextDeps {
   /** Plugins que recebem `ctx.admin` (ADR 0107) e o controle que ele entrega. */
   readonly adminPlugins: ReadonlySet<string>;
   readonly admin: PluginAdmin;
+  /** O mesmo controle com as ações auditadas em nome do plugin (ADR 0122); sem ele, `admin`. */
+  readonly adminFor?: (plugin: string) => PluginAdmin;
   /** Segredos do bot, para mascarar o que sai pelo `ctx.admin` (ADR 0107). */
   readonly secrets: SecretSource;
   /** Prazo do `run` e do `onReject` de cada comando, em ms (ADR 0004). */
@@ -381,7 +383,9 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
       unsafe: deps.unsafe.forPlugin(plugin),
       audit: auditFor(deps.audit.forPlugin(name, deps.adminPlugins.has(name)), guard),
       pseudonym: deps.pseudonym,
-      admin: deps.adminPlugins.has(name) ? liveAdmin(name, deps.admin, live, redact) : undefined,
+      admin: deps.adminPlugins.has(name)
+        ? liveAdmin(name, deps.adminFor?.(name) ?? deps.admin, live, redact, deps.audit)
+        : undefined,
     };
 
     return {
@@ -430,13 +434,23 @@ function liveAdmin(
   admin: PluginAdmin,
   live: Live,
   redact: <T>(value: T) => T,
+  audit?: Audit,
 ): PluginAdmin {
-  const refuse = (action: string): Promise<never> =>
-    Promise.reject(
+  const refuse = (action: string, target: string, kernelAction: string): Promise<never> => {
+    // A recusa do ADR 0107 também é fato de auditoria.
+    audit?.record({
+      action: kernelAction,
+      target: { type: 'plugin', id: target },
+      outcome: 'denied',
+      details: { plugin: target },
+      actor: { kind: 'plugin', name: self },
+    });
+    return Promise.reject(
       new PluginHostStateError(
         `plugin "${self}": ${action} em si mesmo não é permitido (o plugin desceria no meio da própria chamada)`,
       ),
     );
+  };
   // Tudo o que sai pelo admin passa pela máscara de segredos do bot: erro de `setup` e de config
   // carrega texto de terceiros (ex.: "invalid key sk-…") que o log já censura (ADR 0107).
   const masked =
@@ -451,12 +465,16 @@ function liveAdmin(
   const plugins = Object.assign(() => redact(admin.plugins()), {
     reload: masked(
       live('admin.plugins.reload', (target: string) =>
-        target === self ? refuse('admin.plugins.reload') : admin.plugins.reload(target),
+        target === self
+          ? refuse('admin.plugins.reload', target, 'kernel.plugin.reload')
+          : admin.plugins.reload(target),
       ),
     ),
     disable: masked(
       live('admin.plugins.disable', (target: string) =>
-        target === self ? refuse('admin.plugins.disable') : admin.plugins.disable(target),
+        target === self
+          ? refuse('admin.plugins.disable', target, 'kernel.plugin.disable')
+          : admin.plugins.disable(target),
       ),
     ),
     enable: masked(live('admin.plugins.enable', (target: string) => admin.plugins.enable(target))),
@@ -472,21 +490,21 @@ function liveAdmin(
       setOverrides: masked(
         live('admin.config.setOverrides', (target: string, overrides) =>
           target === self
-            ? refuse('admin.config.setOverrides')
+            ? refuse('admin.config.setOverrides', target, 'kernel.config.update')
             : admin.config.setOverrides(target, overrides),
         ),
       ),
       setSecret: masked(
         live('admin.config.setSecret', (target: string, path: string, value) =>
           target === self
-            ? refuse('admin.config.setSecret')
+            ? refuse('admin.config.setSecret', target, 'kernel.secret.update')
             : admin.config.setSecret(target, path, value),
         ),
       ),
       clearSecret: masked(
         live('admin.config.clearSecret', (target: string, path: string) =>
           target === self
-            ? refuse('admin.config.clearSecret')
+            ? refuse('admin.config.clearSecret', target, 'kernel.secret.update')
             : admin.config.clearSecret(target, path),
         ),
       ),

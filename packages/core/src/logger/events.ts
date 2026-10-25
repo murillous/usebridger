@@ -487,6 +487,11 @@ export const auditPurgeFailed: LogEvent = defineLogEvent({
   level: 'error',
   message: 'falha na expurgação da auditoria; tenta de novo na próxima passada',
 });
+export const auditConfigDiffFailed: LogEvent = defineLogEvent({
+  name: 'audit.config-diff.failed',
+  level: 'warn',
+  message: 'não foi possível ler a config para o diff da auditoria; o evento sai com changes: null',
+});
 export const auditUnkeyed: LogEvent = defineLogEvent({
   name: 'audit.unkeyed',
   level: 'warn',
