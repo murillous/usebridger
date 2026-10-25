@@ -22,11 +22,12 @@ export async function verifyChain(
   const explainedByPurge = (event: AuditEvent): boolean =>
     purges.some((purge) => {
       const details = purge.details;
-      return (
-        purge.seq > Number(details?.['toSeq']) &&
-        details?.['lastHash'] === event.prevHash &&
-        event.seq === Number(details?.['toSeq']) + 1
-      );
+      const toSeq = Number(details?.['toSeq']);
+      if (purge.seq <= toSeq) return false;
+      // Expurgação interrompida entre lotes: o início cai dentro do intervalo registrado, e o
+      // encadeamento dali até `toSeq + 1` segue checado.
+      if (event.seq >= Number(details?.['fromSeq']) && event.seq <= toSeq) return true;
+      return details?.['lastHash'] === event.prevHash && event.seq === toSeq + 1;
     });
   let checked = 0;
   let previous: AuditEvent | undefined;

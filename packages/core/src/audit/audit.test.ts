@@ -650,3 +650,91 @@ describe('rotação da chave', () => {
     expect(await col.find()).toHaveLength(4);
   });
 });
+
+describe('descarte rejected sem perder evento por falha do storage', () => {
+  const failing =
+    (until: { ok: boolean }) =>
+    (real: Collection<JsonObject>): Collection<JsonObject> => ({
+      ...real,
+      insert: (document) =>
+        until.ok ? real.insert(document) : Promise.reject(new Error('somente leitura')),
+    });
+
+  it('escrita fora do ar com leitura ok não descarta, nem com um evento só', async () => {
+    vi.useFakeTimers();
+    const state = { ok: false };
+    const { audit, col, dropped } = setup({ wrap: failing(state) });
+    audit.start();
+    await vi.advanceTimersByTimeAsync(0);
+    audit.record({ action: 'kernel.a' });
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(dropped).toEqual([]);
+    state.ok = true;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect((await stored(col)).map((e) => e.action)).toEqual(['kernel.a']);
+  });
+
+  it('com dois eventos e a escrita fora do ar, a sonda falha e nada é descartado', async () => {
+    vi.useFakeTimers();
+    const state = { ok: false };
+    const { audit, col, dropped } = setup({ wrap: failing(state) });
+    audit.start();
+    await vi.advanceTimersByTimeAsync(0);
+    audit.record({ action: 'kernel.a' });
+    audit.record({ action: 'kernel.b' });
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(dropped).toEqual([]);
+    state.ok = true;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect((await stored(col)).map((e) => e.action)).toEqual(['kernel.a', 'kernel.b']);
+    expect(await audit.verify()).toEqual({ ok: true, checked: 2 });
+  });
+
+  it('falha durante o stop não vira rejected: vira shutdown no prazo', async () => {
+    vi.useFakeTimers();
+    const { audit, dropped } = setup({ wrap: failing({ ok: false }) });
+    audit.start();
+    await vi.advanceTimersByTimeAsync(0);
+    audit.record({ action: 'kernel.a' });
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 5000);
+    const stopped = audit.stop(controller.signal);
+    await vi.advanceTimersByTimeAsync(5500);
+    await stopped;
+    expect(dropped).toEqual([{ count: 1, reason: 'shutdown' }]);
+  });
+
+  it('cabeça envenenada com a seguinte boa: descarta só a cabeça e o verify passa', async () => {
+    vi.useFakeTimers();
+    const { audit, col, dropped } = setup({
+      wrap: (real) => ({
+        ...real,
+        insert: (document) =>
+          document['action'] === 'kernel.ruim'
+            ? Promise.reject(new Error('recusado'))
+            : real.insert(document),
+      }),
+    });
+    audit.start();
+    await vi.advanceTimersByTimeAsync(0);
+    audit.record({ action: 'kernel.ruim' });
+    audit.record({ action: 'kernel.bom1' });
+    audit.record({ action: 'kernel.bom2' });
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(dropped).toEqual([{ count: 1, reason: 'rejected' }]);
+    expect((await stored(col)).map((e) => [e.seq, e.action])).toEqual([
+      [1, 'kernel.bom1'],
+      [2, 'kernel.bom2'],
+    ]);
+    expect(await audit.verify()).toEqual({ ok: true, checked: 2 });
+  });
+
+  it('o último lote de fila cheia ainda não logado sai no close', () => {
+    const { audit, events } = setup();
+    for (let i = 0; i < AUDIT_MAX_QUEUE + 3; i++) audit.record({ action: 'kernel.x' });
+    expect(events.count('audit.dropped')).toBe(1); // 1º descarte da janela
+    audit.close();
+    // fila descartada no close + soma pendente da janela (2)
+    expect(events.count('audit.dropped')).toBe(3);
+  });
+});

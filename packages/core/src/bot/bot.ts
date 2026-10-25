@@ -1,5 +1,6 @@
 import { ActionRegistry } from '#actions/actions.ts';
 import { AUDIT_COLLECTION, AUDIT_INDEXES, createAudit } from '#audit/audit.ts';
+import { createAuditRetention, validateRetentionDays } from '#audit/retention.ts';
 import { createCommandCatalog } from '#commands/catalog.ts';
 import { createPrefixStore } from '#commands/prefixes.ts';
 import { createCommandRegistry } from '#commands/registry.ts';
@@ -42,6 +43,7 @@ import { newTraceId, runInTrace } from '#trace/scope.ts';
 import { type Capability, hasCapability } from '#transport/capabilities.ts';
 import type { ConnectionStatus, Transport } from '#transport/types.ts';
 import { createUnsafeAccess } from '#unsafe/access.ts';
+import { CORE_VERSION } from '#version.ts';
 import { BackgroundTasks } from './background-tasks.ts';
 import {
   buttonLimit,
@@ -273,17 +275,26 @@ export function createBot(config: BotConfig): Bot {
   // agendados seguem ele.
   const tenants = new TenantScope();
   // Auditoria (ADR 0122): uma cadeia por sessão, no namespace do kernel.
+  const auditCollection = () =>
+    kernelStorage(scoped, AUDIT_COLLECTION).collection(AUDIT_COLLECTION, {
+      indexes: AUDIT_INDEXES,
+    });
   const audit = createAudit({
-    collection: () =>
-      kernelStorage(scoped, AUDIT_COLLECTION).collection(AUDIT_COLLECTION, {
-        indexes: AUDIT_INDEXES,
-      }),
+    collection: auditCollection,
+    onFlushed: () => auditRetention.tick(),
     session,
     tenants,
     log: getLog,
     observers,
     secrets,
     masterKeys: () => readSecretKeys(config.env ?? processEnv()),
+  });
+  // Expurgação diária, disparada pela gravação (sem timer; ver docs/audit.md).
+  const auditRetention = createAuditRetention({
+    audit,
+    collection: auditCollection,
+    retentionDays: validateRetentionDays(config.audit?.retentionDays),
+    log: getLog,
   });
   const scheduler = createSchedulerService({
     storage: scoped,
@@ -364,6 +375,8 @@ export function createBot(config: BotConfig): Bot {
   let host: PluginHost | undefined;
   let configs: PluginConfigs | undefined;
   let booted = false;
+  // `kernel.stop` só existe se o `kernel.boot` foi gravado.
+  let bootAudited = false;
   const control = createPluginControl({
     host: () => host,
     configs: () => configs,
@@ -371,6 +384,8 @@ export function createBot(config: BotConfig): Bot {
     catalog,
     conversations,
     lifecycleError: pluginErrors.lifecycle,
+    audit,
+    log: getLog,
   });
 
   // --- Boot ---------------------------------------------------------------------------------
@@ -446,6 +461,7 @@ export function createBot(config: BotConfig): Bot {
     void outbound.close({ drain: false });
     // Gancho que não coube no prazo: o que resta na fila vira `audit.dropped`.
     audit.close();
+    void auditRetention.stop();
   }
 
   async function bootPlugins(): Promise<void> {
@@ -506,6 +522,7 @@ export function createBot(config: BotConfig): Bot {
       audit,
       adminPlugins: new Set(config.adminPlugins ?? []),
       admin: control,
+      adminFor: (plugin) => control.as({ kind: 'plugin', name: plugin }),
       secrets,
       pseudonym: pseudonymizer.pseudonym,
       unsafe: createUnsafeAccess({
@@ -598,9 +615,11 @@ export function createBot(config: BotConfig): Bot {
         session,
         log,
         signal: bootAbort.signal,
+        onRenewed: () => auditRetention.tick(),
         onLost: () => {
           // Outro processo pode ter assumido a cadeia: gravar agora a bifurcaria (ADR 0122).
           audit.leaseLost();
+          void auditRetention.stop();
           log.event(LOG.sessionTaken, { session });
           bot.stop().catch((error: unknown) => log.event(LOG.stopFailed, { err: error }));
         },
@@ -615,6 +634,8 @@ export function createBot(config: BotConfig): Bot {
 
     // Depois da trava, o único escritor da cadeia: lê o topo e liga o flush (ADR 0122).
     audit.start();
+    auditRetention.start();
+    auditRetention.tick();
 
     // Plugins primeiro, connect depois (plano §5.3): um plugin quebrado (conflito de comando,
     // manifesto inválido, ciclo) derruba o boot antes de o transport abrir sessão — sem QR nem
@@ -667,6 +688,13 @@ export function createBot(config: BotConfig): Bot {
     scheduler.start();
     gate.settle(true);
     state = 'running';
+    bootAudited = true;
+    audit.record({
+      action: 'kernel.boot',
+      details: { version: CORE_VERSION, plugins: loadedPlugins() },
+    });
+    // Dreno já, sem esperar o timer de 1 s: o boot não deixa timer pendente no caminho quente.
+    void audit.flush();
   }
 
   /**
@@ -703,6 +731,9 @@ export function createBot(config: BotConfig): Bot {
     throw failure;
   }
 
+  const loadedPlugins = (): string[] =>
+    (host?.report() ?? []).filter((each) => each.status === 'loaded').map((each) => each.name);
+
   // --- Shutdown -----------------------------------------------------------------------------
 
   function shutdown(): Promise<void> {
@@ -718,6 +749,13 @@ export function createBot(config: BotConfig): Bot {
     const totalDeadline = Date.now() + (config.shutdown?.timeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS);
     const errors: unknown[] = await runStopHooks(hooks.toReversed(), config.shutdown);
     hooks.length = 0;
+    // Antes do `audit.stop`, para o evento entrar no dreno.
+    if (bootAudited) {
+      audit.record({
+        action: 'kernel.stop',
+        details: { version: CORE_VERSION, plugins: loadedPlugins() },
+      });
+    }
     // Depois do teardown dos plugins, que ainda auditam: drena com o prazo de um gancho
     // (`shutdown.hookTimeoutMs`) limitado ao que sobrou do prazo total (`shutdown.timeoutMs`);
     // o que não couber vira `audit.dropped`. Não é um gancho da lista para não competir com os
@@ -726,7 +764,15 @@ export function createBot(config: BotConfig): Bot {
       config.shutdown?.hookTimeoutMs ?? DEFAULT_HOOK_TIMEOUT_MS,
       totalDeadline - Date.now(),
     );
-    await audit.stop(auditMs > 0 ? AbortSignal.timeout(auditMs) : AbortSignal.abort());
+    const auditSignal = auditMs > 0 ? AbortSignal.timeout(auditMs) : AbortSignal.abort();
+    // Uma expurgação em voo termina (ou desiste no próximo passo) antes de a fila ser drenada.
+    await Promise.race([
+      auditRetention.stop(),
+      new Promise<void>((resolve) => {
+        auditSignal.addEventListener('abort', () => resolve(), { once: true });
+      }),
+    ]);
+    await audit.stop(auditSignal);
     await abandonInternals();
     // Em `failed` o transport já foi desconectado; o storage só fecha depois disso.
     if (failedDisconnect !== undefined) await failedDisconnect;

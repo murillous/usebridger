@@ -23,6 +23,8 @@ export interface SessionLeaseOptions {
   readonly signal: AbortSignal;
   /** Outro processo assumiu a trava com o bot rodando. Chamado uma vez; a renovação para. */
   readonly onLost: () => void;
+  /** A trava foi renovada com sucesso (a cada renovação, com o bot ligado). Não deve lançar. */
+  readonly onRenewed?: () => void;
 }
 
 export interface SessionLease {
@@ -39,7 +41,7 @@ export interface SessionLease {
 export async function acquireSessionLease(
   options: SessionLeaseOptions,
 ): Promise<SessionLease | undefined> {
-  const { storage, session, log, signal, onLost } = options;
+  const { storage, session, log, signal, onLost, onRenewed } = options;
   const { acquireLease, releaseLease } = storage;
   if (acquireLease === undefined || releaseLease === undefined) return undefined;
   const name = `session:${session}`;
@@ -68,7 +70,10 @@ export async function acquireSessionLease(
   let renewing: Promise<void> | undefined;
   const renew = async (): Promise<void> => {
     try {
-      if (await acquire()) return;
+      if (await acquire()) {
+        onRenewed?.();
+        return;
+      }
       lost = true;
       clearInterval(timer);
       onLost();

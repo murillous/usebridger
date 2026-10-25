@@ -56,9 +56,9 @@ describe('ctx.audit', () => {
     ctx().audit.record({ action: 'dash.config.update', details: { token: 'abc' } });
     expect(() => ctx().audit.record({ action: 'outro.x' })).toThrow(TypeError);
     const page = await ctx().audit.query();
-    expect(page.events).toEqual([]); // ainda na fila: gravação assíncrona
+    expect(page.events.filter((e) => e.action === 'dash.config.update')).toEqual([]); // ainda na fila: gravação assíncrona
     await bot.stop();
-    const rows = await audited(storage);
+    const rows = (await audited(storage)).filter((row) => !row.action.startsWith('kernel.'));
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       actor: { kind: 'plugin', name: 'dash' },
@@ -128,9 +128,81 @@ describe('trava de sessão perdida', () => {
       await bot.start();
       held = false;
       await vi.advanceTimersByTimeAsync(SESSION_LEASE_RENEW_MS + 100);
-      expect(dropped).toContainEqual({ count: 2, reason: 'lease-lost' });
+      expect(dropped).toContainEqual({ count: 3, reason: 'lease-lost' }); // 2 do plugin + kernel.boot
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('boot e shutdown da auditoria', () => {
+  it('avisa audit.unkeyed no boot sem BRIDGER_SECRET_KEY, e não com ela', async () => {
+    const lines = recordingLogger();
+    const bot = createBot({
+      transport: new RecordingTransport(),
+      logger: lines,
+      env: {},
+      plugins: [],
+    });
+    bots.push(bot);
+    await bot.start();
+    expect(lines.lines.some((l) => l.fields['event'] === 'audit.unkeyed')).toBe(true);
+
+    const keyed = recordingLogger();
+    const other = createBot({
+      transport: new RecordingTransport(),
+      logger: keyed,
+      env: { BRIDGER_SECRET_KEY: Buffer.alloc(32, 3).toString('base64') },
+      plugins: [],
+    });
+    bots.push(other);
+    await other.start();
+    expect(keyed.lines.some((l) => l.fields['event'] === 'audit.unkeyed')).toBe(false);
+  });
+
+  it('o prazo do audit.stop é limitado pelo shutdown.timeoutMs total', async () => {
+    const inner = openMemory();
+    const storage = {
+      ...inner,
+      forNamespace(namespace: string) {
+        const ns = inner.forNamespace(namespace);
+        if (namespace !== '$audit') return ns;
+        return {
+          ...ns,
+          collection: (name: string, options?: { indexes?: readonly string[] }) => ({
+            ...ns.collection(name, options),
+            insert: () => new Promise<string>(() => undefined),
+          }),
+        };
+      },
+    } as unknown as StoragePort;
+    const log = recordingLogger();
+    const plugin = definePlugin({
+      name: 'p',
+      version: '1.0.0',
+      engine: '>=0.0.0',
+      setup(ctx) {
+        ctx.audit.record({ action: 'p.a' });
+      },
+    });
+    const bot = createBot({
+      transport: new RecordingTransport(),
+      logger: log,
+      env: {},
+      storage,
+      plugins: [plugin],
+      shutdown: { hookTimeoutMs: 30_000, timeoutMs: 300 },
+    });
+    bots.push(bot);
+    await bot.start();
+    const started = Date.now();
+    await bot.stop();
+    expect(Date.now() - started).toBeLessThan(3000);
+    // O plugin (e o observador dele) já desceu: o descarte aparece no log.
+    expect(
+      log.lines.some(
+        (l) => l.fields['event'] === 'audit.dropped' && l.fields['reason'] === 'shutdown',
+      ),
+    ).toBe(true);
   });
 });
