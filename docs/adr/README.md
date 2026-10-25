@@ -141,3 +141,4 @@ Um ADR novo entra no fim da lista.
 - [0119](0119-pseudonimo-estavel-nos-logs.md) — Pseudônimo estável do usuário nos logs
 - [0120](0120-trace-e-trilha-de-eventos.md) — Trace de correlação e trilha de eventos por unidade de trabalho
 - [0121](0121-plugin-metrics-sobre-o-prom-client.md) — `plugin-metrics` redesenhado sobre o `prom-client`
+- [0122](0122-log-de-auditoria-no-kernel.md) — Log de auditoria no kernel (`ctx.audit`): ator do contexto, fila com back-pressure e cadeia de hash
