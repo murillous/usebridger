@@ -127,7 +127,7 @@ segue o padrão das ações do kernel: `kernel.audit.purge`.
 - **`plugin`:** vem do `name` da closure do `ctx` de cada plugin, do mesmo jeito que o `observe`
   (`bot/plugin-context.ts`). Sem `AsyncLocalStorage`: o plugin não escolhe o ator porque o `ctx`
   que ele recebe já está amarrado ao nome dele.
-- **`system`:** só nas chamadas internas do core (boot, stop, scheduler, expurgação, ações do
+- **`system`:** só nas chamadas internas do core (boot, stop, jobs, expurgação, ações do
   kernel). O `record` do plugin nunca produz `system`.
 - **`user` e `contact`:** são os que dependem do contexto assíncrono. Um `AsyncLocalStorage` do
   módulo de auditoria, no molde do `TenantScope` (`packages/core/src/tenant/scope.ts`), guarda o
@@ -233,16 +233,19 @@ derivada da `BRIDGER_SECRET_KEY` (ver Opções). JSON canônico: chaves ordenada
 
 ### Retenção e expurgação
 
-`audit.retentionDays` na config do core, padrão **1825 (5 anos)**, configurável para menos. Um
-job diário no scheduler faz a expurgação.
+`audit.retentionDays` na config do core, padrão **1825 (5 anos)**, configurável para menos.
+A expurgação roda no máximo uma vez a cada 24 h, sem timer próprio: é disparada pela gravação da
+auditoria, pela renovação da trava da sessão (ADR 0070) e pelo boot. O controle das 24 h fica em
+memória e recomeça a cada boot. Não é job do scheduler, porque ele persiste séries por plugin e
+duplicaria a série a cada boot, e o core não arma timer próprio no boot.
 
 O corte é por `at`, mas a apagada tem de ser um prefixo contíguo em `seq`, e o relógio pode ter
-voltado. O job acha o **maior `seq` com `at < corte`** (`toSeq`) e apaga `seq <= toSeq`.
+voltado. A expurgação acha o **maior `seq` com `at < corte`** (`toSeq`) e apaga `seq <= toSeq`.
 
 Ordem, para a cadeia nunca ficar sem explicação: **grava `kernel.audit.purge` primeiro** (ator
 `system`, `details: { fromSeq, toSeq, count, lastHash }`, em que `lastHash` é o `hash` do elo
 `toSeq`) como evento normal da cadeia, e **só então apaga**. Se o processo cair no meio, sobra um
-`kernel.audit.purge` sem buraco, que é inofensivo e o job refaz.
+`kernel.audit.purge` sem buraco, que é inofensivo e a próxima passada refaz.
 
 O `verify` aceita o buraco no início se o primeiro elo restante tiver `prevHash === lastHash` e
 `seq === toSeq + 1` de um `kernel.audit.purge` gravado depois. Apagar o prefixo é legítimo e
