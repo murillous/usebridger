@@ -22,6 +22,8 @@ export const CAPABILITIES = [
   'send.sticker',
   'send.document',
   'send.album',
+  // Template aprovado da plataforma: o que sai com a janela de atendimento fechada (ADR 0124).
+  'send.template',
   'media.download',
   'message.edit',
   'message.delete',
@@ -106,6 +108,7 @@ const sendCapability: { readonly [K in Exclude<OutgoingContent['type'], 'album'>
   sticker: 'send.sticker',
   document: 'send.document',
   poll: 'polls',
+  template: 'send.template',
 };
 
 /**

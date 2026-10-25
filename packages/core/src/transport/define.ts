@@ -37,7 +37,7 @@ export interface TransportKit {
  */
 export interface TransportSpec
   extends Pick<Transport, 'connect' | 'disconnect' | 'send'>,
-    Partial<Pick<Transport, CapabilityMethod | 'raw' | 'isChatAdmin'>> {
+    Partial<Pick<Transport, CapabilityMethod | 'raw' | 'isChatAdmin' | 'window'>> {
   readonly name: string;
   readonly capabilities: readonly Capability[];
   readonly native?: unknown;
@@ -112,8 +112,16 @@ function assemble(
     if (call === undefined) throw new UnsupportedError(capability, spec.name);
     return call(spec);
   };
-  const { react, edit, getGroupMetadata, updateGroupParticipants, sendTyping, raw, isChatAdmin } =
-    spec;
+  const {
+    react,
+    edit,
+    getGroupMetadata,
+    updateGroupParticipants,
+    sendTyping,
+    raw,
+    isChatAdmin,
+    window,
+  } = spec;
   const remove = spec.delete;
   return {
     name: spec.name,
@@ -130,6 +138,7 @@ function assemble(
     ...(isChatAdmin !== undefined && {
       isChatAdmin: (chat: Chat, contact: Contact) => isChatAdmin.call(spec, chat, contact),
     }),
+    ...(window !== undefined && { window: (chatId: string) => window.call(spec, chatId) }),
     connect: () => spec.connect(),
     disconnect: () => spec.disconnect(),
     on: (event, handler) => events.on(event, handler),

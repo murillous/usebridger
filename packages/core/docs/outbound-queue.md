@@ -125,6 +125,10 @@ await queue.send('grupo-1', textoLongo); // atalho: só o texto, cru ou formatad
 
 O `ctx.send.edit` não divide: acima de `limits.text`, rejeita com `RangeError` sem enfileirar.
 
+O template (`{ type: 'template' }`, [ADR 0124](../../../docs/adr/0124-template-e-janela-de-atendimento.md))
+não é dividido nem formatado: sai inteiro, qualquer que seja `limits.text`, e o tamanho é validado
+pela plataforma.
+
 ## Álbum
 
 O conteúdo `{ type: 'album', items, caption? }` envia várias mídias de uma vez
@@ -173,7 +177,9 @@ A espera antes da re-tentativa `n` é `min(maxDelayMs, baseDelayMs × 2^(n-1))`,
 fixa e metade proporcional a `random()` (injetável; padrão `Math.random`). `maxAttempts` conta a
 primeira tentativa; `1` desliga o retry.
 
-Por padrão toda falha é transitória, exceto `UnsupportedError` e erros com `retryable: false`.
+Por padrão toda falha é transitória, exceto `UnsupportedError` e erros com `retryable: false`
+(como o `ConversationWindowError`: janela de atendimento fechada não é re-tentada, o plugin decide
+entre esperar e enviar um template).
 **Transports**: marquem assim as falhas permanentes (destino inexistente, mídia recusada), para a
 fila não insistir; o mapeamento das respostas 4xx está em [Transport](transport.md#erros-de-envio).
 Para outra regra, passe `retry.isRetryable`; se ele lançar, o envio rejeita com um

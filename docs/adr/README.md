@@ -143,3 +143,4 @@ Um ADR novo entra no fim da lista.
 - [0121](0121-plugin-metrics-sobre-o-prom-client.md) — `plugin-metrics` redesenhado sobre o `prom-client`
 - [0122](0122-log-de-auditoria-no-kernel.md) — Log de auditoria no kernel (`ctx.audit`): ator do contexto, fila com back-pressure e cadeia de hash
 - [0123](0123-redacao-de-details-por-sufixo.md) — Redação dos `details` da auditoria por sufixo (`accessToken`, `clientSecret`)
+- [0124](0124-template-e-janela-de-atendimento.md) — Template e janela de atendimento (`send.template`, `ConversationWindowError`, `ctx.send.window`)

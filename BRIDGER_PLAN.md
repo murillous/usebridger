@@ -385,6 +385,7 @@ previsão, confirmada quando cada transport nascer, depois do v1.0.
 | `send.sticker` | ✓ | ✓ | — | — |
 | `send.document` | ✓ | ✓ | ✓ | ✓ |
 | `send.album` | — | ✓ | ✓ | — |
+| `send.template` | — | — | — | — |
 | `media.download` | ✓ | ✓ | ✓ | ✓ |
 | `message.edit` | ✓ | ✓ | ✓ | ✓ |
 | `message.delete` | ✓ | ✓ | ✓ | ✓ |

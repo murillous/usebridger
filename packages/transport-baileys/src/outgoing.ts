@@ -86,6 +86,9 @@ export function toContent(content: OutgoingContent, options?: SendOptions): AnyM
       // não declara `send.album`, e a fila envia item a item (ADR 0061). Chegar aqui é pular a
       // checagem.
       throw new UnsupportedError('send.album', 'baileys');
+    case 'template':
+      // Template é do WhatsApp oficial (ADR 0124); o Baileys não declara `send.template`.
+      throw new UnsupportedError('send.template', 'baileys');
     case 'poll':
       return {
         poll: {

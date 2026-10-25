@@ -287,11 +287,13 @@ export type {
   OutgoingAction,
   OutgoingContent,
   SendOptions,
+  TemplateParam,
   TextLimits,
   Transport,
   TransportPacing,
   TypingKind,
   Unsubscribe,
 } from '#transport/types.ts';
+export { type ConversationWindow, ConversationWindowError } from '#transport/window.ts';
 export type { Unsafe } from '#unsafe/types.ts';
 export { CORE_VERSION } from '#version.ts';
