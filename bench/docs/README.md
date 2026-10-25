@@ -76,7 +76,8 @@ Como ler as metas:
 - **`idle-memory`** mede o processo inteiro. Cerca de 45 MB são do próprio Node. O bot vem do
   `@usebridger/testing/bot`, que não importa o Vitest: o entry principal o carrega para registrar
   os matchers, o que soma ~6 MB que não são do kernel. No runner do CI (Linux), o RSS fica uns
-  10 MB acima do medido no Windows.
+  10 MB acima do medido no Windows. Pelo mesmo motivo, o `plugin-metrics` só é importado pelos
+  cenários `*-metrics`: o `prom-client` dele soma ~4 MB a qualquer processo que o carregue.
 - **`overhead`** inclui o custo do `settled()`, então é um teto do overhead real.
 
 O `boot` mede também o primeiro uso do Zod pelas configs dos plugins, como num processo de
