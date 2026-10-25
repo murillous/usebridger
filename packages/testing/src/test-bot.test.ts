@@ -1,4 +1,11 @@
-import { bold, command, definePlugin, fmt, type Message } from '@usebridger/core';
+import {
+  bold,
+  ConversationWindowError,
+  command,
+  definePlugin,
+  fmt,
+  type Message,
+} from '@usebridger/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FakeTransport } from './fake-transport.ts';
 import { fixtures } from './fixtures.ts';
@@ -485,5 +492,45 @@ describe('createTestBot: sentMedia()', () => {
     expect(bot.sentMedia('audio')).toEqual([]);
     expect(bot).toContainVideo();
     expect(bot).toContainDocument({ fileName: 'a.pdf', mimetype: 'application/pdf' });
+  });
+});
+
+describe('janela de atendimento de ponta a ponta', () => {
+  it('o plugin consulta ctx.send.window e cai no template ao pegar ConversationWindowError', async () => {
+    const aviso = definePlugin({
+      name: 'aviso',
+      version: '1.0.0',
+      engine: ENGINE,
+      setup(ctx) {
+        ctx.commands.add(
+          command({
+            name: 'aviso',
+            run: async (c) => {
+              // O chat atual acabou de escrever (janela aberta); o outro nunca escreveu.
+              expect(await ctx.send.window(c.message.chat.id)).toMatchObject({ open: true });
+              expect(await ctx.send.window('outro@fake')).toMatchObject({ open: false });
+              for (const chatId of [c.message.chat.id, 'outro@fake']) {
+                try {
+                  await ctx.send.send(chatId, { type: 'text', text: 'aviso livre' });
+                } catch (error) {
+                  if (!(error instanceof ConversationWindowError)) throw error;
+                  await ctx.send.send(chatId, {
+                    type: 'template',
+                    name: 'retomar',
+                    language: 'pt_BR',
+                  });
+                }
+              }
+            },
+          }),
+        );
+      },
+    });
+    const transport = new FakeTransport({ window: { enabled: true, ttlMs: 60_000 } });
+    const bot = await testBot({ transport, plugins: [aviso] });
+    await bot.receive({ text: '!aviso' });
+    expect(bot).toContainText('aviso livre');
+    expect(bot).toContainTemplate('retomar');
+    expect(transport.sent.map((s) => s.chatId)).toEqual([DEFAULT_CHAT.id, 'outro@fake']);
   });
 });

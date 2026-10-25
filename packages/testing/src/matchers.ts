@@ -32,6 +32,8 @@ declare module 'vitest' {
      * (texto igual ou casando com a RegExp).
      */
     toContainDocument(expected?: DocumentExpectation): R;
+    /** Algum envio de template; com `name`, de nome igual à string ou casando com a RegExp. */
+    toContainTemplate(name?: TextPattern): R;
     /**
      * Alguma resposta (envio citando uma mensagem, como faz o `ctx.reply`); com `text`, uma
      * resposta de texto com esse conteúdo.
@@ -85,7 +87,9 @@ function describeSent(sent: readonly SentMessage[]): string {
         ? JSON.stringify(content.text)
         : content.type === 'document'
           ? `<document ${JSON.stringify(content.fileName)} ${content.mimetype}>`
-          : `<${content.type}>`;
+          : content.type === 'template'
+            ? `<template ${JSON.stringify(content.name)}>`
+            : `<${content.type}>`;
     return `  - ${body}${quoted ? ' (resposta)' : ''}`;
   });
   return `enviados:\n${lines.join('\n')}`;
@@ -154,6 +158,14 @@ expect.extend({
       this.isNot,
       `enviar um documento${documentLabel(expected)}`,
       ({ content }) => documentMatches(content, expected),
+    );
+  },
+  toContainTemplate(received: unknown, name?: TextPattern) {
+    return check(
+      received,
+      this.isNot,
+      `enviar um template${label(name)}`,
+      ({ content }) => content.type === 'template' && patternMatches(content.name, name),
     );
   },
   toHaveReplied(received: unknown, text?: TextPattern) {
