@@ -1,0 +1,112 @@
+# Log de auditoria (`ctx.audit`)
+
+Quem fez o quê, quando e sobre o quê, com cadeia de hash para detectar adulteração. O porquê
+está no [ADR 0122](../../../docs/adr/0122-log-de-auditoria-no-kernel.md). Não é o log do pino
+(`ctx.logger`, operacional) nem a trilha do [ADR 0120](../../../docs/adr/0120-trace-e-trilha-de-eventos.md)
+(diagnóstico, sem conteúdo): é registro de conformidade.
+
+## Gravar
+
+```ts
+ctx.audit.record({
+  action: 'inbox.ticket.transfer',
+  target: { type: 'ticket', id: ticket.id },
+  outcome: 'success', // padrão; também 'denied' e 'error'
+  details: { from: 'ana', to: 'beto', token: 'x' }, // token vira [REDACTED]
+});
+```
+
+- **Síncrono e nunca aguardado:** monta o evento, redige e enfileira. Quem grava no storage é um
+  dreno em segundo plano. Valor que não é JSON (função, `bigint`, `Date`) em `details` lança
+  `TypeError` na hora.
+- **`action`** é `<plugin>.<recurso>.<verbo>`. O core exige o prefixo `<nome do plugin>.` e
+  reserva `kernel.` e `audit.`: um plugin não forja a ação de outro nem a do kernel.
+- **Ator:** o `ctx` do plugin já está amarrado ao nome dele, então o evento sai com
+  `actor: { kind: 'plugin', name }`. Não existe campo de ator no `record`. Dentro de
+  `runAsAuditSubject` (request autenticado ou fluxo LGPD) o ator é o `user`/`contact` do escopo e
+  o evento leva `via: <plugin>`, `ip` e `userAgent`. `system` é só das chamadas internas do core.
+- **Redação:** valores dos segredos do bot e chaves `password`, `passwd`, `token`, `secret`,
+  `apiKey`, `api_key`, `authorization`, `cookie` (qualquer nível, sem diferenciar maiúscula)
+  viram `[REDACTED]`. A chave `content` é **removida**; para guardá-la, `includeContent: true` no
+  próprio `record`.
+- `tenant` (ADR 0068), `session`, `trace` (ADR 0120) e `at` (relógio do servidor) vêm do core.
+
+## Consultar e verificar (só admin)
+
+`ctx.audit.query` e `ctx.audit.verify` exigem o plugin em `adminPlugins` (ADR 0107); os demais
+rejeitam com `AuditPermissionError`.
+
+```ts
+const page = await ctx.audit.query({ action: 'inbox.ticket.transfer', limit: 50 });
+const next = await ctx.audit.query({ after: page.next }); // cursor por seq
+const result = await ctx.audit.verify(); // { ok, checked, brokenAt? }
+```
+
+Filtros: `from`/`to` (por `at`), `actor`, `action`, `target`, `outcome`, `tenant`, `after`,
+`limit` (padrão 100, máximo 1000). Num request de tenant o core impõe o tenant do escopo,
+ignorando o `tenant` do filtro. Não há `update` nem `delete`.
+
+## Fila, falha e descarte
+
+- Flush a cada 1 s ou 100 eventos, e no `stop`. Um insert por vez, em ordem de `seq`; `seq` e
+  `prevHash` só avançam depois do insert confirmado.
+- Storage falhou: log `error` `audit.flush.failed`, a fila retém e tenta de novo (1 s, dobrando
+  até 30 s). Depois de qualquer erro, inclusive timeout, o topo da cadeia é relido: se o insert
+  ambíguo entrou, o evento sai da fila em vez de duplicar o `seq`.
+- Limite de 10.000 eventos em memória: o evento novo é descartado.
+- Trava de sessão perdida (ADR 0070): a fila é descartada sem gravar, para não bifurcar a cadeia.
+- `stop`: drena até o prazo do gancho (`shutdown.hookTimeoutMs`); o resto é descartado.
+- Todo descarte gera o log `error` `audit.dropped` e o sinal de observador `audit.dropped`
+  (`{ count, reason }`, `count` é o incremento): `queue-full`, `lease-lost`, `shutdown`, ou
+  `before-observer` para o acumulado de antes de haver observador.
+
+```ts
+ctx.observe('audit.dropped', ({ count, reason }) => counter.inc({ reason }, count));
+```
+
+Numa **queda do processo** a fila inteira se perde (até 10.000 eventos, se o storage estava fora).
+
+## Integridade
+
+`hash = HMAC-SHA256(chave, prevHash + JSON canônico do evento sem o hash)`, com a chave derivada
+(HKDF) da `BRIDGER_SECRET_KEY`. Uma cadeia por sessão; o primeiro elo usa `prevHash` de 64 zeros.
+
+O que ela promete e o que não:
+
+- Quem tem só o banco **não** edita um evento do meio nem recalcula a cadeia dali em diante
+  (falta a chave): `verify` aponta o primeiro elo quebrado.
+- Quem tem o banco **e** a chave forja tudo.
+- Quem tem só o banco pode **apagar o final**, ou tudo, sem que a cadeia acuse: falta de eventos
+  no fim não é elo quebrado. A defesa é ancorar o topo fora do banco (ponto de extensão futuro).
+- Sem `BRIDGER_SECRET_KEY` a chave é fixa e pública: só detecta edição ingênua.
+- Trocar a chave invalida a verificação do passado; guarde a anterior para verificá-lo.
+- O `verify` aceita o buraco no início deixado por uma expurgação: o primeiro elo restante tem
+  `prevHash === lastHash` e `seq === toSeq + 1` de um `kernel.audit.purge` gravado depois.
+
+## Verificar por script do app
+
+O core não abre o banco, então o app monta o próprio script com o `StoragePort` que já usa:
+
+```ts
+import { verifyAudit } from '@usebridger/core';
+import { sqlite } from '@usebridger/storage-sqlite';
+
+const storage = sqlite({ path: './data/bot.db' });
+const result = await verifyAudit({ storage, session: 'default' }); // BRIDGER_SECRET_KEY do ambiente
+await storage.close();
+if (!result.ok) {
+  console.error('cadeia quebrada em', result.brokenAt);
+  process.exit(1);
+}
+console.log(`ok: ${result.checked} eventos`);
+```
+
+Rode fora do pico: o `verify` lê a coleção inteira, em lotes por `seq`.
+
+## Uso interno do core
+
+`audit.record({ action: 'kernel.…', details, actor? })` (tipo `Audit` em `src/audit/audit.ts`)
+é a gravação do core: aceita qualquer `action`, usa o titular do escopo e, sem ele, `system`;
+plugin admin que age passa `actor: { kind: 'plugin', name }`. `kernel.audit.purge` grava
+`details: { fromSeq, toSeq, count, lastHash }` antes de apagar `seq <= toSeq` na coleção
+`audit` do namespace `$audit`.

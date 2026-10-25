@@ -36,6 +36,7 @@ explícita.
 | [Conversas](conversations.md) | Resposta esperada: `expectReply` e `ctx.conversations.define`, sem segurar o chat |
 | [Ações e botões](actions.md) | `ctx.reply(text, { actions })`: o clique roda um comando ou um passo; menu numerado sem botões |
 | [Storage](storage.md) | KV e coleções por plugin, auth state, adapter em memória e suíte de contrato |
+| [Auditoria](audit.md) | `ctx.audit`: `record`, `query`, `verify`, fila e descarte, cadeia HMAC e seu limite de integridade |
 | [Scheduler](scheduler.md) | `ctx.scheduler`: `at`/`on`/`cancel`, persistência, restart, entrega pelo menos uma vez |
 | [Plugins](plugins.md) | `definePlugin`, manifesto, forma curta (`commands`/`on`, plugin em JS), fontes (config + `pluginDirs`), ordem, tabela de boot, `setup`/`teardown`/`reload` |
 | [Texto formatado](text.md) | `fmt`, `bold`, `italic`, `code`, `link`, `mention`, `plainText`; texto cru; divisão do texto longo |

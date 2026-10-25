@@ -460,3 +460,15 @@ export const httpRequest: LogEvent = defineLogEvent({
   level: 'info',
   message: 'requisição HTTP atendida',
 });
+
+// Log de auditoria (ADR 0122).
+export const auditFlushFailed: LogEvent = defineLogEvent({
+  name: 'audit.flush.failed',
+  level: 'error',
+  message: 'falha ao gravar a auditoria; a fila fica retida e tenta de novo',
+});
+export const auditDropped: LogEvent = defineLogEvent({
+  name: 'audit.dropped',
+  level: 'error',
+  message: 'eventos de auditoria descartados',
+});

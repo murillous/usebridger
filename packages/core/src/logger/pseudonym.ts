@@ -16,9 +16,14 @@ const HKDF_INFO = 'bridger-pseudonym-v1';
 const TRUNCATE_BYTES = 16;
 const SHAPE_RE = /^[ug]_[A-Za-z0-9_-]{22}$/;
 
+/** Deriva uma subchave de 32 bytes da chave mestra; cada uso tem o próprio rótulo `info`. */
+export function deriveSubkey(master: Buffer, info: string): Buffer {
+  return Buffer.from(hkdfSync('sha256', master, Buffer.alloc(0), info, 32));
+}
+
 /** Deriva a chave de pseudônimo da chave mestra (32 bytes). */
 export function derivePseudonymKey(master: Buffer): Buffer {
-  return Buffer.from(hkdfSync('sha256', master, Buffer.alloc(0), HKDF_INFO, 32));
+  return deriveSubkey(master, HKDF_INFO);
 }
 
 // Transport-agnóstico só no que dá: JID de grupo do WhatsApp e id negativo (Telegram) são grupo.

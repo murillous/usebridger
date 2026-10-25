@@ -23,6 +23,8 @@ cada linha seguem o [dicionário do logger](logger.md#campos).
 | `session.lease.lost` | `error` | outro processo assumiu a trava da sessão; parando o bot |
 | `session.lease.waiting` | `warn` | sessão travada por outro processo; esperando a trava vencer |
 | `session.lease.renew-failed` | `warn` | falha ao renovar a trava da sessão; tentando no próximo intervalo |
+| `audit.flush.failed` | `error` | falha ao gravar a auditoria; a fila fica retida e tenta de novo |
+| `audit.dropped` | `error` | eventos de auditoria descartados |
 | `connection.opened` | `info` | conexão aberta |
 | `connection.connecting` | `debug` | conectando |
 | `connection.closed` | `warn` | conexão fechada: reconectando |

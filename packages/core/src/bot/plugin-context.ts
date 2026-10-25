@@ -2,6 +2,7 @@
 // nome do plugin, e desfaz tudo no `dispose`. É a única peça que conhece todos os serviços; o
 // host de plugins só recebe a fábrica.
 
+import type { Audit } from '#audit/audit.ts';
 import { commandInfo } from '#commands/catalog.ts';
 import {
   assertCommandDefinition,
@@ -123,6 +124,8 @@ export interface PluginContextDeps {
   /** Observadores do bot; os do plugin saem no `dispose` (ADR 0102). */
   readonly observers: Observers;
   readonly unsafe: UnsafeAccess;
+  /** Log de auditoria do bot (ADR 0122). */
+  readonly audit: Audit;
   /** Pseudônimo estável de ids para logs (ADR 0119). */
   readonly pseudonym: Pseudonym;
   /** Plugins que recebem `ctx.admin` (ADR 0107) e o controle que ele entrega. */
@@ -376,6 +379,7 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
         return deps.observers.add(name, signal, observer);
       },
       unsafe: deps.unsafe.forPlugin(plugin),
+      audit: auditFor(deps.audit.forPlugin(name, deps.adminPlugins.has(name)), guard),
       pseudonym: deps.pseudonym,
       admin: deps.adminPlugins.has(name) ? liveAdmin(name, deps.admin, live, redact) : undefined,
     };
@@ -492,6 +496,21 @@ function liveAdmin(
       describe: masked((target: string) => admin.config.describe(target)),
       jsonSchema: (target: string) => redact(admin.config.jsonSchema(target)),
     },
+  };
+}
+
+/** `ctx.audit` que recusa o `record` depois do `dispose`, como as demais ações (ADR 0029). */
+function auditFor(
+  audit: PluginContext['audit'],
+  guard: (what: string) => void,
+): PluginContext['audit'] {
+  return {
+    record(input) {
+      guard('audit.record');
+      audit.record(input);
+    },
+    query: (filter) => audit.query(filter),
+    verify: () => audit.verify(),
   };
 }
 

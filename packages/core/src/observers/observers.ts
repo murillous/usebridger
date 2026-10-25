@@ -48,10 +48,17 @@ export interface LogSignal {
   readonly fields: LogFields;
 }
 
+/** Eventos de auditoria descartados (ADR 0122); `count` é o incremento deste descarte. */
+export interface AuditDroppedSignal {
+  readonly count: number;
+  readonly reason: 'queue-full' | 'lease-lost' | 'shutdown' | 'before-observer';
+}
+
 export interface ObserverSignals {
   readonly 'message.handled': MessageHandledSignal;
   readonly 'outbound.sent': OutboundSentSignal;
   readonly log: LogSignal;
+  readonly 'audit.dropped': AuditDroppedSignal;
 }
 
 export type ObserverSignalName = keyof ObserverSignals;
@@ -70,6 +77,7 @@ export class Observers {
     'message.handled': [],
     'outbound.sent': [],
     log: [],
+    'audit.dropped': [],
   };
   readonly #onError: (event: PluginErrorEvent) => void;
 

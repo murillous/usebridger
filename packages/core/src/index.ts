@@ -4,6 +4,23 @@
 // `entries.test.ts`: export novo é decisão explícita.
 
 export type { CommandAction, MessageAction, StepAction } from '#actions/actions.ts';
+export {
+  AuditPermissionError,
+  type VerifyAuditOptions,
+  verifyAudit,
+} from '#audit/audit.ts';
+export { currentAuditSubject, runAsAuditSubject } from '#audit/scope.ts';
+export type {
+  AuditActor,
+  AuditEvent,
+  AuditOutcome,
+  AuditPage,
+  AuditQuery,
+  AuditRecordInput,
+  AuditSubject,
+  AuditVerifyResult,
+  PluginAudit,
+} from '#audit/types.ts';
 export { createBot } from '#bot/bot.ts';
 export type {
   Bot,
@@ -156,6 +173,7 @@ export {
   sanitize,
 } from '#middleware/sanitize.ts';
 export type {
+  AuditDroppedSignal,
   LogSignal,
   MessageHandledSignal,
   Observer,
