@@ -4,6 +4,7 @@ import { command, createHttp, definePlugin, type PluginDefinition } from '@usebr
 import { createTestBot } from '@usebridger/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createActiveTracker } from './active.ts';
+import { createPeriods } from './history.ts';
 import { type MetricsService, metrics } from './index.ts';
 
 const USER = 'maria@fake';
@@ -144,5 +145,14 @@ describe('ativos por dia', () => {
     expect(tracker.sizes()).toEqual({ users: 0, groups: 0 });
     tracker.record('a', undefined); // conjunto novo: o mesmo usuário conta de novo
     expect(tracker.sizes()).toEqual({ users: 1, groups: 0 });
+  });
+
+  it('vira o dia pelo dayOf (fuso do histórico)', () => {
+    let now = Date.parse('2026-10-18T02:59:00Z'); // 23:59 em São Paulo
+    const periods = createPeriods('America/Sao_Paulo');
+    const tracker = createActiveTracker({ now: () => now, dayOf: (ms) => periods(ms).day });
+    tracker.record('a', undefined);
+    now = Date.parse('2026-10-18T03:00:30Z'); // meia-noite em São Paulo
+    expect(tracker.sizes()).toEqual({ users: 0, groups: 0 });
   });
 });

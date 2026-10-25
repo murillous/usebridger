@@ -160,3 +160,10 @@ As linhas saem com `plugin=dashboard` ou `plugin=metrics`.
 | --- | --- | --- |
 | `metrics.http.missing` | `info` | sem http no bot: GET /metrics desligado |
 | `metrics.series.overflow` | `warn` | métrica passou do limite de séries; amostras de séries novas descartadas |
+| `metrics.flush.failed` | `error` | flush de métricas falhou |
+| `metrics.write.failed` | `error` | falha ao gravar métrica; delta mantido para o próximo flush |
+| `metrics.purge.failed` | `error` | falha ao apagar métricas antigas |
+| `metrics.catalog.write-failed` | `error` | falha ao gravar o descritor da métrica no catálogo |
+| `metrics.sample.failed` | `error` | falha ao amostrar as filas para o histórico |
+| `metrics.exporter.failed` | `error` | exportador de métricas falhou |
+| `metrics.exporters.list-failed` | `error` | falha ao listar exportadores de métricas |

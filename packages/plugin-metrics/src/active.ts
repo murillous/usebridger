@@ -17,8 +17,25 @@ interface Day {
   readonly groups: Set<string>;
 }
 
-export function createActiveTracker(options: { now: () => number }): ActiveTracker {
-  const dayOf = (): string => new Date(options.now()).toISOString().slice(0, 10);
+export function createActiveTracker(options: {
+  now: () => number;
+  /** Dia (`YYYY-MM-DD`) de um instante; padrão UTC. A virada segue o fuso do histórico. */
+  dayOf?: (ms: number) => string;
+}): ActiveTracker {
+  const { now, dayOf: day = (ms) => new Date(ms).toISOString().slice(0, 10) } = options;
+  // O dia só muda na virada de um minuto (todo fuso IANA atual tem deslocamento em minutos):
+  // guardar por minuto tira o `Intl` do caminho de cada mensagem.
+  let minute = Number.NaN;
+  let today = '';
+  const dayOf = (): string => {
+    const ms = now();
+    const m = Math.floor(ms / 60_000);
+    if (m !== minute) {
+      minute = m;
+      today = day(ms);
+    }
+    return today;
+  };
   const fresh = (day: string): Day => ({
     day,
     // `KeyObject` uma vez por dia: com `Buffer`, o `createHmac` converte a chave a cada mensagem,

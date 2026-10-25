@@ -37,43 +37,42 @@ export interface Gauge<L extends string> {
   set(labels: LabelValues<L>, value: number): void;
 }
 
-/** Uma série de contador num dia. */
-export interface CounterRow {
+/** Período do histórico: a hora (`YYYY-MM-DDTHH`) ou o dia (`YYYY-MM-DD`) no fuso da config. */
+export type Granularity = 'hour' | 'day';
+
+interface RowBase {
   readonly metric: string;
-  readonly type: 'counter';
-  readonly day: string;
+  readonly granularity: Granularity;
+  /** Início do período no fuso da config: `YYYY-MM-DDTHH` na hora, `YYYY-MM-DD` no dia. */
+  readonly period: string;
   readonly labels: MetricLabels;
+}
+
+/** O que um contador somou, gravado num período. */
+export interface CounterRow extends RowBase {
+  readonly type: 'counter';
   readonly value: number;
 }
 
-/** Uma série de histograma num dia; percentis saem dos baldes. */
-export interface HistogramRow {
-  readonly metric: string;
+/** O que um histograma somou, gravado num período. */
+export interface HistogramRow extends RowBase {
   readonly type: 'histogram';
-  readonly day: string;
-  readonly labels: MetricLabels;
   readonly count: number;
   readonly sum: number;
-  readonly p50: number;
-  readonly p95: number;
-  readonly p99: number;
-  /** Contagem por balde, alinhada aos limites da métrica mais um `+Inf` no fim. */
-  readonly buckets: readonly number[];
+  /** Contagem por balde, não cumulativa, pelo limite superior (`'0.1'`, `'+Inf'`). */
+  readonly buckets: Readonly<Record<string, number>>;
 }
 
-/** Uma série de gauge num dia: último valor amostrado e o máximo do dia. */
-export interface GaugeRow {
-  readonly metric: string;
+/** Amostra de um gauge gravada num período: o último valor e o máximo desde o flush anterior. */
+export interface GaugeRow extends RowBase {
   readonly type: 'gauge';
-  readonly day: string;
-  readonly labels: MetricLabels;
   readonly last: number;
   readonly max: number;
 }
 
 export type MetricRow = CounterRow | HistogramRow | GaugeRow;
 
-/** O que um flush entrega a cada exportador: só o que foi agregado desde o flush anterior. */
+/** O que um flush entrega a cada exportador: só o que ele gravou, nos dois períodos. */
 export interface MetricsSnapshot {
   /** Instante do flush, ISO 8601. */
   readonly at: string;

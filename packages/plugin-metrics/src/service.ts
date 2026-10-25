@@ -22,6 +22,33 @@ export interface MetricsRuntimeOptions {
   readonly registry: Registry;
   readonly log: Logger;
   readonly maxSeriesPerMetric: number;
+  /** Chamado na primeira declaração de uma métrica e quando o dono dela muda. */
+  readonly onDescribe?: (descriptor: MetricDescriptor) => void;
+}
+
+type Kind = 'counter' | 'histogram' | 'gauge';
+type Labels = Readonly<Record<string, string>>;
+
+/** Descritor de uma métrica, como vai para a coleção `catalog`. */
+export interface MetricDescriptor {
+  readonly name: string;
+  readonly type: Kind;
+  readonly help: string;
+  readonly labelNames: readonly string[];
+  readonly buckets: readonly number[] | null;
+  readonly owner: string;
+}
+
+/** Uma série lida da registry no flush. */
+export interface Sample {
+  readonly metric: string;
+  readonly type: Kind;
+  readonly labels: Labels;
+  /**
+   * Contador e histograma: o que somou desde a leitura anterior (`value`, ou `le:<limite>` por
+   * balde não cumulativo, `sum` e `count`). Gauge: `last` e `max` desde a leitura anterior.
+   */
+  readonly fields: Readonly<Record<string, number>>;
 }
 
 /** Dono das métricas que o próprio plugin-metrics declara (kernel). */
@@ -36,17 +63,33 @@ export interface MetricsRuntime {
   release(caller: string): void;
   /** Quem declarou primeiro, entre os que ainda estão; `undefined` se a métrica não existe. */
   ownerOf(name: string): string | undefined;
+  /** Lê a registry e devolve, por série, o que mudou desde a leitura anterior. */
+  collect(): Promise<Sample[]>;
 }
 
-type Kind = 'counter' | 'histogram' | 'gauge';
-type Labels = Readonly<Record<string, string>>;
+interface Series {
+  readonly labels: Labels;
+  readonly fields: Record<string, number>;
+}
 
 interface Entry {
+  readonly kind: Kind;
   /** Especificação serializada: a redeclaração só devolve o handle se for igual. */
   readonly spec: string;
+  readonly descriptor: Omit<MetricDescriptor, 'owner'>;
   readonly handle: Counter<string> | Histogram<string> | Gauge<string>;
+  readonly metric: PromCounter | PromHistogram | PromGauge;
   /** Plugins que declararam, em ordem; o primeiro é o dono. */
   readonly declarers: string[];
+  /** Contador e histograma: o total por série já entregue pelo `collect`, de onde sai o delta. */
+  readonly baseline: Map<string, Record<string, number>>;
+  /** Gauge: `last` e `max` por série desde o `collect` anterior, mantidos pelo `set`. */
+  readonly gauges: Map<string, Series>;
+}
+
+/** Chave da série independente da ordem dos rótulos. */
+export function seriesKey(labels: Labels): string {
+  return JSON.stringify(Object.entries(labels).sort(([a], [b]) => (a < b ? -1 : 1)));
 }
 
 const NAME_RE = /^[a-zA-Z_:][a-zA-Z0-9_:]*$/;
@@ -91,10 +134,16 @@ function assertSpec(kind: Kind, spec: HistogramSpec<string>): void {
 }
 
 export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
-  const { registry, log, maxSeriesPerMetric } = options;
+  const { registry, log, maxSeriesPerMetric, onDescribe } = options;
   const entries = new Map<string, Entry>();
+  // Métricas que saíram da registry com delta ainda não lido: o próximo `collect` as lê uma vez.
+  const retired: [string, Entry][] = [];
 
-  function create(kind: Kind, spec: HistogramSpec<string>): Entry['handle'] {
+  function create(
+    kind: Kind,
+    spec: HistogramSpec<string>,
+    gauges: Entry['gauges'],
+  ): Pick<Entry, 'handle' | 'metric'> {
     const { name } = spec;
     const labelNames = [...spec.labelNames];
     const allowed = new Set(labelNames);
@@ -138,16 +187,30 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
     if (kind === 'counter') {
       const metric = new PromCounter(base);
       return {
-        inc(labels: Labels, value = 1) {
-          if (admit(labels, value)) metric.inc(labels, value);
+        metric,
+        handle: {
+          inc(labels: Labels, value = 1) {
+            if (admit(labels, value)) metric.inc(labels, value);
+          },
         },
       };
     }
     if (kind === 'gauge') {
       const metric = new PromGauge(base);
       return {
-        set(labels: Labels, value: number) {
-          if (admit(labels, value)) metric.set(labels, value);
+        metric,
+        handle: {
+          set(labels: Labels, value: number) {
+            if (!admit(labels, value)) return;
+            metric.set(labels, value);
+            // O `prom-client` só guarda o último valor; o histórico também quer o pico do período.
+            const key = seriesKey(labels);
+            const seen = gauges.get(key);
+            gauges.set(key, {
+              labels: { ...labels },
+              fields: { last: value, max: Math.max(seen?.fields['max'] ?? value, value) },
+            });
+          },
         },
       };
     }
@@ -155,8 +218,11 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
       spec.buckets === undefined ? base : { ...base, buckets: [...spec.buckets] },
     );
     return {
-      observe(labels: Labels, value: number) {
-        if (admit(labels, value)) metric.observe(labels, value);
+      metric,
+      handle: {
+        observe(labels: Labels, value: number) {
+          if (admit(labels, value)) metric.observe(labels, value);
+        },
       },
     };
   }
@@ -178,9 +244,85 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
     if (registry.getSingleMetric(spec.name)) {
       throw new TypeError(`métrica "${spec.name}" é do plugin-metrics`);
     }
-    const handle = create(kind, spec);
-    entries.set(spec.name, { spec: key, handle, declarers: [caller] });
+    const gauges = new Map<string, Series>();
+    const { handle, metric } = create(kind, spec, gauges);
+    const descriptor = {
+      name: spec.name,
+      type: kind,
+      help: spec.help,
+      labelNames: [...spec.labelNames],
+      buckets: spec.buckets === undefined ? null : [...spec.buckets],
+    };
+    entries.set(spec.name, {
+      kind,
+      spec: key,
+      descriptor,
+      handle,
+      metric,
+      declarers: [caller],
+      baseline: new Map(),
+      gauges,
+    });
+    onDescribe?.({ ...descriptor, owner: caller });
     return handle;
+  }
+
+  // Delta de uma métrica contra o que o `collect` anterior já entregou.
+  async function read(name: string, entry: Entry, out: Sample[]): Promise<void> {
+    if (entry.kind === 'gauge') {
+      for (const g of entry.gauges.values()) {
+        out.push({ metric: name, type: 'gauge', labels: g.labels, fields: g.fields });
+      }
+      entry.gauges.clear();
+      return;
+    }
+    const { values } = await entry.metric.get();
+    const current = new Map<string, Series>();
+    const cumulative = new Map<string, number>();
+    for (const v of values) {
+      let labels = v.labels as Labels;
+      let field = 'value';
+      if (entry.kind === 'histogram') {
+        // `_bucket` (cumulativo, com o rótulo `le`), `_sum` ou `_count`.
+        field = 'metricName' in v ? String(v.metricName).slice(name.length + 1) : '';
+        if (field === 'bucket') {
+          const { le, ...rest } = labels;
+          field = `le:${le}`;
+          labels = rest;
+        }
+      }
+      const key = seriesKey(labels);
+      let s = current.get(key);
+      if (!s) {
+        s = { labels, fields: {} };
+        current.set(key, s);
+      }
+      if (field.startsWith('le:')) {
+        // O `prom-client` entrega os baldes cumulativos e em ordem; o histórico grava cada balde.
+        s.fields[field] = v.value - (cumulative.get(key) ?? 0);
+        cumulative.set(key, v.value);
+      } else {
+        s.fields[field] = v.value;
+      }
+    }
+    for (const [key, s] of current) {
+      const base = entry.baseline.get(key);
+      entry.baseline.set(key, s.fields);
+      const fields: Record<string, number> = {};
+      for (const [field, total] of Object.entries(s.fields)) {
+        const delta = total - (base?.[field] ?? 0);
+        if (delta > 0) fields[field] = delta;
+      }
+      if (Object.keys(fields).length > 0) {
+        out.push({ metric: name, type: entry.kind, labels: s.labels, fields });
+      }
+    }
+  }
+
+  async function collect(): Promise<Sample[]> {
+    const out: Sample[] = [];
+    for (const [name, entry] of [...entries, ...retired.splice(0)]) await read(name, entry, out);
+    return out;
   }
 
   // Os casts ligam o handle genérico ao `L` da chamada; o `admit` faz a checagem em runtime.
@@ -199,9 +341,13 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
       entry.declarers.splice(i, 1);
       // Outro plugin que declarou a mesma métrica segue escrevendo nela e vira o dono; sem
       // ninguém, ela sai do /metrics e volta zerada na próxima declaração.
-      if (entry.declarers.length === 0) {
+      const [owner] = entry.declarers;
+      if (owner === undefined) {
         registry.removeSingleMetric(name);
         entries.delete(name);
+        retired.push([name, entry]);
+      } else if (i === 0) {
+        onDescribe?.({ ...entry.descriptor, owner });
       }
     }
   }
@@ -211,5 +357,6 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
     scoped: serviceFor,
     release,
     ownerOf: (name) => entries.get(name)?.declarers[0],
+    collect,
   };
 }

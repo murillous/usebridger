@@ -5,9 +5,8 @@ Prometheus ([ADR 0103](../../../docs/adr/0103-plugins-oficiais-de-metricas-e-das
 serviço é uma camada fina sobre o [`prom-client`](https://github.com/siimon/prom-client), com as
 métricas declaradas antes do uso ([ADR 0121](../../../docs/adr/0121-plugin-metrics-sobre-o-prom-client.md)).
 
-Nesta versão o plugin não grava nada no storage: o histórico por hora e dia e a leitura (`query`,
-`catalog`) voltam nas próximas versões. O ponto `metrics.exporters` segue declarado, mas ninguém o
-chama até o histórico voltar.
+O plugin grava o histórico por hora e por dia no storage do bot, a partir do delta da registry
+(abaixo). A leitura (`query`, `catalog`) volta na próxima versão.
 
 ## Escrever
 
@@ -66,7 +65,8 @@ Declaração inválida lança `TypeError`:
   plugin declarou a mesma métrica, ela segue no `/metrics` e esse plugin vira o dono. Sem ninguém,
   a métrica sai do `/metrics` e volta zerada na próxima declaração, como no `setup` do reload.
 
-O dono ainda não sai na API pública; ele volta com o `catalog`.
+O dono ainda não sai na API pública; ele vai para a coleção `catalog` (abaixo) e volta na
+leitura com o `catalog()`.
 
 ## Dado pessoal
 
@@ -98,7 +98,91 @@ Pela config do plugin (`pluginConfig.metrics`):
 
 | Campo | Padrão | O que faz |
 | --- | --- | --- |
+| `flushIntervalMs` | `60000` (mín. `1000`) | Intervalo do flush do histórico, em ms |
+| `timeZone` | `UTC` | Fuso IANA da virada da hora e do dia; fuso desconhecido recusa a config |
+| `retention.hourDays` | `7` | Dias mantidos na coleção `hourly` |
+| `retention.dayDays` | `90` | Dias mantidos na coleção `daily` |
 | `maxSeriesPerMetric` | `1000` | Limite de séries por métrica |
+
+## Histórico
+
+### Flush
+
+A cada `flushIntervalMs` o plugin lê a registry e grava no storage o que mudou desde o flush
+anterior. O caminho quente continua com uma escrita só, no `prom-client`. O `stop` e o reload do
+plugin param o intervalo e fazem um flush final, então nada se perde entre o último flush e a
+saída. Os flushes ficam em fila, nunca dois ao mesmo tempo.
+
+- **Contador e histograma:** o delta é o valor da registry menos o último gravado, por série. O
+  histograma grava cada balde **não cumulativo** (campo `le:<limite>`, com `le:+Inf`), mais `sum`
+  e `count`. O delta vai com `increment` no período da hora **e** no do dia.
+- **Gauge:** o handle guarda o último valor e o máximo desde o flush anterior. O flush grava `last`
+  (sobrescreve) e `max` (sobe, nunca desce) nos dois períodos. Gauge sem `set` desde o flush
+  anterior não grava nada.
+- **Gravação que falha** fica pendente, com `metrics.write.failed` (`error`, `{ metric, err }`) no
+  log, e entra no flush seguinte. Cada nível (hora e dia) tem o seu pendente: o que já foi gravado
+  num nível não soma de novo.
+- **Métrica que sai** (o dono saiu e ninguém mais a declarou) tem o delta que faltava gravado no
+  flush seguinte. Ela volta zerada na redeclaração, com base nova, sem somar em dobro.
+- **Restart e reload** recomeçam a registry do zero, e a base do delta junto: o histórico continua
+  somando de onde parou.
+
+O plugin também amostra, a cada flush, três gauges fora do serviço:
+
+| Gauge no histórico | O que grava |
+| --- | --- |
+| `bridger_active_users` | Usuários ativos do dia até o flush (ver Ativos por dia) |
+| `bridger_active_groups` | Grupos ativos do dia até o flush |
+| `bridger_outbound_pending` | Fila de saída somadas as prioridades ([ADR 0113](../../../docs/adr/0113-gauge-e-fila-de-saida-nas-metricas.md)) |
+
+Falha ao ler as filas registra `metrics.sample.failed` e o resto do flush segue.
+
+### Storage
+
+Três coleções no namespace do plugin:
+
+- **`hourly`** e **`daily`**: um documento por (métrica, período, série, campo), para o `increment`
+  mexer num campo só. Campos: `metric`, `period`, `key` (a série, rótulos em ordem), `field`
+  (`value`, `le:<limite>`, `sum`, `count`, `last` ou `max`), `labels` e `value`. O `period` é o
+  início do período no fuso da config: `YYYY-MM-DDTHH` na hora, `YYYY-MM-DD` no dia. Índices em
+  `metric` e `period`.
+- **`catalog`**: um descritor por métrica (`name`, `type`, `help`, `labelNames`, `buckets` ou
+  `null`, `owner`), gravado na primeira declaração e regravado quando o dono muda. Uma métrica
+  que só existe no histórico continua no catálogo, com os baldes que usava. Falha na gravação vai
+  para o log (`metrics.catalog.write-failed`) e a próxima declaração regrava.
+
+### Fuso
+
+`timeZone` define a virada da hora e do dia no histórico e nos ativos do dia. Mudar o fuso vale do
+flush seguinte em diante; o que já foi gravado não muda.
+
+**Limite:** o delta cai no período em que o flush roda. Perto da virada, até `flushIntervalMs` de
+dados pode ir para o período seguinte. O mesmo vale para o pendente de um flush que falhou.
+
+### Retenção
+
+No primeiro flush de cada dia (no fuso da config), o plugin apaga da `hourly` os períodos com mais
+de `retention.hourDays` dias e da `daily` os com mais de `retention.dayDays`. Falha no corte vai
+para o log (`metrics.purge.failed`) sem impedir o flush, e o flush seguinte tenta de novo.
+
+### Exportadores
+
+Plugins contribuem com o ponto `metrics.exporters` para mandar o histórico a outro lugar:
+
+```ts
+ctx.services.contribute('metrics.exporters', async ({ at, rows }) => {
+  // rows: só o que este flush gravou, uma linha por série e por nível (hora e dia)
+});
+```
+
+- `at` é o instante do flush (ISO 8601). Cada linha tem `metric`, `type`, `granularity`
+  (`'hour'` ou `'day'`), `period` e `labels`, mais `value` (contador), `count`, `sum` e `buckets`
+  (histograma, baldes não cumulativos por limite) ou `last` e `max` (gauge).
+- Os valores são o delta gravado, não o acumulado. O que falhou ao gravar não entra; vai na
+  linha do flush que o gravar.
+- Erro de um exportador vai para o log (`metrics.exporter.failed`) e não impede os outros.
+- Flush sem nenhuma linha gravada não chama exportador. Os gauges amostrados (ativos e fila)
+  gravam em todo flush, então na prática todo flush chama.
 
 ## Métricas do kernel
 
@@ -122,8 +206,8 @@ registry do bot, fora do serviço:
 | `bridger_outbound_pending{priority}` | Mensagens aguardando na fila de saída, por prioridade |
 | `bridger_outbound_in_flight` | Envios em andamento |
 | `bridger_outbound_paused` | `1` com a fila de saída pausada pela conexão caída |
-| `bridger_active_users` | Usuários ativos hoje (UTC), desde o início do processo |
-| `bridger_active_groups` | Grupos ativos hoje (UTC), desde o início do processo |
+| `bridger_active_users` | Usuários ativos hoje (no `timeZone`), desde o início do processo |
+| `bridger_active_groups` | Grupos ativos hoje (no `timeZone`), desde o início do processo |
 
 Os totais acumulados das filas (`processed`, `failed`, `dropped`...) não são expostos;
 `bridger_messages_handled_total` e `bridger_outbound_sent_total` cobrem o volume e o resultado.
@@ -131,8 +215,10 @@ Os totais acumulados das filas (`processed`, `failed`, `dropped`...) não são e
 ### Ativos por dia
 
 Cada mensagem tratada põe o HMAC-SHA256 do id do remetente (e do chat, se grupo) num conjunto em
-memória. A chave é aleatória, gerada por dia (UTC), nunca gravada nem logada; na virada a chave
-e o conjunto são trocados. Só o tamanho dos conjuntos sai, nos gauges `bridger_active_*`.
+memória. A chave é aleatória, gerada por dia (no `timeZone`), nunca gravada nem logada; na virada
+a chave e o conjunto são trocados. Só o tamanho dos conjuntos sai, nos gauges `bridger_active_*`
+do `/metrics` e do histórico. No histórico, o `max` do dia é a contagem do último flush antes da
+virada: o que chegou entre esse flush e a meia-noite não entra.
 
 **Restart no meio do dia superestima:** o conjunto recomeça vazio e quem já tinha sido contado
 conta de novo.
