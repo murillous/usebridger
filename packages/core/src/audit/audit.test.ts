@@ -41,6 +41,7 @@ function setup(
     wrap?: (col: Collection<JsonObject>) => Collection<JsonObject>;
     observe?: boolean;
     secrets?: ReturnType<typeof createSecretSet>;
+    keys?: { current?: Buffer; previous?: Buffer };
   } = {},
 ): Setup {
   const storage = options.storage ?? createMemoryStorage();
@@ -64,7 +65,7 @@ function setup(
     log: () => log,
     observers,
     secrets: options.secrets ?? createSecretSet(),
-    masterKey: () => KEY,
+    masterKeys: () => options.keys ?? { current: KEY },
     now: () => new Date(clock.time),
   });
   setups.push(audit);
@@ -310,7 +311,8 @@ describe('descartes e sinal audit.dropped', () => {
       { count: 1, reason: 'queue-full' },
       { count: 1, reason: 'queue-full' },
     ]);
-    expect(events.count('audit.dropped')).toBe(2);
+    // O log sai por janela de 10 s (uma linha), o sinal sai a cada descarte.
+    expect(events.count('audit.dropped')).toBe(1);
   });
 
   it('descartes antes do observador saem no primeiro sinal, como before-observer', () => {
@@ -344,6 +346,7 @@ describe('descartes e sinal audit.dropped', () => {
 
   it('stop drena a fila; o que passa do prazo vira shutdown', async () => {
     const ok = setup();
+    ok.audit.start();
     ok.audit.record({ action: 'kernel.a' });
     await ok.audit.stop(AbortSignal.timeout(1000));
     expect(await ok.col.find()).toHaveLength(1);
@@ -355,6 +358,7 @@ describe('descartes e sinal audit.dropped', () => {
         insert: () => Promise.reject(new Error('fora do ar')),
       }),
     });
+    down.audit.start();
     down.audit.record({ action: 'kernel.a' });
     down.audit.record({ action: 'kernel.b' });
     await down.audit.stop(AbortSignal.abort());
@@ -505,5 +509,144 @@ describe('query', () => {
     await expect(plugin.query()).rejects.toBeInstanceOf(AuditPermissionError);
     await expect(plugin.verify()).rejects.toBeInstanceOf(AuditPermissionError);
     await expect(audit.forPlugin('dash', true).verify()).resolves.toMatchObject({ ok: true });
+  });
+});
+
+describe('robustez do dreno', () => {
+  it('stop não passa do prazo com insert pendurado', async () => {
+    const { audit, dropped } = setup({
+      wrap: (real) => ({ ...real, insert: () => new Promise<string>(() => undefined) }),
+    });
+    audit.start();
+    audit.record({ action: 'kernel.a' });
+    const started = Date.now();
+    await audit.stop(AbortSignal.timeout(200));
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(dropped).toEqual([{ count: 1, reason: 'shutdown' }]);
+  });
+
+  it('stop sem start descarta sem gravar', async () => {
+    const { audit, col, dropped } = setup();
+    audit.record({ action: 'kernel.a' });
+    await audit.stop(AbortSignal.timeout(1000));
+    expect(await col.find()).toHaveLength(0);
+    expect(dropped).toEqual([{ count: 1, reason: 'shutdown' }]);
+  });
+
+  it('o backoff vale sob carga: poucas tentativas com record contínuo e fila passando de 100', async () => {
+    vi.useFakeTimers();
+    let attempts = 0;
+    const { audit } = setup({
+      wrap: (real) => ({
+        ...real,
+        insert: () => {
+          attempts++;
+          return Promise.reject(new Error('fora do ar'));
+        },
+      }),
+    });
+    audit.start();
+    await vi.advanceTimersByTimeAsync(0);
+    for (let t = 0; t < 20_000; t += 100) {
+      for (let i = 0; i < 2; i++) audit.record({ action: 'kernel.x' });
+      await vi.advanceTimersByTimeAsync(100);
+    }
+    // Esperas de 1, 2, 4, 8 e 16 s: no máximo 5 tentativas em 20 s.
+    expect(attempts).toBeLessThanOrEqual(6);
+    expect(attempts).toBeGreaterThanOrEqual(3);
+  });
+
+  it('flush concorrente com o timer e record durante o dreno gravam tudo uma vez', async () => {
+    vi.useFakeTimers();
+    const { audit, col } = setup({
+      wrap: (real) => ({
+        ...real,
+        insert: async (document) => {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          return real.insert(document);
+        },
+      }),
+    });
+    audit.start();
+    await vi.advanceTimersByTimeAsync(10);
+    for (let i = 0; i < 3; i++) audit.record({ action: 'kernel.x' });
+    const flushes = [audit.flush(), audit.flush()];
+    await vi.advanceTimersByTimeAsync(7);
+    audit.record({ action: 'kernel.y' }); // chega com o dreno em andamento
+    audit.record({ action: 'kernel.y' });
+    await vi.advanceTimersByTimeAsync(3000);
+    await Promise.all(flushes);
+    expect((await stored(col)).map((e) => e.seq)).toEqual([1, 2, 3, 4, 5]);
+    expect(await audit.verify()).toEqual({ ok: true, checked: 5 });
+  });
+
+  it('evento que o storage recusa sempre é descartado como rejected', async () => {
+    vi.useFakeTimers();
+    const { audit, col, dropped } = setup({
+      wrap: (real) => ({
+        ...real,
+        insert: (document) =>
+          document['action'] === 'kernel.ruim'
+            ? Promise.reject(new Error('recusado'))
+            : real.insert(document),
+      }),
+    });
+    audit.start();
+    await vi.advanceTimersByTimeAsync(0);
+    audit.record({ action: 'kernel.ruim' });
+    audit.record({ action: 'kernel.bom' });
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(dropped).toEqual([{ count: 1, reason: 'rejected' }]);
+    expect((await stored(col)).map((e) => [e.seq, e.action])).toEqual([[1, 'kernel.bom']]);
+  });
+
+  it('recusa NUL, __proto__, target e limit inválidos', async () => {
+    const { audit } = setup();
+    const plugin = audit.forPlugin('inbox', true);
+    expect(() => plugin.record({ action: 'inbox.a', details: { a: 'x\u0000y' } })).toThrow(
+      TypeError,
+    );
+    expect(() =>
+      plugin.record({ action: 'inbox.a', details: JSON.parse('{"__proto__": 1}') }),
+    ).toThrow(TypeError);
+    expect(() =>
+      plugin.record({ action: 'inbox.a', target: { type: 'a', id: 1 } as never }),
+    ).toThrow(TypeError);
+    await expect(plugin.query({ limit: 0 })).rejects.toBeInstanceOf(TypeError);
+    await expect(plugin.query({ limit: 1.5 })).rejects.toBeInstanceOf(TypeError);
+  });
+});
+
+describe('rotação da chave', () => {
+  const OLD = Buffer.alloc(32, 1);
+  const NEW = Buffer.alloc(32, 2);
+
+  async function rotated(): Promise<Setup> {
+    const before = setup({ keys: { current: OLD } });
+    before.audit.record({ action: 'kernel.a' });
+    before.audit.record({ action: 'kernel.b' });
+    await before.audit.flush();
+    const after = setup({ storage: before.storage, keys: { current: NEW, previous: OLD } });
+    after.audit.record({ action: 'kernel.c' });
+    await after.audit.flush();
+    return after;
+  }
+
+  it('aceita a chave anterior nos elos antes do primeiro assinado com a atual', async () => {
+    const { audit } = await rotated();
+    expect(await audit.verify()).toEqual({ ok: true, checked: 3 });
+  });
+
+  it('sem a anterior, o histórico antigo é acusado; e a anterior não vale depois da atual', async () => {
+    const { storage, col } = await rotated();
+    const noPrevious = setup({ storage, keys: { current: NEW } });
+    expect(await noPrevious.audit.verify()).toMatchObject({ ok: false, brokenAt: { seq: 1 } });
+    // Elo novo assinado com a chave antiga depois de um com a nova: forjado.
+    const forger = setup({ storage, keys: { current: OLD } });
+    forger.audit.record({ action: 'kernel.forjado' });
+    await forger.audit.flush();
+    const verifier = setup({ storage, keys: { current: NEW, previous: OLD } });
+    expect(await verifier.audit.verify()).toMatchObject({ ok: false, brokenAt: { seq: 4 } });
+    expect(await col.find()).toHaveLength(4);
   });
 });

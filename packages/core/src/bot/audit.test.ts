@@ -1,12 +1,14 @@
 // ADR 0122: `ctx.audit` ligado ao bot (ator do plugin, admin, descarte e parada).
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AuditEvent } from '#audit/types.ts';
 import { definePlugin } from '#plugin/define.ts';
 import type { PluginContext } from '#plugin/types.ts';
 import { createMemoryStorage } from '#storage/memory.ts';
+import type { StoragePort } from '#storage/types.ts';
 import { type Bot, createBot } from './bot.ts';
 import { RecordingTransport, recordingLogger } from './harness.test-support.ts';
+import { SESSION_LEASE_RENEW_MS } from './session-lease.ts';
 
 const bots: Bot[] = [];
 afterEach(async () => {
@@ -78,5 +80,57 @@ describe('ctx.audit', () => {
     const audit = ctx().audit;
     await bot.stop();
     expect(() => audit.record({ action: 'inbox.late' })).toThrow();
+  });
+});
+
+describe('trava de sessão perdida', () => {
+  it('descarta a fila com lease-lost, sem gravar', async () => {
+    vi.useFakeTimers();
+    try {
+      let held = true;
+      const inner = openMemory();
+      // O insert da auditoria falha: os eventos ficam na fila até a trava ser perdida.
+      const storage = {
+        ...inner,
+        forNamespace(namespace: string) {
+          const ns = inner.forNamespace(namespace);
+          if (namespace !== '$audit') return ns;
+          return {
+            ...ns,
+            collection: (name: string, options?: { indexes?: readonly string[] }) => ({
+              ...ns.collection(name, options),
+              insert: () => Promise.reject(new Error('fora do ar')),
+            }),
+          };
+        },
+        acquireLease: async () => held,
+        releaseLease: async () => undefined,
+      } as unknown as StoragePort;
+      const dropped: unknown[] = [];
+      const plugin = definePlugin({
+        name: 'p',
+        version: '1.0.0',
+        engine: '>=0.0.0',
+        setup(ctx) {
+          ctx.observe('audit.dropped', (signal) => dropped.push(signal));
+          ctx.audit.record({ action: 'p.a' });
+          ctx.audit.record({ action: 'p.b' });
+        },
+      });
+      const bot = createBot({
+        transport: new RecordingTransport(),
+        logger: recordingLogger(),
+        env: {},
+        storage,
+        plugins: [plugin],
+      });
+      bots.push(bot);
+      await bot.start();
+      held = false;
+      await vi.advanceTimersByTimeAsync(SESSION_LEASE_RENEW_MS + 100);
+      expect(dropped).toContainEqual({ count: 2, reason: 'lease-lost' });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
