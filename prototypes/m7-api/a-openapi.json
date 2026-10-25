@@ -1,0 +1,338 @@
+{
+  "openapi": "3.2.0",
+  "info": {
+    "title": "Bridger",
+    "version": "0.0.0-proto"
+  },
+  "paths": {
+    "/plugins": {
+      "get": {
+        "summary": "Lista plugins",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "string"
+            }
+          },
+          {
+            "name": "enabled",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Plugin"
+                      }
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "total"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plugins/{name}": {
+      "get": {
+        "summary": "Um plugin",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Plugin"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Liga/desliga",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "enabled"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Plugin"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/logs/stream": {
+      "get": {
+        "summary": "Logs ao vivo",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/event-stream": {
+                "itemSchema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "event": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "contentMediaType": "application/json",
+                      "contentSchema": {
+                        "$ref": "#/components/schemas/LogEvent"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/echo/stats": {
+      "get": {
+        "summary": "Plugin tardio",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "count"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Problem": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/Problem",
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "detail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "Plugin": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/Plugin",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "enabled"
+        ],
+        "additionalProperties": false
+      },
+      "LogEvent": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "#/components/schemas/LogEvent",
+        "type": "object",
+        "properties": {
+          "ts": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "debug",
+              "info",
+              "warn",
+              "error"
+            ]
+          },
+          "event": {
+            "type": "string"
+          },
+          "msg": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ts",
+          "level",
+          "event",
+          "msg"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}

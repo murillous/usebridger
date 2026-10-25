@@ -1,0 +1,1 @@
+{"name":"m7-web","private":true,"type":"module","dependencies":{"@refinedev/core":"^5.0.12","@rjsf/core":"^6.11.0","@rjsf/utils":"^6.11.0","@rjsf/validator-ajv8":"^6.11.0","@tanstack/react-query":"^5.104.5","@vitejs/plugin-react":"^6.1.2","openapi-fetch":"^0.17.0","react":"^19.3.1","react-dom":"^19.3.1","vite":"^8.3.5"}}

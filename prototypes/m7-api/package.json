@@ -1,0 +1,1 @@
+{"name":"m7-proto","private":true,"type":"module","dependencies":{"@hono/node-server":"^2.1.5","@hono/zod-openapi":"^1.6.3","hono":"^4.13.13","openapi-fetch":"^0.17.0","openapi-typescript":"^7.13.0","tsx":"^4.23.15","typescript":"^5.9.3","zod":"^4.6.7","zod-openapi":"^6.0.2"}}
