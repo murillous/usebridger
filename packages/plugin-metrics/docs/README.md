@@ -5,8 +5,8 @@ Prometheus ([ADR 0103](../../../docs/adr/0103-plugins-oficiais-de-metricas-e-das
 serviço é uma camada fina sobre o [`prom-client`](https://github.com/siimon/prom-client), com as
 métricas declaradas antes do uso ([ADR 0121](../../../docs/adr/0121-plugin-metrics-sobre-o-prom-client.md)).
 
-O plugin grava o histórico por hora e por dia no storage do bot, a partir do delta da registry
-(abaixo). A leitura (`query`, `catalog`) volta na próxima versão.
+O plugin grava o histórico por hora e por dia no storage do bot, a partir do delta da registry, e
+o serviço lê esse histórico já agregado (`query`, `catalog`; ver Ler).
 
 ## Escrever
 
@@ -143,7 +143,8 @@ Três coleções no namespace do plugin:
 
 - **`hourly`** e **`daily`**: um documento por (métrica, período, série, campo), para o `increment`
   mexer num campo só. Campos: `metric`, `period`, `key` (a série, rótulos em ordem), `field`
-  (`value`, `le:<limite>`, `sum`, `count`, `last` ou `max`), `labels` e `value`. O `period` é o
+  (`value`, `le:<limite>`, `sum`, `count`, `last` ou `max`), `labels` e `value`; o `last` do
+  gauge leva também `at`, o instante da gravação em ms. O `period` é o
   início do período no fuso da config: `YYYY-MM-DDTHH` na hora, `YYYY-MM-DD` no dia. Índices em
   `metric` e `period`.
 - **`catalog`**: um descritor por métrica (`name`, `type`, `help`, `labelNames`, `buckets` ou
@@ -164,6 +165,77 @@ dados pode ir para o período seguinte. O mesmo vale para o pendente de um flush
 No primeiro flush de cada dia (no fuso da config), o plugin apaga da `hourly` os períodos com mais
 de `retention.hourDays` dias e da `daily` os com mais de `retention.dayDays`. Falha no corte vai
 para o log (`metrics.purge.failed`) sem impedir o flush, e o flush seguinte tenta de novo.
+
+### Ler
+
+`query` agrega o histórico de uma métrica num intervalo, e `catalog` lista as métricas conhecidas.
+Os dois rodam na fila do flush: um flush nunca acontece no meio de uma leitura, então nada é
+contado em dobro nem perdido.
+
+```ts
+const m = ctx.services.get('metrics');
+
+// Mensagens tratadas por dia, no total.
+await m.query({
+  name: 'bridger_messages_handled_total',
+  from: '2026-10-01',
+  to: '2026-10-24',
+  granularity: 'day',
+  groupBy: [],
+});
+// → [{ type: 'counter', period: '2026-10-01', labels: {}, value: 1520 }, …]
+
+// p95 do tratamento por rota, hora a hora, só o que deu certo.
+await m.query({
+  name: 'bridger_message_handle_duration_seconds',
+  from: '2026-10-24T00',
+  to: '2026-10-24T23',
+  granularity: 'hour',
+  where: { status: 'ok' },
+  groupBy: ['route'],
+});
+// → [{ type: 'histogram', period: '2026-10-24T00', labels: { route: 'command' },
+//      count, sum, buckets: [{ le: 0.005, count: 3 }, …, { le: Infinity, count: 0 }],
+//      p50, p95, p99 }, …]
+
+// Consumo por modelo de uma métrica de app (ex.: tokens de IA).
+await m.query({
+  name: 'ai_tokens_total',
+  from: '2026-10-01',
+  to: '2026-10-24',
+  granularity: 'day',
+  groupBy: ['model'],
+});
+```
+
+- **Intervalo:** `from` e `to` são inclusivos, no fuso da config. No dia, `YYYY-MM-DD`; na hora,
+  `YYYY-MM-DDTHH` ou só o dia (vale da hora `00` à `23`). Formato inválido, data que não existe,
+  `from` depois de `to`, granularidade que não é `hour` nem `day` ou `from` num dia mais antigo
+  que a retenção do nível lançam `TypeError`.
+- **O que entra:** o gravado no storage mais o que ainda não foi gravado (a registry menos o
+  último flush, e o pendente de um flush que falhou), no período corrente.
+- **`where`:** igualdade de rótulo; rótulo ausente na série não casa.
+- **`groupBy`:** ausente, uma linha por série; `[]`, uma linha por período com `labels: {}`; com
+  rótulos, soma as séries que têm os mesmos valores neles (rótulo ausente fica fora do `labels`).
+- **Linhas** em ordem de período e de rótulos:
+  - contador: `{ type: 'counter', period, labels, value }`;
+  - histograma: `{ type: 'histogram', period, labels, count, sum, buckets, p50, p95, p99 }`, com
+    `buckets` não cumulativos, somados antes do percentil, e o último `le` em `Infinity`;
+  - gauge: `{ type: 'gauge', period, labels, last, max }`. Agrupado, vale o `max` dos máximos e o
+    `last` da série amostrada mais recentemente.
+- **Percentil:** interpolação linear dentro do balde, como o `histogram_quantile` do Prometheus.
+  O limite inferior do primeiro balde é `0`, e o percentil que cai no `+Inf` vale o maior limite
+  finito. Os limites são os da declaração (os do `catalog`) mais os gravados, então um balde
+  vazio, que o flush não grava, ainda serve de limite inferior.
+- **Limites diferentes** (redeclaração com outros `buckets` depois de um `release`): a linha usa a
+  união dos limites. É aproximação: a interpolação toma como limite inferior o anterior da união,
+  não o do balde original.
+
+`catalog()` devolve um descritor por métrica, em ordem de `name`: `{ name, type, help,
+labelNames, buckets?, owner?, live }`. Junta as declarações vivas no processo (`live: true`, com o
+dono atual, `core` no kernel) com a coleção `catalog` (`live: false` e sem `owner` na métrica que
+só existe no histórico). `buckets` só vem no histograma, com o padrão do `prom-client` quando a
+declaração não passou.
 
 ### Exportadores
 

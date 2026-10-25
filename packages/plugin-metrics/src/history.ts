@@ -3,8 +3,17 @@
 // Separado do plugin para não depender do contexto além do que `createHistory` recebe.
 
 import type { Collection, Logger } from '@usebridger/core';
-import { type MetricDescriptor, type Sample, seriesKey } from '#service.ts';
-import type { Granularity, MetricLabels, MetricRow, MetricsExporter } from '#types.ts';
+import { type Declaration, type Sample, seriesKey } from '#service.ts';
+import type {
+  Granularity,
+  HistogramQueryRow,
+  MetricDescriptor,
+  MetricLabels,
+  MetricQuery,
+  MetricRow,
+  MetricsExporter,
+  QueryRow,
+} from '#types.ts';
 import * as LOG from './log-events.ts';
 
 /** Um documento por (métrica, período, série, campo): o `increment` atômico mexe num campo só. */
@@ -16,6 +25,7 @@ export interface HistoryDoc {
   readonly field: string;
   readonly labels: MetricLabels;
   readonly value: number;
+  // No `last` do gauge vai também `at` (ms), para o `query` achar a amostra mais nova.
 }
 
 /** Descritor gravado na coleção `catalog`, um por nome. */
@@ -23,7 +33,7 @@ export type CatalogDoc = {
   readonly [key: string]: string | readonly string[] | readonly number[] | null;
 } & {
   readonly name: string;
-  readonly type: MetricDescriptor['type'];
+  readonly type: Declaration['type'];
   readonly help: string;
   readonly labelNames: readonly string[];
   readonly buckets: readonly number[] | null;
@@ -39,6 +49,10 @@ export interface HistoryOptions {
   readonly retention: { readonly hourDays: number; readonly dayDays: number };
   /** O que mudou desde o flush anterior. */
   readonly collect: () => Promise<Sample[]>;
+  /** O que o próximo `collect` devolveria, sem consumir. */
+  readonly peek: () => Promise<Sample[]>;
+  /** Declarações vivas no processo. */
+  readonly live: () => readonly Declaration[];
   readonly exporters: () => readonly MetricsExporter[];
   readonly now?: () => number;
 }
@@ -47,7 +61,9 @@ export interface History {
   /** Grava o delta; flushes ficam em fila, nunca dois ao mesmo tempo. */
   flush(): Promise<void>;
   /** Grava o descritor na `catalog`, na mesma fila do flush. */
-  describe(descriptor: MetricDescriptor): void;
+  describe(descriptor: Declaration): void;
+  query(query: MetricQuery): Promise<QueryRow[]>;
+  catalog(): Promise<MetricDescriptor[]>;
 }
 
 export interface Periods {
@@ -56,6 +72,85 @@ export interface Periods {
 }
 
 const DAY_MS = 86_400_000;
+// Os limites do `prom-client` para histograma declarado sem `buckets` (ele não os exporta).
+const DEFAULT_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10];
+const PERIOD_RE = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}))?$/;
+
+// Valida o período e devolve no formato da granularidade; o dia, na hora, vira a hora `edge`.
+function toPeriod(value: unknown, granularity: Granularity, edge: '00' | '23'): string {
+  const m = typeof value === 'string' ? PERIOD_RE.exec(value) : null;
+  const [, y, mo, d, h] = m ?? [];
+  // O round trip pelo `Date` recusa mês 13, 30 de fevereiro, hora 24.
+  const iso = m ? new Date(Date.UTC(+(y ?? 0), +(mo ?? 0) - 1, +(d ?? 0), +(h ?? 0))) : null;
+  const valid =
+    iso !== null &&
+    !Number.isNaN(iso.getTime()) &&
+    iso.toISOString().slice(0, 13) === `${y}-${mo}-${d}T${h ?? '00'}` &&
+    (h === undefined || granularity === 'hour');
+  if (!valid) {
+    const format = granularity === 'hour' ? 'YYYY-MM-DD ou YYYY-MM-DDTHH' : 'YYYY-MM-DD';
+    throw new TypeError(`query: período "${String(value)}" fora do formato ${format}`);
+  }
+  if (granularity === 'day') return `${y}-${mo}-${d}`;
+  return `${y}-${mo}-${d}T${h ?? edge}`;
+}
+
+/** Percentil `q` pelos baldes não cumulativos em ordem, como o `histogram_quantile`. */
+export function quantile(
+  q: number,
+  buckets: readonly { readonly le: number; readonly count: number }[],
+): number {
+  const total = buckets.reduce((sum, b) => sum + b.count, 0);
+  if (total === 0) return 0;
+  const rank = q * total;
+  let below = 0;
+  for (const [i, b] of buckets.entries()) {
+    if (below + b.count < rank) {
+      below += b.count;
+      continue;
+    }
+    const lower = buckets[i - 1]?.le ?? 0;
+    // No `+Inf` não há limite para interpolar: vale o maior finito.
+    if (b.le === Number.POSITIVE_INFINITY) return lower;
+    return lower + (b.le - lower) * ((rank - below) / b.count);
+  }
+  return buckets.at(-2)?.le ?? 0;
+}
+
+// Soma os baldes na união dos limites declarados e gravados. Se os limites mudaram entre
+// períodos, é aproximação: a interpolação usa o limite anterior da união, não o do balde original.
+function histogram(
+  fields: ReadonlyMap<string, number>,
+  limits: readonly number[],
+): Omit<HistogramQueryRow, 'period' | 'labels'> {
+  const counts = new Map<number, number>(
+    [...limits, Number.POSITIVE_INFINITY].map((le) => [le, 0]),
+  );
+  for (const [field, value] of fields) {
+    if (!field.startsWith('le:')) continue;
+    const raw = field.slice(3);
+    const le = raw === '+Inf' ? Number.POSITIVE_INFINITY : Number(raw);
+    counts.set(le, (counts.get(le) ?? 0) + value);
+  }
+  const buckets = [...counts].sort(([a], [b]) => a - b).map(([le, count]) => ({ le, count }));
+  return {
+    type: 'histogram',
+    count: fields.get('count') ?? 0,
+    sum: fields.get('sum') ?? 0,
+    buckets,
+    p50: quantile(0.5, buckets),
+    p95: quantile(0.95, buckets),
+    p99: quantile(0.99, buckets),
+  };
+}
+
+// Uma linha em construção: soma dos campos e, no gauge, a idade do `last`.
+interface Group {
+  readonly period: string;
+  readonly labels: MetricLabels;
+  readonly fields: Map<string, number>;
+  lastAt: number;
+}
 
 /** `true` se o `Intl` conhece o fuso IANA. */
 export function isTimeZone(timeZone: string): boolean {
@@ -159,7 +254,9 @@ export function createHistory(options: HistoryOptions): History {
       // O core soma `by` ao `insert`, então ele vai com zero.
       await collection.increment(where, 'value', value, { insert: { ...doc, value: 0 } });
     } else if (field === 'last') {
-      if ((await collection.update(where, { value })) === 0) await collection.insert(doc);
+      const at = now();
+      if ((await collection.update(where, { value, at })) === 0)
+        await collection.insert({ ...doc, at });
     } else {
       const [stored] = await collection.find({ where, limit: 1 });
       if (stored)
@@ -231,7 +328,121 @@ export function createHistory(options: HistoryOptions): History {
     }
   }
 
-  function describe(descriptor: MetricDescriptor): void {
+  async function read(q: MetricQuery): Promise<QueryRow[]> {
+    const { name, granularity, where = {}, groupBy } = q;
+    const level = levels.find((l) => l.granularity === granularity);
+    if (!level)
+      throw new TypeError(`query: granularity "${String(granularity)}" não é hour nem day`);
+    const from = toPeriod(q.from, granularity, '00');
+    const to = toPeriod(q.to, granularity, '23');
+    if (from > to) throw new TypeError(`query: from "${q.from}" depois de to "${q.to}"`);
+    const at = now();
+    const days = granularity === 'hour' ? retention.hourDays : retention.dayDays;
+    if (from.slice(0, 10) < periods(at - days * DAY_MS).day) {
+      throw new TypeError(
+        `query: from "${q.from}" fora da retenção de ${days} dias em ${granularity}`,
+      );
+    }
+
+    const groups = new Map<string, Group>();
+    let type: Sample['type'] | undefined;
+    const add = (
+      period: string,
+      labels: MetricLabels,
+      field: string,
+      value: number,
+      sampledAt: number,
+    ): void => {
+      if (Object.entries(where).some(([k, v]) => labels[k] !== v)) return;
+      // Sem catálogo, o tipo sai dos campos: `value` no contador, `last`/`max` no gauge.
+      type ??=
+        field === 'value' ? 'counter' : field === 'last' || field === 'max' ? 'gauge' : 'histogram';
+      const picked = groupBy
+        ? Object.fromEntries(
+            groupBy.flatMap((k) => (labels[k] === undefined ? [] : [[k, labels[k]]])),
+          )
+        : labels;
+      const id = `${period}|${seriesKey(picked)}`;
+      let g = groups.get(id);
+      if (!g) {
+        g = { period, labels: picked, fields: new Map(), lastAt: Number.NEGATIVE_INFINITY };
+        groups.set(id, g);
+      }
+      const seen = g.fields.get(field);
+      if (field === 'max') g.fields.set(field, Math.max(seen ?? value, value));
+      else if (field !== 'last') g.fields.set(field, (seen ?? 0) + value);
+      else if (sampledAt >= g.lastAt) {
+        g.fields.set(field, value);
+        g.lastAt = sampledAt;
+      }
+    };
+
+    const stored = await level.collection.find({
+      where: { metric: name, period: { gte: from, lte: to } },
+    });
+    // Documento de antes do `at` conta como o mais antigo.
+    for (const d of stored)
+      add(d.period, d.labels, d.field, d.value, typeof d['at'] === 'number' ? d['at'] : 0);
+    const slot = granularity === 'hour' ? periods(at).hour : periods(at).day;
+    if (slot >= from && slot <= to) {
+      // O não gravado é mais novo que qualquer gravado: o pendente de um flush que falhou e o
+      // delta da registry, nessa ordem.
+      for (const p of level.pending.values()) {
+        if (p.metric !== name) continue;
+        for (const [field, value] of p.fields)
+          add(slot, p.labels, field, value, Number.POSITIVE_INFINITY);
+      }
+      for (const s of await options.peek()) {
+        if (s.metric !== name) continue;
+        for (const [field, value] of Object.entries(s.fields)) {
+          add(slot, s.labels, field, value, Number.POSITIVE_INFINITY);
+        }
+      }
+    }
+    if (groups.size === 0) return [];
+
+    const declared =
+      options.live().find((d) => d.name === name) ??
+      (await options.catalog.find({ where: { name }, limit: 1 }))[0];
+    type = declared?.type ?? type;
+    const limits = type === 'histogram' && declared ? (declared.buckets ?? DEFAULT_BUCKETS) : [];
+    const rows: QueryRow[] = [];
+    for (const g of groups.values()) {
+      const base = { period: g.period, labels: g.labels };
+      const f = (field: string): number => g.fields.get(field) ?? 0;
+      if (type === 'counter') rows.push({ ...base, type, value: f('value') });
+      else if (type === 'gauge') {
+        const last = g.fields.get('last') ?? f('max');
+        rows.push({ ...base, type, last, max: g.fields.get('max') ?? last });
+      } else rows.push({ ...base, ...histogram(g.fields, limits) });
+    }
+    return rows.sort((a, b) =>
+      a.period === b.period
+        ? seriesKey(a.labels) < seriesKey(b.labels)
+          ? -1
+          : 1
+        : a.period < b.period
+          ? -1
+          : 1,
+    );
+  }
+
+  async function catalog(): Promise<MetricDescriptor[]> {
+    const out = new Map<string, MetricDescriptor>();
+    const descriptor = (d: Omit<Declaration, 'owner'>, owner?: string): MetricDescriptor => ({
+      name: d.name,
+      type: d.type,
+      help: d.help,
+      labelNames: [...d.labelNames],
+      ...(d.type === 'histogram' ? { buckets: [...(d.buckets ?? DEFAULT_BUCKETS)] } : {}),
+      ...(owner === undefined ? { live: false } : { owner, live: true }),
+    });
+    for (const d of await options.catalog.find()) out.set(d.name, descriptor(d));
+    for (const d of options.live()) out.set(d.name, descriptor(d, d.owner));
+    return [...out.values()].sort((a, b) => (a.name < b.name ? -1 : 1));
+  }
+
+  function describe(descriptor: Declaration): void {
     const { name, ...rest } = descriptor;
     // Nunca rejeita: a falha vai para o log e a próxima declaração (ou troca de dono) regrava.
     void enqueue(async () => {
@@ -246,5 +457,18 @@ export function createHistory(options: HistoryOptions): History {
     });
   }
 
-  return { flush: () => enqueue(flush), describe };
+  // Na fila do flush: um flush nunca roda entre a leitura do gravado e a do delta, então o
+  // `query` não conta em dobro nem perde o que o flush move da registry para o storage.
+  const queued = <T>(task: () => Promise<T>): Promise<T> => {
+    let result: T;
+    return enqueue(async () => {
+      result = await task();
+    }).then(() => result);
+  };
+  return {
+    flush: () => enqueue(flush),
+    describe,
+    query: (q) => queued(() => read(q)),
+    catalog: () => queued(catalog),
+  };
 }

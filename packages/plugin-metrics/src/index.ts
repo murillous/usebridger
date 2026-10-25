@@ -9,24 +9,30 @@ import {
   type HistoryDoc,
   isTimeZone,
 } from '#history.ts';
-import { CORE_OWNER, createMetrics, type Sample } from '#service.ts';
+import { CORE_OWNER, createMetrics, type Declaration, type Sample } from '#service.ts';
 
 export type {
   Counter,
+  CounterQueryRow,
   CounterRow,
   Gauge,
+  GaugeQueryRow,
   GaugeRow,
   Granularity,
   Histogram,
+  HistogramQueryRow,
   HistogramRow,
   HistogramSpec,
   LabelValues,
+  MetricDescriptor,
   MetricLabels,
+  MetricQuery,
   MetricRow,
   MetricSpec,
   MetricsExporter,
   MetricsService,
   MetricsSnapshot,
+  QueryRow,
 } from '#types.ts';
 
 import * as LOG from './log-events.ts';
@@ -73,6 +79,8 @@ export const metrics: PluginDefinition = definePlugin({
       periods,
       retention: ctx.config.retention,
       collect: async () => [...(await runtime.collect()), ...sampled()],
+      peek: async () => [...(await runtime.peek()), ...sampled()],
+      live: () => [...runtime.declarations(), ...kernelGauges],
       exporters: () => exporters.list(),
     });
     const runtime = createMetrics({
@@ -84,7 +92,7 @@ export const metrics: PluginDefinition = definePlugin({
     // Serviço com escopo (ADR 0112): cada plugin recebe uma instância que grava o nome dele como dono.
     ctx.services.provideScoped(
       'metrics',
-      (caller) => runtime.scoped(caller),
+      (caller) => ({ ...runtime.scoped(caller), query: history.query, catalog: history.catalog }),
       (caller) => runtime.release(caller),
     );
     // Decisão explícita: o que o próprio plugin-metrics declara (kernel) é do `core`, não do
@@ -172,20 +180,21 @@ export const metrics: PluginDefinition = definePlugin({
 
     // Gauges do histórico amostrados no flush, fora do serviço: os ativos do dia e a fila de saída
     // (ADR 0113), amostrada no timer para a fila pausada ou ociosa também gerar amostra.
-    for (const [name, help] of [
-      ['bridger_active_users', ACTIVE_USERS],
-      ['bridger_active_groups', ACTIVE_GROUPS],
-      ['bridger_outbound_pending', OUTBOUND],
-    ] as const) {
-      history.describe({
-        name,
-        type: 'gauge',
-        help,
-        labelNames: [],
-        buckets: null,
-        owner: CORE_OWNER,
-      });
-    }
+    const kernelGauges: Declaration[] = (
+      [
+        ['bridger_active_users', ACTIVE_USERS],
+        ['bridger_active_groups', ACTIVE_GROUPS],
+        ['bridger_outbound_pending', OUTBOUND],
+      ] as const
+    ).map(([name, help]) => ({
+      name,
+      type: 'gauge',
+      help,
+      labelNames: [],
+      buckets: null,
+      owner: CORE_OWNER,
+    }));
+    for (const d of kernelGauges) history.describe(d);
     const gauge = (metric: string, value: number): Sample => ({
       metric,
       type: 'gauge',

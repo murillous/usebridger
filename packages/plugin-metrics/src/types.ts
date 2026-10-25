@@ -82,6 +82,69 @@ export interface MetricsSnapshot {
 /** Contribuição ao ponto `metrics.exporters`. Erro vai para o log e não derruba o flush. */
 export type MetricsExporter = (snapshot: MetricsSnapshot) => void | Promise<void>;
 
+/** Leitura do histórico. */
+export interface MetricQuery {
+  readonly name: string;
+  /**
+   * Primeiro período, inclusivo, no fuso da config: `YYYY-MM-DD`, ou `YYYY-MM-DDTHH` com
+   * `granularity: 'hour'` (o dia sozinho vale da hora 00 à 23).
+   */
+  readonly from: string;
+  /** Último período, inclusivo, no mesmo formato do `from`. */
+  readonly to: string;
+  readonly granularity: Granularity;
+  /** Só as séries com esses rótulos iguais. */
+  readonly where?: MetricLabels;
+  /** Soma as séries pelos rótulos pedidos; `[]` é o total; ausente, uma linha por série. */
+  readonly groupBy?: readonly string[];
+}
+
+interface QueryRowBase {
+  /** Período, no formato da granularidade pedida. */
+  readonly period: string;
+  /** Os rótulos da série, ou só os do `groupBy`. */
+  readonly labels: MetricLabels;
+}
+
+export interface CounterQueryRow extends QueryRowBase {
+  readonly type: 'counter';
+  readonly value: number;
+}
+
+export interface HistogramQueryRow extends QueryRowBase {
+  readonly type: 'histogram';
+  readonly count: number;
+  readonly sum: number;
+  /** Contagem por balde, não cumulativa, em ordem; o último `le` é `Infinity`. */
+  readonly buckets: readonly { readonly le: number; readonly count: number }[];
+  /** Percentis interpolados dentro do balde, como o `histogram_quantile` do Prometheus. */
+  readonly p50: number;
+  readonly p95: number;
+  readonly p99: number;
+}
+
+export interface GaugeQueryRow extends QueryRowBase {
+  readonly type: 'gauge';
+  /** O valor da série amostrada mais recentemente. */
+  readonly last: number;
+  readonly max: number;
+}
+
+export type QueryRow = CounterQueryRow | HistogramQueryRow | GaugeQueryRow;
+
+/** Uma métrica conhecida: declarada no processo (`live`) ou só no histórico. */
+export interface MetricDescriptor {
+  readonly name: string;
+  readonly type: 'counter' | 'histogram' | 'gauge';
+  readonly help: string;
+  readonly labelNames: readonly string[];
+  /** Só no histograma: os limites finitos em uso. */
+  readonly buckets?: readonly number[];
+  /** Plugin dono (`core` no kernel); ausente se a métrica só existe no histórico. */
+  readonly owner?: string;
+  readonly live: boolean;
+}
+
 /**
  * Declara métricas e devolve o handle de escrita. A mesma especificação devolve o mesmo handle
  * (também a outro plugin); especificação diferente para o mesmo nome lança `TypeError`.
@@ -91,6 +154,13 @@ export interface MetricsService {
   counter<const L extends string = never>(spec: MetricSpec<L>): Counter<L>;
   histogram<const L extends string = never>(spec: HistogramSpec<L>): Histogram<L>;
   gauge<const L extends string = never>(spec: MetricSpec<L>): Gauge<L>;
+  /**
+   * Agrega o histórico gravado com o delta ainda não gravado (no período corrente), sem contar
+   * em dobro com um flush concorrente. Intervalo inválido ou fora da retenção lança `TypeError`.
+   */
+  query(query: MetricQuery): Promise<QueryRow[]>;
+  /** Métricas declaradas no processo e as que só existem no histórico, por `name`. */
+  catalog(): Promise<MetricDescriptor[]>;
 }
 
 declare module '@usebridger/core' {
