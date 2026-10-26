@@ -102,6 +102,10 @@ export class FakeTransport implements Transport {
   }[] = [];
   readonly deletions: MessageKey[] = [];
   readonly typing: { readonly chatId: string; readonly kind: TypingKind }[] = [];
+  /** Telefones de cada `requestPairingCode`, na ordem (ADR 0129). */
+  readonly pairingRequests: string[] = [];
+  /** Quantas vezes o `logout()` foi chamado. */
+  logouts = 0;
   readonly participantUpdates: {
     readonly groupId: string;
     readonly participantIds: readonly string[];
@@ -159,6 +163,31 @@ export class FakeTransport implements Transport {
     if (!this.#connected) return;
     this.#connected = false;
     this.#emitter.emit('connection.status', { status: 'closed', reason: 'unknown', error: null });
+  }
+
+  /**
+   * Capability `pairing`. Devolve `FAKE-` mais os 4 últimos dígitos do telefone e emite o mesmo
+   * código em `connection.pairing-code`, como um transport real.
+   */
+  async requestPairingCode(phone: string): Promise<string> {
+    assertCapability(this, 'pairing');
+    this.pairingRequests.push(phone);
+    const code = `FAKE-${phone.slice(-4)}`;
+    this.#emitter.emit('connection.pairing-code', { code });
+    return code;
+  }
+
+  /** Capability `pairing`. Desvincula a sessão: emite `closed` com `logged-out`. */
+  async logout(): Promise<void> {
+    assertCapability(this, 'pairing');
+    this.logouts++;
+    this.#connected = false;
+    this.#self = null;
+    this.#emitter.emit('connection.status', {
+      status: 'closed',
+      reason: 'logged-out',
+      error: null,
+    });
   }
 
   on<E extends TransportEventName>(event: E, handler: TransportEventHandler<E>): Unsubscribe {
