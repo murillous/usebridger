@@ -13,6 +13,7 @@ import { createHttp, type SessionHttp, sessionHttp } from '#http/server.ts';
 import { createNoopLogger } from '#logger/logger.ts';
 import { createMemoryStorage } from '#storage/memory.ts';
 import { kernelStorage } from '#storage/namespace.ts';
+import { createAccounts } from './accounts.ts';
 import { SESSION_COOKIE } from './actor.ts';
 import { createApiGuard } from './guard.ts';
 import { createAuthStore } from './store.ts';
@@ -38,12 +39,19 @@ const OBO = 'x-bridger-on-behalf-of';
 
 async function start() {
   await loadApiLibs();
-  const store = createAuthStore(kernelStorage(createMemoryStorage(), 'auth'));
+  const storage = kernelStorage(createMemoryStorage(), 'auth');
+  const store = createAuthStore(storage);
   const recorded: InternalRecordInput[] = [];
   const audit = {
     record: (input: InternalRecordInput) => recorded.push(input),
   } as unknown as Audit;
-  const guard = createApiGuard({ store, audit: () => audit });
+  const sessionMaxAgeMs = 3_600_000;
+  const guard = createApiGuard({
+    store,
+    audit: () => audit,
+    sessionMaxAgeMs,
+    accounts: createAccounts({ storage, store, audit: () => audit, sessionMaxAgeMs }),
+  });
   const http = createHttp({ port: 0, hostname: '127.0.0.1' });
   const session = sessionHttp(http, 'default', createNoopLogger, undefined, {}, guard);
   session
@@ -89,10 +97,17 @@ describe('rotas /api/keys', () => {
     expect(JSON.stringify(await store.getApiKey(created.id))).not.toContain(created.secret);
 
     const list = (await (await call(admin.secret, '/keys')).json()) as {
-      keys: { name: string; lastUsedAt: string | null; revokedAt: string | null }[];
+      keys: {
+        name: string;
+        createdBy: string | null;
+        lastUsedAt: string | null;
+        revokedAt: string | null;
+      }[];
     };
     expect(JSON.stringify(list)).not.toContain(created.secret);
     expect(list.keys.map((k) => k.name)).toEqual(['admin', 'ci']);
+    // `createdBy` guarda quem criou; o admin do teste veio direto do store, sem criador.
+    expect(list.keys.map((k) => k.createdBy)).toEqual([null, admin.id]);
     expect(list.keys[1]).toMatchObject({ lastUsedAt: null, revokedAt: null });
     expect(recorded).toContainEqual(
       expect.objectContaining({
@@ -133,7 +148,7 @@ describe('rotas /api/keys', () => {
   });
 
   it('recusa permissão que o criador não tem (403) e a desconhecida (400)', async () => {
-    const { admin, create, store } = await start();
+    const { admin, create, store, recorded } = await start();
     const manager = await store.createApiKey(
       { name: 'gerente', permissions: ['keys.manage', 'logs.read'] },
       new Date(),
@@ -142,6 +157,13 @@ describe('rotas /api/keys', () => {
       (await create(secret, { name, permissions })).status;
     expect(await status(manager.secret, 'x', ['logs.read'])).toBe(201);
     expect(await status(manager.secret, 'x', ['secrets.write'])).toBe(403);
+    expect(recorded).toContainEqual(
+      expect.objectContaining({
+        action: 'kernel.auth.denied',
+        outcome: 'denied',
+        details: { reason: 'grant: secrets.write' },
+      }),
+    );
     expect(await status(admin.secret, 'x', ['inventada.x'])).toBe(400);
     expect(await status(admin.secret, ' ', ['logs.read'])).toBe(400);
   });
@@ -187,6 +209,13 @@ describe('X-Bridger-On-Behalf-Of', () => {
       onBehalfOf: 'user-42',
       subject: { kind: 'user', id: `key:${admin.id}`, name: 'admin', onBehalfOf: 'user-42' },
     });
+  });
+
+  it('/auth/me devolve onBehalfOf', async () => {
+    const { admin, call } = await start();
+    const res = await call(admin.secret, '/auth/me', { headers: { [OBO]: 'user-42' } });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ kind: 'key', onBehalfOf: 'user-42' });
   });
 
   it('valor vazio ou longo demais: 400; o escopo da chave continua valendo', async () => {

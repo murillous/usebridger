@@ -2,8 +2,8 @@
 // aqui nas tarefas seguintes do M7.
 
 import type { z } from 'zod';
-import type { ApiGuard } from '#auth/guard.ts';
-import { keyApiOperations } from '#auth/keys.ts';
+import { keyOperations } from '#auth/keys.ts';
+import { type AuthRoutesDeps, authOperations } from '#auth/routes.ts';
 import { apiLibs, loadApiLibs } from './libs.ts';
 import type { AnyApiOperation, ApiRoute } from './operation.ts';
 
@@ -23,7 +23,8 @@ function healthSchema(): z.ZodType {
 /** Precisa de `loadApiLibs()` antes. `states` lê o estado de cada sessão do servidor; a spec não precisa dele. */
 export function coreApiOperations(
   states: () => Record<string, string> = () => ({}),
-  guard?: ApiGuard,
+  /** Com a auth ligada (`api.auth`), monta as rotas `/auth` e `/users`. */
+  auth?: AuthRoutesDeps,
 ): readonly AnyApiOperation[] {
   return [
     {
@@ -40,20 +41,17 @@ export function coreApiOperations(
         return { status: ok ? 'ok' : 'degraded', sessions };
       },
     },
-    // Com a auth ligada (`guard`): rotas de chaves. Blocos das outras entregas da #223 entram aqui.
-    ...(guard === undefined ? [] : keyApiOperations(guard)),
+    ...(auth ? [...authOperations(auth), ...keyOperations(auth)] : []),
   ];
 }
 
-const SPEC_GUARD = {} as ApiGuard;
-
 /**
- * As rotas do core na sessão `default`, para a spec sem servidor (CLI, snapshot). A spec descreve a API
- * com a auth ligada (chaves incluídas); o guarda é de mentira, ninguém chama o handler.
+ * As rotas do core na sessão `default`, para a spec sem servidor (CLI, snapshot).
  */
 export async function coreApiRoutes(): Promise<readonly ApiRoute[]> {
   await loadApiLibs();
-  return coreApiOperations(undefined, SPEC_GUARD).map((operation) => ({
+  // A spec descreve as rotas de auth mesmo sem auth ligada: o contrato é o mesmo.
+  return [...coreApiOperations(), ...authOperations(), ...keyOperations()].map((operation) => ({
     path: `/api${operation.path}`,
     operation,
   }));

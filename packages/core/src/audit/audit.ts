@@ -352,7 +352,7 @@ export function createAudit(deps: AuditDeps): Audit {
       action,
       target: target && { type: target.type, id: target.id },
       outcome,
-      ip: subject?.ip,
+      ip: (plugin !== undefined ? undefined : (input as InternalRecordInput).ip) ?? subject?.ip,
       userAgent: subject?.userAgent,
       tenant: deps.tenants.current,
       session: deps.session,

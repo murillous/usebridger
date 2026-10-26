@@ -12,6 +12,26 @@ async function exec(argv: string[]) {
   return { code, out, err };
 }
 
+// A spec do core descreve a API completa com auth ligada (ADR 0127).
+const CORE_PATHS = [
+  '/api/health',
+  '/api/auth/login',
+  '/api/auth/logout',
+  '/api/auth/me',
+  '/api/auth/sessions',
+  '/api/auth/sessions/{id}',
+  '/api/auth/password',
+  '/api/auth/invites/accept',
+  '/api/users',
+  '/api/users/{id}',
+  '/api/users/{id}/disable',
+  '/api/users/{id}/enable',
+  '/api/users/{id}/sessions',
+  '/api/users/{id}/reset-password',
+  '/api/keys',
+  '/api/keys/{id}',
+];
+
 const PLUGIN_MODULE = `
 import { z } from 'zod';
 export const plugins = [{
@@ -32,8 +52,6 @@ export const plugins = [{
 async function tempDir() {
   return mkdtemp(join(tmpdir(), 'bridger-openapi-'));
 }
-
-const CORE_PATHS = ['/api/health', '/api/keys', '/api/keys/{id}'];
 
 describe('bridger openapi', () => {
   it('sem módulo escreve só a spec do core no stdout', async () => {

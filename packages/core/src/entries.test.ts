@@ -87,7 +87,6 @@ const entries: Record<string, { file: string; load: () => Promise<object> } & En
       'AlbumItem',
       'AnyApiOperation',
       'ApiActor',
-      'ApiGuard',
       'AuthRole',
       'ApiOperation',
       'ApiOptions',

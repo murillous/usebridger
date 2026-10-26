@@ -5,10 +5,9 @@ import type { z } from 'zod';
 import { apiLibs } from '#api/libs.ts';
 import type { AnyApiOperation } from '#api/operation.ts';
 import { ApiError } from '#api/problem.ts';
-import type { ApiGuard } from './guard.ts';
 import { CORE_PERMISSIONS } from './permissions.ts';
+import { type AuthRoutesDeps, need } from './routes.ts';
 import type { ApiKeyDoc } from './store.ts';
-import type { ApiActor } from './types.ts';
 
 const MAX_NAME = 100;
 
@@ -29,6 +28,7 @@ function keySchemas() {
     id: z.string(),
     name: z.string(),
     permissions: z.array(z.string()),
+    createdBy: z.string().nullable(),
     createdAt: z.string(),
     lastUsedAt: z.string().nullable(),
     revokedAt: z.string().nullable(),
@@ -58,21 +58,23 @@ function summary(id: string, key: ApiKeyDoc) {
     id,
     name: key.name,
     permissions: key.permissions,
+    createdBy: key.createdBy,
     createdAt: key.createdAt,
     lastUsedAt: key.lastUsedAt,
     revokedAt: key.revokedAt ?? null,
   };
 }
 
-function required(actor: ApiActor | undefined): ApiActor {
-  // Com a guarda montada toda rota não pública tem ator; isto só protege o tipo.
-  if (actor === undefined) throw new ApiError(401, 'autenticação necessária');
-  return actor;
-}
-
-/** Precisa de `loadApiLibs()` antes. */
-export function keyApiOperations(guard: ApiGuard): readonly AnyApiOperation[] {
+/**
+ * Operações de API keys. Sem `deps` só descrevem a spec (CLI, snapshot): o handler não roda.
+ * Precisa de `loadApiLibs()` antes.
+ */
+export function keyOperations(deps?: AuthRoutesDeps): readonly AnyApiOperation[] {
   const s = keySchemas();
+  const guard = (): AuthRoutesDeps => {
+    if (deps === undefined) throw new Error('auth: rotas só descritas, sem deps');
+    return deps;
+  };
   const tags = ['keys'];
   return [
     {
@@ -84,8 +86,8 @@ export function keyApiOperations(guard: ApiGuard): readonly AnyApiOperation[] {
       body: s.create,
       response: s.created,
       status: 201,
-      handler: async ({ body, actor }) => {
-        const who = required(actor);
+      handler: async ({ body, actor }, request) => {
+        const who = need(actor);
         const { name, permissions } = body as { name: string; permissions: string[] };
         const scope = [...new Set(permissions)];
         const unknown = scope.filter((p) => !(CORE_PERMISSIONS as readonly string[]).includes(p));
@@ -95,18 +97,27 @@ export function keyApiOperations(guard: ApiGuard): readonly AnyApiOperation[] {
         // Delegar o que não se tem seria escalar privilégio por uma chave.
         const missing = scope.filter((p) => !who.permissions.includes(p));
         if (missing.length > 0) {
+          guard().denied(
+            who,
+            'POST /keys',
+            'keys.manage',
+            request,
+            undefined,
+            `grant: ${missing.join(', ')}`,
+          );
           throw new ApiError(403, `você não pode conceder: ${missing.join(', ')}`);
         }
-        const { secret, id } = await guard.store.createApiKey(
-          { name, permissions: scope },
-          guard.now(),
+        const { keys } = guard();
+        const { secret, id } = await keys.store.createApiKey(
+          { name, permissions: scope, createdBy: who.id },
+          keys.now(),
         );
-        guard.audit().record({
+        keys.audit().record({
           action: 'kernel.key.created',
           target: { type: 'api-key', id },
           details: { name, permissions: scope },
         });
-        const key = await guard.store.getApiKey(id);
+        const key = await keys.store.getApiKey(id);
         if (key === undefined) throw new Error('api key sumiu logo após a criação');
         return { ...summary(id, key), secret };
       },
@@ -119,7 +130,7 @@ export function keyApiOperations(guard: ApiGuard): readonly AnyApiOperation[] {
       permission: 'keys.manage',
       response: s.list,
       handler: async () => ({
-        keys: (await guard.store.listApiKeys()).map(({ id, ...key }) => summary(id, key)),
+        keys: (await guard().keys.store.listApiKeys()).map(({ id, ...key }) => summary(id, key)),
       }),
     },
     {
@@ -132,13 +143,14 @@ export function keyApiOperations(guard: ApiGuard): readonly AnyApiOperation[] {
       response: s.revoked,
       handler: async ({ params }) => {
         const { id } = params as { id: string };
-        const key = await guard.store.getApiKey(id);
+        const { keys } = guard();
+        const key = await keys.store.getApiKey(id);
         if (key === undefined) throw new ApiError(404, 'chave não encontrada');
         // Revogar de novo não regrava a data nem gera outro evento.
         if (key.revokedAt !== undefined) return { id, revokedAt: key.revokedAt };
-        const now = guard.now();
-        await guard.store.revokeApiKey(id, now);
-        guard.audit().record({
+        const now = keys.now();
+        await keys.store.revokeApiKey(id, now);
+        keys.audit().record({
           action: 'kernel.key.revoked',
           target: { type: 'api-key', id },
           details: { name: key.name },

@@ -103,4 +103,6 @@ export interface AuditSubject {
 /** Entrada da gravação interna do core: o ator padrão é o do escopo, senão `system`. */
 export interface InternalRecordInput extends AuditRecordInput {
   readonly actor?: AuditActor;
+  /** Endereço de quem agiu quando não há titular no escopo (ex.: login que falhou). */
+  readonly ip?: string;
 }

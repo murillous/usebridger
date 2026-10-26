@@ -9,6 +9,8 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS'
 export interface HttpRequestInfo {
   /** Parâmetros do caminho (`/users/:id` → `{ id }`). */
   readonly params: Readonly<Record<string, string>>;
+  /** Endereço do par TCP (não confia em `X-Forwarded-For`); ausente fora do servidor Node. */
+  readonly ip?: string;
 }
 
 /**

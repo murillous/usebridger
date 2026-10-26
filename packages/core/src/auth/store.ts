@@ -31,6 +31,8 @@ export type ApiKeyDoc = {
   name: string;
   hash: string;
   permissions: string[];
+  /** Id do ator que criou (null em chave anterior a isso); a chave não depende dele depois (ADR 0127). */
+  createdBy: string | null;
   createdAt: string;
   lastUsedAt: string | null;
   revokedAt?: string;
@@ -59,7 +61,7 @@ export interface AuthStore {
 
   /** Devolve o segredo uma única vez; o storage guarda só o hash. */
   createApiKey(
-    input: { name: string; permissions: readonly string[] },
+    input: { name: string; permissions: readonly string[]; createdBy?: string },
     now: Date,
   ): Promise<{ secret: string; id: string }>;
   getApiKey(id: string): Promise<WithId<ApiKeyDoc> | undefined>;
@@ -127,12 +129,13 @@ export function createAuthStore(storage: PluginStorage): AuthStore {
     revokeUserSessions: (userId, now) =>
       sessions.update({ userId, revokedAt: null }, { revokedAt: now.toISOString() }),
 
-    createApiKey: async ({ name, permissions }, now) => {
+    createApiKey: async ({ name, permissions, createdBy }, now) => {
       const secret = generateSecret(API_KEY_PREFIX);
       const id = await keys.insert({
         name,
         hash: hashSecret(secret),
         permissions: [...permissions],
+        createdBy: createdBy ?? null,
         createdAt: now.toISOString(),
         lastUsedAt: null,
       });
