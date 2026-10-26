@@ -14,11 +14,14 @@ chaves e `X-Bridger-On-Behalf-Of` vêm nas seguintes.
   vira `x-permission` na spec. Papéis fixos: `owner` e `admin` com todas as do core, `viewer` só as
   `.read`. A regra "admin não gerencia owner" não é uma permissão: é `canManageRole(ator, alvo)`,
   que as rotas de usuário aplicam.
+- **Permissão inválida**: `permission` fora de `<área>.<ação>` lança `BotConfigError` ao registrar
+  a operação, em vez de virar 403 para todos.
 - **Rota pública** é `public: true`, nunca a ausência de `permission`. Com a auth ligada, operação
   sem `permission` exige apenas estar autenticado, então esquecer o campo não abre a rota.
   `/api/health` é `public`: serve de sonda de orquestrador e só expõe o estado das sessões.
-- **Auth opt-in** por `BotConfig.api.auth` (`sessionIdleMs`, `sessionMaxAgeMs`). Sem ela a API fica
-  aberta como na M7-3, para não quebrar quem já usa. O bootstrap (3ª entrega) é que torna a auth o
+- **Auth opt-in** por `BotConfig.api.auth` (`sessionIdleMs`, aplicado já na resolução do ator; `sessionMaxAgeMs`, aplicado na criação da
+  sessão, no login da 2ª entrega). Sem ela a API fica
+  aberta como na M7-3, para não quebrar quem já usa. O bootstrap (2ª entrega) é que torna a auth o
   padrão. Vale para as operações do core e para as de plugin (`ctx.http.api`); permissões
   declaradas pelo plugin ficam para o M7-8.
 - **Ator** `{ id, kind: 'user' | 'key', name, permissions, role?, onBehalfOf? }`, resolvido do
@@ -34,11 +37,12 @@ chaves e `X-Bridger-On-Behalf-Of` vêm nas seguintes.
   10 caracteres. **Segredo opaco** (token de sessão, API key): 256 bits aleatórios, guardado como
   sha256 hex; hash rápido basta porque a entropia já é alta.
 - **Storage** no namespace `auth` do kernel: `users` (índice `email`), `sessions` (`hash`, `userId`),
-  `apiKeys` (`hash`). Sessão e chave têm `revokedAt` opcional; datas em ISO 8601 UTC.
+  `apiKeys` (`hash`). A unicidade de e-mail é da camada de cima (convite/CRUD): o storage não tem
+  índice unique, então dois cadastros simultâneos do mesmo e-mail podem passar (corrida). Sessão e chave têm `revokedAt` opcional; datas em ISO 8601 UTC.
 
 ## Consequências
 
 - `lastSeenAt` é gravado a cada request autenticado por sessão; throttle fica para quando o
   storage reclamar.
-- Quem liga `api.auth` sem usuário nem chave recebe 401 em tudo, exceto `/health`, até a 3ª entrega.
+- Quem liga `api.auth` sem usuário nem chave recebe 401 em tudo, exceto `/health`, até o bootstrap (2ª entrega).
 - `plugin-dashboard` segue com o token próprio até migrar para a API do core.

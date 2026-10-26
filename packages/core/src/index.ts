@@ -25,7 +25,6 @@ export type {
   AuditVerifyResult,
   PluginAudit,
 } from '#audit/types.ts';
-export type { ApiGuard } from '#auth/guard.ts';
 export type { AuthRole } from '#auth/permissions.ts';
 export { CORE_PERMISSIONS, canManageRole, rolePermissions } from '#auth/permissions.ts';
 export type { ApiActor } from '#auth/types.ts';

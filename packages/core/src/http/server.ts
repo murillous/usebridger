@@ -110,6 +110,8 @@ export function createHttp(options: HttpOptions): HttpServer {
   return server;
 }
 
+const PERMISSION_FORMAT = /^[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*$/;
+
 /** Tabela de rotas de uma sessão nesse servidor; sem efeito até o `attach`. */
 export function sessionHttp(
   server: HttpServer,
@@ -222,6 +224,12 @@ export class SessionHttp {
       api(operation) {
         if (!METHODS.has(operation.method)) {
           throw new TypeError(`http: método não suportado: ${String(operation.method)}`);
+        }
+        // Falha no registro: permissão fora do formato nunca casaria, e a rota daria 403 para todos.
+        if (operation.permission !== undefined && !PERMISSION_FORMAT.test(operation.permission)) {
+          throw new BotConfigError(
+            `http: permissão "${operation.permission}" de ${operation.method} ${operation.path} fora do formato <área>.<ação> (ex.: "logs.read")`,
+          );
         }
         add(
           operation.method,
