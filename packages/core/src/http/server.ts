@@ -132,7 +132,21 @@ export function sessionHttp(
     throw new BotConfigError('http: passe o servidor criado por `createHttp({ port })`');
   }
   validateApiOptions(api);
+  // Cedo, no config: sem auth a API só pode escutar em loopback (ADR 0128).
+  if (guard === undefined && !isLoopbackHost(hub.hostname)) {
+    throw new BotConfigError(
+      `http: a API não pode escutar em ${hub.hostname ?? 'todas as interfaces'} sem autenticação; ` +
+        'configure `api.auth` ou use `createHttp({ hostname: "127.0.0.1" })` (loopback)',
+    );
+  }
   return new SessionHttp(hub, session, log, trail, api.cors?.origins, guard);
+}
+
+/** Loopback: 127.0.0.0/8, `::1` ou `localhost`. Hostname ausente escuta em todas as interfaces. */
+function isLoopbackHost(hostname: string | undefined): boolean {
+  if (hostname === undefined) return false;
+  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  return host === 'localhost' || host === '::1' || /^127(\.\d{1,3}){3}$/.test(host);
 }
 
 /** Prefixo das rotas da sessão: nenhum na `default`, para a URL não mudar quando entra outro bot. */
@@ -355,6 +369,10 @@ class HttpHub {
 
   constructor(options: HttpOptions) {
     this.#options = options;
+  }
+
+  get hostname(): string | undefined {
+    return this.#options.hostname;
   }
 
   get port(): number | undefined {

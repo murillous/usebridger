@@ -48,7 +48,11 @@ export async function pluginApiRoutes(
   plugins: readonly PluginDefinition[],
 ): Promise<readonly ApiRoute[]> {
   // Servidor só como tabela de rotas: sem `attach`/`listen`, nenhuma porta abre.
-  const session = sessionHttp(createHttp({ port: 0 }), 'default', createNoopLogger);
+  const session = sessionHttp(
+    createHttp({ port: 0, hostname: '127.0.0.1' }),
+    'default',
+    createNoopLogger,
+  );
   for (const plugin of plugins) {
     const http = session.scope(
       plugin.name,

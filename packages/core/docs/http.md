@@ -10,7 +10,7 @@ transport em `deps.http`. A porta só abre se houver rota. A API do core (`/api`
 ```ts
 import { createBot, createHttp } from '@usebridger/core';
 
-const http = createHttp({ port: 3000 });
+const http = createHttp({ port: 3000, hostname: '127.0.0.1' });
 const storage = sqlite({ path: 'data/bot.db' });
 
 const zap = createBot({ transport: baileys(), storage, http, plugins });

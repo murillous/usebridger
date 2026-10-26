@@ -12,7 +12,7 @@ const bot = createBot({
   transport: baileys({ pairing: 'qr' }),
   storage: sqlite({ path: 'data/bot.sqlite' }),
   // A rota do plugin precisa do servidor HTTP do processo.
-  http: createHttp({ port: 3000 }),
+  http: createHttp({ port: 3000, hostname: '127.0.0.1' }),
   plugins: [pareamento, ping, avisos],
   pluginConfig: {
     avisos: { chat: '120363000000000000@g.us', prefixo: '🚨' },
