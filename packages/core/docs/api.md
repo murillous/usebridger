@@ -231,7 +231,11 @@ aceites simultâneos criam um owner só (o outro leva 400).
 Convite: uso único, vale 48 h, guardado só como hash. Admin não gerencia owner, e o último owner
 ativo não pode ser desativado nem rebaixado (409); e-mail repetido também leva 409. Essas três
 regras (primeiro owner, e-mail único, último owner) rodam sob uma trava curta no storage
-(ADR 0128), então valem com requests e processos simultâneos. Cada ação grava na auditoria
+(ADR 0128), então valem com requests e processos simultâneos. A trava é um lease de 15 s: supõe
+relógios sincronizados entre os processos (NTP) e seção crítica bem abaixo disso. Quem não a
+pega em até 5 s recebe `409 conta em uso por outra operação; tente de novo`, e depois de uma
+queda no meio da operação as rotas de cadastro, bootstrap, papel e status podem dar esse 409 por
+até ~15 s, até o lease vencer sozinho. Cada ação grava na auditoria
 (`kernel.auth.login`, `kernel.auth.login.failed`, `kernel.auth.logout`,
 `kernel.auth.invite.created` e `.accepted`, `kernel.user.created`, `.updated`, `.disabled`,
 `.enabled`, `kernel.auth.sessions.revoked`, `kernel.auth.password.changed`). Recusas de papel (admin sobre owner) e de CSRF saem como

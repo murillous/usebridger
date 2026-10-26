@@ -492,6 +492,11 @@ export const auditConfigDiffFailed: LogEvent = defineLogEvent({
   level: 'warn',
   message: 'não foi possível ler a config para o diff da auditoria; o evento sai com changes: null',
 });
+export const authLockReleaseFailed: LogEvent = defineLogEvent({
+  name: 'auth.lock.release-failed',
+  level: 'warn',
+  message: 'não foi possível soltar a trava da auth; ela vence sozinha ao fim do lease',
+});
 export const auditUnkeyed: LogEvent = defineLogEvent({
   name: 'audit.unkeyed',
   level: 'warn',

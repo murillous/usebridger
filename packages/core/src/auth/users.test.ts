@@ -1,16 +1,18 @@
 // M7-4 parte 2 (ADR 0127): login, sessões, convites, usuários, rate limit, CSRF e recuperação.
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadApiLibs } from '#api/libs.ts';
 import type { ProblemBody } from '#api/problem.ts';
 import type { Audit } from '#audit/audit.ts';
 import { currentAuditSubject } from '#audit/scope.ts';
 import type { InternalRecordInput } from '#audit/types.ts';
+import { recordingLogger } from '#bot/harness.test-support.ts';
 import { run as ownerInvite } from '#cli/owner-invite.ts';
 import { createHttp, type SessionHttp, sessionHttp } from '#http/server.ts';
 import { createNoopLogger } from '#logger/logger.ts';
 import { createMemoryStorage } from '#storage/memory.ts';
 import { kernelStorage } from '#storage/namespace.ts';
+import type { PluginStorage } from '#storage/types.ts';
 import { type Accounts, createAccounts, INVITE_TTL_MS } from './accounts.ts';
 import { createActorResolver, SESSION_COOKIE } from './actor.ts';
 import { createApiGuard } from './guard.ts';
@@ -747,5 +749,66 @@ describe('corridas (ADR 0128)', () => {
     await expect(
       accounts.createUser(boss, { name: 'c', email: 'c@exemplo.com', role: 'viewer' }),
     ).resolves.toBeDefined();
+  });
+
+  it('trava vencida não bloqueia', async () => {
+    const { accounts, storage } = setup();
+    await storage
+      .collection<{ key: string; until: number }>('locks', { indexes: ['key'] })
+      .insert({ key: 'users', until: Date.now() - 1 });
+    await expect(
+      accounts.createUser(actor('owner'), { name: 'a', email: 'a@exemplo.com', role: 'viewer' }),
+    ).resolves.toBeDefined();
+  });
+
+  it('trava ocupada dá 409 depois de esperar', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] });
+    try {
+      const { accounts, storage } = setup();
+      await storage
+        .collection<{ key: string; until: number }>('locks', { indexes: ['key'] })
+        .insert({ key: 'users', until: Date.now() + 60_000 });
+      const pending = status(
+        accounts.createUser(actor('owner'), { name: 'a', email: 'a@exemplo.com', role: 'viewer' }),
+      );
+      await vi.advanceTimersByTimeAsync(5_100);
+      expect(await pending).toBe(409);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('falha ao soltar a trava não troca o resultado e é registrada', async () => {
+    const base = setup();
+    const lines: { fields?: Record<string, unknown> }[] = [];
+    const log = recordingLogger(lines as never);
+    const storage: PluginStorage = {
+      ...base.storage,
+      collection: ((name: string, opts?: never) => {
+        const c = base.storage.collection(name, opts);
+        if (name !== 'locks') return c;
+        return {
+          ...c,
+          update: async (t: never, p: { until?: number }) => {
+            if (p.until === 0) throw new Error('disco cheio');
+            return c.update(t, p);
+          },
+        };
+      }) as PluginStorage['collection'],
+    };
+    const accounts = createAccounts({
+      storage,
+      store: createAuthStore(storage),
+      log: () => log,
+      now: base.now,
+      sessionMaxAgeMs: HOUR,
+    });
+    const created = await accounts.createUser(actor('owner'), {
+      name: 'a',
+      email: 'a@exemplo.com',
+      role: 'viewer',
+    });
+    expect(created.user.email).toBe('a@exemplo.com');
+    expect(log.lines.some((l) => l.fields?.event === 'auth.lock.release-failed')).toBe(true);
   });
 });
