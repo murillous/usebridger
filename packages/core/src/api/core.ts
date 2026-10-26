@@ -48,12 +48,12 @@ export function coreApiOperations(
 const SPEC_GUARD = {} as ApiGuard;
 
 /**
- * As rotas do core na sessão `default`, para a spec sem servidor (CLI, snapshot). `withAuth` junta
- * as rotas que só existem com `api.auth` (chaves); o guarda é de mentira, ninguém chama o handler.
+ * As rotas do core na sessão `default`, para a spec sem servidor (CLI, snapshot). A spec descreve a API
+ * com a auth ligada (chaves incluídas); o guarda é de mentira, ninguém chama o handler.
  */
-export async function coreApiRoutes(withAuth = false): Promise<readonly ApiRoute[]> {
+export async function coreApiRoutes(): Promise<readonly ApiRoute[]> {
   await loadApiLibs();
-  return coreApiOperations(undefined, withAuth ? SPEC_GUARD : undefined).map((operation) => ({
+  return coreApiOperations(undefined, SPEC_GUARD).map((operation) => ({
     path: `/api${operation.path}`,
     operation,
   }));

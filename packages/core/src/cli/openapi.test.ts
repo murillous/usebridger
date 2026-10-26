@@ -33,6 +33,8 @@ async function tempDir() {
   return mkdtemp(join(tmpdir(), 'bridger-openapi-'));
 }
 
+const CORE_PATHS = ['/api/health', '/api/keys', '/api/keys/{id}'];
+
 describe('bridger openapi', () => {
   it('sem módulo escreve só a spec do core no stdout', async () => {
     const { code, out, err } = await exec([]);
@@ -40,7 +42,7 @@ describe('bridger openapi', () => {
     expect(err).toEqual([]);
     const doc = JSON.parse(out[0] ?? '');
     expect(doc.openapi).toBe('3.2.0');
-    expect(Object.keys(doc.paths)).toEqual(['/api/health']);
+    expect(Object.keys(doc.paths)).toEqual(CORE_PATHS);
   });
 
   it('--out escreve o arquivo e deixa o stdout vazio', async () => {
@@ -48,7 +50,7 @@ describe('bridger openapi', () => {
     const { code, out } = await exec(['--out', file]);
     expect(code).toBe(0);
     expect(out).toEqual([]);
-    expect(Object.keys(JSON.parse(await readFile(file, 'utf8')).paths)).toEqual(['/api/health']);
+    expect(Object.keys(JSON.parse(await readFile(file, 'utf8')).paths)).toEqual(CORE_PATHS);
   });
 
   it('com módulo inclui a rota do plugin sob /api/plugins/<nome>', async () => {
@@ -59,7 +61,7 @@ describe('bridger openapi', () => {
     expect(err).toEqual([]);
     expect(code).toBe(0);
     expect(Object.keys(JSON.parse(out[0] ?? '').paths)).toEqual([
-      '/api/health',
+      ...CORE_PATHS,
       '/api/plugins/demo/ping',
     ]);
   });

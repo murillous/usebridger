@@ -9,4 +9,4 @@ scrypt, sessões e API keys no storage, e `securitySchemes`/`x-permission` na sp
 
 API keys pela API (`POST/GET /api/keys`, `DELETE /api/keys/:id`, permissão `keys.manage`) e
 `X-Bridger-On-Behalf-Of` para chaves com `auth.on-behalf-of`, registrado no ator da auditoria
-(`AuditActor.onBehalfOf`) (#223 parte 3). A spec do CLI (`bridger openapi`) segue sem elas, que só existem com `api.auth`.
+(`AuditActor.onBehalfOf`) (#223 parte 3).

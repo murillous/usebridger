@@ -206,7 +206,7 @@ describe('X-Bridger-On-Behalf-Of', () => {
 
 describe('spec OpenAPI', () => {
   it('as rotas de chaves trazem x-permission', async () => {
-    const doc = (await createOpenApiDocument(await coreApiRoutes(true))) as unknown as {
+    const doc = (await createOpenApiDocument(await coreApiRoutes())) as unknown as {
       paths: Record<string, Record<string, Record<string, unknown>>>;
     };
     expect(doc.paths['/api/keys']?.['post']?.['x-permission']).toBe('keys.manage');
