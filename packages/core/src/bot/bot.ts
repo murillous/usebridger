@@ -1,6 +1,8 @@
 import { ActionRegistry } from '#actions/actions.ts';
 import { AUDIT_COLLECTION, AUDIT_INDEXES, createAudit } from '#audit/audit.ts';
 import { createAuditRetention, validateRetentionDays } from '#audit/retention.ts';
+import { createAccounts } from '#auth/accounts.ts';
+import { DEFAULT_MAX_AGE_MS } from '#auth/actor.ts';
 import { createApiGuard } from '#auth/guard.ts';
 import { createAuthStore } from '#auth/store.ts';
 import { createCommandCatalog } from '#commands/catalog.ts';
@@ -146,15 +148,25 @@ export function createBot(config: BotConfig): Bot {
   });
   const registry = createCommandRegistry({ onChange: () => catalog.changed() });
   // Autenticação da API (ADR 0127): só com `api.auth`. A auditoria nasce depois, daí o `() => audit`.
+  const apiAuth = config.api?.auth;
+  const authStorage = kernelStorage(scoped, 'auth');
+  const sessionMaxAgeMs = apiAuth?.sessionMaxAgeMs ?? DEFAULT_MAX_AGE_MS;
   const apiGuard =
-    config.api?.auth === undefined
+    apiAuth === undefined
       ? undefined
       : createApiGuard({
-          store: createAuthStore(kernelStorage(scoped, 'auth')),
+          store: createAuthStore(authStorage),
           audit: () => audit,
-          ...(config.api.auth.sessionIdleMs !== undefined && {
-            idleMs: config.api.auth.sessionIdleMs,
+          sessionMaxAgeMs,
+          ...(apiAuth.trustProxy !== undefined && { trustProxy: apiAuth.trustProxy }),
+          accounts: createAccounts({
+            storage: authStorage,
+            store: createAuthStore(authStorage),
+            audit: () => audit,
+            sessionMaxAgeMs,
+            ...(apiAuth.bootstrapToken !== undefined && { bootstrapToken: apiAuth.bootstrapToken }),
           }),
+          ...(apiAuth.sessionIdleMs !== undefined && { idleMs: apiAuth.sessionIdleMs }),
         });
   // Rotas da sessão no servidor do processo (ADR 0072); só entram nele no start().
   const http =

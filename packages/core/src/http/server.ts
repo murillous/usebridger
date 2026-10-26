@@ -10,7 +10,13 @@ import type { Context, Hono } from 'hono';
 import type { WSContext, WSEvents } from 'hono/ws';
 import type { WebSocketServer } from 'ws';
 import { coreApiOperations } from '#api/core.ts';
-import { type ApiOptions, corsMiddleware, validateApiOptions } from '#api/cors.ts';
+import {
+  type ApiOptions,
+  corsMiddleware,
+  csrfMiddleware,
+  socketAddress,
+  validateApiOptions,
+} from '#api/cors.ts';
 import { loadApiLibs } from '#api/libs.ts';
 import { createOpenApiDocument } from '#api/openapi.ts';
 import { type AnyApiOperation, operationHandler } from '#api/operation.ts';
@@ -249,7 +255,18 @@ export class SessionHttp {
   coreEntries(states: () => Record<string, string>): RouteEntry[] {
     const base = (): string => `${this.#prefix}/api`;
     const onError = (error: unknown): void => this.log().event(LOG.httpUnhandled, { err: error });
-    return coreApiOperations(states).map((api) => ({
+    const { accounts, sessionMaxAgeMs } = this.#guard ?? {};
+    const auth =
+      accounts && sessionMaxAgeMs !== undefined
+        ? {
+            accounts,
+            sessionMaxAgeMs,
+            corsOrigins: this.corsOrigins,
+            // Um cookie por sessão do servidor: bots em /sessions/<nome> não sobrescrevem o do outro.
+            cookiePath: `${this.#prefix}/api`,
+          }
+        : undefined;
+    return coreApiOperations(states, auth).map((api) => ({
       owner: 'core',
       method: api.method,
       path: normalizePath(api.path),
@@ -260,6 +277,15 @@ export class SessionHttp {
       trail: this.#trail,
       sockets: new Set(),
     }));
+  }
+
+  get guard(): ApiGuard | undefined {
+    return this.#guard;
+  }
+
+  /** CORS com auth: o cookie cruza origens e as escritas exigem o header anti-CSRF. */
+  get csrf(): boolean {
+    return this.corsOrigins !== undefined && this.#guard?.accounts !== undefined;
   }
 
   get prefix(): string {
@@ -462,6 +488,11 @@ class HttpHub {
         const cors = corsMiddleware(session.corsOrigins);
         app.use(`${session.prefix}/api`, cors);
         app.use(`${session.prefix}/api/*`, cors);
+        if (session.csrf) {
+          const csrf = csrfMiddleware(session.guard);
+          app.use(`${session.prefix}/api`, csrf);
+          app.use(`${session.prefix}/api/*`, csrf);
+        }
       }
       entries.push(...session.coreEntries(states), ...session.entries());
     }
@@ -515,7 +546,10 @@ class HttpHub {
 function mount(app: Hono, entry: RouteEntry, upgradeWebSocket: typeof UpgradeWebSocket): void {
   const base = entry.base();
   const path = entry.path === '/' ? base : base + entry.path;
-  const info = (c: Context): HttpRequestInfo => ({ params: c.req.param() });
+  const info = (c: Context): HttpRequestInfo => {
+    const ip = socketAddress(c.env);
+    return { params: c.req.param(), ...(ip !== undefined && { ip }) };
+  };
   const { target } = entry;
   if (typeof target === 'function') {
     const handler = target;

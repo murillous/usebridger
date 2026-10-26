@@ -12,6 +12,24 @@ async function exec(argv: string[]) {
   return { code, out, err };
 }
 
+// A spec do core descreve a API completa com auth ligada (ADR 0127).
+const CORE_PATHS = [
+  '/api/health',
+  '/api/auth/login',
+  '/api/auth/logout',
+  '/api/auth/me',
+  '/api/auth/sessions',
+  '/api/auth/sessions/{id}',
+  '/api/auth/password',
+  '/api/auth/invites/accept',
+  '/api/users',
+  '/api/users/{id}',
+  '/api/users/{id}/disable',
+  '/api/users/{id}/enable',
+  '/api/users/{id}/sessions',
+  '/api/users/{id}/reset-password',
+];
+
 const PLUGIN_MODULE = `
 import { z } from 'zod';
 export const plugins = [{
@@ -40,7 +58,7 @@ describe('bridger openapi', () => {
     expect(err).toEqual([]);
     const doc = JSON.parse(out[0] ?? '');
     expect(doc.openapi).toBe('3.2.0');
-    expect(Object.keys(doc.paths)).toEqual(['/api/health']);
+    expect(Object.keys(doc.paths)).toEqual(CORE_PATHS);
   });
 
   it('--out escreve o arquivo e deixa o stdout vazio', async () => {
@@ -48,7 +66,7 @@ describe('bridger openapi', () => {
     const { code, out } = await exec(['--out', file]);
     expect(code).toBe(0);
     expect(out).toEqual([]);
-    expect(Object.keys(JSON.parse(await readFile(file, 'utf8')).paths)).toEqual(['/api/health']);
+    expect(Object.keys(JSON.parse(await readFile(file, 'utf8')).paths)).toEqual(CORE_PATHS);
   });
 
   it('com módulo inclui a rota do plugin sob /api/plugins/<nome>', async () => {
@@ -59,7 +77,7 @@ describe('bridger openapi', () => {
     expect(err).toEqual([]);
     expect(code).toBe(0);
     expect(Object.keys(JSON.parse(out[0] ?? '').paths)).toEqual([
-      '/api/health',
+      ...CORE_PATHS,
       '/api/plugins/demo/ping',
     ]);
   });
