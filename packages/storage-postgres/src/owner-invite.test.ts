@@ -1,29 +1,58 @@
 import { randomUUID } from 'node:crypto';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { StoragePort } from '@usebridger/core/adapter';
 import pg from 'pg';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TEST_POSTGRES_URL } from './config/test-env.ts';
 import { postgres } from './index.ts';
 
-// `bridger owner-invite` roda com o bot no ar (M7-4, ADR 0128): dois clientes no mesmo banco, e a
-// CLI só grava documentos de auth com operações atômicas, sem a trava da sessão.
+// `bridger owner-invite` com o bot no ar (M7-4, ADR 0128): o `main` real da CLI roda neste
+// processo com o próprio cliente, e o "bot" é um segundo cliente no mesmo banco.
+const bridger = new URL('./cli/bridger.ts', import.meta.resolve('@usebridger/core')).href;
+const adapter = new URL('./index.ts', import.meta.url).href;
+
 describe.skipIf(TEST_POSTGRES_URL === undefined)('postgres: owner-invite com o bot no ar', () => {
   const connectionString = TEST_POSTGRES_URL as string;
   let schema: string;
+  let dir: string;
+  let module: string;
   const open: StoragePort[] = [];
 
-  async function connect(): Promise<StoragePort> {
-    const port = await postgres({ connectionString, schema });
-    open.push(port);
-    return port;
+  async function runCli() {
+    const { main } = (await import(bridger)) as {
+      main: (
+        argv: readonly string[],
+        io: { out: (text: string) => void; err: (text: string) => void },
+      ) => Promise<number>;
+    };
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await main(
+      ['owner-invite', module, '--email', 'dona@exemplo.com', '--name', 'Dona'],
+      {
+        out: (text) => out.push(text),
+        err: (text) => err.push(text),
+      },
+    );
+    return { code, out: out.join('\n'), err: err.join('\n') };
   }
 
   beforeEach(() => {
     schema = `t_${randomUUID().replaceAll('-', '')}`;
+    dir = mkdtempSync(join(tmpdir(), 'bridger-owner-invite-'));
+    module = join(dir, 'storage.ts');
+    writeFileSync(
+      module,
+      `import { postgres } from ${JSON.stringify(adapter)};\n` +
+        `export const storage = await postgres({ connectionString: ${JSON.stringify(connectionString)}, schema: ${JSON.stringify(schema)} });\n`,
+    );
   });
 
   afterEach(async () => {
     await Promise.all(open.splice(0).map((port) => port.close()));
+    rmSync(dir, { recursive: true, force: true });
     const client = new pg.Client({ connectionString });
     await client.connect();
     try {
@@ -33,31 +62,44 @@ describe.skipIf(TEST_POSTGRES_URL === undefined)('postgres: owner-invite com o b
     }
   });
 
-  it('a CLI grava usuário e convite enquanto o bot escreve, e cada lado vê o do outro', async () => {
-    const [bot, cli] = await Promise.all([connect(), connect()]);
-    const sessions = bot.forNamespace('$auth').collection('sessions');
-    const auth = cli.forNamespace('$auth');
-    const users = auth.collection<{ email: string; role: string }>('users');
-    const invites = auth.collection<{ userId: string; used: boolean }>('invites');
+  async function bot() {
+    const port = await postgres({ connectionString, schema });
+    open.push(port);
+    const auth = port.forNamespace('$auth');
+    return {
+      sessions: auth.collection<{ hash: string; userId: string }>('sessions', {
+        indexes: ['hash', 'userId'],
+      }),
+      users: auth.collection<{ role: string; status: string }>('users', { indexes: ['email'] }),
+      locks: auth.collection<{ key: string; until: number }>('locks', { indexes: ['key'] }),
+    };
+  }
 
-    const botWrites = (async () => {
-      for (let i = 0; i < 100; i++) await sessions.insert({ n: i });
+  it('a CLI cria o owner enquanto o bot grava, e nenhuma escrita se perde', async () => {
+    const { sessions, users } = await bot();
+    let stop = false;
+    let written = 0;
+    const writing = (async () => {
+      while (!stop) await sessions.insert({ hash: `h${written++}`, userId: 'u' });
     })();
-    for (let i = 0; i < 30; i++) {
-      const userId = await users.insert({ email: `dona${i}@exemplo.com`, role: 'owner' });
-      const inviteId = await invites.insert({ userId, used: false });
-      // Uso único: duas tentativas simultâneas de consumir, uma só vence.
-      const claims = await Promise.all([
-        invites.update({ id: inviteId, used: false }, { used: true }),
-        invites.update({ id: inviteId, used: false }, { used: true }),
-      ]);
-      expect(claims[0] + claims[1]).toBe(1);
-    }
-    await botWrites;
+    const { code, out, err } = await runCli();
+    stop = true;
+    await writing;
 
-    expect(await bot.forNamespace('$auth').collection('users').find({ limit: 1000 })).toHaveLength(
-      30,
-    );
-    expect(await auth.collection('sessions').find({ limit: 1000 })).toHaveLength(100);
-  });
+    expect(err).toBe('');
+    expect(code).toBe(0);
+    expect(out).toMatch(/bri_/);
+    expect(written).toBeGreaterThan(0);
+    expect(await sessions.find({ limit: 1_000_000 })).toHaveLength(written);
+    expect(await users.find({ where: { role: 'owner' } })).toHaveLength(1);
+  }, 60_000);
+
+  it('com a trava `users` presa pelo bot, a CLI sai com erro claro e não cria owner', async () => {
+    const { users, locks } = await bot();
+    await locks.insert({ key: 'users', until: Date.now() + 120_000 });
+    const { code, err } = await runCli();
+    expect(code).toBe(1);
+    expect(err).toMatch(/em uso por outra operação/);
+    expect(await users.find({ where: { role: 'owner' } })).toHaveLength(0);
+  }, 60_000);
 });

@@ -247,13 +247,12 @@ bridger owner-invite ./app.ts --email dona@exemplo.com --name "Dona"
 ```
 
 O módulo deve **só exportar `storage` (e `session`)**, sem efeito colateral: use um arquivo à parte
-(`storage.ts`) que o app também importa, nunca o que chama `createBot().start()` (abriria o transport
-e tomaria a trava da sessão). A CLI não toma a trava (`session:<nome>`), então roda com o bot no ar;
-é seguro porque ela só grava documentos de auth, cada operação atômica (o convite é de uso único por
-`update` condicional, ADR 0128). SQLite: são dois processos no mesmo arquivo, que o adapter abre em WAL
-com `busy_timeout` de 5 s, então leitura não espera escrita e uma escrita concorrente espera em vez de
-falhar com `SQLITE_BUSY`. Postgres: dois clientes no mesmo banco, com o isolamento do próprio Postgres.
-Os testes dos dois adapters cobrem o cenário.
+e tomaria a trava da sessão). A CLI não toma a trava da sessão (`session:<nome>`), então roda com o bot
+no ar. É seguro porque a checagem e a escrita do owner rodam sob as travas `users`/`owners` no storage
+(ADR 0128), que valem entre processos: se o bot segura uma delas, a CLI espera até 5 s e, passado isso,
+sai com erro claro (409) sem criar nada. SQLite: dois processos no mesmo arquivo em WAL com
+`busy_timeout` de 5 s, sem `SQLITE_BUSY`. Postgres: dois clientes no mesmo banco, com `UPDATE`
+condicional. O uso único do convite é do aceite no bot, não da CLI.
 
 Imprime o token uma vez; aceite-o em `/api/auth/invites/accept`. Cria o usuário ou promove o do
 e-mail a owner sem senha, e recusa se já existe owner ativo. A CLI não grava na auditoria (roda
