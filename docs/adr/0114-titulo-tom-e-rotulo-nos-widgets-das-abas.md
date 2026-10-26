@@ -1,6 +1,7 @@
 # ADR 0114 — Título, tom e rótulo de envio nos widgets das abas
 
-**Status:** Aceito (2026-10-18) · Complementa **D104**
+**Status:** Substituído por [ADR 0125](0125-api-http-do-core-e-dashboard-cliente.md)
+(2026-10-25) · Aceito (2026-10-18) · Complementa **D104**
 ([ADR 0104](0104-abas-do-dashboard-por-ponto-de-extensao.md)) e **D109**
 ([ADR 0109](0109-contrato-das-abas-do-dashboard-complemento.md))
 

@@ -3,7 +3,8 @@
 **Status:** Aceito (2026-10-09) · Detalha **D18** ([ADR 0018](0018-http-unico-hono.md)), **D33**
 ([ADR 0033](0033-transport-por-fabrica.md)) e o item de HTTP do **D71**
 ([ADR 0071](0071-varios-bots-e-escopo-compartilhado.md)) · Parte do kernel multiplataforma
-([ADR 0051](0051-plataformas-alvo-e-transport-web.md))
+([ADR 0051](0051-plataformas-alvo-e-transport-web.md)) · "Sem autenticação no kernel" substituído
+para a API do core pelo **D125** ([ADR 0125](0125-api-http-do-core-e-dashboard-cliente.md))
 
 ## Contexto
 

@@ -90,7 +90,7 @@ Débitos que **impedem** um kernel de verdade e que o Bridger deve corrigir por 
 | 9 | Sem contrato de eventos | Só `messages.upsert` chega aos plugins | Barramento tipado: mensagem, reação, edição, deleção, grupo (entrada/saída/update), conexão, QR |
 | 10 | Sem fila de saída | Só há rate limit de entrada; rajadas de envio arriscam ban | Fila de saída com taxa global/por chat, prioridade e retry |
 | 11 | Auth em arquivos | `useMultiFileAuthState` (não recomendado pelo Baileys em produção) | Auth state no `StoragePort` (SQLite/Postgres) |
-| 12 | Dashboard via stdout | Sinais `[LUMA_QR]`, `[LUMA_STATUS]` parseados de texto; processo filho | Dashboard vira plugin lendo o barramento de eventos via HTTP/WS do core |
+| 12 | Dashboard via stdout | Sinais `[LUMA_QR]`, `[LUMA_STATUS]` parseados de texto; processo filho | Dashboard vira plugin, cliente da API HTTP do core (D19, D125) |
 
 ---
 
@@ -147,6 +147,7 @@ bridger/
 | Config | Zod por plugin, precedência, secrets, reload de plugin |
 | Papéis | owner / group-admin / everyone; middleware de allow/blocklist |
 | HTTP | Hono sob demanda, `/health`, rotas namespaced |
+| API HTTP | OpenAPI em `/openapi.json`, auth (usuários, API keys, papéis), SSE, `api.resources` (D125) |
 | Logger | pino estruturado com `plugin` no contexto |
 
 **Plugins oficiais** (no `usebridger`, D103): metrics e dashboard.

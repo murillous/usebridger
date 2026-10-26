@@ -1,6 +1,7 @@
 # ADR 0109 — Complementos ao contrato das abas do dashboard
 
-**Status:** Aceito (2026-10-17) · Complementa **D104** ([ADR 0104](0104-abas-do-dashboard-por-ponto-de-extensao.md))
+**Status:** Substituído por [ADR 0125](0125-api-http-do-core-e-dashboard-cliente.md)
+(2026-10-25) · Aceito (2026-10-17) · Complementa **D104** ([ADR 0104](0104-abas-do-dashboard-por-ponto-de-extensao.md))
 
 ## Contexto
 

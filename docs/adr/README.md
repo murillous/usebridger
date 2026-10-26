@@ -38,7 +38,7 @@ Um ADR novo entra no fim da lista.
 - [0016](0016-service-registry.md) — Service registry entre plugins
 - [0017](0017-fila-de-saida-anti-ban.md) — Fila de saída anti-ban no core
 - [0018](0018-http-unico-hono.md) — Servidor HTTP único no core (Hono)
-- [0019](0019-dashboard-vira-plugin.md) — Dashboard vira plugin
+- [0019](0019-dashboard-vira-plugin.md) — Dashboard vira plugin (rotas e auth substituídas pelo 0125)
 - [0020](0020-kit-de-autor.md) — Kit de autor na v1
 - [0021](0021-papeis-no-core.md) — Papéis no core
 - [0022](0022-sem-i18n-objeto-messages.md) — Sem i18n formal na v1; objeto `messages`
@@ -91,7 +91,7 @@ Um ADR novo entra no fim da lista.
 - [0069](0069-kit-de-testes-multiplataforma.md) — Kit de testes multiplataforma: perfis de transport
 - [0070](0070-trava-de-sessao-entre-processos.md) — Trava de sessão entre processos
 - [0071](0071-varios-bots-e-escopo-compartilhado.md) — Vários bots num storage e escopo compartilhado opt-in
-- [0072](0072-http-do-core.md) — HTTP do core: um servidor por processo, rotas de plugin e de transport por sessão
+- [0072](0072-http-do-core.md) — HTTP do core: um servidor por processo, rotas de plugin e de transport por sessão (sem auth no kernel: substituído pelo 0125 na API)
 - [0073](0073-transport-web.md) — `@usebridger/transport-web`: chat por WebSocket com JWT, conversa por usuário e mídia por HTTP
 - [0074](0074-postgres-via-pg.md) — Postgres pelo `pg`, com schema próprio, documentos em `jsonb` e migrations do adapter
 - [0075](0075-acucar-no-manifesto-do-plugin.md) — Açúcar no manifesto do plugin: `commands`, `on` e o `run` que devolve texto
@@ -123,17 +123,17 @@ Um ADR novo entra no fim da lista.
 - [0101](0101-incremento-atomico-na-colecao.md) — Incremento atômico na coleção
 - [0102](0102-observadores-do-core.md) — Observadores do core e `ctx.stats()`
 - [0103](0103-plugins-oficiais-de-metricas-e-dashboard.md) — Plugins oficiais de métricas e dashboard
-- [0104](0104-abas-do-dashboard-por-ponto-de-extensao.md) — Abas do dashboard por ponto de extensão
+- [0104](0104-abas-do-dashboard-por-ponto-de-extensao.md) — Abas do dashboard por ponto de extensão (substituído pelo 0125)
 - [0105](0105-sinal-de-log-nos-observadores.md) — Sinal `log` nos observadores
 - [0106](0106-sessao-e-status-de-conexao-no-contexto.md) — Sessão e último status de conexão no contexto do plugin
 - [0107](0107-acesso-admin-para-plugins.md) — Acesso admin para plugins autorizados
 - [0108](0108-tabela-de-plugins-com-dependencias-servicos-e-contribuicoes.md) — Tabela de plugins com dependências, serviços e contribuições
-- [0109](0109-contrato-das-abas-do-dashboard-complemento.md) — Complementos ao contrato das abas do dashboard
+- [0109](0109-contrato-das-abas-do-dashboard-complemento.md) — Complementos ao contrato das abas do dashboard (substituído pelo 0125)
 - [0110](0110-duracao-do-setup-contagem-e-boot-no-report-de-plugins.md) — Duração do setup, contagem por ponto e horário do boot no report de plugins
 - [0111](0111-status-do-bot-no-contexto.md) — Status do bot no contexto: no ar desde, reconexões, expiração do QR e nome
 - [0112](0112-servico-com-escopo-por-chamador.md) — Serviço com escopo por quem chama
 - [0113](0113-gauge-e-fila-de-saida-nas-metricas.md) — Gauge no serviço `metrics` e a fila de saída
-- [0114](0114-titulo-tom-e-rotulo-nos-widgets-das-abas.md) — Título, tom e rótulo de envio nos widgets das abas
+- [0114](0114-titulo-tom-e-rotulo-nos-widgets-das-abas.md) — Título, tom e rótulo de envio nos widgets das abas (substituído pelo 0125)
 - [0115](0115-testes-de-componente-do-dashboard-no-happy-dom.md) — Testes de componente do dashboard no happy-dom
 - [0116](0116-giveup-da-reconexao-leva-ao-estado-failed.md) — O giveUp da reconexão leva o bot ao estado `failed`
 - [0117](0117-segredos-cifrados-editaveis-pelo-dashboard.md) — Segredos cifrados no storage, editáveis pelo dashboard
@@ -144,3 +144,4 @@ Um ADR novo entra no fim da lista.
 - [0122](0122-log-de-auditoria-no-kernel.md) — Log de auditoria no kernel (`ctx.audit`): ator do contexto, fila com back-pressure e cadeia de hash
 - [0123](0123-redacao-de-details-por-sufixo.md) — Redação dos `details` da auditoria por sufixo (`accessToken`, `clientSecret`)
 - [0124](0124-template-e-janela-de-atendimento.md) — Template e janela de atendimento (`send.template`, `ConversationWindowError`, `ctx.send.window`)
+- [0125](0125-api-http-do-core-e-dashboard-cliente.md) — API HTTP do core em OpenAPI, auth no core, SSE e dashboard como cliente (`api.resources`)
