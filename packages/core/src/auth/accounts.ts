@@ -5,6 +5,8 @@
 import { timingSafeEqual } from 'node:crypto';
 import { ApiError } from '#api/problem.ts';
 import type { Audit } from '#audit/audit.ts';
+import * as LOG from '#logger/events.ts';
+import type { Logger } from '#logger/types.ts';
 import type { PluginStorage, WithId } from '#storage/types.ts';
 import { type AuthRole, canManageRole } from './permissions.ts';
 import { createLoginLimiter, type LoginLimiter } from './rate-limit.ts';
@@ -46,6 +48,8 @@ export interface AccountsOptions {
   readonly store: AuthStore;
   /** Lido a cada uso: a auditoria nasce depois do servidor HTTP no `createBot`. */
   readonly audit?: () => Audit;
+  /** Lido a cada uso (o logger nasce no `start()`); sem ele, falha ao soltar a trava só some. */
+  readonly log?: () => Logger;
   readonly now?: () => Date;
   readonly sessionMaxAgeMs: number;
   /** Token que serve de convite do primeiro owner enquanto não há usuário. */
@@ -101,6 +105,7 @@ export function createAccounts(options: AccountsOptions) {
   // sob uma trava feita de duas primitivas atômicas: `increment` por 0 com `insert` cria o
   // documento uma vez só, e o `update` condicional (compare-and-set em `until`) diz quem levou.
   // Vale entre chamadas e entre processos que dividem o banco; a trava é solta mesmo se `fn` falhar.
+  // O lease supõe relógios sincronizados entre processos (NTP) e seção crítica bem abaixo de 15 s.
   async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
     await locks.increment({ key }, 'until', 0, { insert: { key, until: 0 } });
     const deadline = Date.now() + LOCK_WAIT_MS;
@@ -115,7 +120,12 @@ export function createAccounts(options: AccountsOptions) {
     try {
       return await fn();
     } finally {
-      await locks.update({ key, until: mine }, { until: 0 });
+      // Falha ao soltar não pode trocar o resultado (ou o erro) de `fn`: o lease limpa a trava.
+      try {
+        await locks.update({ key, until: mine }, { until: 0 });
+      } catch (err) {
+        options.log?.().event(LOG.authLockReleaseFailed, { key, err });
+      }
     }
   }
 

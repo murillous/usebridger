@@ -163,6 +163,7 @@ export function createBot(config: BotConfig): Bot {
             storage: authStorage,
             store: createAuthStore(authStorage),
             audit: () => audit,
+            log: getLog,
             sessionMaxAgeMs,
             ...(apiAuth.bootstrapToken !== undefined && { bootstrapToken: apiAuth.bootstrapToken }),
           }),
