@@ -2,6 +2,7 @@
 // aqui nas tarefas seguintes do M7.
 
 import type { z } from 'zod';
+import { type AuthRoutesDeps, authOperations } from '#auth/routes.ts';
 import { apiLibs, loadApiLibs } from './libs.ts';
 import type { AnyApiOperation, ApiRoute } from './operation.ts';
 
@@ -21,6 +22,8 @@ function healthSchema(): z.ZodType {
 /** Precisa de `loadApiLibs()` antes. `states` lê o estado de cada sessão do servidor; a spec não precisa dele. */
 export function coreApiOperations(
   states: () => Record<string, string> = () => ({}),
+  /** Com a auth ligada (`api.auth`), monta as rotas `/auth` e `/users`. */
+  auth?: AuthRoutesDeps,
 ): readonly AnyApiOperation[] {
   return [
     {
@@ -37,11 +40,16 @@ export function coreApiOperations(
         return { status: ok ? 'ok' : 'degraded', sessions };
       },
     },
+    ...(auth ? authOperations(auth) : []),
   ];
 }
 
 /** As rotas do core na sessão `default`, para a spec sem servidor (CLI, snapshot). */
 export async function coreApiRoutes(): Promise<readonly ApiRoute[]> {
   await loadApiLibs();
-  return coreApiOperations().map((operation) => ({ path: `/api${operation.path}`, operation }));
+  // A spec descreve as rotas de auth mesmo sem auth ligada: o contrato é o mesmo.
+  return [...coreApiOperations(), ...authOperations()].map((operation) => ({
+    path: `/api${operation.path}`,
+    operation,
+  }));
 }

@@ -42,3 +42,28 @@ chaves e `X-Bridger-On-Behalf-Of` vêm nas seguintes.
   storage reclamar.
 - Quem liga `api.auth` sem usuário nem chave recebe 401 em tudo, exceto `/health`, até a 3ª entrega.
 - `plugin-dashboard` segue com o token próprio até migrar para a API do core.
+
+## Complemento (parte 2): usuários, sessões e convites
+
+- **Login** `POST /api/auth/login` devolve o cookie `bridger_session` (`HttpOnly; Secure; Path=/`,
+  `Max-Age` = vida absoluta). A falha é sempre `401 e-mail ou senha inválidos` (e-mail inexistente,
+  senha errada, conta desativada ou sem senha) e a conta inexistente gasta o mesmo scrypt.
+- **Rate limit** por IP (do socket, sem confiar em `X-Forwarded-For`) e por e-mail digitado: 5 falhas
+  em 15 min bloqueiam por 30 s, dobrando a cada falha (teto 1 h); 429 com `Retry-After`. Em memória
+  do processo (`shortcut:` no código); sucesso zera só a chave do e-mail.
+- **CSRF**: com `api.cors.origins` e a auth ligada, o cookie de origem permitida sai
+  `SameSite=None; Secure` e toda escrita com `Origin` e sem `Authorization` exige `X-Bridger-CSRF`
+  (403 sem ele). Sem CORS, `SameSite=Strict` e nada a exigir.
+- **Convite**: token `bri_...` de 256 bits, só o hash no storage (`invites`), 48 h, uso único (a
+  marcação de uso decide a corrida), um vivo por usuário. Usuário novo nasce sem senha
+  (`passwordHash: ''`); o reset zera a senha, encerra as sessões e gera novo convite.
+- **Papéis**: as rotas de usuário aplicam `canManageRole` ao papel atual e ao novo; chave sem papel
+  conta como admin. O último owner ativo não é desativado nem rebaixado (409).
+- **Bootstrap**: `api.auth.bootstrapToken` (16+ caracteres) aceito em `/api/auth/invites/accept`
+  com `name` e `email`, só enquanto a coleção `users` está vazia. O core não tem token de dashboard
+  (o do `plugin-dashboard` é do plugin), então a config define o do core.
+- **Recuperação**: `bridger owner-invite <módulo> --email ...` abre o `storage` exportado pelo módulo
+  do app (o storage é do app, como os plugins no `bridger openapi`), recusa se há owner ativo e
+  imprime o convite. Não audita.
+- A spec offline (`coreApiRoutes()`) descreve as rotas de auth mesmo sem `api.auth`; no servidor só
+  montam com ela.

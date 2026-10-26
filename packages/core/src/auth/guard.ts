@@ -3,12 +3,16 @@
 import type { Audit } from '#audit/audit.ts';
 import { runAsAuditSubject } from '#audit/scope.ts';
 import type { AuditSubject } from '#audit/types.ts';
+import type { Accounts } from './accounts.ts';
 import { createActorResolver } from './actor.ts';
 import type { AuthStore } from './store.ts';
 import type { ApiActor } from './types.ts';
 
 /** O que `operationHandler` precisa para proteger uma rota. */
 export interface ApiGuard {
+  /** Usuários e sessões; as rotas `/auth` e `/users` só montam com ele. */
+  readonly accounts?: Accounts | undefined;
+  readonly sessionMaxAgeMs?: number | undefined;
   authenticate(request: Request): Promise<ApiActor | undefined>;
   /** Registra o 403 na auditoria, com o ator e a operação. */
   denied(actor: ApiActor, operation: string, permission: string, request: Request): void;
@@ -21,6 +25,8 @@ export interface ApiGuardOptions {
   /** Lido a cada uso: a auditoria nasce depois do servidor HTTP no `createBot`. */
   readonly audit: () => Audit;
   readonly idleMs?: number;
+  readonly accounts?: Accounts;
+  readonly sessionMaxAgeMs?: number;
   readonly now?: () => Date;
 }
 
@@ -39,6 +45,8 @@ function subject(actor: ApiActor, request: Request): AuditSubject {
 
 export function createApiGuard(options: ApiGuardOptions): ApiGuard {
   return {
+    accounts: options.accounts,
+    sessionMaxAgeMs: options.sessionMaxAgeMs,
     authenticate: createActorResolver(options),
     run: (actor, request, fn) => runAsAuditSubject(subject(actor, request), fn),
     denied: (actor, operation, permission, request) =>

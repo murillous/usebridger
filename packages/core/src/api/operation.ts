@@ -39,9 +39,11 @@ export interface ApiOperation<
       body: z.output<Body>;
       /** Ator autenticado; `undefined` em rota `public` ou com a auth desligada. */
       actor: ApiActor | undefined;
+      /** Endereço do par TCP, para rate limit; `undefined` fora do servidor Node. */
+      ip: string | undefined;
     },
     request: Request,
-  ) => z.input<Result> | Promise<z.input<Result>>;
+  ) => z.input<Result> | Response | Promise<z.input<Result> | Response>;
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: a tabela guarda operações de schemas diferentes
@@ -128,10 +130,12 @@ export function operationHandler(
       const body =
         operation.body === undefined ? undefined : await readBody(operation.body, request, issues);
       if (issues.length > 0) throw new ApiError(400, 'entrada inválida', issues);
-      const input = { params, query, body, actor };
+      const input = { params, query, body, actor, ip: info.ip };
       const result = await (actor !== undefined && guard !== undefined
         ? guard.run(actor, request, () => operation.handler(input, request))
         : operation.handler(input, request));
+      // `Response` pronta: a rota precisa de header próprio (ex.: `Set-Cookie` do login).
+      if (result instanceof Response) return result;
       return Response.json(result, { status: operation.status ?? 200 });
     } catch (error) {
       // 500 explícito é falha interna: vai para o log e não vaza o detail.

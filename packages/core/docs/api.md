@@ -147,8 +147,7 @@ exige changeset **`major`** do `@usebridger/core`; acrescentar é `minor`.
 
 ## Autenticação
 
-([ADR 0127](../../../docs/adr/0127-base-da-autenticacao-da-api.md); login, convites e chaves pela
-API chegam nas próximas entregas da #223.) Ligue com `api: { auth: {} }` no `BotConfig`
+([ADR 0127](../../../docs/adr/0127-base-da-autenticacao-da-api.md).) Ligue com `api: { auth: {} }` no `BotConfig`
 (`sessionIdleMs`, padrão 8 h, e `sessionMaxAgeMs`, padrão 7 d, são opcionais). Daí em diante toda
 operação, do core e de plugin, exige um ator:
 
@@ -170,3 +169,71 @@ ctx.http.api({
 Papéis: `owner` e `admin` têm todas as permissões do core; `viewer`, só as `.read`. O admin não
 gerencia owner (`canManageRole`). A spec traz `securitySchemes` (`cookieAuth`, `bearerAuth`),
 `security` por operação e `x-permission`.
+
+### Configurar a auth e o CORS
+
+```ts
+createBot({
+  http, storage,
+  api: {
+    auth: {
+      bootstrapToken: appEnv.BRIDGER_BOOTSTRAP_TOKEN, // 16+ caracteres; só para o primeiro acesso
+      sessionIdleMs: 8 * 3_600_000, // inatividade (padrão 8 h)
+      sessionMaxAgeMs: 7 * 24 * 3_600_000, // vida absoluta (padrão 7 d)
+    },
+    cors: { origins: ['https://painel.exemplo.com'] }, // só se o frontend está em outra origem
+  },
+});
+```
+
+- **Mesma origem**: o cookie sai `bridger_session=...; Path=/; HttpOnly; Secure; SameSite=Strict`.
+- **Origem cruzada** (`api.cors.origins`, request de origem da lista): o cookie sai
+  `SameSite=None; Secure`, e toda escrita (`POST`, `PUT`, `PATCH`, `DELETE`) vinda de um browser
+  (request com `Origin`) precisa do header `X-Bridger-CSRF` com qualquer valor não vazio; sem ele a
+  resposta é 403. O browser só deixa um site mandar o header se a origem passou no preflight do CORS.
+  O frontend faz `fetch(url, { credentials: 'include', headers: { 'X-Bridger-CSRF': '1' } })`.
+  Quem usa `Authorization: Bearer` não precisa do header.
+
+### Primeiro acesso (bootstrap)
+
+Sem nenhum usuário, o `bootstrapToken` vale como convite do primeiro `owner`:
+
+```bash
+curl -X POST $URL/api/auth/invites/accept -H 'content-type: application/json' \
+  -d '{"token":"<bootstrapToken>","name":"Dona","email":"dona@exemplo.com","password":"uma senha longa"}'
+```
+
+A resposta já traz o cookie da sessão. Com o primeiro usuário criado, o token não vale mais.
+
+### Rotas de login e usuários
+
+| Rota | Quem |
+| --- | --- |
+| `POST /api/auth/login` `{ email, password }` | público; 5 falhas em 15 min por IP e por e-mail bloqueiam (429 com `Retry-After`, espera dobrando a cada falha); a falha é sempre `401 e-mail ou senha inválidos` |
+| `POST /api/auth/logout`, `GET /api/auth/me` | autenticado |
+| `GET /api/auth/sessions`, `DELETE /api/auth/sessions/:id` | minhas sessões |
+| `POST /api/auth/password` `{ currentPassword, newPassword }` | encerra as outras sessões |
+| `POST /api/auth/invites/accept` `{ token, password }` | público; define a senha e entra |
+| `POST /api/users` `{ name, email, role }` | `users.manage`; devolve o convite **uma vez** |
+| `GET /api/users`, `GET` e `PATCH /api/users/:id` | `users.manage` |
+| `POST /api/users/:id/disable` e `/enable` | desativar encerra as sessões na hora; nunca se apaga |
+| `DELETE /api/users/:id/sessions`, `POST /api/users/:id/reset-password` | encerra sessões; novo convite e senha antiga invalidada |
+
+Convite: uso único, vale 48 h, guardado só como hash. Admin não gerencia owner, e o último owner
+ativo não pode ser desativado nem rebaixado (409). Cada ação grava na auditoria
+(`kernel.auth.login`, `kernel.auth.login.failed`, `kernel.auth.logout`,
+`kernel.auth.invite.created` e `.accepted`, `kernel.user.created`, `.updated`, `.disabled`,
+`.enabled`, `kernel.auth.sessions.revoked`, `kernel.auth.password.changed`).
+
+### Recuperação (sem owner ativo)
+
+Se não sobrou owner ativo, gere um convite pela CLI. O módulo do app exporta o mesmo `storage` do
+bot (e `session`, se não for a `default`):
+
+```bash
+bridger owner-invite ./app.ts --email dona@exemplo.com --name "Dona"
+```
+
+Imprime o token uma vez; aceite-o em `/api/auth/invites/accept`. Cria o usuário ou promove o do
+e-mail a owner sem senha, e recusa se já existe owner ativo. A CLI não grava na auditoria (roda
+fora do bot). O limite de login fica em memória do processo e zera ao reiniciar.

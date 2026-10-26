@@ -4,6 +4,7 @@
 
 import type { MiddlewareHandler } from 'hono';
 import { BotConfigError } from '#config/owners.ts';
+import { ApiError, problemResponse } from './problem.ts';
 
 export interface ApiOptions {
   readonly cors?: { readonly origins: readonly string[] };
@@ -13,6 +14,11 @@ export interface ApiOptions {
     readonly sessionIdleMs?: number;
     /** Vida absoluta da sessão; padrão 7 d. */
     readonly sessionMaxAgeMs?: number;
+    /**
+     * Convite do primeiro `owner` enquanto não há usuário (`POST /api/auth/invites/accept`); depois
+     * do primeiro usuário não vale mais. Mínimo de 16 caracteres; guarde em segredo.
+     */
+    readonly bootstrapToken?: string;
   };
 }
 
@@ -25,6 +31,10 @@ export function validateApiOptions(api: ApiOptions): void {
     ) {
       throw new BotConfigError(`api.auth.${key}: use um número de milissegundos maior que zero`);
     }
+  }
+  const boot: unknown = api.auth?.bootstrapToken;
+  if (boot !== undefined && !(typeof boot === 'string' && boot.length >= 16)) {
+    throw new BotConfigError('api.auth.bootstrapToken: use um texto de pelo menos 16 caracteres');
   }
   if (api.cors === undefined) return;
   const origins: unknown = api.cors.origins;
@@ -65,5 +75,27 @@ export function corsMiddleware(origins: readonly string[]): MiddlewareHandler {
     c.res.headers.set('access-control-allow-origin', origin);
     c.res.headers.set('access-control-allow-credentials', 'true');
     c.res.headers.append('vary', 'Origin');
+  };
+}
+
+/** Header que as escritas vindas de um browser (com `Origin`) precisam mandar contra CSRF. */
+export const CSRF_HEADER = 'x-bridger-csrf';
+
+/**
+ * Com cookie `SameSite=None` (origem cruzada) qualquer site consegue disparar a escrita; o header
+ * custom só passa pelo preflight das origens da allowlist. Bearer não usa cookie, então não precisa.
+ */
+export function csrfMiddleware(): MiddlewareHandler {
+  return async (c, next) => {
+    const write = !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method);
+    if (
+      write &&
+      c.req.header('origin') !== undefined &&
+      c.req.header('authorization') === undefined &&
+      !c.req.header(CSRF_HEADER)
+    ) {
+      return problemResponse(new ApiError(403, `escrita de browser exige o header ${CSRF_HEADER}`));
+    }
+    await next();
   };
 }

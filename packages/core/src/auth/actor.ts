@@ -16,7 +16,7 @@ export interface ActorResolverOptions {
   readonly now?: () => Date;
 }
 
-function cookie(request: Request, name: string): string | undefined {
+export function cookie(request: Request, name: string): string | undefined {
   for (const part of (request.headers.get('cookie') ?? '').split(';')) {
     const [key, ...value] = part.trim().split('=');
     if (key === name) return value.join('=');
