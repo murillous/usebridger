@@ -62,4 +62,44 @@ describe('escopo da API key limitado ao criador', () => {
     await store.revokeApiKey(key.id, new Date());
     expect(await as(child.secret)).toBeUndefined();
   });
+
+  it('criador-raiz desativado: a chave-filha dá 401', async () => {
+    const { store, userId, key, as } = await setup();
+    const child = await store.createApiKey(
+      { name: 'filha', permissions: ['logs.read'], createdBy: key.id },
+      new Date(),
+    );
+    await store.updateUser(userId, { status: 'disabled' });
+    expect(await as(child.secret)).toBeUndefined();
+  });
+
+  it('chave-pai ausente: 401', async () => {
+    const { store, as } = await setup();
+    const child = await store.createApiKey(
+      { name: 'filha', permissions: ['logs.read'], createdBy: 'brk-fantasma' },
+      new Date(),
+    );
+    expect(await as(child.secret)).toBeUndefined();
+  });
+
+  it('ciclo forjado no storage: não autentica e não estoura a pilha', async () => {
+    const { store, key } = await setup();
+    const b = await store.createApiKey(
+      { name: 'b', permissions: ['logs.read'], createdBy: key.id },
+      new Date(),
+    );
+    // Só edição direta do storage produz o ciclo: a chave original passa a ser filha da filha.
+    const doc = await store.getApiKey(key.id);
+    if (doc === undefined) throw new Error('sumiu');
+    (doc as { createdBy: string | null }).createdBy = b.id;
+    const patched = {
+      ...store,
+      getApiKey: async (id: string) => (id === key.id ? doc : store.getApiKey(id)),
+    };
+    const resolve = createActorResolver({ store: patched });
+    const res = await resolve(
+      new Request('http://x/', { headers: { authorization: `Bearer ${b.secret}` } }),
+    );
+    expect(res).toBeUndefined();
+  });
 });
