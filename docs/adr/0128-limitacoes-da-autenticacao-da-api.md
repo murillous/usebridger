@@ -12,33 +12,54 @@ não impede, a API key sobrevive ao criador e a API sobe aberta quando falta `ap
 ## Decisão
 
 - **Rate limit persistido**. As contagens de login, aceite de convite e troca de senha ficam no
-  storage do bot, namespace `auth`, coleção `rateLimits`, com `Collection.increment` atômico e
-  expiração por janela. Sobrevivem a restart e valem entre processos que dividem o banco.
+  storage do bot, namespace `auth`, coleção `rateLimits`, com `Collection.increment` atômico.
+  Sobrevivem a restart e valem entre processos que dividem o banco. A chave do documento é um hash
+  (sem e-mail nem IP em claro). Janela vencida é zerada ao tocar a chave, e uma varredura, no máximo
+  uma vez por janela por processo, apaga os documentos vencidos. O fallback em memória existe só
+  sem storage (testes); o bot sempre passa o storage.
 - **Corridas** (bootstrap criando dois owners, dois owners se desativando ou rebaixando e zerando os
-  owners ativos, e-mail duplicado concorrente): checagem e escrita passam a ser atômicas, com as
-  primitivas que o storage já tem (`increment` com `insert`, `update` condicional que devolve
-  quantos documentos casaram). Em termos gerais, quem quer a vaga reserva/trava um documento no
-  storage e só então escreve; quem perde a reserva recebe o erro de conflito. O mecanismo exato
-  fica no código.
+  owners ativos, e-mail duplicado concorrente): o storage não tem transação entre documentos nem
+  índice unique, então as operações tomam uma trava por documento na coleção `auth.locks`:
+  `users` (bootstrap, createUser, recoverOwner) e `owners` (desativar e rebaixar).
+  - `increment` com `insert` cria o documento da trava uma única vez; a tomada é um CAS por
+    `update` condicional em `until`, com lease de 15 s que vence sozinho.
+  - Espera de até 5 s; trava ocupada devolve 409 "conta em uso por outra operação".
+  - Dentro da trava a regra é revalidada: e-mail repetido e último owner dão 409, e o perdedor do
+    bootstrap leva 400 (o token já não vale).
+  - Falha ao soltar a trava vai para o log (`auth.lock.release-failed`) sem trocar o resultado.
 - **Chaves órfãs**. A permissão efetiva de uma API key é o **escopo da chave ∩ as permissões
-  atuais do criador** (`createdBy`). Criador desativado ou inexistente: a chave não autentica
-  (401). Reativar ou repromover o criador restaura a chave, sem recriá-la. Substitui "A chave
-  sobrevive ao rebaixamento ou desativação do criador".
-- **Auth padrão**. Sem `api.auth`, a API só sobe se o `hostname` do servidor HTTP for loopback
-  (`127.0.0.1`, `::1`, `localhost`). Fora disso o start do bot falha com erro claro. Substitui
-  "Auth opt-in ... Sem ela a API fica aberta".
-- **`bridger owner-invite` com o bot no ar** é permitido. A CLI só grava documentos de auth com
-  operações atômicas, e SQLite (WAL) e Postgres suportam dois processos no mesmo banco. Testes com
-  dois handles no mesmo banco provam.
+  atuais do criador** (`createdBy`). Rebaixar o criador encolhe a chave (403 na operação);
+  desativá-lo dá 401; reativar ou repromover restaura, sem recriar a chave.
+  - `createdBy: null` (chave criada direto pelo `AuthStore`, sem passar pela API) vale pelo escopo
+    próprio.
+  - Chave criada por chave segue a cadeia: interseção com o efetivo do pai; pai revogado ou ausente
+    dá 401; profundidade máxima 16.
+  - A listagem mostra o escopo gravado; o `/auth/me` mostra o efetivo.
+  - Substitui "A chave sobrevive ao rebaixamento ou desativação do criador".
+- **Auth padrão**. Sem `api.auth`, a API só sobe se o `hostname` do servidor HTTP for loopback.
+  A checagem roda no `createBot`, antes do start, e lança `BotConfigError` com mensagem clara.
+  Loopback é 127.0.0.0/8, `::1` (inclusive formas equivalentes como `::ffff:127.0.0.1`) e
+  `localhost` em qualquer caixa, via `BlockList`/`isIP` do `node:net`. Vale para qualquer servidor
+  HTTP aberto, porque a API do core sempre vai junto: quem usa o webhook do transport-web fora de
+  loopback precisa de `api.auth` ou de proxy reverso. Substitui "Auth opt-in ... Sem ela a API fica
+  aberta".
+- **`bridger owner-invite` com o bot no ar** é permitido. É seguro porque o `recoverOwner` da CLI
+  toma as mesmas travas `users`/`owners` no storage que o bot, válidas entre processos; a
+  atomicidade de cada operação isolada não bastaria. Testes: no SQLite, a CLI real roda em processo
+  filho enquanto o bot grava (WAL + `busy_timeout`); no Postgres, dois clientes, e o caso só roda
+  com `BRIDGER_TEST_POSTGRES_URL` configurado.
 
 ## Consequências
 
 - **Quebra** quem expunha a API aberta (hostname não loopback sem `api.auth`): precisa configurar
-  `api.auth` ou voltar para loopback. Pede changeset adequado no `@usebridger/core`.
-- O rate limit passa a custar escrita no storage a cada tentativa, em troca de limite que não zera
-  no restart.
+  `api.auth`, usar proxy reverso ou voltar para loopback. Changeset `minor` no `@usebridger/core`
+  (0.x).
+- O rate limit custa escrita no storage a cada tentativa. Aceito: entre processos, no pior caso uma
+  falha se perde.
+- O lease supõe relógios sincronizados (NTP) e seção crítica bem abaixo de 15 s, sem fencing token.
+  Travar custa escritas extras, e depois de uma queda essas rotas podem dar 409 por até ~15 s.
 - A chave de um criador desativado para de funcionar sem ser apagada: o efeito é reversível, mas
-  quem audita a listagem de chaves precisa lembrar que "ativa" depende do criador.
+  "ativa" na listagem depende do criador (por isso o `/auth/me` mostra o efetivo).
 - Os `shortcut:` correspondentes saem do código e a doc do COMO acompanha.
 
 ## Alternativas descartadas

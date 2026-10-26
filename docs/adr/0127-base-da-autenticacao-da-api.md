@@ -53,9 +53,9 @@ chaves e `X-Bridger-On-Behalf-Of` vêm nas seguintes.
 - **Login** `POST /api/auth/login` devolve o cookie `bridger_session` (`HttpOnly; Secure; Path=/`,
   `Max-Age` = vida absoluta). A falha é sempre `401 e-mail ou senha inválidos` (e-mail inexistente,
   senha errada, conta desativada ou sem senha) e a conta inexistente gasta o mesmo scrypt.
-- **Rate limit** (persistência substituída pelo [ADR 0128](0128-limitacoes-da-autenticacao-da-api.md)) por IP (do socket, sem confiar em `X-Forwarded-For`) e por e-mail digitado: 5 falhas
+- **Rate limit** por IP (do socket, sem confiar em `X-Forwarded-For`) e por e-mail digitado: 5 falhas
   em 15 min bloqueiam por 30 s, dobrando a cada falha (teto 1 h); 429 com `Retry-After`. Em memória
-  do processo (`shortcut:` no código); sucesso zera só a chave do e-mail.
+  do processo (substituído pelo [ADR 0128](0128-limitacoes-da-autenticacao-da-api.md); `shortcut:` no código); sucesso zera só a chave do e-mail.
 - **CSRF**: com `api.cors.origins` e a auth ligada, o cookie de origem permitida sai
   `SameSite=None; Secure` e toda escrita com `Origin` e sem `Authorization` exige `X-Bridger-CSRF`
   (403 sem ele). Sem CORS, `SameSite=Strict` e nada a exigir.
