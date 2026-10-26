@@ -1,6 +1,8 @@
 // Contrato do HTTP do core (ADR 0018, 0072): Request/Response da Web API, sem tipo do Hono, que
 // fica como detalhe interno do servidor.
 
+import type { AnyApiOperation } from '#api/operation.ts';
+
 /** Métodos aceitos numa rota. `HEAD` sai do `GET`. */
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS';
 
@@ -56,6 +58,16 @@ export interface HttpRoutes {
   route(method: HttpMethod, path: string, handler: HttpHandler): void;
   /** WebSocket em `basePath + path`; ocupa o `GET` desse caminho. */
   ws(path: string, accept: HttpSocketAccept): void;
+}
+
+/** `ctx.http` do plugin: as rotas e mais as operações da API. */
+export interface PluginHttpRoutes extends HttpRoutes {
+  /**
+   * Operação da API (ADR 0125), em `/api` + o segmento do dono (`/plugins/<nome>`) + `operation.path`.
+   * Valida a entrada com os schemas Zod, responde erro em problem+json e entra na spec
+   * `GET /openapi.json`. Mesmo método e caminho duas vezes lança `HttpRouteConflictError`.
+   */
+  api(operation: AnyApiOperation): void;
 }
 
 export interface HttpOptions {

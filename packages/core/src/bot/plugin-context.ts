@@ -37,7 +37,7 @@ import type { EventBus } from '#events/bus.ts';
 import type { BotEventName, EventSubscriber, PluginErrorEvent } from '#events/types.ts';
 import type { Groups } from '#groups/groups.ts';
 import type { SessionHttp } from '#http/server.ts';
-import type { HttpRoutes } from '#http/types.ts';
+import type { PluginHttpRoutes } from '#http/types.ts';
 import * as LOG from '#logger/events.ts';
 import type { Pseudonym } from '#logger/pseudonym.ts';
 import { createRedactor } from '#logger/redact.ts';
@@ -537,7 +537,7 @@ function pluginHttp(
   name: string,
   deps: PluginContextDeps,
   guard: (what: string) => void,
-): HttpRoutes {
+): PluginHttpRoutes {
   if (deps.http === undefined) {
     const missing = (): never => {
       throw new BotConfigError(
@@ -550,6 +550,7 @@ function pluginHttp(
       },
       route: missing,
       ws: missing,
+      api: missing,
     };
   }
   const routes = deps.http.scope(
@@ -569,6 +570,10 @@ function pluginHttp(
     ws(path, accept) {
       guard('http.ws');
       routes.ws(path, accept);
+    },
+    api(operation) {
+      guard('http.api');
+      routes.api(operation);
     },
   };
 }

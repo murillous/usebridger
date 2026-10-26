@@ -4,6 +4,11 @@
 // `entries.test.ts`: export novo é decisão explícita.
 
 export type { CommandAction, MessageAction, StepAction } from '#actions/actions.ts';
+export { coreApiRoutes } from '#api/core.ts';
+export type { ApiOptions } from '#api/cors.ts';
+export { createOpenApiDocument } from '#api/openapi.ts';
+export type { AnyApiOperation, ApiOperation, ApiRoute } from '#api/operation.ts';
+export { ApiError } from '#api/problem.ts';
 export {
   AuditPermissionError,
   type VerifyAuditOptions,
@@ -118,6 +123,7 @@ export type {
   HttpSocket,
   HttpSocketAccept,
   HttpSocketHandlers,
+  PluginHttpRoutes,
 } from '#http/types.ts';
 export { defineLogEvent } from '#logger/define-event.ts';
 export { createLogger, type LogDestination, type LoggerOptions } from '#logger/logger.ts';
