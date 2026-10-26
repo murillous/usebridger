@@ -2,6 +2,8 @@
 // vira rota HTTP (validação + problem+json) e entrada da spec OpenAPI.
 
 import type { z } from 'zod';
+import type { ApiGuard } from '#auth/guard.ts';
+import type { ApiActor } from '#auth/types.ts';
 import type { HttpHandler, HttpMethod } from '#http/types.ts';
 import { ApiError, type ProblemIssue, problemResponse } from './problem.ts';
 
@@ -23,8 +25,21 @@ export interface ApiOperation<
   readonly response: Result;
   /** Status de sucesso. Padrão: 200. */
   readonly status?: 200 | 201;
+  /**
+   * Permissão `<área>.<ação>` exigida do ator. Com a auth ligada (`api.auth`), sem ela basta estar
+   * autenticado; sem `public`, a rota nunca fica aberta por esquecimento (ADR 0127).
+   */
+  readonly permission?: string;
+  /** Rota sem autenticação (ex.: `/health`). Exclui `permission`. */
+  readonly public?: true;
   readonly handler: (
-    input: { params: z.output<Params>; query: z.output<Query>; body: z.output<Body> },
+    input: {
+      params: z.output<Params>;
+      query: z.output<Query>;
+      body: z.output<Body>;
+      /** Ator autenticado; `undefined` em rota `public` ou com a auth desligada. */
+      actor: ApiActor | undefined;
+    },
     request: Request,
   ) => z.input<Result> | Promise<z.input<Result>>;
 }
@@ -93,16 +108,30 @@ async function readBody(
 export function operationHandler(
   operation: AnyApiOperation,
   onError: (error: unknown) => void,
+  guard?: ApiGuard,
 ): HttpHandler {
   return async (request, info) => {
     try {
+      let actor: ApiActor | undefined;
+      if (guard !== undefined && operation.public !== true) {
+        actor = await guard.authenticate(request);
+        if (actor === undefined) throw new ApiError(401, 'autenticação necessária');
+        const { permission } = operation;
+        if (permission !== undefined && !actor.permissions.includes(permission)) {
+          guard.denied(actor, `${operation.method} ${operation.path}`, permission, request);
+          throw new ApiError(403, `permissão necessária: ${permission}`);
+        }
+      }
       const issues: ProblemIssue[] = [];
       const params = check('path', operation.params, info.params, issues);
       const query = check('query', operation.query, queryObject(request), issues);
       const body =
         operation.body === undefined ? undefined : await readBody(operation.body, request, issues);
       if (issues.length > 0) throw new ApiError(400, 'entrada inválida', issues);
-      const result = await operation.handler({ params, query, body }, request);
+      const input = { params, query, body, actor };
+      const result = await (actor !== undefined && guard !== undefined
+        ? guard.run(actor, request, () => operation.handler(input, request))
+        : operation.handler(input, request));
       return Response.json(result, { status: operation.status ?? 200 });
     } catch (error) {
       // 500 explícito é falha interna: vai para o log e não vaza o detail.

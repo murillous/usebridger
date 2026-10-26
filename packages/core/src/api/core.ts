@@ -28,6 +28,8 @@ export function coreApiOperations(
       path: '/health',
       summary: 'Estado das sessões',
       tags: ['core'],
+      // Sonda de orquestrador e load balancer não leva credencial; só expõe o estado das sessões.
+      public: true,
       response: healthSchema(),
       handler: () => {
         const sessions = states();

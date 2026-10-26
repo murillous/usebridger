@@ -146,3 +146,4 @@ Um ADR novo entra no fim da lista.
 - [0124](0124-template-e-janela-de-atendimento.md) — Template e janela de atendimento (`send.template`, `ConversationWindowError`, `ctx.send.window`)
 - [0125](0125-api-http-do-core-e-dashboard-cliente.md) — API HTTP do core em OpenAPI, auth no core, SSE e dashboard como cliente (`api.resources`)
 - [0126](0126-rotas-da-api-de-plugin-sob-api-plugins.md) — Operações de plugin na API ficam em `/api/plugins/<nome>`; spec do core em snapshot de arquivo
+- [0127](0127-base-da-autenticacao-da-api.md) — Base da autenticação da API: permissões `<área>.<ação>`, papéis fixos, scrypt, sessão e guarda por operação

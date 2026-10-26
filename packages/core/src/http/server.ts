@@ -15,6 +15,7 @@ import { loadApiLibs } from '#api/libs.ts';
 import { createOpenApiDocument } from '#api/openapi.ts';
 import { type AnyApiOperation, operationHandler } from '#api/operation.ts';
 import { ApiError, problemResponse } from '#api/problem.ts';
+import type { ApiGuard } from '#auth/guard.ts';
 import { BotConfigError } from '#config/owners.ts';
 import * as LOG from '#logger/events.ts';
 import { NO_TRAIL, type Trail } from '#logger/trail.ts';
@@ -109,6 +110,8 @@ export function createHttp(options: HttpOptions): HttpServer {
   return server;
 }
 
+const PERMISSION_FORMAT = /^[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*$/;
+
 /** Tabela de rotas de uma sessão nesse servidor; sem efeito até o `attach`. */
 export function sessionHttp(
   server: HttpServer,
@@ -116,13 +119,14 @@ export function sessionHttp(
   log: () => Logger,
   trail: Trail = NO_TRAIL,
   api: ApiOptions = {},
+  guard?: ApiGuard,
 ): SessionHttp {
   const hub = hubs.get(server);
   if (hub === undefined) {
     throw new BotConfigError('http: passe o servidor criado por `createHttp({ port })`');
   }
   validateApiOptions(api);
-  return new SessionHttp(hub, session, log, trail, api.cors?.origins);
+  return new SessionHttp(hub, session, log, trail, api.cors?.origins, guard);
 }
 
 /** Prefixo das rotas da sessão: nenhum na `default`, para a URL não mudar quando entra outro bot. */
@@ -145,6 +149,7 @@ export class SessionHttp {
   readonly #prefix: string;
   readonly #entries = new Map<string, RouteEntry>();
   readonly #trail: Trail;
+  readonly #guard: ApiGuard | undefined;
   #state: () => string = () => 'idle';
   #attached = false;
 
@@ -157,8 +162,10 @@ export class SessionHttp {
     log: () => Logger,
     trail: Trail,
     corsOrigins?: readonly string[],
+    guard?: ApiGuard,
   ) {
     this.corsOrigins = corsOrigins;
+    this.#guard = guard;
     this.#hub = hub;
     this.session = session;
     this.log = log;
@@ -178,6 +185,7 @@ export class SessionHttp {
     const base = (): string => this.#prefix + segment();
     // A API vive sob `<sessão>/api`, e a rota do plugin sob o segmento dele (ADR 0125).
     const apiBase = (): string => `${this.#prefix}/api${segment()}`;
+    const guard = this.#guard;
     const add = (
       method: HttpMethod,
       rawPath: string,
@@ -217,11 +225,19 @@ export class SessionHttp {
         if (!METHODS.has(operation.method)) {
           throw new TypeError(`http: método não suportado: ${String(operation.method)}`);
         }
+        // Falha no registro: permissão fora do formato nunca casaria, e a rota daria 403 para todos.
+        if (operation.permission !== undefined && !PERMISSION_FORMAT.test(operation.permission)) {
+          throw new BotConfigError(
+            `http: permissão "${operation.permission}" de ${operation.method} ${operation.path} fora do formato <área>.<ação> (ex.: "logs.read")`,
+          );
+        }
         add(
           operation.method,
           operation.path,
-          operationHandler(operation, (error) =>
-            onError(error, `${operation.method} ${operation.path}`),
+          operationHandler(
+            operation,
+            (error) => onError(error, `${operation.method} ${operation.path}`),
+            guard,
           ),
           operation,
         );
@@ -239,7 +255,7 @@ export class SessionHttp {
       path: normalizePath(api.path),
       base,
       api,
-      target: operationHandler(api, onError),
+      target: operationHandler(api, onError, this.#guard),
       onError,
       trail: this.#trail,
       sockets: new Set(),

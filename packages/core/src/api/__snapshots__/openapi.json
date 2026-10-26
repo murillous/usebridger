@@ -11,6 +11,7 @@
         "tags": [
           "core"
         ],
+        "security": [],
         "responses": {
           "200": {
             "description": "Sucesso",
@@ -126,6 +127,17 @@
           "status"
         ],
         "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "bridger_session"
+      },
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
       }
     }
   }

@@ -25,6 +25,9 @@ export type {
   AuditVerifyResult,
   PluginAudit,
 } from '#audit/types.ts';
+export type { AuthRole } from '#auth/permissions.ts';
+export { CORE_PERMISSIONS, canManageRole, rolePermissions } from '#auth/permissions.ts';
+export type { ApiActor } from '#auth/types.ts';
 export { createBot } from '#bot/bot.ts';
 export type {
   Bot,
