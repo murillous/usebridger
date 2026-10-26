@@ -170,6 +170,13 @@ Papéis: `owner` e `admin` têm todas as permissões do core; `viewer`, só as `
 gerencia owner (`canManageRole`). A spec traz `securitySchemes` (`cookieAuth`, `bearerAuth`),
 `security` por operação e `x-permission`.
 
+### Auth obrigatória fora de loopback
+
+(ADR 0128.) Sem `api.auth`, a API fica aberta, então o bot só sobe se o `hostname` de
+`createHttp` for loopback (`127.0.0.1`/`127.0.0.0/8`, `::1`, `localhost`). Hostname ausente
+(escuta em todas as interfaces), `0.0.0.0`, `::` ou outro faz o `createBot` lançar `BotConfigError`.
+Corrija configurando `api.auth` ou usando `createHttp({ port, hostname: '127.0.0.1' })`.
+
 ### Configurar a auth e o CORS
 
 ```ts

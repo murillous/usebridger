@@ -167,7 +167,7 @@ describe('API HTTP', () => {
   });
 
   it('operação repetida lança conflito', () => {
-    const http = createHttp({ port: 0 });
+    const http = createHttp({ port: 0, hostname: '127.0.0.1' });
     const scope = sessionHttp(http, 'default', createNoopLogger).scope(
       'd',
       () => '/p',
@@ -258,7 +258,7 @@ describe('CORS', () => {
   });
 
   it('recusa origins que não é lista de strings', () => {
-    const http = createHttp({ port: 0 });
+    const http = createHttp({ port: 0, hostname: '127.0.0.1' });
     const bad = { cors: { origins: 'x' } } as unknown as ApiOptions;
     expect(() => sessionHttp(http, 'default', createNoopLogger, undefined, bad)).toThrow(
       BotConfigError,

@@ -14,7 +14,7 @@ import { dashboard } from '@usebridger/plugin-dashboard';
 
 const bot = createBot({
   transport,
-  http: createHttp({ port: 3000 }),
+  http: createHttp({ port: 3000, hostname: '127.0.0.1' }),
   plugins: [dashboard],
   pluginConfig: { dashboard: { token: process.env.DASHBOARD_TOKEN } },
 });

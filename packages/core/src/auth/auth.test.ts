@@ -342,7 +342,7 @@ describe('configuração', () => {
   });
 
   it('recusa api.auth com valores inválidos', () => {
-    const http = createHttp({ port: 0 });
+    const http = createHttp({ port: 0, hostname: '127.0.0.1' });
     for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, '8h' as unknown as number]) {
       expect(() =>
         sessionHttp(http, 'default', createNoopLogger, undefined, { auth: { sessionIdleMs: bad } }),
@@ -359,7 +359,7 @@ describe('configuração', () => {
   });
 
   it('recusa permissão fora do formato <área>.<ação> ao registrar', () => {
-    const http = createHttp({ port: 0 });
+    const http = createHttp({ port: 0, hostname: '127.0.0.1' });
     const session = sessionHttp(http, 'default', createNoopLogger);
     const scope = session.scope(
       'demo',

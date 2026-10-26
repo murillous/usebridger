@@ -10,7 +10,7 @@ transport em `deps.http`. A porta só abre se houver rota. A API do core (`/api`
 ```ts
 import { createBot, createHttp } from '@usebridger/core';
 
-const http = createHttp({ port: 3000 });
+const http = createHttp({ port: 3000, hostname: '127.0.0.1' });
 const storage = sqlite({ path: 'data/bot.db' });
 
 const zap = createBot({ transport: baileys(), storage, http, plugins });
@@ -21,7 +21,7 @@ await Promise.all([zap.start(), erp.start()]);
 | Opção de `createHttp` | Padrão | O que faz |
 | --- | --- | --- |
 | `port` | — | Porta; `0` escolhe uma livre (leia em `http.port`) |
-| `hostname` | todas as interfaces | Interface de escuta (`'127.0.0.1'` atrás de proxy reverso) |
+| `hostname` | todas as interfaces | Interface de escuta (`'127.0.0.1'` atrás de proxy reverso). Sem `api.auth`, use loopback (ADR 0128) |
 
 - Passe a **mesma** instância a todos os bots, como o storage. Dois bots com a mesma `session` no
   mesmo servidor: o segundo `start()` rejeita com `BotConfigError`.

@@ -75,7 +75,7 @@ export interface PluginHttpRoutes extends HttpRoutes {
 export interface HttpOptions {
   /** Porta. `0` escolhe uma livre (leia em `HttpServer.port`). */
   readonly port: number;
-  /** Interface de escuta. Padrão: todas. */
+  /** Interface de escuta. Padrão: todas; sem `api.auth`, use loopback (ADR 0128). */
   readonly hostname?: string;
 }
 

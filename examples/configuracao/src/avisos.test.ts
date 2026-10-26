@@ -63,7 +63,7 @@ it('o pluginConfig vale abaixo da env', async () => {
 it('sem o token, o bot não sobe e aponta a variável', async () => {
   const subida = createTestBot({
     plugins: [avisos],
-    http: createHttp({ port: 0 }),
+    http: createHttp({ port: 0, hostname: '127.0.0.1' }),
     env: { BRIDGER_AVISOS__CHAT: 'grupo@g.us' },
   });
 
