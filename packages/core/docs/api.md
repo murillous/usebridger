@@ -170,3 +170,32 @@ ctx.http.api({
 Papéis: `owner` e `admin` têm todas as permissões do core; `viewer`, só as `.read`. O admin não
 gerencia owner (`canManageRole`). A spec traz `securitySchemes` (`cookieAuth`, `bearerAuth`),
 `security` por operação e `x-permission`.
+
+### Criar uma API key
+
+Quem tem `keys.manage` (owner/admin, ou outra chave com ela) cria chaves em `POST /api/keys`:
+
+```sh
+curl -X POST http://localhost:3000/api/keys \
+  -H "Authorization: Bearer $BRIDGER_KEY" -H 'content-type: application/json' \
+  -d '{ "name": "backend-do-app", "permissions": ["logs.read", "auth.on-behalf-of"] }'
+```
+
+A resposta traz `secret` (`brk_...`) **uma única vez**; o storage guarda só o hash. O escopo só
+aceita permissões do core e só as que quem cria também tem (senão 403). `GET /api/keys` lista com
+`lastUsedAt` e `revokedAt`, sem o segredo; `DELETE /api/keys/:id` revoga (a chave passa a dar 401).
+Criar e revogar geram os eventos `kernel.key.created` e `kernel.key.revoked` na auditoria.
+
+### Padrão BFF (`X-Bridger-On-Behalf-Of`)
+
+Um app com login próprio guarda uma chave com `auth.on-behalf-of` no backend dele (nunca no
+browser) e, a cada chamada, informa quem é a pessoa:
+
+```sh
+curl http://localhost:3000/api/plugins/tarefas/items \
+  -H "Authorization: Bearer $BRIDGER_KEY" -H 'X-Bridger-On-Behalf-Of: user-42'
+```
+
+O valor (1 a 256 caracteres, sem controle) vai para `actor.onBehalfOf` e para o ator dos eventos
+de auditoria. Não amplia permissão: vale o escopo da chave. Sem `auth.on-behalf-of`, ou vindo de
+sessão de usuário, é 403 auditado. Em frontend de outra origem, o CORS libera o header.

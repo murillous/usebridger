@@ -3,7 +3,13 @@
 import type { JsonValue } from '#storage/types.ts';
 
 export type AuditActor =
-  | { readonly kind: 'user'; readonly id: string; readonly name: string }
+  | {
+      readonly kind: 'user';
+      readonly id: string;
+      readonly name: string;
+      /** Quem uma API key representava (`X-Bridger-On-Behalf-Of`, ADR 0127). */
+      readonly onBehalfOf?: string;
+    }
   | { readonly kind: 'system' }
   | { readonly kind: 'plugin'; readonly name: string }
   | { readonly kind: 'contact'; readonly transport: string; readonly id: string };

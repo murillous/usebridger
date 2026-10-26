@@ -63,6 +63,8 @@ export interface AuthStore {
     now: Date,
   ): Promise<{ secret: string; id: string }>;
   getApiKey(id: string): Promise<WithId<ApiKeyDoc> | undefined>;
+  /** Todas, inclusive revogadas, da mais antiga para a mais nova. */
+  listApiKeys(): Promise<WithId<ApiKeyDoc>[]>;
   findApiKeyBySecret(secret: string): Promise<WithId<ApiKeyDoc> | undefined>;
   touchApiKey(id: string, now: Date): Promise<void>;
   revokeApiKey(id: string, now: Date): Promise<boolean>;
@@ -137,6 +139,7 @@ export function createAuthStore(storage: PluginStorage): AuthStore {
       return { secret, id };
     },
     getApiKey: (id) => keys.get(id),
+    listApiKeys: () => keys.find(),
     findApiKeyBySecret: async (secret) =>
       (await keys.find({ where: { hash: hashSecret(secret) }, limit: 1 }))[0],
     touchApiKey: async (id, now) => {

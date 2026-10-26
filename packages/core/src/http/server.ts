@@ -241,7 +241,7 @@ export class SessionHttp {
   coreEntries(states: () => Record<string, string>): RouteEntry[] {
     const base = (): string => `${this.#prefix}/api`;
     const onError = (error: unknown): void => this.log().event(LOG.httpUnhandled, { err: error });
-    return coreApiOperations(states).map((api) => ({
+    return coreApiOperations(states, this.#guard).map((api) => ({
       owner: 'core',
       method: api.method,
       path: normalizePath(api.path),

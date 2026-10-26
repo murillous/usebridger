@@ -116,6 +116,7 @@ export function operationHandler(
       if (guard !== undefined && operation.public !== true) {
         actor = await guard.authenticate(request);
         if (actor === undefined) throw new ApiError(401, 'autenticação necessária');
+        actor = guard.delegate(actor, `${operation.method} ${operation.path}`, request);
         const { permission } = operation;
         if (permission !== undefined && !actor.permissions.includes(permission)) {
           guard.denied(actor, `${operation.method} ${operation.path}`, permission, request);

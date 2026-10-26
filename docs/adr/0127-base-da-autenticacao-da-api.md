@@ -42,3 +42,18 @@ chaves e `X-Bridger-On-Behalf-Of` vêm nas seguintes.
   storage reclamar.
 - Quem liga `api.auth` sem usuário nem chave recebe 401 em tudo, exceto `/health`, até a 3ª entrega.
 - `plugin-dashboard` segue com o token próprio até migrar para a API do core.
+
+## Complemento: API keys e `X-Bridger-On-Behalf-Of` (#223, parte 3)
+
+- **Rotas** `POST/GET /api/keys` e `DELETE /api/keys/:id`, permissão `keys.manage`, montadas só com
+  `api.auth` (sem auth não haveria quem protegesse); na spec entram sempre. O segredo (`brk_...`)
+  sai só na resposta da criação. O escopo aceita só `CORE_PERMISSIONS` (as de plugin entram no M7-8)
+  e nada que o criador não tenha: delegar o que não se tem seria escalar privilégio. Revogar duas
+  vezes é idempotente e gera um único evento. Eventos `kernel.key.created` e `kernel.key.revoked`.
+- **`X-Bridger-On-Behalf-Of`** é lido pelo guarda, antes da checagem de permissão da operação. Só
+  `kind: 'key'` com `auth.on-behalf-of` o usa; sessão de usuário ou chave sem a permissão levam 403
+  auditado (`kernel.auth.denied`, `permission: auth.on-behalf-of`). Valor: texto sem caractere de
+  controle, 1 a 256 caracteres, senão 400. Não amplia permissão: o escopo é o da chave.
+- **Auditoria**: `AuditActor` (`kind: 'user'`) ganha o campo opcional `onBehalfOf`, a menor mudança
+  para registrar a pessoa representada no ator do evento, sem criar um `kind` novo.
+- O CORS inclui `X-Bridger-On-Behalf-Of` no `Access-Control-Allow-Headers` padrão do preflight.
