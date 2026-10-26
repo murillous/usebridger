@@ -87,7 +87,7 @@ export function problemResponse(error: ApiError): Response {
     type: 'about:blank',
     title: TITLES[error.status],
     status: error.status,
-    ...(error.detail !== undefined && { detail: error.detail }),
+    ...(error.detail !== undefined && error.status !== 500 && { detail: error.detail }),
     ...(traceId !== undefined && { traceId }),
     ...(error.issues !== undefined && { errors: [...error.issues] }),
   };

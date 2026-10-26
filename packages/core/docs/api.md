@@ -39,8 +39,7 @@ export default definePlugin({
 });
 ```
 
-- O caminho é relativo ao dono: `/api/plugins/<nome>` no plugin, `/api/transports/<nome>` no
-  transport. Mesmo método e caminho duas vezes lança `HttpRouteConflictError`.
+- O caminho é relativo ao dono: `/api/plugins/<nome>` no plugin. Mesmo método e caminho duas vezes lança `HttpRouteConflictError`.
 - `params`, `query` e `body` são opcionais; presentes, o core valida antes do handler. `body` é
   JSON. `status: 201` troca o status de sucesso.
 - `response` só alimenta a spec: o core não confere o retorno do handler.
@@ -92,7 +91,7 @@ createBot({ http, api: { cors: { origins: ['https://painel.exemplo.com'] } }, ..
 
 Origem exata (esquema, host e porta), sem curinga. Só origem da lista recebe
 `Access-Control-Allow-Origin` (com `Allow-Credentials: true` e `Vary: Origin`); o preflight
-dessas origens responde 204. Vale só para `/api`.
+dessas origens responde 204. Com o CORS ligado, toda resposta leva `Vary: Origin`. Vale para `/api` e para `/openapi.json` (união das origens das sessões).
 
 ## Snapshot da spec do core
 

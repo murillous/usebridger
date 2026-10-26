@@ -105,7 +105,8 @@ export function operationHandler(
       const result = await operation.handler({ params, query, body }, request);
       return Response.json(result, { status: operation.status ?? 200 });
     } catch (error) {
-      if (error instanceof ApiError) return problemResponse(error);
+      // 500 explícito é falha interna: vai para o log e não vaza o detail.
+      if (error instanceof ApiError && error.status !== 500) return problemResponse(error);
       onError(error);
       return problemResponse(new ApiError(500));
     }

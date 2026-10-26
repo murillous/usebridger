@@ -439,14 +439,18 @@ class HttpHub {
       return sessions;
     };
     const entries: RouteEntry[] = [];
+    const corsAll: string[] = [];
     for (const session of this.#sessions.values()) {
       if (session.corsOrigins !== undefined) {
+        corsAll.push(...session.corsOrigins);
         const cors = corsMiddleware(session.corsOrigins);
         app.use(`${session.prefix}/api`, cors);
         app.use(`${session.prefix}/api/*`, cors);
       }
       entries.push(...session.coreEntries(states), ...session.entries());
     }
+    // A spec é lida pelo painel no browser: vale a união das allowlists das sessões.
+    if (corsAll.length > 0) app.use('/openapi.json', corsMiddleware(corsAll));
     app.get('/health', (c) => {
       const sessions = states();
       const ok = Object.values(sessions).every((state) => state === 'running');
@@ -454,27 +458,36 @@ class HttpHub {
     });
     for (const entry of entries) mount(app, entry, lib.upgradeWebSocket);
     // Gerada a cada pedido da tabela atual: plugin que carrega depois aparece na spec (ADR 0125).
-    app.get('/openapi.json', async (c) =>
-      c.json(
-        await createOpenApiDocument(
-          entries.flatMap((entry) =>
-            entry.api
-              ? [
-                  {
-                    path: entry.path === '/' ? entry.base() : entry.base() + entry.path,
-                    operation: entry.api,
-                  },
-                ]
-              : [],
-          ),
-        ),
-      ),
-    );
-    app.notFound((c) =>
-      /^(\/sessions\/[^/]+)?\/api(\/|$)/.test(c.req.path)
-        ? problemResponse(new ApiError(404))
-        : c.text('404 Not Found', 404),
-    );
+    app.get('/openapi.json', async (c) => {
+      try {
+        const routes = entries.flatMap((entry) =>
+          entry.api
+            ? [
+                {
+                  path: entry.path === '/' ? entry.base() : entry.base() + entry.path,
+                  operation: entry.api,
+                },
+              ]
+            : [],
+        );
+        return c.json(await createOpenApiDocument(routes));
+      } catch (error) {
+        // Schema de plugin que o gerador recusa: 500 sem detalhe, causa no log.
+        this.#log()?.event(LOG.httpUnhandled, { err: error });
+        return problemResponse(new ApiError(500));
+      }
+    });
+    app.notFound((c) => {
+      if (!/^(\/sessions\/[^/]+)?\/api(\/|$)/.test(c.req.path)) {
+        return c.text('404 Not Found', 404);
+      }
+      // Fora do `mount`, então o trace nasce aqui para o `traceId` do problema (ADR 0120).
+      const header = c.req.header('traceparent');
+      const trace = parseTraceparent(header) ?? newTraceId();
+      return runInTrace(trace, () =>
+        withTraceparent(problemResponse(new ApiError(404)), trace, parseTraceFlags(header)),
+      );
+    });
     app.onError((error, c) => {
       this.#log()?.event(LOG.httpUnhandled, { err: error });
       return c.text('Internal Server Error', 500);
