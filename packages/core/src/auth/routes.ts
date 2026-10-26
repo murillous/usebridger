@@ -5,6 +5,7 @@ import type { AnyApiOperation } from '#api/operation.ts';
 import { ApiError, problemResponse } from '#api/problem.ts';
 import { type Accounts, type Login, TooManyAttempts } from './accounts.ts';
 import { cookie, SESSION_COOKIE } from './actor.ts';
+import type { ApiGuard, KeysDeps } from './guard.ts';
 import { ROLES } from './permissions.ts';
 import type { ApiActor } from './types.ts';
 
@@ -15,6 +16,10 @@ export interface AuthRoutesDeps {
   readonly corsOrigins?: readonly string[] | undefined;
   /** Path do cookie: `<prefixo da sessão>/api`. */
   readonly cookiePath: string;
+  /** Rotas de chaves (`keyOperations`). */
+  readonly keys: KeysDeps;
+  /** Registra 403 que não é falta de permissão da operação (ex.: conceder além do que se tem). */
+  readonly denied: ApiGuard['denied'];
 }
 
 /** Cookie da sessão; `maxAgeSeconds` 0 apaga. Origem cruzada exige `SameSite=None; Secure`. */
@@ -35,7 +40,7 @@ function loggedIn(deps: AuthRoutesDeps, request: Request, login: Login): Respons
 }
 
 /** `actor` sempre existe nas rotas não públicas com a auth ligada; sem ele é 401. */
-function need(actor: ApiActor | undefined): ApiActor {
+export function need(actor: ApiActor | undefined): ApiActor {
   if (actor === undefined) throw new ApiError(401, 'autenticação necessária');
   return actor;
 }

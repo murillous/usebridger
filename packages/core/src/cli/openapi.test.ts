@@ -28,6 +28,8 @@ const CORE_PATHS = [
   '/api/users/{id}/enable',
   '/api/users/{id}/sessions',
   '/api/users/{id}/reset-password',
+  '/api/keys',
+  '/api/keys/{id}',
 ];
 
 const PLUGIN_MODULE = `

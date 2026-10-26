@@ -2,6 +2,7 @@
 // aqui nas tarefas seguintes do M7.
 
 import type { z } from 'zod';
+import { keyOperations } from '#auth/keys.ts';
 import { type AuthRoutesDeps, authOperations } from '#auth/routes.ts';
 import { apiLibs, loadApiLibs } from './libs.ts';
 import type { AnyApiOperation, ApiRoute } from './operation.ts';
@@ -40,15 +41,17 @@ export function coreApiOperations(
         return { status: ok ? 'ok' : 'degraded', sessions };
       },
     },
-    ...(auth ? authOperations(auth) : []),
+    ...(auth ? [...authOperations(auth), ...keyOperations(auth)] : []),
   ];
 }
 
-/** As rotas do core na sessão `default`, para a spec sem servidor (CLI, snapshot). */
+/**
+ * As rotas do core na sessão `default`, para a spec sem servidor (CLI, snapshot).
+ */
 export async function coreApiRoutes(): Promise<readonly ApiRoute[]> {
   await loadApiLibs();
   // A spec descreve as rotas de auth mesmo sem auth ligada: o contrato é o mesmo.
-  return [...coreApiOperations(), ...authOperations()].map((operation) => ({
+  return [...coreApiOperations(), ...authOperations(), ...keyOperations()].map((operation) => ({
     path: `/api${operation.path}`,
     operation,
   }));

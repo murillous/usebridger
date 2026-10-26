@@ -255,15 +255,18 @@ export class SessionHttp {
   coreEntries(states: () => Record<string, string>): RouteEntry[] {
     const base = (): string => `${this.#prefix}/api`;
     const onError = (error: unknown): void => this.log().event(LOG.httpUnhandled, { err: error });
-    const { accounts, sessionMaxAgeMs } = this.#guard ?? {};
+    const guard = this.#guard;
+    const { accounts, sessionMaxAgeMs } = guard ?? {};
     const auth =
-      accounts && sessionMaxAgeMs !== undefined
+      guard && accounts && sessionMaxAgeMs !== undefined
         ? {
             accounts,
             sessionMaxAgeMs,
             corsOrigins: this.corsOrigins,
             // Um cookie por sessão do servidor: bots em /sessions/<nome> não sobrescrevem o do outro.
             cookiePath: `${this.#prefix}/api`,
+            keys: guard.keys,
+            denied: guard.denied,
           }
         : undefined;
     return coreApiOperations(states, auth).map((api) => ({

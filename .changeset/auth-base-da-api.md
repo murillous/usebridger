@@ -16,3 +16,7 @@ protegido, CSRF em origem cruzada (`X-Bridger-CSRF`), bootstrap por `api.auth.bo
 Rate limit de login reservado antes do scrypt, com teto global de hashes simultâneos; aceite de
 convite sob limite por IP; `api.auth.trustProxy`; cookie com `Path` por sessão do servidor; recusas
 de papel e CSRF auditadas como `kernel.auth.denied`; IP no titular da auditoria.
+
+API keys pela API (parte 3): `POST/GET /api/keys` e `DELETE /api/keys/:id` (`keys.manage`, segredo mostrado
+uma vez, `createdBy`) e `X-Bridger-On-Behalf-Of` para chaves com `auth.on-behalf-of`, registrado no ator
+da auditoria (`AuditActor.onBehalfOf`) e devolvido por `/auth/me`.

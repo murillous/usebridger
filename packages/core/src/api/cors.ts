@@ -78,7 +78,8 @@ export function corsMiddleware(origins: readonly string[]): MiddlewareHandler {
           'access-control-allow-credentials': 'true',
           'access-control-allow-methods': ALLOW_METHODS,
           'access-control-allow-headers':
-            c.req.header('access-control-request-headers') ?? 'content-type, authorization',
+            c.req.header('access-control-request-headers') ??
+            'content-type, authorization, x-bridger-on-behalf-of, x-bridger-csrf',
           'access-control-max-age': '600',
           vary: 'Origin',
         },
