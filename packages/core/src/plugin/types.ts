@@ -135,7 +135,8 @@ export interface PluginContext<
   readonly groups: Groups;
   /**
    * Rotas HTTP e WebSocket do plugin sob `/plugins/<nome>` (ADR 0072). Sem `http` na config do
-   * bot, `route` e `ws` lançam `BotConfigError` (o plugin cai no `setup`).
+   * bot, `route`, `ws` e `api` lançam `BotConfigError` (o plugin cai no `setup`). `api` monta as
+   * operações da API em `/api/plugins/<nome>` (ADR 0126).
    */
   readonly http: PluginHttpRoutes;
   /**

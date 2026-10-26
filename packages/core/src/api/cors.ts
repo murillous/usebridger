@@ -25,7 +25,12 @@ export function corsMiddleware(origins: readonly string[]): MiddlewareHandler {
   const allowed = new Set(origins);
   return async (c, next) => {
     const origin = c.req.header('origin');
-    if (origin === undefined || !allowed.has(origin)) return next();
+    if (origin === undefined || !allowed.has(origin)) {
+      await next();
+      // A resposta varia pela origem mesmo quando negada, ou um cache serviria a errada.
+      c.res.headers.append('vary', 'Origin');
+      return;
+    }
     if (c.req.method === 'OPTIONS') {
       return new Response(null, {
         status: 204,

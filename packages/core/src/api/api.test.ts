@@ -2,9 +2,13 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { type Bot, type BotConfig, createBot } from '#bot/bot.ts';
+import { RecordingTransport, recordingLogger } from '#bot/harness.test-support.ts';
 import { BotConfigError } from '#config/owners.ts';
 import { createHttp, type SessionHttp, sessionHttp } from '#http/server.ts';
 import { createNoopLogger } from '#logger/logger.ts';
+import { definePlugin } from '#plugin/define.ts';
+import type { PluginContext, PluginDefinition } from '#plugin/types.ts';
 import { coreApiRoutes } from './core.ts';
 import type { ApiOptions } from './cors.ts';
 import { createOpenApiDocument } from './openapi.ts';
@@ -136,6 +140,32 @@ describe('API HTTP', () => {
     expect(errors).toHaveLength(1);
   });
 
+  it('ApiError 500 explícito vai para o onError e não vaza o detail', async () => {
+    const errors: unknown[] = [];
+    const url = await start({ errors }, (api) =>
+      api.api({
+        method: 'GET',
+        path: '/x',
+        response: z.object({}),
+        handler: () => {
+          throw new ApiError(500, 'detalhe interno');
+        },
+      }),
+    );
+    const response = await fetch(`${url}/api/plugins/demo/x`);
+    expect(response.status).toBe(500);
+    expect(await response.text()).not.toContain('detalhe interno');
+    expect(errors).toHaveLength(1);
+  });
+
+  it('404 de caminho desconhecido sob /api leva traceId e traceparent', async () => {
+    const url = await start({}, demo);
+    const response = await fetch(`${url}/api/nada`);
+    const body = (await response.json()) as ProblemBody;
+    expect(body.traceId).toMatch(/^[0-9a-f]{32}$/);
+    expect(response.headers.get('traceparent')).toContain(body.traceId as string);
+  });
+
   it('operação repetida lança conflito', () => {
     const http = createHttp({ port: 0 });
     const scope = sessionHttp(http, 'default', createNoopLogger).scope(
@@ -172,6 +202,29 @@ describe('GET /openapi.json', () => {
   });
 });
 
+describe('GET /openapi.json com falha', () => {
+  it('schema que o gerador recusa vira 500 problem+json', async () => {
+    const url = await start({}, (api) => {
+      // Dois schemas distintos com o mesmo id de componente: o createDocument lança.
+      api.api({
+        method: 'GET',
+        path: '/a',
+        response: z.object({ a: z.string() }).meta({ id: 'Dup' }),
+        handler: () => ({}),
+      });
+      api.api({
+        method: 'GET',
+        path: '/b',
+        response: z.object({ b: z.number() }).meta({ id: 'Dup' }),
+        handler: () => ({}),
+      });
+    });
+    const response = await fetch(`${url}/openapi.json`);
+    expect(response.status).toBe(500);
+    expect(response.headers.get('content-type')).toBe('application/problem+json');
+  });
+});
+
 describe('CORS', () => {
   const origin = 'https://painel.exemplo.com';
 
@@ -197,6 +250,11 @@ describe('CORS', () => {
       headers: { origin: 'https://mal.com' },
     });
     expect(denied.headers.get('access-control-allow-origin')).toBeNull();
+    // Vary sempre que o CORS está ligado, mesmo para origem negada ou sem Origin.
+    expect(other.headers.get('vary')).toContain('Origin');
+    expect((await fetch(`${url}/api/health`)).headers.get('vary')).toContain('Origin');
+    const spec = await fetch(`${url}/openapi.json`, { headers: { origin } });
+    expect(spec.headers.get('access-control-allow-origin')).toBe(origin);
   });
 
   it('recusa origins que não é lista de strings', () => {
@@ -216,5 +274,71 @@ describe('snapshot da spec do core', () => {
     await expect(`${JSON.stringify(doc, null, 2)}\n`).toMatchFileSnapshot(
       '__snapshots__/openapi.json',
     );
+  });
+});
+
+describe('ctx.http.api pelo plugin-context', () => {
+  const bots: Bot[] = [];
+  afterEach(async () => {
+    for (const created of bots.splice(0)) await created.stop().catch(() => undefined);
+  });
+
+  function capture(): { plugin: PluginDefinition; ctx: () => PluginContext } {
+    let captured: PluginContext | undefined;
+    const plugin = definePlugin({
+      name: 'cap',
+      version: '1.0.0',
+      engine: '>=0.0.0',
+      setup(ctx) {
+        captured = ctx;
+      },
+    });
+    return { plugin, ctx: () => captured as PluginContext };
+  }
+
+  const operation = {
+    method: 'GET',
+    path: '/x',
+    response: z.object({}),
+    handler: () => ({}),
+  } as const;
+
+  function bot(config: Partial<BotConfig>): Bot {
+    const created = createBot({
+      transport: new RecordingTransport(),
+      logger: recordingLogger(),
+      outbound: { globalIntervalMs: 0, chatIntervalMs: 0 },
+      env: {},
+      ...config,
+    });
+    bots.push(created);
+    return created;
+  }
+
+  it('registrar depois do teardown lança', async () => {
+    const { plugin, ctx } = capture();
+    const created = bot({
+      http: createHttp({ port: 0, hostname: '127.0.0.1' }),
+      plugins: [plugin],
+    });
+    await created.start();
+    expect(() => ctx().http.api(operation)).not.toThrow();
+    await created.stop();
+    expect(() => ctx().http.api({ ...operation, path: '/y' })).toThrow();
+  });
+
+  it('sem http na config lança BotConfigError e derruba o setup', async () => {
+    const plugin = definePlugin({
+      name: 'sem-http',
+      version: '1.0.0',
+      engine: '>=0.0.0',
+      setup(ctx) {
+        ctx.http.api(operation);
+      },
+    });
+    await expect(bot({ plugins: [plugin] }).start()).rejects.toMatchObject({
+      name: 'PluginBootError',
+      reason: { kind: 'setup-failed' },
+    });
   });
 });

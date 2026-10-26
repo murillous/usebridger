@@ -10,7 +10,7 @@ plugin pendura as próprias operações e como o contrato do core fica vigiado.
 ## Decisão
 
 - **`ctx.http.api(operation)`** monta a operação em `/api` + o segmento do dono + `operation.path`:
-  `/api/plugins/<nome>/...` no plugin, `/api/transports/<nome>/...` no transport, `/api/...` no core.
+  `/api/plugins/<nome>/...` no plugin e `/api/...` no core. O transport não registra operações da API.
   Dois plugins não colidem, e o prefixo diz de quem é o dado. Os recursos declarativos
   (`api.resources`, M7-x) vão ter caminho próprio, sem passar por aqui.
 - **Operação** é um objeto com schemas Zod de `params`, `query`, `body` e `response`. A resposta de
