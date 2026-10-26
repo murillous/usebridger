@@ -250,7 +250,7 @@ o risco é só o storage ser um arquivo local aberto por dois processos (SQLite 
 
 Imprime o token uma vez; aceite-o em `/api/auth/invites/accept`. Cria o usuário ou promove o do
 e-mail a owner sem senha, e recusa se já existe owner ativo. A CLI não grava na auditoria (roda
-fora do bot). O limite de login fica em memória do processo e zera ao reiniciar.
+fora do bot). O limite de login fica no storage (coleção `rateLimits`) e sobrevive a restart.
 
 ### Criar uma API key
 

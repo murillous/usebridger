@@ -83,7 +83,7 @@ type Who = { readonly id: string; readonly name: string };
 export function createAccounts(options: AccountsOptions) {
   const { store, storage } = options;
   const now = options.now ?? (() => new Date());
-  const limiter = options.limiter ?? createLoginLimiter({ now });
+  const limiter = options.limiter ?? createLoginLimiter({ now, storage });
   const users = storage.collection<UserDoc>('users', { indexes: ['email'] });
   const sessions = storage.collection<SessionDoc>('sessions', { indexes: ['hash', 'userId'] });
   const invites = storage.collection<InviteDoc>('invites', { indexes: ['hash', 'userId'] });
@@ -179,11 +179,11 @@ export function createAccounts(options: AccountsOptions) {
     async login(email: string, plain: string, ip: string | undefined): Promise<Login> {
       const emailKey = `email:${email.toLowerCase()}`;
       const keys = ip === undefined ? [emailKey] : [emailKey, `ip:${ip}`];
-      const waitMs = limiter.wait(keys);
+      const waitMs = await limiter.wait(keys);
       if (waitMs > 0) throw new TooManyAttempts(Math.ceil(waitMs / 1000));
       // A tentativa é contada ANTES do scrypt: rajada paralela não passa do limite enquanto a
       // primeira ainda verifica. Sucesso (ou erro nosso) devolve a reserva.
-      limiter.fail(keys);
+      await limiter.fail(keys);
       let user: Awaited<ReturnType<AuthStore['findUserByEmail']>>;
       let ok: boolean;
       try {
@@ -191,7 +191,7 @@ export function createAccounts(options: AccountsOptions) {
         const stored = user?.passwordHash || (await dummy());
         ok = await gated(() => verifyPassword(plain, stored));
       } catch (error) {
-        limiter.refund(keys);
+        await limiter.refund(keys);
         throw error;
       }
       if (!(ok && user !== undefined && user.passwordHash !== '' && user.status === 'active')) {
@@ -199,8 +199,8 @@ export function createAccounts(options: AccountsOptions) {
         // A mesma mensagem para e-mail inexistente, senha errada, conta desativada ou sem senha.
         throw new ApiError(401, 'e-mail ou senha inválidos');
       }
-      limiter.reset(emailKey);
-      if (ip !== undefined) limiter.refund([`ip:${ip}`]);
+      await limiter.reset(emailKey);
+      if (ip !== undefined) await limiter.refund([`ip:${ip}`]);
       const token = await startSession(user.id);
       record('auth.login', user.id, { as: { id: user.id, name: user.name } });
       return { token, user: view(user) };
@@ -246,14 +246,14 @@ export function createAccounts(options: AccountsOptions) {
     ): Promise<void> {
       const user = await mustGet(actor.id);
       const key = [`pw:${user.id}`];
-      const waitMs = limiter.wait(key);
+      const waitMs = await limiter.wait(key);
       if (waitMs > 0) throw new TooManyAttempts(Math.ceil(waitMs / 1000));
       if (!(await gated(() => verifyPassword(current, user.passwordHash)))) {
-        limiter.fail(key);
+        await limiter.fail(key);
         // 403 e não 401: o usuário está autenticado, só errou a confirmação.
         throw new ApiError(403, 'senha atual incorreta');
       }
-      limiter.reset(key[0] as string);
+      await limiter.reset(key[0] as string);
       await store.updateUser(user.id, {
         passwordHash: await newHash(next),
         mustChangePassword: false,
@@ -278,10 +278,10 @@ export function createAccounts(options: AccountsOptions) {
     ): Promise<Login> {
       const invalid = new ApiError(400, 'convite inválido ou expirado');
       const keys = ip === undefined ? [] : [`ip:${ip}`];
-      const waitMs = limiter.wait(keys);
+      const waitMs = await limiter.wait(keys);
       if (waitMs > 0) throw new TooManyAttempts(Math.ceil(waitMs / 1000));
-      const reject = (): never => {
-        limiter.fail(keys);
+      const reject = async (): Promise<never> => {
+        await limiter.fail(keys);
         throw invalid;
       };
       const at = now();
@@ -289,9 +289,10 @@ export function createAccounts(options: AccountsOptions) {
       const found = (await invites.find({ where: { hash: hashSecret(input.token) }, limit: 1 }))[0];
       let invitee: WithId<UserDoc> | undefined;
       if (found !== undefined) {
-        if (found.usedAt !== undefined || Date.parse(found.expiresAt) <= at.getTime()) reject();
+        if (found.usedAt !== undefined || Date.parse(found.expiresAt) <= at.getTime())
+          return reject();
         invitee = await store.getUser(found.userId);
-        if (invitee === undefined || invitee.status !== 'active') reject();
+        if (invitee === undefined || invitee.status !== 'active') return reject();
       } else {
         // Bootstrap: o token da config só vale enquanto não existe nenhum usuário.
         const boot = options.bootstrapToken;
@@ -300,7 +301,7 @@ export function createAccounts(options: AccountsOptions) {
           !sameSecret(input.token, boot) ||
           (await users.find({ limit: 1 })).length > 0
         ) {
-          reject();
+          return reject();
         }
         if (input.name === undefined || input.email === undefined) {
           throw new ApiError(400, 'informe name e email do primeiro owner');
@@ -314,7 +315,7 @@ export function createAccounts(options: AccountsOptions) {
           { hash: found.hash, usedAt: null },
           { usedAt: at.toISOString() },
         );
-        if (claimed === 0) reject();
+        if (claimed === 0) return reject();
         await store.updateUser(invitee.id, { passwordHash: hash, mustChangePassword: false });
         userId = invitee.id;
         record('auth.invite.accepted', userId, { as: { id: invitee.id, name: invitee.name } });
