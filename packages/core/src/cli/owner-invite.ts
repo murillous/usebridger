@@ -21,7 +21,9 @@ storage do bot) e, se o bot não usa a sessão default, \`export const session\`
 --name é obrigatório.
 O módulo deve só exportar \`storage\` (e \`session\`), sem efeito colateral: nada de \`createBot().start()\`,
 que abriria transport e a trava da sessão. Use um arquivo à parte (ex.: \`storage.ts\`) que o app importa.
-A CLI não pega a trava da sessão: só grava documentos de auth e pode rodar com o bot de pé. Imprime o token do convite uma única vez; vale 48 h.`;
+A CLI não pega a trava da sessão: só grava documentos de auth, cada operação atômica (o convite é de
+uso único por \`update\` condicional), então pode rodar com o bot de pé. SQLite: dois processos no mesmo
+arquivo em WAL com \`busy_timeout\`; Postgres: dois clientes no mesmo banco. Imprime o token do convite uma única vez; vale 48 h.`;
 
 export interface Loaded {
   readonly storage: StoragePort;
