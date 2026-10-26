@@ -10,6 +10,7 @@ no [ADR 0073](../../../docs/adr/0073-transport-web.md).
 import { createBot, createHttp } from '@usebridger/core';
 import { web } from '@usebridger/transport-web';
 
+// Para expor publicamente, configure `api.auth`, ou fique em loopback atrás de proxy reverso.
 const http = createHttp({ port: 3000, hostname: '127.0.0.1' });
 
 const bot = createBot({

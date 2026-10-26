@@ -5,6 +5,7 @@
 // abrir a porta: bot sem rota não paga a memória deles.
 
 import type { Server } from 'node:http';
+import { BlockList, isIP } from 'node:net';
 import type { upgradeWebSocket as UpgradeWebSocket } from '@hono/node-server';
 import type { Context, Hono } from 'hono';
 import type { WSContext, WSEvents } from 'hono/ws';
@@ -136,17 +137,24 @@ export function sessionHttp(
   if (guard === undefined && !isLoopbackHost(hub.hostname)) {
     throw new BotConfigError(
       `http: a API não pode escutar em ${hub.hostname ?? 'todas as interfaces'} sem autenticação; ` +
-        'configure `api.auth` ou use `createHttp({ hostname: "127.0.0.1" })` (loopback)',
+        'configure `api.auth` ou use `createHttp({ port, hostname: "127.0.0.1" })` (loopback)',
     );
   }
   return new SessionHttp(hub, session, log, trail, api.cors?.origins, guard);
 }
 
 /** Loopback: 127.0.0.0/8, `::1` ou `localhost`. Hostname ausente escuta em todas as interfaces. */
+const LOOPBACK = new BlockList();
+LOOPBACK.addSubnet('127.0.0.0', 8, 'ipv4');
+LOOPBACK.addAddress('::1', 'ipv6');
+
 function isLoopbackHost(hostname: string | undefined): boolean {
   if (hostname === undefined) return false;
-  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase();
-  return host === 'localhost' || host === '::1' || /^127(\.\d{1,3}){3}$/.test(host);
+  const host = hostname.toLowerCase();
+  const family = isIP(host);
+  return (
+    host === 'localhost' || (family !== 0 && LOOPBACK.check(host, family === 6 ? 'ipv6' : 'ipv4'))
+  );
 }
 
 /** Prefixo das rotas da sessão: nenhum na `default`, para a URL não mudar quando entra outro bot. */

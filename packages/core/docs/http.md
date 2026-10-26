@@ -21,7 +21,7 @@ await Promise.all([zap.start(), erp.start()]);
 | Opção de `createHttp` | Padrão | O que faz |
 | --- | --- | --- |
 | `port` | — | Porta; `0` escolhe uma livre (leia em `http.port`) |
-| `hostname` | todas as interfaces | Interface de escuta (`'127.0.0.1'` atrás de proxy reverso) |
+| `hostname` | todas as interfaces | Interface de escuta (`'127.0.0.1'` atrás de proxy reverso). Sem `api.auth`, use loopback (ADR 0128) |
 
 - Passe a **mesma** instância a todos os bots, como o storage. Dois bots com a mesma `session` no
   mesmo servidor: o segundo `start()` rejeita com `BotConfigError`.
