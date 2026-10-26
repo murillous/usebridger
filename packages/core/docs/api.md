@@ -148,7 +148,7 @@ exige changeset **`major`** do `@usebridger/core`; acrescentar é `minor`.
 ## Autenticação
 
 ([ADR 0127](../../../docs/adr/0127-base-da-autenticacao-da-api.md).) Ligue com `api: { auth: {} }` no `BotConfig`
-(`sessionIdleMs`, padrão 8 h, e `sessionMaxAgeMs`, padrão 7 d, são opcionais). Daí em diante toda
+(`sessionIdleMs`, padrão 8 h, e `sessionMaxAgeMs`, padrão 7 d, são opcionais; o máximo absoluto vale na criação da sessão, no login). Daí em diante toda
 operação, do core e de plugin, exige um ator:
 
 - cookie `bridger_session` (pessoa) ou `Authorization: Bearer <chave>` (máquina);

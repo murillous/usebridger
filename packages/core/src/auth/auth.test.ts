@@ -9,8 +9,11 @@ import type { ProblemBody } from '#api/problem.ts';
 import type { Audit } from '#audit/audit.ts';
 import { currentAuditSubject } from '#audit/scope.ts';
 import type { InternalRecordInput } from '#audit/types.ts';
+import { type Bot, createBot } from '#bot/bot.ts';
+import { RecordingTransport, recordingLogger } from '#bot/harness.test-support.ts';
 import { createHttp, type SessionHttp, sessionHttp } from '#http/server.ts';
 import { createNoopLogger } from '#logger/logger.ts';
+import { definePlugin } from '#plugin/define.ts';
 import { createMemoryStorage } from '#storage/memory.ts';
 import { kernelStorage } from '#storage/namespace.ts';
 import { createActorResolver, SESSION_COOKIE } from './actor.ts';
@@ -192,7 +195,7 @@ describe('resolução do ator', () => {
     expect(await resolve(req(headers))).toBeUndefined();
   });
 
-  it('e-mail é único e comparado em minúsculas', async () => {
+  it('e-mail é normalizado para minúsculas na gravação e na busca', async () => {
     const store = newStore();
     const id = await newUser(store);
     expect((await store.findUserByEmail('ANA@exemplo.com'))?.id).toBe(id);
@@ -327,5 +330,78 @@ describe('spec OpenAPI', () => {
       security: [{ cookieAuth: [] }, { bearerAuth: [] }],
     });
     expect(doc.paths['/api/health']?.get['security']).toEqual([]);
+  });
+});
+
+describe('configuração', () => {
+  const attached: SessionHttp[] = [];
+  const bots: Bot[] = [];
+  afterEach(async () => {
+    for (const bot of bots.splice(0)) await bot.stop();
+    for (const session of attached.splice(0)) await session.detach();
+  });
+
+  it('recusa api.auth com valores inválidos', () => {
+    const http = createHttp({ port: 0 });
+    for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, '8h' as unknown as number]) {
+      expect(() =>
+        sessionHttp(http, 'default', createNoopLogger, undefined, { auth: { sessionIdleMs: bad } }),
+      ).toThrow(/api\.auth\.sessionIdleMs/);
+      expect(() =>
+        sessionHttp(http, 'default', createNoopLogger, undefined, {
+          auth: { sessionMaxAgeMs: bad },
+        }),
+      ).toThrow(/api\.auth\.sessionMaxAgeMs/);
+    }
+    expect(() =>
+      sessionHttp(http, 'default', createNoopLogger, undefined, { auth: {} }),
+    ).not.toThrow();
+  });
+
+  it('recusa permissão fora do formato <área>.<ação> ao registrar', () => {
+    const http = createHttp({ port: 0 });
+    const session = sessionHttp(http, 'default', createNoopLogger);
+    const scope = session.scope(
+      'demo',
+      () => '/plugins/demo',
+      () => undefined,
+    );
+    const op = { method: 'GET', path: '/x', response: z.object({}), handler: () => ({}) } as const;
+    for (const bad of ['logs', 'Logs.Read', 'logs.', '.read', 'a.b.c', '']) {
+      expect(() => scope.api({ ...op, permission: bad })).toThrow(/formato <área>\.<ação>/);
+    }
+    expect(() => scope.api({ ...op, permission: 'auth.on-behalf-of' })).not.toThrow();
+  });
+
+  it('createBot com api.auth liga a guarda: 401 sem ator', async () => {
+    const plugin = definePlugin({
+      name: 'demo',
+      version: '1.0.0',
+      engine: '>=0.0.0',
+      setup(ctx) {
+        ctx.http.api({
+          method: 'GET',
+          path: '/logs',
+          permission: 'logs.read',
+          response: z.object({}),
+          handler: () => ({}),
+        });
+      },
+    });
+    const http = createHttp({ port: 0, hostname: '127.0.0.1' });
+    const bot = createBot({
+      transport: new RecordingTransport(),
+      logger: recordingLogger(),
+      outbound: { globalIntervalMs: 0, chatIntervalMs: 0 },
+      env: {},
+      http,
+      api: { auth: {} },
+      plugins: [plugin],
+    });
+    bots.push(bot);
+    await bot.start();
+    const res = await fetch(`http://127.0.0.1:${http.port}/api/plugins/demo/logs`);
+    expect(res.status).toBe(401);
+    expect((await fetch(`http://127.0.0.1:${http.port}/api/health`)).status).toBe(200);
   });
 });
