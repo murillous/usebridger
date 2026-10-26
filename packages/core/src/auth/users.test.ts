@@ -22,11 +22,12 @@ const HOUR = 3_600_000;
 const T0 = new Date('2026-10-26T12:00:00Z');
 const PASSWORD = 'uma senha bem longa';
 
-function setup(options: { bootstrapToken?: string; maxAgeMs?: number } = {}) {
+function setup(options: { bootstrapToken?: string; maxAgeMs?: number; realClock?: boolean } = {}) {
   const storage = kernelStorage(createMemoryStorage(), 'auth');
   const store = createAuthStore(storage);
   const clock = { now: T0 };
-  const now = () => clock.now;
+  // O servidor HTTP resolve a sessão com o relógio real: sessão criada em T0 já estaria inativa.
+  const now = () => (options.realClock ? new Date() : clock.now);
   const recorded: InternalRecordInput[] = [];
   const audit = { record: (e: InternalRecordInput) => recorded.push(e) } as unknown as Audit;
   const accounts = createAccounts({
@@ -389,7 +390,10 @@ describe('HTTP: cookie e CSRF', () => {
 
   async function start(origins?: string[], sessionName = 'default') {
     await loadApiLibs();
-    const { store, accounts, recorded } = setup({ bootstrapToken: 'token-de-bootstrap-1234' });
+    const { store, accounts, recorded } = setup({
+      bootstrapToken: 'token-de-bootstrap-1234',
+      realClock: true,
+    });
     last = { store, recorded };
     const guard = createApiGuard({
       store,
