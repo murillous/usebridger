@@ -169,6 +169,39 @@ describe('rotas /api/keys', () => {
   });
 });
 
+describe('chave limitada ao criador (HTTP)', () => {
+  it('rebaixar dá 403; desativar dá 401; reativar restaura', async () => {
+    const { base, store, call, create } = await start();
+    const userId = await store.createUser(
+      { name: 'ana', email: 'ana@x.dev', passwordHash: 'h', role: 'admin' },
+      new Date(),
+    );
+    const { token } = await store.createSession({ userId, maxAgeMs: 60_000 }, new Date());
+    const res = await fetch(`${base}/keys`, {
+      method: 'POST',
+      headers: { cookie: `${SESSION_COOKIE}=${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'bff', permissions: ['keys.manage', 'logs.read'] }),
+    });
+    expect(res.status).toBe(201);
+    const { secret } = (await res.json()) as Created;
+    const body = JSON.stringify({ name: 'x', permissions: ['logs.read'] });
+
+    await store.updateUser(userId, { role: 'viewer' });
+    expect((await create(secret, JSON.parse(body))).status).toBe(403);
+    const me = await call(secret, '/auth/me');
+    expect(me.status).toBe(200);
+    expect(JSON.stringify(await me.json())).toContain('logs.read');
+    expect(JSON.stringify(await (await call(secret, '/auth/me')).json())).not.toContain(
+      'keys.manage',
+    );
+
+    await store.updateUser(userId, { status: 'disabled' });
+    expect((await call(secret, '/auth/me')).status).toBe(401);
+    await store.updateUser(userId, { status: 'active' });
+    expect((await call(secret, '/auth/me')).status).toBe(200);
+  });
+});
+
 describe('X-Bridger-On-Behalf-Of', () => {
   it('chave sem a permissão: 403 auditado', async () => {
     const { admin, call, create, recorded } = await start();

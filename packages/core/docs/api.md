@@ -277,6 +277,12 @@ aceita permissões do core e só as que quem cria também tem (senão 403). `GET
 `lastUsedAt` e `revokedAt`, sem o segredo; `DELETE /api/keys/:id` revoga (a chave passa a dar 401).
 Criar e revogar geram os eventos `kernel.key.created` e `kernel.key.revoked` na auditoria.
 
+A permissão efetiva de uma chave é o escopo dela **∩ as permissões atuais do criador**
+(`createdBy`, ADR 0128). Criador rebaixado: a chave perde o que ele não tem mais (403 na operação).
+Criador desativado ou removido, ou chave-criadora revogada: a chave dá 401. Reativar ou repromover
+o criador restaura a chave, que não é alterada nem revogada no storage. Chave sem `createdBy`
+(criada fora da API) vale pelo escopo próprio; chave criada por chave segue a cadeia.
+
 ### Padrão BFF (`X-Bridger-On-Behalf-Of`)
 
 Um app com login próprio guarda uma chave com `auth.on-behalf-of` no backend dele (nunca no

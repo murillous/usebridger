@@ -6,6 +6,7 @@ import type { AuthStore } from './store.ts';
 import type { ApiActor } from './types.ts';
 
 export const SESSION_COOKIE = 'bridger_session';
+const MAX_KEY_CHAIN = 16;
 export const DEFAULT_IDLE_MS: number = 8 * 60 * 60 * 1000;
 export const DEFAULT_MAX_AGE_MS: number = 7 * 24 * 60 * 60 * 1000;
 
@@ -34,8 +35,32 @@ export function createActorResolver(
   async function fromKey(secret: string): Promise<ApiActor | undefined> {
     const key = await store.findApiKeyBySecret(secret);
     if (key === undefined || key.revokedAt !== undefined) return undefined;
+    const permissions = await effectivePermissions(key);
+    if (permissions === undefined) return undefined;
     await store.touchApiKey(key.id, now());
-    return { id: key.id, kind: 'key', name: key.name, permissions: key.permissions };
+    return { id: key.id, kind: 'key', name: key.name, permissions };
+  }
+
+  // Escopo da chave ∩ permissões atuais do criador (ADR 0128): rebaixar o criador encolhe a chave,
+  // desativá-lo a suspende; reativar restaura, sem tocar no storage. Criador-chave vale pela cadeia,
+  // com limite de profundidade (um ciclo editado no storage não autentica). Sem criador (chave criada
+  // direto pelo AuthStore), vale o escopo da chave.
+  async function effectivePermissions(
+    key: { permissions: readonly string[]; createdBy: string | null },
+    depth = 0,
+  ): Promise<readonly string[] | undefined> {
+    if (depth > MAX_KEY_CHAIN) return undefined;
+    if (key.createdBy === null) return key.permissions;
+    const user = await store.getUser(key.createdBy);
+    if (user !== undefined) {
+      if (user.status !== 'active' || !isRole(user.role)) return undefined;
+      const allowed = rolePermissions(user.role);
+      return key.permissions.filter((p) => allowed.includes(p));
+    }
+    const parent = await store.getApiKey(key.createdBy);
+    if (parent === undefined || parent.revokedAt !== undefined) return undefined;
+    const allowed = await effectivePermissions(parent, depth + 1);
+    return allowed && key.permissions.filter((p) => allowed.includes(p));
   }
 
   async function fromSession(token: string): Promise<ApiActor | undefined> {
