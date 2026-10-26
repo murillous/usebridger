@@ -28,6 +28,7 @@ cada linha seguem o [dicionário do logger](logger.md#campos).
 | `audit.purged` | `info` | auditoria vencida expurgada |
 | `audit.purge.skipped` | `warn` | expurgação da auditoria adiada: o registro kernel.audit.purge não foi gravado |
 | `audit.purge.failed` | `error` | falha na expurgação da auditoria; tenta de novo na próxima passada |
+| `auth.lock.release-failed` | `warn` | não foi possível soltar a trava da auth; ela vence sozinha ao fim do lease |
 | `audit.config-diff.failed` | `warn` | não foi possível ler a config para o diff da auditoria; o evento sai com changes: null |
 | `audit.unkeyed` | `warn` | sem BRIDGER_SECRET_KEY: a cadeia de auditoria usa chave pública e só detecta edição ingênua |
 | `connection.opened` | `info` | conexão aberta |
