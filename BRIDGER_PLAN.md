@@ -90,7 +90,7 @@ Débitos que **impedem** um kernel de verdade e que o Bridger deve corrigir por 
 | 9 | Sem contrato de eventos | Só `messages.upsert` chega aos plugins | Barramento tipado: mensagem, reação, edição, deleção, grupo (entrada/saída/update), conexão, QR |
 | 10 | Sem fila de saída | Só há rate limit de entrada; rajadas de envio arriscam ban | Fila de saída com taxa global/por chat, prioridade e retry |
 | 11 | Auth em arquivos | `useMultiFileAuthState` (não recomendado pelo Baileys em produção) | Auth state no `StoragePort` (SQLite/Postgres) |
-| 12 | Dashboard via stdout | Sinais `[LUMA_QR]`, `[LUMA_STATUS]` parseados de texto; processo filho | Dashboard vira plugin lendo o barramento de eventos via HTTP/WS do core |
+| 12 | Dashboard via stdout | Sinais `[LUMA_QR]`, `[LUMA_STATUS]` parseados de texto; processo filho | Dashboard vira plugin, cliente da API HTTP do core (D19, D125) |
 
 ---
 
@@ -147,6 +147,7 @@ bridger/
 | Config | Zod por plugin, precedência, secrets, reload de plugin |
 | Papéis | owner / group-admin / everyone; middleware de allow/blocklist |
 | HTTP | Hono sob demanda, `/health`, rotas namespaced |
+| API HTTP | OpenAPI em `/openapi.json`, auth (usuários, API keys, papéis), SSE, `api.resources` (D125) |
 | Logger | pino estruturado com `plugin` no contexto |
 
 **Plugins oficiais** (no `usebridger`, D103): metrics e dashboard.
@@ -499,9 +500,24 @@ o M5 (exceto M5-4 e M5-6) e a virada (V1-1, V1-2 e V1-4) vivem no `murillous/Lum
 - #M6-8 `scrapeToken` no `GET /metrics` (#240)
 - #M6-9 Reconhecedor de id pessoal do core no lugar do regex local (#241)
 
-### M7 — Dashboard refeito do zero
+### M7 — API e Dashboard (D125)
 
-- Novo `plugin-dashboard` sobre o `query` e o `catalog()` do D121, sem compatibilidade com o atual
+Tudo o que o dashboard mostra sai da API HTTP pública do core, descrita em OpenAPI 3.2
+(`GET /openapi.json`, gerada da tabela de rotas). Auth no core (sessão em cookie, API keys,
+papéis `owner`/`admin`/`viewer`), tempo real por SSE, recursos de plugin por `api.resources` no
+lugar do `dashboard.tabs`, e o `plugin-dashboard` vira cliente genérico, sem compatibilidade com
+o atual. Atendimento humano fica fora do kernel.
+
+- #M7-1 Pesquisa e protótipo: OpenAPI a partir do Zod, SSE na spec e Refine (#273)
+- #M7-2 ADR 0125: API HTTP do core em OpenAPI e dashboard como cliente (#274)
+- #M7-3 Base da API HTTP, `problem+json` e `/openapi.json` (#275)
+- #M7-4 Autenticação da API: usuários, sessões, API keys e papéis (#223)
+- #M7-5 Conexão e tempo real por SSE: status, QR, pareamento, logs ao vivo (#276)
+- #M7-6 Plugins e configuração na API, com segredos (#277)
+- #M7-7 Histórico de logs e métricas na API (#278)
+- #M7-8 Ponto de extensão `api.resources` no lugar do `dashboard.tabs` (#279)
+- #M7-9 Auditoria na API: consulta, exportação e verify (#261)
+- #M7-10 `plugin-dashboard` refeito como cliente genérico da API (#280)
 
 ### v1.0
 

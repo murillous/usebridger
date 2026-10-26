@@ -1,6 +1,7 @@
 # ADR 0104 — Abas do dashboard por ponto de extensão
 
-**Status:** Aceito (2026-10-17) · Detalha **D103**
+**Status:** Substituído por [ADR 0125](0125-api-http-do-core-e-dashboard-cliente.md)
+(2026-10-25) · Aceito (2026-10-17) · Detalha **D103**
 ([ADR 0103](0103-plugins-oficiais-de-metricas-e-dashboard.md)) · Usa **D92**
 ([ADR 0092](0092-pontos-de-extensao-em-servicos.md)) e **D72** ([ADR 0072](0072-http-do-core.md))
 
