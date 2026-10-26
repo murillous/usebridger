@@ -40,7 +40,8 @@ chaves e `X-Bridger-On-Behalf-Of` vêm nas seguintes.
 
 - `lastSeenAt` é gravado a cada request autenticado por sessão; throttle fica para quando o
   storage reclamar.
-- Quem liga `api.auth` sem usuário nem chave recebe 401 em tudo, exceto `/health`, até a 3ª entrega.
+- Quem liga `api.auth` sem usuário nem chave recebe 401 em tudo, exceto `/health`, até o bootstrap
+  (`api.auth.bootstrapToken`, entregue na parte 2).
 - `plugin-dashboard` segue com o token próprio até migrar para a API do core.
 
 ## Complemento (parte 2): usuários, sessões e convites
@@ -67,3 +68,22 @@ chaves e `X-Bridger-On-Behalf-Of` vêm nas seguintes.
   imprime o convite. Não audita.
 - A spec offline (`coreApiRoutes()`) descreve as rotas de auth mesmo sem `api.auth`; no servidor só
   montam com ela.
+- **Concorrência**: a tentativa de login é contada antes do scrypt (e devolvida no sucesso ou em erro
+  nosso), então uma rajada paralela não passa de 5 verificações. No máximo 4 scrypt rodam ao mesmo
+  tempo (login, aceite de convite e troca de senha); o excedente leva 429. O aceite de convite valida
+  o token antes do scrypt e entra no limite por IP; a troca de senha tem limite por usuário (403 na
+  senha atual errada, não 401, porque o usuário já está autenticado).
+- **Proxy**: `api.auth.trustProxy` (número de saltos, padrão 0 = IP do socket) lê o IP do
+  `X-Forwarded-For` contando de trás para frente. O IP entra no titular da auditoria de todo request
+  e em `ip` do `kernel.auth.login.failed`.
+- **Cookie** com `Path=<prefixo da sessão>/api`: bots em `/sessions/<nome>` ([ADR 0072](0072-http-do-core.md))
+  não sobrescrevem o cookie um do outro. Rotas de conta (`/auth/sessions`, `/auth/password`,
+  `/auth/logout`) recusam API key (403); `/auth/me` devolve `onBehalfOf` quando o ator tem.
+- **Auditoria de recusas**: o 403 de papel (admin sobre owner) e o de CSRF saem como
+  `kernel.auth.denied` com o ator (`details.reason` `role` ou `csrf`).
+- **Corridas conhecidas** (aceitas na v1, o storage não tem transação entre documentos): dois
+  bootstraps simultâneos podem criar dois owners; dois admins desativando owners ao mesmo tempo
+  podem deixar zero owner ativo (a recuperação pela CLI cobre); dois `POST /users` com o mesmo
+  e-mail ao mesmo tempo podem duplicar (o login pega o primeiro).
+- **`users.manage` equivale a quase tudo**: quem a tem cria admin e, portanto, qualquer permissão do
+  core. Dê só a quem seria admin; só o owner cria e gerencia owner.

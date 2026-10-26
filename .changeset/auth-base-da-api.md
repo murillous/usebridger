@@ -12,3 +12,7 @@ usuários (criar, alterar, desativar, reset de senha), sessões próprias, papé
 protegido, CSRF em origem cruzada (`X-Bridger-CSRF`), bootstrap por `api.auth.bootstrapToken`,
 `bridger owner-invite` e auditoria dos eventos. `ApiOperation.handler` recebe `ip` e pode devolver
 `Response`.
+
+Rate limit de login reservado antes do scrypt, com teto global de hashes simultâneos; aceite de
+convite sob limite por IP; `api.auth.trustProxy`; cookie com `Path` por sessão do servidor; recusas
+de papel e CSRF auditadas como `kernel.auth.denied`; IP no titular da auditoria.

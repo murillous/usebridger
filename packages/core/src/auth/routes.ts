@@ -13,13 +13,15 @@ export interface AuthRoutesDeps {
   readonly sessionMaxAgeMs: number;
   /** `api.cors.origins`: com a origem do request na lista, o cookie sai `SameSite=None`. */
   readonly corsOrigins?: readonly string[] | undefined;
+  /** Path do cookie: `<prefixo da sessão>/api`. */
+  readonly cookiePath: string;
 }
 
 /** Cookie da sessão; `maxAgeSeconds` 0 apaga. Origem cruzada exige `SameSite=None; Secure`. */
 function setCookie(deps: AuthRoutesDeps, request: Request, token: string, maxAge: number): string {
   const origin = request.headers.get('origin');
   const cross = origin !== null && deps.corsOrigins?.includes(origin) === true;
-  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=${cross ? 'None' : 'Strict'}; Max-Age=${maxAge}`;
+  return `${SESSION_COOKIE}=${token}; Path=${deps.cookiePath}; HttpOnly; Secure; SameSite=${cross ? 'None' : 'Strict'}; Max-Age=${maxAge}`;
 }
 
 function loggedIn(deps: AuthRoutesDeps, request: Request, login: Login): Response {
@@ -36,6 +38,13 @@ function loggedIn(deps: AuthRoutesDeps, request: Request, login: Login): Respons
 function need(actor: ApiActor | undefined): ApiActor {
   if (actor === undefined) throw new ApiError(401, 'autenticação necessária');
   return actor;
+}
+
+/** Rotas de "minha conta" (sessão, senha) são de pessoa: API key não tem conta. */
+function needUser(actor: ApiActor | undefined): ApiActor {
+  const found = need(actor);
+  if (found.kind === 'key') throw new ApiError(403, 'rota de usuário: não vale para API key');
+  return found;
 }
 
 /**
@@ -102,7 +111,7 @@ export function authOperations(deps?: AuthRoutesDeps): readonly AnyApiOperation[
       ...auth,
       response: z.object({}),
       handler: async ({ actor }, request) => {
-        await accounts().logout(need(actor), sessionCookie(request));
+        await accounts().logout(needUser(actor), sessionCookie(request));
         return new Response('{}', {
           headers: {
             'content-type': 'application/json',
@@ -121,11 +130,19 @@ export function authOperations(deps?: AuthRoutesDeps): readonly AnyApiOperation[
         kind: z.enum(['user', 'key']),
         name: z.string(),
         role: role.optional(),
+        onBehalfOf: z.string().optional(),
         permissions: z.array(z.string()),
       }),
       handler: ({ actor }) => {
-        const { id, kind, name, role, permissions } = need(actor);
-        return { id, kind, name, ...(role && { role }), permissions: [...permissions] };
+        const { id, kind, name, role, permissions, onBehalfOf } = need(actor);
+        return {
+          id,
+          kind,
+          name,
+          ...(role && { role }),
+          ...(onBehalfOf !== undefined && { onBehalfOf }),
+          permissions: [...permissions],
+        };
       },
     },
     {
@@ -146,7 +163,7 @@ export function authOperations(deps?: AuthRoutesDeps): readonly AnyApiOperation[
       }),
       handler: async ({ actor }, request) => {
         const token = sessionCookie(request);
-        const mine = await accounts().listSessions(need(actor).id);
+        const mine = await accounts().listSessions(needUser(actor).id);
         const current = token === undefined ? undefined : await accounts().currentSession(token);
         return {
           sessions: mine.map(({ id, createdAt, lastSeenAt, expiresAt }) => ({
@@ -167,7 +184,7 @@ export function authOperations(deps?: AuthRoutesDeps): readonly AnyApiOperation[
       params: idParams,
       response: z.object({}),
       handler: async ({ actor, params }) => {
-        await accounts().revokeOwnSession(need(actor).id, params.id);
+        await accounts().revokeOwnSession(needUser(actor).id, params.id);
         return {};
       },
     },
@@ -180,7 +197,7 @@ export function authOperations(deps?: AuthRoutesDeps): readonly AnyApiOperation[
       response: z.object({}),
       handler: async ({ actor, body }, request) => {
         await accounts().changePassword(
-          need(actor),
+          needUser(actor),
           body.currentPassword,
           body.newPassword,
           sessionCookie(request),
@@ -198,11 +215,11 @@ export function authOperations(deps?: AuthRoutesDeps): readonly AnyApiOperation[
         token: z.string().max(512),
         password,
         name: z.string().min(1).max(200).optional(),
-        email: z.string().min(3).max(320).optional(),
+        email: z.email().max(320).optional(),
       }),
       response: z.object({ user }),
-      handler: async ({ body }, request) =>
-        loggedIn(d(), request, await accounts().acceptInvite(body)),
+      handler: async ({ body, ip }, request) =>
+        loggedIn(d(), request, await accounts().acceptInvite(body, ip)),
     },
     {
       method: 'POST',
@@ -212,7 +229,7 @@ export function authOperations(deps?: AuthRoutesDeps): readonly AnyApiOperation[
       status: 201,
       body: z.object({
         name: z.string().min(1).max(200),
-        email: z.string().min(3).max(320),
+        email: z.email().max(320),
         role,
       }),
       response: withInvite,

@@ -17,6 +17,8 @@ export interface LoginLimiter {
   /** Milissegundos até poder tentar de novo (0 = liberado) para a pior das chaves. */
   wait(keys: readonly string[]): number;
   fail(keys: readonly string[]): void;
+  /** Desfaz uma falha reservada (a tentativa deu certo ou nem chegou a verificar). */
+  refund(keys: readonly string[]): void;
   reset(key: string): void;
 }
 
@@ -60,6 +62,14 @@ export function createLoginLimiter(options: LoginLimiterOptions = {}): LoginLimi
         if (entry.count >= max) {
           entry.blockedUntil = at + Math.min(baseMs * 2 ** (entry.count - max), capMs);
         }
+      }
+    },
+    refund: (keys) => {
+      for (const key of keys) {
+        const entry = entries.get(key);
+        if (entry === undefined) continue;
+        entry.count = Math.max(0, entry.count - 1);
+        if (entry.count < max) entry.blockedUntil = 0;
       }
     },
     reset: (key) => {

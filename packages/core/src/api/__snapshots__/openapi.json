@@ -236,6 +236,9 @@
                         "viewer"
                       ]
                     },
+                    "onBehalfOf": {
+                      "type": "string"
+                    },
                     "permissions": {
                       "type": "array",
                       "items": {
@@ -485,8 +488,9 @@
                   },
                   "email": {
                     "type": "string",
-                    "minLength": 3,
-                    "maxLength": 320
+                    "maxLength": 320,
+                    "format": "email",
+                    "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
                   }
                 },
                 "required": [
@@ -612,8 +616,9 @@
                   },
                   "email": {
                     "type": "string",
-                    "minLength": 3,
-                    "maxLength": 320
+                    "maxLength": 320,
+                    "format": "email",
+                    "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
                   },
                   "role": {
                     "type": "string",

@@ -158,6 +158,7 @@ export function createBot(config: BotConfig): Bot {
           store: createAuthStore(authStorage),
           audit: () => audit,
           sessionMaxAgeMs,
+          ...(apiAuth.trustProxy !== undefined && { trustProxy: apiAuth.trustProxy }),
           accounts: createAccounts({
             storage: authStorage,
             store: createAuthStore(authStorage),

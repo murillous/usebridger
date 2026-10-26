@@ -18,7 +18,10 @@ export const USAGE = `Uso: bridger owner-invite <módulo> --email <e-mail> [--na
 Gera um convite de owner quando o bot não tem nenhum owner ativo (primeiro acesso perdido, dono
 desativado). O módulo é um arquivo do app (.ts, .mjs, .js) com \`export const storage\` (o mesmo
 storage do bot) e, se o bot não usa a sessão default, \`export const session\`. Sem o e-mail em uso,
---name é obrigatório. Imprime o token do convite uma única vez; vale 48 h.`;
+--name é obrigatório.
+O módulo deve só exportar \`storage\` (e \`session\`), sem efeito colateral: nada de \`createBot().start()\`,
+que abriria transport e a trava da sessão. Use um arquivo à parte (ex.: \`storage.ts\`) que o app importa.
+A CLI não pega a trava da sessão: só grava documentos de auth e pode rodar com o bot de pé. Imprime o token do convite uma única vez; vale 48 h.`;
 
 export interface Loaded {
   readonly storage: StoragePort;

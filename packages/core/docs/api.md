@@ -180,6 +180,7 @@ createBot({
       bootstrapToken: appEnv.BRIDGER_BOOTSTRAP_TOKEN, // 16+ caracteres; só para o primeiro acesso
       sessionIdleMs: 8 * 3_600_000, // inatividade (padrão 8 h)
       sessionMaxAgeMs: 7 * 24 * 3_600_000, // vida absoluta (padrão 7 d)
+      trustProxy: 1, // proxies confiáveis na frente (padrão 0: usa o IP do socket)
     },
     cors: { origins: ['https://painel.exemplo.com'] }, // só se o frontend está em outra origem
   },
@@ -193,6 +194,13 @@ createBot({
   resposta é 403. O browser só deixa um site mandar o header se a origem passou no preflight do CORS.
   O frontend faz `fetch(url, { credentials: 'include', headers: { 'X-Bridger-CSRF': '1' } })`.
   Quem usa `Authorization: Bearer` não precisa do header.
+
+- **Atrás de proxy** (`trustProxy: N`): o IP do cliente, usado no rate limit e na auditoria, é o
+  N-ésimo de trás para frente do `X-Forwarded-For`. Use o número exato de proxies que acrescentam o
+  header; com valor maior que o real o cliente forja o IP e escapa do limite. O padrão (0) usa o
+  endereço do socket, e atrás de proxy todos os clientes dividem o mesmo limite por IP.
+- **Cookie por sessão do servidor**: `Path=<prefixo>/api`, então bots em `/sessions/<nome>/api`
+  não sobrescrevem o cookie um do outro.
 
 ### Primeiro acesso (bootstrap)
 
@@ -211,8 +219,8 @@ A resposta já traz o cookie da sessão. Com o primeiro usuário criado, o token
 | --- | --- |
 | `POST /api/auth/login` `{ email, password }` | público; 5 falhas em 15 min por IP e por e-mail bloqueiam (429 com `Retry-After`, espera dobrando a cada falha); a falha é sempre `401 e-mail ou senha inválidos` |
 | `POST /api/auth/logout`, `GET /api/auth/me` | autenticado |
-| `GET /api/auth/sessions`, `DELETE /api/auth/sessions/:id` | minhas sessões |
-| `POST /api/auth/password` `{ currentPassword, newPassword }` | encerra as outras sessões |
+| `GET /api/auth/sessions`, `DELETE /api/auth/sessions/:id` | minhas sessões (pessoa; API key leva 403) |
+| `POST /api/auth/password` `{ currentPassword, newPassword }` | encerra as outras sessões; senha atual errada é 403, com limite por usuário |
 | `POST /api/auth/invites/accept` `{ token, password }` | público; define a senha e entra |
 | `POST /api/users` `{ name, email, role }` | `users.manage`; devolve o convite **uma vez** |
 | `GET /api/users`, `GET` e `PATCH /api/users/:id` | `users.manage` |
@@ -223,7 +231,8 @@ Convite: uso único, vale 48 h, guardado só como hash. Admin não gerencia owne
 ativo não pode ser desativado nem rebaixado (409). Cada ação grava na auditoria
 (`kernel.auth.login`, `kernel.auth.login.failed`, `kernel.auth.logout`,
 `kernel.auth.invite.created` e `.accepted`, `kernel.user.created`, `.updated`, `.disabled`,
-`.enabled`, `kernel.auth.sessions.revoked`, `kernel.auth.password.changed`).
+`.enabled`, `kernel.auth.sessions.revoked`, `kernel.auth.password.changed`). Recusas de papel (admin sobre owner) e de CSRF saem como
+`kernel.auth.denied` com o ator. O IP vai no campo `ip` do evento.
 
 ### Recuperação (sem owner ativo)
 
@@ -233,6 +242,11 @@ bot (e `session`, se não for a `default`):
 ```bash
 bridger owner-invite ./app.ts --email dona@exemplo.com --name "Dona"
 ```
+
+O módulo deve **só exportar `storage` (e `session`)**, sem efeito colateral: use um arquivo à parte
+(`storage.ts`) que o app também importa, nunca o que chama `createBot().start()` (abriria o transport
+e tomaria a trava da sessão). A CLI não toma a trava (`session:<nome>`), então roda com o bot no ar;
+o risco é só o storage ser um arquivo local aberto por dois processos (SQLite em WAL aguenta).
 
 Imprime o token uma vez; aceite-o em `/api/auth/invites/accept`. Cria o usuário ou promove o do
 e-mail a owner sem senha, e recusa se já existe owner ativo. A CLI não grava na auditoria (roda

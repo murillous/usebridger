@@ -18,6 +18,7 @@ import {
 import type { AuthStore, SessionDoc, UserDoc } from './store.ts';
 import type { ApiActor } from './types.ts';
 
+const MAX_CONCURRENT_HASHES = 4;
 export const INVITE_TTL_MS: number = 48 * 60 * 60 * 1000;
 const INVITE_PREFIX = 'bri_';
 
@@ -91,7 +92,12 @@ export function createAccounts(options: AccountsOptions) {
   function record(
     action: string,
     target: string | undefined,
-    extra: { outcome?: 'denied'; details?: Record<string, unknown>; as?: Who } = {},
+    extra: {
+      outcome?: 'denied';
+      details?: Record<string, unknown>;
+      as?: Who;
+      ip?: string | undefined;
+    } = {},
   ): void {
     options.audit?.().record({
       action: `kernel.${action}`,
@@ -99,6 +105,7 @@ export function createAccounts(options: AccountsOptions) {
       ...(extra.outcome && { outcome: extra.outcome }),
       ...(extra.details && { details: extra.details }),
       ...(extra.as && { actor: { kind: 'user' as const, ...extra.as } }),
+      ...(extra.ip !== undefined && { ip: extra.ip }),
     });
   }
 
@@ -113,9 +120,10 @@ export function createAccounts(options: AccountsOptions) {
     return user;
   }
 
-  function requireManage(actor: ApiActor, target: AuthRole): void {
+  function requireManage(actor: ApiActor, target: AuthRole, userId?: string): void {
     // Chave não tem papel: vale o do admin, que não toca em owner.
     if (!canManageRole(actor.role ?? 'admin', target)) {
+      record('auth.denied', userId, { outcome: 'denied', details: { reason: 'role', target } });
       throw new ApiError(403, 'seu papel não gerencia esse usuário');
     }
   }
@@ -145,9 +153,22 @@ export function createAccounts(options: AccountsOptions) {
     return (await store.createSession({ userId, maxAgeMs: options.sessionMaxAgeMs }, at)).token;
   }
 
+  // Teto de scrypt em andamento: cada um custa ~32 MiB e ~50 ms de CPU, e rajada de login ou
+  // convite não pode esgotar a memória. O excedente leva 429 em vez de fila.
+  let hashing = 0;
+  async function gated<T>(fn: () => Promise<T>): Promise<T> {
+    if (hashing >= MAX_CONCURRENT_HASHES) throw new TooManyAttempts(1);
+    hashing += 1;
+    try {
+      return await fn();
+    } finally {
+      hashing -= 1;
+    }
+  }
+
   async function newHash(plain: string): Promise<string> {
     try {
-      return await hashPassword(plain);
+      return await gated(() => hashPassword(plain));
     } catch (error) {
       if (error instanceof WeakPasswordError) throw new ApiError(400, error.message);
       throw error;
@@ -160,18 +181,26 @@ export function createAccounts(options: AccountsOptions) {
       const keys = ip === undefined ? [emailKey] : [emailKey, `ip:${ip}`];
       const waitMs = limiter.wait(keys);
       if (waitMs > 0) throw new TooManyAttempts(Math.ceil(waitMs / 1000));
-      const user = await store.findUserByEmail(email);
-      const ok = await verifyPassword(plain, user?.passwordHash || (await dummy()));
+      // A tentativa é contada ANTES do scrypt: rajada paralela não passa do limite enquanto a
+      // primeira ainda verifica. Sucesso (ou erro nosso) devolve a reserva.
+      limiter.fail(keys);
+      let user: Awaited<ReturnType<AuthStore['findUserByEmail']>>;
+      let ok: boolean;
+      try {
+        user = await store.findUserByEmail(email);
+        const stored = user?.passwordHash || (await dummy());
+        ok = await gated(() => verifyPassword(plain, stored));
+      } catch (error) {
+        limiter.refund(keys);
+        throw error;
+      }
       if (!(ok && user !== undefined && user.passwordHash !== '' && user.status === 'active')) {
-        limiter.fail(keys);
-        record('auth.login.failed', user?.id, {
-          outcome: 'denied',
-          ...(ip !== undefined && { details: { ip } }),
-        });
+        record('auth.login.failed', user?.id, { outcome: 'denied', ip });
         // A mesma mensagem para e-mail inexistente, senha errada, conta desativada ou sem senha.
         throw new ApiError(401, 'e-mail ou senha inválidos');
       }
       limiter.reset(emailKey);
+      if (ip !== undefined) limiter.refund([`ip:${ip}`]);
       const token = await startSession(user.id);
       record('auth.login', user.id, { as: { id: user.id, name: user.name } });
       return { token, user: view(user) };
@@ -216,9 +245,15 @@ export function createAccounts(options: AccountsOptions) {
       keepToken: string | undefined,
     ): Promise<void> {
       const user = await mustGet(actor.id);
-      if (!(await verifyPassword(current, user.passwordHash))) {
-        throw new ApiError(401, 'senha atual incorreta');
+      const key = [`pw:${user.id}`];
+      const waitMs = limiter.wait(key);
+      if (waitMs > 0) throw new TooManyAttempts(Math.ceil(waitMs / 1000));
+      if (!(await gated(() => verifyPassword(current, user.passwordHash)))) {
+        limiter.fail(key);
+        // 403 e não 401: o usuário está autenticado, só errou a confirmação.
+        throw new ApiError(403, 'senha atual incorreta');
       }
+      limiter.reset(key[0] as string);
       await store.updateUser(user.id, {
         passwordHash: await newHash(next),
         mustChangePassword: false,
@@ -232,32 +267,31 @@ export function createAccounts(options: AccountsOptions) {
       record('auth.password.changed', user.id);
     },
 
-    async acceptInvite(input: {
-      token: string;
-      password: string;
-      name?: string | undefined;
-      email?: string | undefined;
-    }): Promise<Login> {
+    async acceptInvite(
+      input: {
+        token: string;
+        password: string;
+        name?: string | undefined;
+        email?: string | undefined;
+      },
+      ip?: string,
+    ): Promise<Login> {
       const invalid = new ApiError(400, 'convite inválido ou expirado');
-      const hash = await newHash(input.password);
+      const keys = ip === undefined ? [] : [`ip:${ip}`];
+      const waitMs = limiter.wait(keys);
+      if (waitMs > 0) throw new TooManyAttempts(Math.ceil(waitMs / 1000));
+      const reject = (): never => {
+        limiter.fail(keys);
+        throw invalid;
+      };
       const at = now();
+      // O token é validado antes do scrypt: chute de convite não custa CPU nem memória.
       const found = (await invites.find({ where: { hash: hashSecret(input.token) }, limit: 1 }))[0];
-      let userId: string;
+      let invitee: WithId<UserDoc> | undefined;
       if (found !== undefined) {
-        if (found.usedAt !== undefined || Date.parse(found.expiresAt) <= at.getTime()) {
-          throw invalid;
-        }
-        const user = await store.getUser(found.userId);
-        if (user === undefined || user.status !== 'active') throw invalid;
-        // Uso único: quem marcar primeiro leva; a segunda chamada concorrente recebe 0.
-        const claimed = await invites.update(
-          { hash: found.hash, usedAt: null },
-          { usedAt: at.toISOString() },
-        );
-        if (claimed === 0) throw invalid;
-        await store.updateUser(user.id, { passwordHash: hash, mustChangePassword: false });
-        userId = user.id;
-        record('auth.invite.accepted', userId, { as: { id: user.id, name: user.name } });
+        if (found.usedAt !== undefined || Date.parse(found.expiresAt) <= at.getTime()) reject();
+        invitee = await store.getUser(found.userId);
+        if (invitee === undefined || invitee.status !== 'active') reject();
       } else {
         // Bootstrap: o token da config só vale enquanto não existe nenhum usuário.
         const boot = options.bootstrapToken;
@@ -266,19 +300,34 @@ export function createAccounts(options: AccountsOptions) {
           !sameSecret(input.token, boot) ||
           (await users.find({ limit: 1 })).length > 0
         ) {
-          throw invalid;
+          reject();
         }
         if (input.name === undefined || input.email === undefined) {
           throw new ApiError(400, 'informe name e email do primeiro owner');
         }
+      }
+      const hash = await newHash(input.password);
+      let userId: string;
+      if (found !== undefined && invitee !== undefined) {
+        // Uso único: quem marcar primeiro leva; a segunda chamada concorrente recebe 0.
+        const claimed = await invites.update(
+          { hash: found.hash, usedAt: null },
+          { usedAt: at.toISOString() },
+        );
+        if (claimed === 0) reject();
+        await store.updateUser(invitee.id, { passwordHash: hash, mustChangePassword: false });
+        userId = invitee.id;
+        record('auth.invite.accepted', userId, { as: { id: invitee.id, name: invitee.name } });
+      } else {
         // shortcut: dois bootstraps simultâneos poderiam criar dois owners; o token é só do
         // operador, então é raro. Travar no storage se importar.
+        const name = input.name as string;
         userId = await store.createUser(
-          { name: input.name, email: input.email, passwordHash: hash, role: 'owner' },
+          { name, email: input.email as string, passwordHash: hash, role: 'owner' },
           at,
         );
         record('auth.invite.accepted', userId, {
-          as: { id: userId, name: input.name },
+          as: { id: userId, name },
           details: { bootstrap: true },
         });
       }
@@ -315,9 +364,9 @@ export function createAccounts(options: AccountsOptions) {
       patch: { name?: string | undefined; role?: AuthRole | undefined },
     ): Promise<User> {
       const user = await mustGet(id);
-      requireManage(actor, user.role);
+      requireManage(actor, user.role, id);
       if (patch.role !== undefined && patch.role !== user.role) {
-        requireManage(actor, patch.role);
+        requireManage(actor, patch.role, id);
         await guardLastOwner(user);
       }
       const change: Partial<UserDoc> = {
@@ -332,7 +381,7 @@ export function createAccounts(options: AccountsOptions) {
 
     async setStatus(actor: ApiActor, id: string, status: 'active' | 'disabled'): Promise<User> {
       const user = await mustGet(id);
-      requireManage(actor, user.role);
+      requireManage(actor, user.role, id);
       if (status === 'disabled') {
         await guardLastOwner(user);
         await store.updateUser(id, { status });
@@ -347,7 +396,7 @@ export function createAccounts(options: AccountsOptions) {
 
     async revokeSessions(actor: ApiActor, id: string): Promise<number> {
       const user = await mustGet(id);
-      requireManage(actor, user.role);
+      requireManage(actor, user.role, id);
       const count = await store.revokeUserSessions(id, now());
       record('auth.sessions.revoked', id, { details: { count } });
       return count;
@@ -356,7 +405,7 @@ export function createAccounts(options: AccountsOptions) {
     /** Zera a senha (a antiga para de valer), encerra as sessões e gera novo convite. */
     async resetPassword(actor: ApiActor, id: string): Promise<Invite> {
       const user = await mustGet(id);
-      requireManage(actor, user.role);
+      requireManage(actor, user.role, id);
       await store.updateUser(id, { passwordHash: '', mustChangePassword: true });
       await store.revokeUserSessions(id, now());
       const invite = await createInvite(id);

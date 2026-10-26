@@ -10,7 +10,13 @@ import type { Context, Hono } from 'hono';
 import type { WSContext, WSEvents } from 'hono/ws';
 import type { WebSocketServer } from 'ws';
 import { coreApiOperations } from '#api/core.ts';
-import { type ApiOptions, corsMiddleware, csrfMiddleware, validateApiOptions } from '#api/cors.ts';
+import {
+  type ApiOptions,
+  corsMiddleware,
+  csrfMiddleware,
+  socketAddress,
+  validateApiOptions,
+} from '#api/cors.ts';
 import { loadApiLibs } from '#api/libs.ts';
 import { createOpenApiDocument } from '#api/openapi.ts';
 import { type AnyApiOperation, operationHandler } from '#api/operation.ts';
@@ -244,7 +250,13 @@ export class SessionHttp {
     const { accounts, sessionMaxAgeMs } = this.#guard ?? {};
     const auth =
       accounts && sessionMaxAgeMs !== undefined
-        ? { accounts, sessionMaxAgeMs, corsOrigins: this.corsOrigins }
+        ? {
+            accounts,
+            sessionMaxAgeMs,
+            corsOrigins: this.corsOrigins,
+            // Um cookie por sessão do servidor: bots em /sessions/<nome> não sobrescrevem o do outro.
+            cookiePath: `${this.#prefix}/api`,
+          }
         : undefined;
     return coreApiOperations(states, auth).map((api) => ({
       owner: 'core',
@@ -257,6 +269,10 @@ export class SessionHttp {
       trail: this.#trail,
       sockets: new Set(),
     }));
+  }
+
+  get guard(): ApiGuard | undefined {
+    return this.#guard;
   }
 
   /** CORS com auth: o cookie cruza origens e as escritas exigem o header anti-CSRF. */
@@ -465,7 +481,7 @@ class HttpHub {
         app.use(`${session.prefix}/api`, cors);
         app.use(`${session.prefix}/api/*`, cors);
         if (session.csrf) {
-          const csrf = csrfMiddleware();
+          const csrf = csrfMiddleware(session.guard);
           app.use(`${session.prefix}/api`, csrf);
           app.use(`${session.prefix}/api/*`, csrf);
         }
@@ -523,8 +539,7 @@ function mount(app: Hono, entry: RouteEntry, upgradeWebSocket: typeof UpgradeWeb
   const base = entry.base();
   const path = entry.path === '/' ? base : base + entry.path;
   const info = (c: Context): HttpRequestInfo => {
-    const ip = (c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined)
-      ?.incoming?.socket?.remoteAddress;
+    const ip = socketAddress(c.env);
     return { params: c.req.param(), ...(ip !== undefined && { ip }) };
   };
   const { target } = entry;

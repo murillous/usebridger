@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { loadApiLibs } from '#api/libs.ts';
 import type { ProblemBody } from '#api/problem.ts';
 import type { Audit } from '#audit/audit.ts';
+import { currentAuditSubject } from '#audit/scope.ts';
 import type { InternalRecordInput } from '#audit/types.ts';
 import { run as ownerInvite } from '#cli/owner-invite.ts';
 import { createHttp, type SessionHttp, sessionHttp } from '#http/server.ts';
@@ -173,7 +174,7 @@ describe('sessões', () => {
     const me = { ...actor('admin', id), role: 'viewer' as const };
     expect(
       await status(accounts.changePassword(me, 'errada errada', 'outra senha longa', undefined)),
-    ).toBe(401);
+    ).toBe(403);
     expect(await status(accounts.changePassword(me, PASSWORD, 'curta', undefined))).toBe(400);
     await accounts.changePassword(me, PASSWORD, 'outra senha longa', second.token);
     expect((await store.findSessionByToken(first))?.revokedAt).toBeDefined();
@@ -371,7 +372,7 @@ describe('auditoria', () => {
     expect(failed).toMatchObject({
       outcome: 'denied',
       target: { type: 'user', id },
-      details: { ip: '4.4.4.4' },
+      ip: '4.4.4.4',
     });
     expect(recorded.find((e) => e.action === 'kernel.auth.login')?.actor).toMatchObject({ id });
     expect(JSON.stringify(recorded)).not.toContain('passwordHash');
@@ -384,19 +385,22 @@ describe('HTTP: cookie e CSRF', () => {
     for (const session of attached.splice(0)) await session.detach();
   });
 
-  async function start(origins?: string[]) {
+  let last: { store: ReturnType<typeof createAuthStore>; recorded: InternalRecordInput[] };
+
+  async function start(origins?: string[], sessionName = 'default') {
     await loadApiLibs();
-    const { storage, store, accounts } = setup({ bootstrapToken: 'token-de-bootstrap-1234' });
+    const { store, accounts, recorded } = setup({ bootstrapToken: 'token-de-bootstrap-1234' });
+    last = { store, recorded };
     const guard = createApiGuard({
       store,
-      audit: () => ({ record: () => undefined }) as unknown as Audit,
+      audit: () => ({ record: (e: InternalRecordInput) => recorded.push(e) }) as unknown as Audit,
       accounts,
       sessionMaxAgeMs: 7 * 24 * HOUR,
     });
     const http = createHttp({ port: 0, hostname: '127.0.0.1' });
     const session = sessionHttp(
       http,
-      'default',
+      sessionName,
       createNoopLogger,
       undefined,
       origins ? { cors: { origins } } : {},
@@ -415,8 +419,8 @@ describe('HTTP: cookie e CSRF', () => {
     session.attach(() => 'running');
     attached.push(session);
     await session.listen();
-    void storage;
-    return `http://127.0.0.1:${http.port}/api`;
+    const prefix = sessionName === 'default' ? '' : `/sessions/${sessionName}`;
+    return `http://127.0.0.1:${http.port}${prefix}/api`;
   }
 
   const json = (body: unknown, headers: Record<string, string> = {}): RequestInit => ({
@@ -515,5 +519,156 @@ describe('HTTP: cookie e CSRF', () => {
     expect((await fetch(`${base}/users`, { headers: { cookie: viewer } })).status).toBe(403);
     const list = await fetch(`${base}/users`, { headers: { cookie: owner } });
     expect(((await list.json()) as { users: unknown[] }).users).toHaveLength(2);
+  });
+
+  it('cookie por sessão do servidor: Path=<prefixo>/api', async () => {
+    const base = await start(undefined, 'erp');
+    const res = await fetch(`${base}/auth/invites/accept`, json(boot));
+    expect(res.headers.get('set-cookie')).toContain('Path=/sessions/erp/api;');
+    expect(
+      (
+        await fetch(`${base}/auth/me`, {
+          headers: { cookie: (res.headers.get('set-cookie') ?? '').split(';')[0] ?? '' },
+        })
+      ).status,
+    ).toBe(200);
+  });
+
+  it('API key não usa as rotas de conta (403) e e-mail inválido dá 400', async () => {
+    const base = await start();
+    const owner =
+      (
+        (await fetch(`${base}/auth/invites/accept`, json(boot))).headers.get('set-cookie') ?? ''
+      ).split(';')[0] ?? '';
+    const key = await last.store.createApiKey(
+      { name: 'k', permissions: ['users.manage'] },
+      new Date(),
+    );
+    const bearer = { authorization: `Bearer ${key.secret}` };
+    for (const path of ['/auth/sessions']) {
+      expect((await fetch(`${base}${path}`, { headers: bearer })).status).toBe(403);
+    }
+    expect((await fetch(`${base}/auth/logout`, { method: 'POST', headers: bearer })).status).toBe(
+      403,
+    );
+    expect((await fetch(`${base}/auth/me`, { headers: bearer })).status).toBe(200);
+    const bad = await fetch(
+      `${base}/users`,
+      json({ name: 'V', email: 'nao-e-email', role: 'viewer' }, { cookie: owner }),
+    );
+    expect(bad.status).toBe(400);
+  });
+
+  it('CSRF recusado é auditado como kernel.auth.denied com o ator; invite aceito por IP é limitado', async () => {
+    const origin = 'https://painel.exemplo.com';
+    const base = await start([origin]);
+    const ok = await fetch(
+      `${base}/auth/invites/accept`,
+      json(boot, { origin, 'x-bridger-csrf': '1' }),
+    );
+    const cookie = (ok.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    const res = await fetch(`${base}/auth/logout`, json({}, { origin, cookie }));
+    expect(res.status).toBe(403);
+    expect(last.recorded.find((e) => e.action === 'kernel.auth.denied')).toMatchObject({
+      outcome: 'denied',
+      details: { reason: 'csrf' },
+    });
+    for (let i = 0; i < 5; i++) {
+      const r = await fetch(
+        `${base}/auth/invites/accept`,
+        json({ token: `chute-${i}`, password: PASSWORD }, { origin, 'x-bridger-csrf': '1' }),
+      );
+      expect(r.status).toBe(400);
+    }
+    const blocked = await fetch(
+      `${base}/auth/invites/accept`,
+      json({ token: 'outro', password: PASSWORD }, { origin, 'x-bridger-csrf': '1' }),
+    );
+    expect(blocked.status).toBe(429);
+  });
+});
+
+describe('concorrência, proxy e papéis', () => {
+  it('logins paralelos com senha errada: só 5 chegam a verificar', async () => {
+    const { accounts } = setup();
+    await activate(accounts, actor('owner'), 'viewer', 'p@x.com');
+    const results = await Promise.all(
+      Array.from({ length: 20 }, () =>
+        status(accounts.login('p@x.com', 'errada errada', '7.7.7.7')),
+      ),
+    );
+    // O teto de scrypt (4 ao mesmo tempo) devolve a reserva do excedente; nunca passa de 5 verificações.
+    expect(results.filter((s) => s === 401).length).toBeLessThanOrEqual(5);
+    expect(results.filter((s) => s === 401).length).toBeGreaterThan(0);
+    expect(results.filter((s) => s === 429).length).toBeGreaterThanOrEqual(15);
+  });
+
+  it('teto global de scrypt: rajada de IPs e e-mails distintos leva 429 no excedente', async () => {
+    const { accounts } = setup();
+    const results = await Promise.all(
+      Array.from({ length: 12 }, (_, i) =>
+        status(accounts.login(`u${i}@x.com`, 'qualquer coisa', `10.0.0.${i}`)),
+      ),
+    );
+    expect(results.filter((s) => s === 429).length).toBeGreaterThan(0);
+    expect(results.filter((s) => s === 401).length).toBeGreaterThan(0);
+  });
+
+  it('convite com token inválido não gasta scrypt: a mensagem é a do convite, não a da senha', async () => {
+    const { accounts } = setup();
+    const error = await accounts
+      .acceptInvite({ token: 'nada', password: 'curta' })
+      .catch((e: Error) => e);
+    expect((error as Error).message).toBe('convite inválido ou expirado');
+  });
+
+  it('troca de senha: erro é 403 e 5 erros bloqueiam o usuário (429)', async () => {
+    const { accounts } = setup();
+    const { id } = await activate(accounts, actor('owner'), 'viewer', 'w@x.com');
+    const me = { ...actor('admin', id), role: 'viewer' as const };
+    for (let i = 0; i < 5; i++) {
+      expect(
+        await status(accounts.changePassword(me, 'errada errada', 'outra senha longa', undefined)),
+      ).toBe(403);
+    }
+    expect(
+      await status(accounts.changePassword(me, PASSWORD, 'outra senha longa', undefined)),
+    ).toBe(429);
+  });
+
+  it('trustProxy: IP do X-Forwarded-For pelo número de saltos; padrão é o socket; vai no titular da auditoria', async () => {
+    const { store } = setup();
+    const audit = { record: () => undefined } as unknown as Audit;
+    const req = new Request('http://x/', {
+      headers: { 'x-forwarded-for': 'forjado, 1.2.3.4, 5.6.7.8' },
+    });
+    expect(createApiGuard({ store, audit: () => audit }).clientIp(req, '9.9.9.9')).toBe('9.9.9.9');
+    expect(
+      createApiGuard({ store, audit: () => audit, trustProxy: 1 }).clientIp(req, '9.9.9.9'),
+    ).toBe('5.6.7.8');
+    expect(
+      createApiGuard({ store, audit: () => audit, trustProxy: 2 }).clientIp(req, '9.9.9.9'),
+    ).toBe('1.2.3.4');
+    expect(
+      createApiGuard({ store, audit: () => audit, trustProxy: 9 }).clientIp(req, '9.9.9.9'),
+    ).toBe('9.9.9.9');
+    const seen = createApiGuard({ store, audit: () => audit }).run(
+      actor('owner'),
+      req,
+      () => currentAuditSubject()?.ip,
+      '1.1.1.1',
+    );
+    expect(seen).toBe('1.1.1.1');
+  });
+
+  it('admin tentando gerir owner é auditado como kernel.auth.denied', async () => {
+    const { accounts, recorded } = setup();
+    const { id } = await activate(accounts, actor('owner'), 'owner', 'ow@x.com');
+    await accounts.setStatus(actor('admin'), id, 'disabled').catch(() => undefined);
+    expect(recorded.find((e) => e.action === 'kernel.auth.denied')).toMatchObject({
+      outcome: 'denied',
+      target: { type: 'user', id },
+      details: { reason: 'role' },
+    });
   });
 });
