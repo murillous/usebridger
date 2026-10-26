@@ -7,9 +7,25 @@ import { BotConfigError } from '#config/owners.ts';
 
 export interface ApiOptions {
   readonly cors?: { readonly origins: readonly string[] };
+  /** Liga a autenticação da API (ADR 0127). Desligada, a API fica aberta como antes. */
+  readonly auth?: {
+    /** Inatividade que encerra a sessão; padrão 8 h. */
+    readonly sessionIdleMs?: number;
+    /** Vida absoluta da sessão; padrão 7 d. */
+    readonly sessionMaxAgeMs?: number;
+  };
 }
 
 export function validateApiOptions(api: ApiOptions): void {
+  for (const key of ['sessionIdleMs', 'sessionMaxAgeMs'] as const) {
+    const value: unknown = api.auth?.[key];
+    if (
+      value !== undefined &&
+      !(typeof value === 'number' && Number.isFinite(value) && value > 0)
+    ) {
+      throw new BotConfigError(`api.auth.${key}: use um número de milissegundos maior que zero`);
+    }
+  }
   if (api.cors === undefined) return;
   const origins: unknown = api.cors.origins;
   if (!(Array.isArray(origins) && origins.every((o) => typeof o === 'string' && o !== ''))) {

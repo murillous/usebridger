@@ -1,6 +1,8 @@
 import { ActionRegistry } from '#actions/actions.ts';
 import { AUDIT_COLLECTION, AUDIT_INDEXES, createAudit } from '#audit/audit.ts';
 import { createAuditRetention, validateRetentionDays } from '#audit/retention.ts';
+import { createApiGuard } from '#auth/guard.ts';
+import { createAuthStore } from '#auth/store.ts';
 import { createCommandCatalog } from '#commands/catalog.ts';
 import { createPrefixStore } from '#commands/prefixes.ts';
 import { createCommandRegistry } from '#commands/registry.ts';
@@ -143,11 +145,22 @@ export function createBot(config: BotConfig): Bot {
     onError: (error) => log.event(LOG.transportCommandsListenerFailed, { err: error }),
   });
   const registry = createCommandRegistry({ onChange: () => catalog.changed() });
+  // Autenticação da API (ADR 0127): só com `api.auth`. A auditoria nasce depois, daí o `() => audit`.
+  const apiGuard =
+    config.api?.auth === undefined
+      ? undefined
+      : createApiGuard({
+          store: createAuthStore(kernelStorage(scoped, 'auth')),
+          audit: () => audit,
+          ...(config.api.auth.sessionIdleMs !== undefined && {
+            idleMs: config.api.auth.sessionIdleMs,
+          }),
+        });
   // Rotas da sessão no servidor do processo (ADR 0072); só entram nele no start().
   const http =
     config.http === undefined
       ? undefined
-      : sessionHttp(config.http, session, getLog, trail, config.api);
+      : sessionHttp(config.http, session, getLog, trail, config.api, apiGuard);
   let resolvedTransport: Transport | undefined;
   const transport = resolveTransport(config.transport, {
     session,

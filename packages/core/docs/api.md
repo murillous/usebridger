@@ -3,7 +3,8 @@
 O core expõe uma API HTTP descrita em OpenAPI 3.2 sobre o [servidor HTTP](http.md)
 ([ADR 0125](../../../docs/adr/0125-api-http-do-core-e-dashboard-cliente.md),
 [ADR 0126](../../../docs/adr/0126-rotas-da-api-de-plugin-sob-api-plugins.md)). Sem auth ainda
-(M7-4): não exponha a porta fora de uma rede confiável.
+fica aberta até ligar `api.auth` (veja [Autenticação](#autenticação)): sem ela, não exponha a porta
+fora de uma rede confiável.
 
 | Sessão | Base da API | Spec |
 | --- | --- | --- |
@@ -143,3 +144,29 @@ A spec do core fica versionada em `packages/core/src/api/__snapshots__/openapi.j
 Mudança proposital: rode `pnpm exec vitest run packages/core/src/api -u`, confira o diff do
 arquivo no PR e crie o changeset. A spec é contrato semver: remover ou mudar rota, campo ou enum
 exige changeset **`major`** do `@usebridger/core`; acrescentar é `minor`.
+
+## Autenticação
+
+([ADR 0127](../../../docs/adr/0127-base-da-autenticacao-da-api.md); login, convites e chaves pela
+API chegam nas próximas entregas da #223.) Ligue com `api: { auth: {} }` no `BotConfig`
+(`sessionIdleMs`, padrão 8 h, e `sessionMaxAgeMs`, padrão 7 d, são opcionais). Daí em diante toda
+operação, do core e de plugin, exige um ator:
+
+- cookie `bridger_session` (pessoa) ou `Authorization: Bearer <chave>` (máquina);
+- `permission: 'logs.read'` na operação exige essa permissão (403 e evento `kernel.auth.denied`
+  se faltar); sem `permission`, basta estar autenticado; `public: true` dispensa a auth;
+- o handler recebe o ator em `input.actor`, e `ctx.audit` grava com ele.
+
+```ts
+ctx.http.api({
+  method: 'GET',
+  path: '/logs',
+  permission: 'logs.read',
+  response: z.object({ lines: z.array(z.string()) }),
+  handler: ({ actor }) => ({ lines: [`lido por ${actor?.name}`] }),
+});
+```
+
+Papéis: `owner` e `admin` têm todas as permissões do core; `viewer`, só as `.read`. O admin não
+gerencia owner (`canManageRole`). A spec traz `securitySchemes` (`cookieAuth`, `bearerAuth`),
+`security` por operação e `x-permission`.

@@ -2,6 +2,7 @@
 // servidor nem transport, então serve o `GET /openapi.json` e a exportação da CLI.
 
 import type { createDocument } from 'zod-openapi';
+import { SESSION_COOKIE } from '#auth/actor.ts';
 import { CORE_VERSION } from '#version.ts';
 import { apiLibs, loadApiLibs } from './libs.ts';
 import type { ApiRoute } from './operation.ts';
@@ -29,6 +30,9 @@ export async function createOpenApiDocument(
     item[operation.method.toLowerCase()] = {
       ...(operation.summary && { summary: operation.summary }),
       ...(operation.tags && { tags: [...operation.tags] }),
+      // `security: []` marca a rota pública; as duas formas de credencial valem como alternativas.
+      security: operation.public ? [] : [{ cookieAuth: [] }, { bearerAuth: [] }],
+      ...(operation.permission && { 'x-permission': operation.permission }),
       ...(Object.keys(requestParams).length > 0 && { requestParams }),
       ...(operation.body && {
         requestBody: {
@@ -52,5 +56,11 @@ export async function createOpenApiDocument(
     openapi: '3.2.0',
     info: { title: 'Bridger API', version: options.version ?? CORE_VERSION },
     paths,
+    components: {
+      securitySchemes: {
+        cookieAuth: { type: 'apiKey', in: 'cookie', name: SESSION_COOKIE },
+        bearerAuth: { type: 'http', scheme: 'bearer' },
+      },
+    },
   } as Parameters<typeof createDocument>[0]);
 }
