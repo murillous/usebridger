@@ -81,6 +81,38 @@ const spec = await createOpenApiDocument(await coreApiRoutes()); // só o core; 
 
 `createOpenApiDocument` recebe qualquer lista de `{ path, operation }` (`ApiRoute`).
 
+## Gerar a spec e o cliente
+
+O comando `bridger openapi [módulo] [--out <arquivo>]` escreve a spec OpenAPI 3.2 (JSON) no
+stdout, ou em `--out`, sem conectar transport nem abrir porta:
+
+```sh
+bridger openapi --out openapi.json              # só o core
+bridger openapi ./src/plugins.ts --out openapi.json  # core + plugins do app
+```
+
+O módulo é um arquivo do app que exporta, por named export, a lista de plugins:
+`export const plugins = [meuPlugin, outroPlugin]` (a mesma lista que vai na config do bot). Para
+coletar as operações, o comando roda o `setup` de cada plugin com um contexto em que só `ctx.http`
+e `ctx.plugin` são reais; o resto de `ctx` (storage, scheduler, commands) é um no-op. O kernel não
+toca em nada externo, mas o código do próprio plugin roda: registre a API no começo do `setup` e
+deixe conexões e timers para depois dela. Uso inválido sai com código 1 e mensagem no stderr.
+
+Tipos e cliente no frontend (o `openapi-typescript` roda isolado em TypeScript 5,
+[ADR 0125](../../../docs/adr/0125-api-http-do-core-e-dashboard-cliente.md); não é dependência do core):
+
+```sh
+pnpm dlx openapi-typescript@7 openapi.json -o src/api-types.d.ts
+```
+
+```ts
+import createClient from 'openapi-fetch'; // fixe a versão exata no package.json do frontend
+import type { paths } from './api-types';
+
+const api = createClient<paths>({ baseUrl: 'http://localhost:3000' });
+const { data, error } = await api.GET('/api/health'); // `error` é o problem+json tipado
+```
+
 ## CORS
 
 Desligado por padrão: sem config, a API não manda header CORS e o preflight `OPTIONS` não é

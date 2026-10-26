@@ -7,3 +7,6 @@ Zod sob `/api` (`/sessions/<sessão>/api` fora da `default`), erros em `applicat
 com `traceId`, `GET /openapi.json` (OpenAPI 3.2 via `zod-openapi`), `GET /api/health`, CORS por
 allowlist em `BotConfig.api.cors.origins` e `createOpenApiDocument`/`coreApiRoutes` para gerar a
 spec sem servidor. `HttpRoutes` ganha o método `api`.
+
+O binário `bridger` traz o comando `bridger openapi [módulo] [--out <arquivo>]`, que escreve a
+spec (do core e dos plugins do módulo) sem transport nem porta.
