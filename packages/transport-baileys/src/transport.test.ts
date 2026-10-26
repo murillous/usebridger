@@ -171,6 +171,24 @@ describe('BaileysTransport: pareamento', () => {
     expect(codes).toEqual([]);
   });
 
+  it('código sob demanda: devolve e emite o código da tentativa atual (ADR 0129)', async () => {
+    const { driver, transport, codes } = setup('qr');
+    await transport.connect();
+    driver.last.emit('connection.update', { qr: 'QR-1' });
+    expect(await transport.requestPairingCode('5511999999999')).toBe('ABCD1234');
+    expect(driver.last.pairingRequests).toEqual(['5511999999999']);
+    expect(codes).toEqual(['ABCD1234']);
+  });
+
+  it('logout fecha com logged-out (ADR 0129)', async () => {
+    const { driver, transport, statuses } = setup('qr');
+    await transport.connect();
+    await transport.logout();
+    expect(driver.last.loggedOut).toBe(true);
+    expect(statuses.at(-1)).toMatchObject({ status: 'closed', reason: 'logged-out' });
+    await expect(transport.logout()).rejects.toThrow('sem conexão');
+  });
+
   it('falha ao pedir o código vai para o log, sem derrubar nada', async () => {
     const { driver, transport, log, codes } = setup({ phone: '5511999999999' });
     await transport.connect();

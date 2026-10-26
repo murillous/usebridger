@@ -77,6 +77,17 @@ export class FakeSocket implements BaileysSocket {
     this.ended = true;
   }
 
+  loggedOut = false;
+
+  /** Como o Baileys: avisa o aparelho e fecha com `loggedOut` (401). */
+  async logout(): Promise<void> {
+    this.loggedOut = true;
+    this.emit('connection.update', {
+      connection: 'close',
+      lastDisconnect: { error: boom(401, 'Intentional Logout'), date: new Date() },
+    });
+  }
+
   requestPairingCode(phoneNumber: string): Promise<string> {
     this.pairingRequests.push(phoneNumber);
     return this.pairingCode;
