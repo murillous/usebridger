@@ -11,7 +11,7 @@ Versões e datas consultadas no npm em 2026-10-25, Node 24.21.
 | Spec a partir do Zod | `zod-openapi` sobre uma tabela de rotas que o core já mantém | `@hono/zod-openapi`; montar à mão fica de plano B |
 | Tempo real na spec | SSE com `itemSchema` (OpenAPI 3.2) e o item como componente nomeado | pacote separado só com os tipos dos eventos |
 | Cliente | `openapi-typescript` + `openapi-fetch`, codegen isolado com TypeScript 5 | — |
-| Dashboard | Refine (headless, `@refinedev/core`) com data provider sobre `openapi-fetch` | UI kit próprio do Refine |
+| Dashboard | Refine (headless, `@refinedev/core`) com data provider sobre `openapi-fetch`, com saída para React Query puro | UI kit próprio do Refine |
 | Formulário de config | `@rjsf/core` + `@rjsf/shadcn` direto do JSON Schema | AutoForm |
 
 ## Spec a partir do Zod
@@ -124,7 +124,27 @@ Formulário de config:
 | `@rjsf/core` / `@rjsf/shadcn` | 6.11.0 | Apache-2.0 / MIT | 2026-09-29 |
 | `@autoform/react` / `@autoform/zod` | 5.0.0 / 6.0.0 | MIT | 2026-07-08 |
 
-O `@refinedev/core` está há seis meses sem publish; vale reavaliar antes do M7-10.
+### Confiabilidade do Refine
+
+Verificado no GitHub e no npm em 2026-10-25.
+
+- A favor: MIT, ~36 mil estrelas, repo ativo (não arquivado) e mantido por empresa, 51 issues
+  abertas, histórico longo de releases com contribuidores externos.
+- Ritmo caindo: mais de 100 commits desde janeiro de 2026, 38 desde abril, 4 desde julho; o
+  último em 2026-09-10.
+- Publicação travada: o `packages/core/package.json` do repo está em `5.2.0` (PR de versão
+  mergeado em setembro), mas o npm parou no `5.0.12`, de abril. A 5.1 e a 5.2 nunca saíram. A
+  causa não foi verificada; pode ser só o CI de release.
+- Dependências pesadas para o que usamos: `lodash` e `lodash-es` juntos, `papaparse`, `qs`,
+  `@refinedev/devtools-internal`.
+
+O risco é baixo para o uso proposto: só o `@refinedev/core` headless (`useList`, `useUpdate` e o
+data provider), sem o UI kit. Quem faz o trabalho é o React Query, bem mantido. Se o Refine
+parar, trocá-lo por React Query direto custa pouco: o data provider vira meia dúzia de hooks.
+
+**Recomendação:** Refine com saída prevista. Versão fixa, nada dele fora do data provider e dos
+hooks (nenhum tipo do Refine espalhado pelo dashboard), e checar antes do M7-10 se a 5.2 chegou
+ao npm; se não chegou, React Query puro.
 
 ## O que ficou de fora
 
