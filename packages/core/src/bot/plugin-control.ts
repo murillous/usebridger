@@ -29,6 +29,8 @@ export interface PluginControlDeps {
   readonly audit?: Pick<Audit, 'record'>;
   /** Para registrar a falha de leitura do diff de config. */
   readonly log?: () => Logger;
+  /** Plugins que mudaram num reload/disable/enable, com os dependentes (stream da API, ADR 0129). */
+  readonly onChange?: (entries: readonly PluginReportEntry[]) => void;
 }
 
 export interface PluginControl {
@@ -94,6 +96,7 @@ export function createPluginControl(deps: PluginControlDeps): PluginControl {
     // também (dormentes); o `disable` e o passo que sumiu as perdem, também do storage (ADR 0094).
     deps.conversations.sweep(presence);
     for (const error of result.teardownErrors) deps.lifecycleError(error);
+    deps.onChange?.([result.plugin, ...result.dependents]);
     // Os dependentes recarregados em cascata (ADR 0037) também podem falhar no `setup` novo.
     for (const entry of [result.plugin, ...result.dependents]) {
       if (entry.status === 'skipped' && entry.reason.kind === 'setup-failed') {

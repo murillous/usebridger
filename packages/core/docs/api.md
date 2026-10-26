@@ -303,3 +303,117 @@ curl http://localhost:3000/api/plugins/tarefas/items \
 O valor (1 a 256 caracteres, sem controle) vai para `actor.onBehalfOf` e para o ator dos eventos
 de auditoria. Não amplia permissão: vale o escopo da chave. Sem `auth.on-behalf-of`, ou vindo de
 sessão de usuário, é 403 auditado. Em frontend de outra origem, o CORS libera o header.
+
+## Conexão e tempo real
+
+Um app conecta o número sem o dashboard (ADR 0129). As rotas ficam sob `/api` (ou
+`/sessions/<sessão>/api`) e só existem com `BotConfig.http`. A porta abre quando algum plugin ou o
+transport tem rota (ADR 0072).
+
+| Rota | Permissão | O que faz |
+| --- | --- | --- |
+| `GET /connection` | `connection.read` | Estado (`connecting`/`open`/`closed` e `reason`), transport, `pairing`, conta conectada (`account`), `connectedSince`, `reconnections`, `qrExpiresAt` |
+| `POST /connection/pairing-code` | `connection.manage` | Pede o código para `{ "phone": "5511999999999" }` e devolve `{ "code" }` |
+| `POST /connection/logout` | `connection.manage` | Desvincula a sessão; o bot limpa a credencial e pareia de novo |
+| `GET /events` | `connection.read` | Stream SSE com os eventos abaixo |
+
+Pareamento e logout pedem um transport com a capability `pairing` e os métodos
+`requestPairingCode`/`logout` (o `transport-baileys` tem os dois). Sem eles, ou com a sessão já
+conectada, a resposta é 409.
+
+### Conectar um número
+
+1. Abra o stream (`GET /events`). Sem `Last-Event-ID`, ele começa com o estado atual: o último
+   `connection.status` e, se ainda valer, o QR ou o código.
+2. Mostre o `connection.qr` que chegar; a cada QR novo, troque a imagem.
+3. Para parear por código em vez do QR, com a sessão em `connecting`:
+
+   ```sh
+   curl -X POST http://localhost:3000/api/connection/pairing-code \
+     -H "Authorization: Bearer $BRIDGER_KEY" -H 'content-type: application/json' \
+     -d '{"phone":"5511999999999"}'
+   # {"code":"ABCD1234"}
+   ```
+
+4. Espere o `connection.status` com `open`. `GET /connection` traz a conta em `account`.
+
+Para trocar de número, chame `POST /connection/logout`. O stream mostra o `closed` com
+`logged-out` e, em seguida, o QR novo.
+
+### Eventos do stream
+
+| `event` | `data` | Quem recebe |
+| --- | --- | --- |
+| `connection.status` | `{ status, reason? }` | todos com `connection.read` |
+| `connection.qr` | `{ qr, expiresAt? }` | `connection.manage` |
+| `connection.pairing-code` | `{ code }` | `connection.manage` |
+| `log` | `{ level, time, message, fields }`, com segredos e ids pessoais já censurados | `logs.read` |
+| `plugin.status` | `{ name, status: 'loaded' \| 'skipped', reason? }`, a cada reload, disable ou enable | todos com `connection.read` |
+
+A linha de log que carrega o valor do QR ou do código (`fields.event` igual a
+`connection.qr.value` ou `connection.pairing-code.value`) só vai a quem tem `connection.manage`.
+
+Filtre por tipo com `?types=log,connection.status`; tipo desconhecido é 400. Na spec, cada item é
+um componente (`ConnectionStatusEvent`, `ConnectionQrEvent`, `ConnectionPairingCodeEvent`,
+`LogEvent`, `PluginStatusEvent`); o cliente gerado pelo `openapi-typescript` usa esses tipos, já
+que ele ignora o `itemSchema`.
+
+### Retomada
+
+Todo evento leva `id`. O `EventSource` reconecta sozinho e manda o último id em `Last-Event-ID`, e
+o servidor reenvia só o que veio depois dele, sem repetir. O buffer guarda os últimos 1000 eventos
+por sessão. Um cliente fora por mais tempo que isso perde o que girou: releia `GET /connection`.
+Depois de um restart do processo, o id antigo não vale, e o stream recomeça pelo estado atual.
+
+O servidor manda `: ping` a cada 15 s, para o proxy não cortar o stream. Um cliente que não lê e
+acumula mais de 1000 eventos tem o stream fechado; ele retoma pelo último id. Atrás de nginx,
+`X-Accel-Buffering: no` já sai na resposta.
+
+### No browser (cookie)
+
+O `EventSource` não manda header próprio: autentica pelo cookie da sessão. Em outra origem
+(`api.cors.origins`), passe `withCredentials`:
+
+```ts
+const events = new EventSource('https://bot.exemplo.com/api/events?types=connection.status,connection.qr', {
+  withCredentials: true,
+});
+events.addEventListener('connection.qr', (e) => mostrarQr(JSON.parse(e.data).qr));
+events.addEventListener('connection.status', (e) => {
+  if (JSON.parse(e.data).status === 'open') esconderQr();
+});
+```
+
+### Com bearer (servidor ou script)
+
+Com API key, use `fetch` e leia o corpo em stream. Guarde o último `id` para retomar:
+
+```ts
+let lastId: string | undefined;
+const res = await fetch('http://localhost:3000/api/events?types=log', {
+  headers: {
+    authorization: `Bearer ${process.env.BRIDGER_KEY}`,
+    ...(lastId && { 'last-event-id': lastId }),
+  },
+});
+const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
+let buffer = '';
+for (;;) {
+  const { value, done } = await reader.read();
+  if (done) break; // caiu ou o bot parou: reconecte com `last-event-id`
+  buffer += value;
+  let end: number;
+  while ((end = buffer.indexOf('\n\n')) >= 0) {
+    const block = buffer.slice(0, end);
+    buffer = buffer.slice(end + 2);
+    const field = (name: string) =>
+      block.split('\n').find((l) => l.startsWith(`${name}: `))?.slice(name.length + 2);
+    if (field('id')) lastId = field('id');
+    const data = field('data');
+    if (data) console.log(field('event'), JSON.parse(data));
+  }
+}
+```
+
+O stream não revalida a credencial depois de aberto: uma sessão revogada recebe eventos até o
+stream cair, e a reconexão é recusada.

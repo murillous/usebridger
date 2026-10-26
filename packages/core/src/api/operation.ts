@@ -23,6 +23,11 @@ export interface ApiOperation<
   readonly body?: Body;
   /** Corpo da resposta de sucesso. Só descreve a spec: o handler não é conferido contra ele. */
   readonly response: Result;
+  /**
+   * Resposta em SSE (`text/event-stream`): `response` descreve um item do stream, e o handler
+   * devolve o `Response` com o corpo em stream.
+   */
+  readonly stream?: true;
   /** Status de sucesso. Padrão: 200. */
   readonly status?: 200 | 201;
   /**
