@@ -5,6 +5,7 @@
 
 import { createMemoryStorage } from '#storage/memory.ts';
 import type { PluginStorage } from '#storage/types.ts';
+import { hashSecret } from './secret.ts';
 
 export interface LoginLimiterOptions {
   /** Storage do namespace `auth`; sem ele, memória do processo (testes e uso avulso). */
@@ -44,35 +45,53 @@ export function createLoginLimiter(options: LoginLimiterOptions = {}): LoginLimi
     options.storage ?? createMemoryStorage().forNamespace('auth')
   ).collection<LimitDoc>('rateLimits', { indexes: ['key'] });
 
+  // Varredura de documentos vencidos de chaves que nunca voltam (e-mail digitado uma vez): no
+  // máximo uma por janela e por processo, para a coleção não crescer sem limite.
+  let lastSweep = 0;
+  // A chave vira hash: ela traz e-mail digitado (às vezes uma senha colada) e IP.
+  const hashed = (keys: readonly string[]): string[] => keys.map(hashSecret);
+
   return {
     wait: async (keys) => {
       const at = now().getTime();
-      const docs = await limits.find({ where: { key: { in: keys } } });
+      const docs = await limits.find({ where: { key: { in: hashed(keys) } } });
       return Math.max(0, ...docs.map((doc) => doc.blockedUntil - at));
     },
     fail: async (keys) => {
       const at = now().getTime();
-      for (const key of keys) {
-        // Janela vencida e sem bloqueio: recomeça a contagem (o documento some e é recriado).
-        await limits.delete({ key, blockedUntil: { lte: at }, since: { lt: at - windowMs } });
-        await limits.increment({ key }, 'count', 1, {
-          insert: { key, count: 0, since: at, blockedUntil: 0 },
-        });
-        const doc = (await limits.find({ where: { key }, limit: 1 }))[0];
-        if (doc !== undefined && doc.count >= max) {
-          const blockedUntil = at + Math.min(baseMs * 2 ** (doc.count - max), capMs);
-          await limits.update({ key, blockedUntil: { lt: blockedUntil } }, { blockedUntil });
-        }
+      if (at - lastSweep >= windowMs) {
+        lastSweep = at;
+        await limits.delete({ blockedUntil: { lte: at }, since: { lt: at - windowMs } });
       }
+      await Promise.all(
+        hashed(keys).map(async (key) => {
+          // Janela vencida e sem bloqueio: recomeça a contagem (o documento some e é recriado).
+          // Entre o `delete` e o `increment`, outro processo pode incrementar ou apagar o mesmo
+          // documento: no pior caso uma falha se perde. Aceito (ADR 0128).
+          await limits.delete({ key, blockedUntil: { lte: at }, since: { lt: at - windowMs } });
+          await limits.increment({ key }, 'count', 1, {
+            insert: { key, count: 0, since: at, blockedUntil: 0 },
+          });
+          const doc = (await limits.find({ where: { key }, limit: 1 }))[0];
+          if (doc !== undefined && doc.count >= max) {
+            const blockedUntil = at + Math.min(baseMs * 2 ** (doc.count - max), capMs);
+            await limits.update({ key, blockedUntil: { lt: blockedUntil } }, { blockedUntil });
+          }
+        }),
+      );
     },
     refund: async (keys) => {
-      for (const key of keys) {
-        await limits.increment({ key, count: { gt: 0 } }, 'count', -1);
-        await limits.update({ key, count: { lt: max } }, { blockedUntil: 0 });
-      }
+      await Promise.all(
+        hashed(keys).map(async (key) => {
+          // Entre processos o par decrementa/limpa não é atômico: no pior caso uma falha se perde.
+          // Aceito (ADR 0128).
+          await limits.increment({ key, count: { gt: 0 } }, 'count', -1);
+          await limits.update({ key, count: { lt: max } }, { blockedUntil: 0 });
+        }),
+      );
     },
     reset: async (key) => {
-      await limits.delete({ key });
+      await limits.delete({ key: hashSecret(key) });
     },
   };
 }
