@@ -1,6 +1,6 @@
 # ADR 0127 — Base da autenticação da API: permissões, papéis, senha, sessão e guarda por operação
 
-**Status:** Aceito (2026-10-26) · Complementa o [ADR 0125](0125-api-http-do-core-e-dashboard-cliente.md) e usa a auditoria do [ADR 0122](0122-log-de-auditoria-no-kernel.md)
+**Status:** Aceito (2026-10-26) · Complementa o [ADR 0125](0125-api-http-do-core-e-dashboard-cliente.md) e usa a auditoria do [ADR 0122](0122-log-de-auditoria-no-kernel.md) · Rate limit em memória, corridas conhecidas, chaves órfãs e auth opt-in: substituídos pelo [ADR 0128](0128-limitacoes-da-autenticacao-da-api.md)
 
 ## Contexto
 
@@ -19,7 +19,7 @@ chaves e `X-Bridger-On-Behalf-Of` vêm nas seguintes.
 - **Rota pública** é `public: true`, nunca a ausência de `permission`. Com a auth ligada, operação
   sem `permission` exige apenas estar autenticado, então esquecer o campo não abre a rota.
   `/api/health` é `public`: serve de sonda de orquestrador e só expõe o estado das sessões.
-- **Auth opt-in** por `BotConfig.api.auth` (`sessionIdleMs`, aplicado já na resolução do ator; `sessionMaxAgeMs`, aplicado na criação da
+- **Auth opt-in** (substituído pelo [ADR 0128](0128-limitacoes-da-autenticacao-da-api.md)) por `BotConfig.api.auth` (`sessionIdleMs`, aplicado já na resolução do ator; `sessionMaxAgeMs`, aplicado na criação da
   sessão, no login da 2ª entrega). Sem ela a API fica
   aberta como na M7-3, para não quebrar quem já usa. O bootstrap (2ª entrega) é que torna a auth o
   padrão. Vale para as operações do core e para as de plugin (`ctx.http.api`); permissões
@@ -55,7 +55,7 @@ chaves e `X-Bridger-On-Behalf-Of` vêm nas seguintes.
   senha errada, conta desativada ou sem senha) e a conta inexistente gasta o mesmo scrypt.
 - **Rate limit** por IP (do socket, sem confiar em `X-Forwarded-For`) e por e-mail digitado: 5 falhas
   em 15 min bloqueiam por 30 s, dobrando a cada falha (teto 1 h); 429 com `Retry-After`. Em memória
-  do processo (`shortcut:` no código); sucesso zera só a chave do e-mail.
+  do processo (substituído pelo [ADR 0128](0128-limitacoes-da-autenticacao-da-api.md); `shortcut:` no código); sucesso zera só a chave do e-mail.
 - **CSRF**: com `api.cors.origins` e a auth ligada, o cookie de origem permitida sai
   `SameSite=None; Secure` e toda escrita com `Origin` e sem `Authorization` exige `X-Bridger-CSRF`
   (403 sem ele). Sem CORS, `SameSite=Strict` e nada a exigir.
@@ -85,7 +85,7 @@ chaves e `X-Bridger-On-Behalf-Of` vêm nas seguintes.
   `/auth/logout`) recusam API key (403); `/auth/me` devolve `onBehalfOf` quando o ator tem.
 - **Auditoria de recusas**: o 403 de papel (admin sobre owner) e o de CSRF saem como
   `kernel.auth.denied` com o ator (`details.reason` `role` ou `csrf`).
-- **Corridas conhecidas** (aceitas na v1, o storage não tem transação entre documentos): dois
+- **Corridas conhecidas** (substituídas pelo [ADR 0128](0128-limitacoes-da-autenticacao-da-api.md); aceitas na v1, o storage não tem transação entre documentos): dois
   bootstraps simultâneos podem criar dois owners; dois admins desativando owners ao mesmo tempo
   podem deixar zero owner ativo (a recuperação pela CLI cobre); dois `POST /users` com o mesmo
   e-mail ao mesmo tempo podem duplicar (o login pega o primeiro).
@@ -100,7 +100,7 @@ chaves e `X-Bridger-On-Behalf-Of` vêm nas seguintes.
   e nada que o criador não tenha: delegar o que não se tem seria escalar privilégio. Revogar duas
   vezes é idempotente e gera um único evento. Eventos `kernel.key.created` e `kernel.key.revoked`. Conceder além do que se tem é 403 auditado
   como `kernel.auth.denied` (`details.reason` `grant: <permissões>`).
-- **`createdBy`**: a chave guarda o id do ator que a criou e a listagem o devolve. A chave **sobrevive**
+- **`createdBy`** (o trecho da sobrevivência da chave foi substituído pelo [ADR 0128](0128-limitacoes-da-autenticacao-da-api.md)): a chave guarda o id do ator que a criou e a listagem o devolve. A chave **sobrevive**
   ao rebaixamento ou desativação do criador: a revogação é manual, por quem tem `keys.manage`.
 - **`X-Bridger-On-Behalf-Of`** é lido pelo guarda, antes da checagem de permissão da operação. Só
   `kind: 'key'` com `auth.on-behalf-of` o usa; sessão de usuário ou chave sem a permissão levam 403
