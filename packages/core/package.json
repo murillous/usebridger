@@ -37,6 +37,7 @@
     }
   },
   "bin": {
+    "bridger": "./dist/bridger-cli.mjs",
     "bridger-pseudonym": "./dist/pseudonym-cli.mjs"
   },
   "files": [
