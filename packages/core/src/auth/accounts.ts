@@ -78,6 +78,14 @@ function sameSecret(a: string, b: string): boolean {
   return timingSafeEqual(Buffer.from(hashSecret(a), 'hex'), Buffer.from(hashSecret(b), 'hex'));
 }
 
+type LockDoc = { key: string; until: number };
+
+// Trava curta: as escritas de auth que checam e depois gravam (primeiro owner, e-mail único,
+// último owner) levam segundos no máximo; a concessão vence sozinha se o processo morrer dentro.
+const LOCK_LEASE_MS = 15_000;
+const LOCK_WAIT_MS = 5_000;
+const LOCK_POLL_MS = 15;
+
 type Who = { readonly id: string; readonly name: string };
 
 export function createAccounts(options: AccountsOptions) {
@@ -87,6 +95,29 @@ export function createAccounts(options: AccountsOptions) {
   const users = storage.collection<UserDoc>('users', { indexes: ['email'] });
   const sessions = storage.collection<SessionDoc>('sessions', { indexes: ['hash', 'userId'] });
   const invites = storage.collection<InviteDoc>('invites', { indexes: ['hash', 'userId'] });
+  const locks = storage.collection<LockDoc>('locks', { indexes: ['key'] });
+
+  // ADR 0128: o storage não tem transação nem índice unique, então o check-then-write da auth roda
+  // sob uma trava feita de duas primitivas atômicas: `increment` por 0 com `insert` cria o
+  // documento uma vez só, e o `update` condicional (compare-and-set em `until`) diz quem levou.
+  // Vale entre chamadas e entre processos que dividem o banco; a trava é solta mesmo se `fn` falhar.
+  async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    await locks.increment({ key }, 'until', 0, { insert: { key, until: 0 } });
+    const deadline = Date.now() + LOCK_WAIT_MS;
+    let mine: number;
+    for (;;) {
+      const at = Date.now();
+      mine = at + LOCK_LEASE_MS;
+      if ((await locks.update({ key, until: { lt: at } }, { until: mine })) > 0) break;
+      if (at >= deadline) throw new ApiError(409, 'conta em uso por outra operação; tente de novo');
+      await new Promise((resolve) => setTimeout(resolve, LOCK_POLL_MS));
+    }
+    try {
+      return await fn();
+    } finally {
+      await locks.update({ key, until: mine }, { until: 0 });
+    }
+  }
 
   // Sem `actor`, vale o titular do request autenticado; login e convite (sem sessão) passam o seu.
   function record(
@@ -128,7 +159,10 @@ export function createAccounts(options: AccountsOptions) {
     }
   }
 
-  /** Impede deixar o bot sem owner ativo (desativar ou rebaixar o último). */
+  /**
+   * Impede deixar o bot sem owner ativo (desativar ou rebaixar o último). Chame dentro de
+   * `withLock('owners')`, junto da escrita, com o usuário lido dentro da trava.
+   */
   async function guardLastOwner(user: WithId<UserDoc>): Promise<void> {
     if (user.role !== 'owner' || user.status !== 'active') return;
     const owners = await users.find({ where: { role: 'owner', status: 'active' } });
@@ -319,13 +353,16 @@ export function createAccounts(options: AccountsOptions) {
         userId = invitee.id;
         record('auth.invite.accepted', userId, { as: { id: invitee.id, name: invitee.name } });
       } else {
-        // shortcut: dois bootstraps simultâneos poderiam criar dois owners; o token é só do
-        // operador, então é raro. Travar no storage se importar.
         const name = input.name as string;
-        userId = await store.createUser(
-          { name, email: input.email as string, passwordHash: hash, role: 'owner' },
-          at,
-        );
+        // Sob a trava, a checagem "sem usuário" e a criação são um passo só: o segundo bootstrap
+        // concorrente já vê o owner e é recusado.
+        userId = await withLock('users', async () => {
+          if ((await users.find({ limit: 1 })).length > 0) return reject();
+          return store.createUser(
+            { name, email: input.email as string, passwordHash: hash, role: 'owner' },
+            at,
+          );
+        });
         record('auth.invite.accepted', userId, {
           as: { id: userId, name },
           details: { bootstrap: true },
@@ -340,10 +377,12 @@ export function createAccounts(options: AccountsOptions) {
       input: { name: string; email: string; role: AuthRole },
     ): Promise<{ user: User; invite: Invite }> {
       requireManage(actor, input.role);
-      if ((await store.findUserByEmail(input.email)) !== undefined) {
-        throw new ApiError(409, 'já existe usuário com esse e-mail');
-      }
-      const id = await store.createUser({ ...input, passwordHash: '' }, now());
+      const id = await withLock('users', async () => {
+        if ((await store.findUserByEmail(input.email)) !== undefined) {
+          throw new ApiError(409, 'já existe usuário com esse e-mail');
+        }
+        return store.createUser({ ...input, passwordHash: '' }, now());
+      });
       const invite = await createInvite(id);
       record('user.created', id, { details: { role: input.role } });
       record('auth.invite.created', id);
@@ -363,32 +402,36 @@ export function createAccounts(options: AccountsOptions) {
       id: string,
       patch: { name?: string | undefined; role?: AuthRole | undefined },
     ): Promise<User> {
-      const user = await mustGet(id);
-      requireManage(actor, user.role, id);
-      if (patch.role !== undefined && patch.role !== user.role) {
-        requireManage(actor, patch.role, id);
-        await guardLastOwner(user);
-      }
       const change: Partial<UserDoc> = {
         ...(patch.name !== undefined && { name: patch.name }),
         ...(patch.role !== undefined && { role: patch.role }),
       };
-      // O papel vale já: a sessão resolve as permissões pelo papel a cada request.
-      await store.updateUser(id, change);
+      await withLock('owners', async () => {
+        const user = await mustGet(id);
+        requireManage(actor, user.role, id);
+        if (patch.role !== undefined && patch.role !== user.role) {
+          requireManage(actor, patch.role, id);
+          await guardLastOwner(user);
+        }
+        // O papel vale já: a sessão resolve as permissões pelo papel a cada request.
+        await store.updateUser(id, change);
+      });
       record('user.updated', id, { details: change });
       return view(await mustGet(id));
     },
 
     async setStatus(actor: ApiActor, id: string, status: 'active' | 'disabled'): Promise<User> {
-      const user = await mustGet(id);
-      requireManage(actor, user.role, id);
-      if (status === 'disabled') {
-        await guardLastOwner(user);
+      const disabling = status === 'disabled';
+      await withLock('owners', async () => {
+        const user = await mustGet(id);
+        requireManage(actor, user.role, id);
+        if (disabling) await guardLastOwner(user);
         await store.updateUser(id, { status });
+      });
+      if (disabling) {
         await store.revokeUserSessions(id, now());
         record('user.disabled', id);
       } else {
-        await store.updateUser(id, { status });
         record('user.enabled', id);
       }
       return view(await mustGet(id));
@@ -418,22 +461,30 @@ export function createAccounts(options: AccountsOptions) {
      * ativo sem senha, e devolve o convite. Não audita: roda fora do bot, sem a cadeia.
      */
     async recoverOwner(input: { email: string; name?: string | undefined }): Promise<Invite> {
-      if ((await users.find({ where: { role: 'owner', status: 'active' }, limit: 1 })).length > 0) {
-        throw new ApiError(409, 'já existe owner ativo; a recuperação só vale sem nenhum');
-      }
-      const existing = await store.findUserByEmail(input.email);
-      let id: string;
-      if (existing !== undefined) {
-        id = existing.id;
-        await store.updateUser(id, { role: 'owner', status: 'active', passwordHash: '' });
-        await store.revokeUserSessions(id, now());
-      } else {
-        if (input.name === undefined) throw new ApiError(400, 'usuário novo: informe --name');
-        id = await store.createUser(
-          { name: input.name, email: input.email, passwordHash: '', role: 'owner' },
-          now(),
-        );
-      }
+      const id = await withLock('users', () =>
+        withLock('owners', async () => {
+          if (
+            (await users.find({ where: { role: 'owner', status: 'active' }, limit: 1 })).length > 0
+          ) {
+            throw new ApiError(409, 'já existe owner ativo; a recuperação só vale sem nenhum');
+          }
+          const existing = await store.findUserByEmail(input.email);
+          if (existing !== undefined) {
+            await store.updateUser(existing.id, {
+              role: 'owner',
+              status: 'active',
+              passwordHash: '',
+            });
+            return existing.id;
+          }
+          if (input.name === undefined) throw new ApiError(400, 'usuário novo: informe --name');
+          return store.createUser(
+            { name: input.name, email: input.email, passwordHash: '', role: 'owner' },
+            now(),
+          );
+        }),
+      );
+      await store.revokeUserSessions(id, now());
       return createInvite(id);
     },
   };

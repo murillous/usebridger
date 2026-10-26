@@ -676,3 +676,76 @@ describe('concorrência, proxy e papéis', () => {
     });
   });
 });
+
+describe('corridas (ADR 0128)', () => {
+  it('bootstrap concorrente cria um owner só', async () => {
+    const { accounts } = setup({ bootstrapToken: 'segredo-do-operador' });
+    const accept = (email: string) =>
+      accounts.acceptInvite({
+        token: 'segredo-do-operador',
+        password: PASSWORD,
+        name: 'Dona',
+        email,
+      });
+    const results = await Promise.allSettled([accept('a@exemplo.com'), accept('b@exemplo.com')]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(await accounts.listUsers()).toHaveLength(1);
+  });
+
+  it('dois owners se desativando ao mesmo tempo deixam ao menos um ativo', async () => {
+    const { accounts } = setup();
+    const boss = actor('owner');
+    const a = await activate(accounts, boss, 'owner', 'a@exemplo.com');
+    const b = await activate(accounts, boss, 'owner', 'b@exemplo.com');
+    const results = await Promise.all([
+      status(accounts.setStatus(boss, a.id, 'disabled')),
+      status(accounts.setStatus(boss, b.id, 'disabled')),
+    ]);
+    expect(results.filter((s) => s === 409)).toHaveLength(1);
+    const active = (await accounts.listUsers()).filter(
+      (u) => u.role === 'owner' && u.status === 'active',
+    );
+    expect(active).toHaveLength(1);
+  });
+
+  it('dois owners se rebaixando ao mesmo tempo deixam ao menos um owner ativo', async () => {
+    const { accounts } = setup();
+    const boss = actor('owner');
+    const a = await activate(accounts, boss, 'owner', 'a@exemplo.com');
+    const b = await activate(accounts, boss, 'owner', 'b@exemplo.com');
+    const results = await Promise.all([
+      status(accounts.updateUser(boss, a.id, { role: 'viewer' })),
+      status(accounts.updateUser(boss, b.id, { role: 'viewer' })),
+    ]);
+    expect(results.filter((s) => s === 409)).toHaveLength(1);
+    const active = (await accounts.listUsers()).filter(
+      (u) => u.role === 'owner' && u.status === 'active',
+    );
+    expect(active).toHaveLength(1);
+  });
+
+  it('e-mail duplicado concorrente: um cadastro passa e o outro leva 409', async () => {
+    const { accounts } = setup();
+    const boss = actor('owner');
+    const create = (name: string) =>
+      status(accounts.createUser(boss, { name, email: 'Dup@exemplo.com', role: 'viewer' }));
+    const results = await Promise.all([create('um'), create('dois')]);
+    expect(results.filter((s) => s === 409)).toHaveLength(1);
+    expect(results.filter((s) => s === undefined)).toHaveLength(1);
+    expect(await accounts.listUsers()).toHaveLength(1);
+  });
+
+  it('a trava é solta quando a operação falha', async () => {
+    const { accounts } = setup();
+    const boss = actor('owner');
+    await accounts.createUser(boss, { name: 'a', email: 'a@exemplo.com', role: 'viewer' });
+    expect(
+      await status(
+        accounts.createUser(boss, { name: 'b', email: 'a@exemplo.com', role: 'viewer' }),
+      ),
+    ).toBe(409);
+    await expect(
+      accounts.createUser(boss, { name: 'c', email: 'c@exemplo.com', role: 'viewer' }),
+    ).resolves.toBeDefined();
+  });
+});
