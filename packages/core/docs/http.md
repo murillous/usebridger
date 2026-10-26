@@ -3,7 +3,7 @@
 O core tem **um** servidor HTTP por processo, dividido por todos os bots, para webhooks, o
 dashboard e o chat web ([ADR 0018](../../../docs/adr/0018-http-unico-hono.md),
 [ADR 0072](../../../docs/adr/0072-http-do-core.md)). Plugins registram rotas em `ctx.http`, o
-transport em `deps.http`. A porta só abre se houver rota.
+transport em `deps.http`. A porta só abre se houver rota. A API do core (`/api`, `/openapi.json`) fica em [API HTTP](api.md).
 
 ## Ligar o servidor
 

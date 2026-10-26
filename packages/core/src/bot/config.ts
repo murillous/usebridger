@@ -1,3 +1,4 @@
+import type { ApiOptions } from '#api/cors.ts';
 import type { PrefixConfig } from '#commands/prefixes.ts';
 import type { ConfigEnv } from '#config/env.ts';
 import type { BotOwner } from '#config/owners.ts';
@@ -109,6 +110,8 @@ export interface BotConfig {
    * `ctx.http` aos plugins e `TransportDeps.http` ao transport; a porta só abre se houver rota.
    */
   readonly http?: HttpServer;
+  /** API HTTP do core (ADR 0125). Sem `http`, não tem efeito. */
+  readonly api?: ApiOptions;
   /** Plugins da config (pacotes npm que o app importa). */
   readonly plugins?: readonly PluginDefinition[];
   /** Pastas de plugins locais (ver `collectPlugins`), relativas a `cwd`. */

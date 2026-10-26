@@ -145,7 +145,9 @@ export function createBot(config: BotConfig): Bot {
   const registry = createCommandRegistry({ onChange: () => catalog.changed() });
   // Rotas da sessão no servidor do processo (ADR 0072); só entram nele no start().
   const http =
-    config.http === undefined ? undefined : sessionHttp(config.http, session, getLog, trail);
+    config.http === undefined
+      ? undefined
+      : sessionHttp(config.http, session, getLog, trail, config.api);
   let resolvedTransport: Transport | undefined;
   const transport = resolveTransport(config.transport, {
     session,
