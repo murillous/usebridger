@@ -1,15 +1,20 @@
-#!/usr/bin/env node
-// Binário `bridger <comando>`; hoje só `openapi`. Ninguém o importa como biblioteca.
+// Despacho do binário `bridger <comando>`; hoje só `openapi`. O `bridger-bin.ts` o liga ao processo.
 
-import { run, USAGE } from './openapi.ts';
+import { type CliIo, run } from './openapi.ts';
 
-const [command, ...rest] = process.argv.slice(2);
-if (command === 'openapi') {
-  process.exitCode = await run(rest, {
-    out: (text) => process.stdout.write(`${text}\n`),
-    err: (text) => process.stderr.write(`${text}\n`),
-  });
-} else {
-  process.stderr.write(`Comando desconhecido: ${command ?? '(nenhum)'}\n\n${USAGE}\n`);
-  process.exitCode = 1;
+export const USAGE = `Uso: bridger <comando>
+
+Comandos:
+  openapi [módulo] [--out <arquivo>]   escreve a spec OpenAPI da API (bridger openapi --help)`;
+
+/** Despacha o comando e devolve o código de saída. */
+export async function main(argv: readonly string[], io: CliIo): Promise<number> {
+  const [command, ...rest] = argv;
+  if (command === undefined || command === '-h' || command === '--help') {
+    io.out(USAGE);
+    return 0;
+  }
+  if (command === 'openapi') return run(rest, io);
+  io.err(`Comando desconhecido: ${command}\n\n${USAGE}`);
+  return 1;
 }

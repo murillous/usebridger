@@ -13,6 +13,6 @@ export default defineConfig({
     // Binário `bridger-pseudonym` (ADR 0119); ninguém o importa como biblioteca.
     'pseudonym-cli': 'src/cli/pseudonym.ts',
     // Binário `bridger` (comando `openapi`, ADR 0125).
-    'bridger-cli': 'src/cli/bridger.ts',
+    'bridger-cli': 'src/cli/bridger-bin.ts',
   },
 });
