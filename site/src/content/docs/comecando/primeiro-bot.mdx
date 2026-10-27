@@ -20,6 +20,8 @@ npm install @usebridger/core @usebridger/transport-baileys @usebridger/storage-s
 
 O `type=module` faz o Node tratar os arquivos como ES modules, e o Node 24 roda `.ts` direto, sem etapa de build.
 
+Dos pacotes, o obrigatório é o core e um transport: o core não fala com nenhuma plataforma sozinho. O `storage-sqlite` guarda a sessão do WhatsApp para não parear de novo a cada restart, e o `qrcode-terminal` só desenha o QR no terminal.
+
 ## 2. Escrever o bot
 
 Crie `ping.ts`, o plugin com o comando:
@@ -63,7 +65,7 @@ Depois de conectado, mande `!ping` para o número do bot, de outro contato. A re
 | `plugins` | A lista do que o bot faz: comandos, reações a eventos, tarefas. |
 | `http` | Um servidor HTTP opcional, dividido por todos os bots do processo. Só é preciso se um plugin ou o transport tiver rotas, como o `transport-web`. |
 
-O `createBot` aceita ainda `logger` (ou `logLevel`) para os logs. Todas as opções estão em [Bot](/usebridger/pacotes/core/bot/).
+O `createBot` aceita ainda `logger` (ou `logLevel`) para os logs e `api`, a API do core com login, que só existe com `http` e não é preciso para o bot funcionar. Todas as opções estão em [Bot](/usebridger/pacotes/core/bot/).
 
 ## Sem o seu número: transport-web
 
