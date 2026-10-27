@@ -168,7 +168,21 @@ mesmo pseudônimo entre restarts, e ids diferentes dão pseudônimos diferentes.
   # u_rUSbV8Bla-rDWdpH0FuuNw
   ```
 
-  A conversão é só do id ao pseudônimo; ele não volta a telefone.
+  O comando vai só do id ao pseudônimo. A volta é pela API, abaixo.
+- **Descobrir de quem é um pseudônimo:** com a `BRIDGER_SECRET_KEY`, o bot guarda cada par
+  `pseudônimo → id` cifrado no storage da sessão
+  ([ADR 0132](../../../docs/adr/0132-pseudonimo-de-volta-ao-id-pela-api.md)).
+  `GET /api/pseudonyms/{pseudonym}` devolve `{ pseudonym, kind, id }` a quem tem
+  `pseudonyms.resolve` (owner e admin; o viewer não). Toda consulta, achando ou não, grava
+  `kernel.pseudonym.resolve` na auditoria com quem consultou e o pseudônimo, sem o id.
+
+  ```sh
+  curl http://localhost:3000/api/pseudonyms/u_rUSbV8Bla-rDWdpH0FuuNw     -H "Authorization: Bearer $BRIDGER_KEY"
+  # {"pseudonym":"u_rUSbV8Bla-rDWdpH0FuuNw","kind":"user","id":"5565999998888@s.whatsapp.net"}
+  ```
+
+  Só resolve pseudônimo que o bot calculou com a chave atual ou com a
+  `BRIDGER_SECRET_KEY_PREVIOUS`; sem chave mestra a rota responde 409. Pseudônimo desconhecido é 404.
 - **Redação de reserva:** o `createLogger` troca por `[REDACTED]` qualquer JID (`@s.whatsapp.net`,
   `@g.us`, `@lid`) e telefone (10 a 15 dígitos, com sufixo de device `.0`/`_1.0`) que escape em campo,
   mensagem ou `err`; o sinal `log` dos observadores recebe a mesma redação.
@@ -268,7 +282,7 @@ O `/health` e o WebSocket não geram `http.request`.
 ### Investigar no Grafana
 
 1. Ache o pseudônimo do usuário com `pnpm bridger-pseudonym <telefone ou JID>` (ou `ctx.pseudonym`
-   num plugin).
+   num plugin). Partindo de um log, descubra de quem é o `chat` com `GET /api/pseudonyms/{pseudonym}`.
 2. Veja o que ele fez: `{service="lumabot"} | json | chat="u_7Hq2…"`. Cada `message.received`
    traz um `trace`.
 3. Pegue o `trace` da mensagem com erro e abra a jornada inteira, com os logs dos plugins, os

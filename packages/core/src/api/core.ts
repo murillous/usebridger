@@ -9,12 +9,14 @@ import { type EventStream, eventsOperation } from './events.ts';
 import { apiLibs, loadApiLibs } from './libs.ts';
 import type { AnyApiOperation, ApiRoute } from './operation.ts';
 import { type PluginsApiDeps, pluginAdminOperations } from './plugin-admin.ts';
+import { type PseudonymApiDeps, pseudonymOperations } from './pseudonyms.ts';
 
 /** O que a API lê do bot da sessão; o servidor só o recebe no `attach`. */
 export interface BotApiDeps {
   readonly connection: ConnectionApiDeps;
   readonly stream: EventStream;
   readonly plugins: PluginsApiDeps;
+  readonly pseudonyms: PseudonymApiDeps;
 }
 
 let health: z.ZodType | undefined;
@@ -35,7 +37,7 @@ export function coreApiOperations(
   states: () => Record<string, string> = () => ({}),
   /** Com a auth ligada (`api.auth`), monta as rotas `/auth` e `/users`. */
   auth?: AuthRoutesDeps,
-  /** Do bot da sessão: monta `/connection`, `/events` (ADR 0129) e `/plugins`. */
+  /** Do bot da sessão: monta `/connection`, `/events` (ADR 0129), `/plugins` e `/pseudonyms`. */
   realtime?: BotApiDeps,
 ): readonly AnyApiOperation[] {
   return [
@@ -59,6 +61,7 @@ export function coreApiOperations(
           ...connectionOperations(realtime.connection),
           eventsOperation(realtime.stream),
           ...pluginAdminOperations(realtime.plugins),
+          ...pseudonymOperations(realtime.pseudonyms),
         ]
       : []),
   ];
@@ -77,6 +80,7 @@ export async function coreApiRoutes(): Promise<readonly ApiRoute[]> {
     ...connectionOperations(),
     eventsOperation(),
     ...pluginAdminOperations(),
+    ...pseudonymOperations(),
   ].map((operation) => ({
     path: `/api${operation.path}`,
     operation,

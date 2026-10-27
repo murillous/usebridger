@@ -12,6 +12,7 @@ export const CORE_PERMISSIONS = [
   'secrets.write',
   'metrics.read',
   'audit.read',
+  'pseudonyms.resolve',
   'users.manage',
   'keys.manage',
   'auth.on-behalf-of',

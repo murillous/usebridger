@@ -1,6 +1,6 @@
 // Pseudônimo estável de usuário/grupo para logs (ADR 0119): HMAC-SHA256 do id com uma chave
-// derivada (HKDF) da chave mestra dos segredos (ADR 0117), truncado em 16 bytes. Só vai do id ao
-// pseudônimo; nunca volta.
+// derivada (HKDF) da chave mestra dos segredos (ADR 0117), truncado em 16 bytes. O HMAC só vai do
+// id ao pseudônimo; a volta é o mapa cifrado do ADR 0132 (`pseudonym-map.ts`).
 
 import { createHmac, hkdfSync, randomBytes } from 'node:crypto';
 import type { LogFields, Logger } from './types.ts';
@@ -14,7 +14,8 @@ export type Pseudonym = (id: string, kind?: PseudonymKind) => string;
 // Rótulo próprio: a chave de pseudônimo não serve para cifrar segredo, nem o contrário.
 const HKDF_INFO = 'bridger-pseudonym-v1';
 const TRUNCATE_BYTES = 16;
-const SHAPE_RE = /^[ug]_[A-Za-z0-9_-]{22}$/;
+/** Forma de um pseudônimo (`u_`/`g_` + 22 caracteres base64url). */
+export const PSEUDONYM_RE: RegExp = /^[ug]_[A-Za-z0-9_-]{22}$/;
 
 /** Deriva uma subchave de 32 bytes da chave mestra; cada uso tem o próprio rótulo `info`. */
 export function deriveSubkey(master: Buffer, info: string): Buffer {
@@ -54,7 +55,11 @@ export interface Pseudonymizer {
  * `masterKey` é lida na primeira chamada, não na criação: o bot só vê o ambiente no start. Sem
  * chave mestra, a chave é aleatória do processo (estável só até o restart).
  */
-export function createPseudonymizer(masterKey: () => Buffer | undefined): Pseudonymizer {
+export function createPseudonymizer(
+  masterKey: () => Buffer | undefined,
+  /** Cada pseudônimo calculado, com o id: alimenta o mapa reverso (ADR 0132). */
+  onPseudonym?: (pseudonym: string, id: string) => void,
+): Pseudonymizer {
   let resolved: { readonly fn: Pseudonym; readonly ephemeral: boolean } | undefined;
   const resolve = (): NonNullable<typeof resolved> => {
     if (resolved === undefined) {
@@ -65,14 +70,21 @@ export function createPseudonymizer(masterKey: () => Buffer | undefined): Pseudo
     }
     return resolved;
   };
-  return { pseudonym: (id, kind) => resolve().fn(id, kind), ephemeral: () => resolve().ephemeral };
+  return {
+    pseudonym: (id, kind) => {
+      const value = resolve().fn(id, kind);
+      onPseudonym?.(value, id);
+      return value;
+    },
+    ephemeral: () => resolve().ephemeral,
+  };
 }
 
 function mapFields(fields: LogFields, pseudonym: Pseudonym): LogFields {
   let out = fields;
   for (const key of ['chat', 'sender'] as const) {
     const value = fields[key];
-    if (typeof value !== 'string' || SHAPE_RE.test(value)) continue;
+    if (typeof value !== 'string' || PSEUDONYM_RE.test(value)) continue;
     if (out === fields) out = { ...fields };
     (out as Record<string, unknown>)[key] = pseudonym(value);
   }

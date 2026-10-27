@@ -16,6 +16,11 @@ export const pseudonymEphemeral: LogEvent = defineLogEvent({
   level: 'info',
   message: 'sem BRIDGER_SECRET_KEY: os pseudônimos dos logs mudam a cada restart',
 });
+export const pseudonymMapFailed: LogEvent = defineLogEvent({
+  name: 'bot.pseudonym.map-failed',
+  level: 'warn',
+  message: 'falha ao gravar o mapa reverso do pseudônimo; a consulta dele pela API não o acha',
+});
 export const stopFailed: LogEvent = defineLogEvent({
   name: 'bot.stop.failed',
   level: 'error',

@@ -38,6 +38,7 @@ const CORE_PATHS = [
   '/api/plugins/{name}/enable',
   '/api/plugins/{name}/disable',
   '/api/plugins/{name}/config',
+  '/api/pseudonyms/{pseudonym}',
 ];
 
 const PLUGIN_MODULE = `
