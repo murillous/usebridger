@@ -1,6 +1,6 @@
 # Contribuindo com o Bridger
 
-Obrigado pelo interesse! O Bridger é um kernel de bot de mensageria extensível por plugins,
+Obrigado pelo interesse! O Bridger é um framework de bots de mensageria extensível por plugins,
 extraído do LumaBot. Antes de começar, vale ler:
 
 - [`BRIDGER_PLAN.md`](BRIDGER_PLAN.md) — visão, arquitetura e roadmap;

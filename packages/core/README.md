@@ -1,6 +1,6 @@
 # @usebridger/core
 
-Kernel do Bridger: bot de mensageria extensível por plugins. O core cuida de plugins, comandos,
+Core do Bridger, framework de bots de mensageria extensível por plugins. O core cuida de plugins, comandos,
 filas, middlewares e storage; a plataforma (WhatsApp, chat web) entra por um transport.
 
 ```sh

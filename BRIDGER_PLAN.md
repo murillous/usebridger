@@ -1,4 +1,4 @@
-# Bridger — Plano do Kernel
+# Bridger — Plano do framework
 
 > Documento de planejamento consolidado a partir da sessão de levantamento de requisitos
 > de 2026-10-06. Fonte única de verdade para criar o GitHub Project (milestones, issues e
@@ -25,10 +25,10 @@
 
 ## 1. Visão
 
-**Bridger** é um *kernel* para bots de mensageria (WhatsApp, Discord, Telegram e sistemas web
-próprios, D51) que contém apenas
-o indispensável — conexão, modelo de mensagem, roteamento, filas, armazenamento, configuração
-e ciclo de vida de plugins. **Todo o resto é plugin.**
+**Bridger** é um framework para bots de mensageria (WhatsApp, Discord, Telegram e sistemas web
+próprios, D51) em arquitetura de *microkernel* (D129): o core contém apenas o indispensável —
+conexão, modelo de mensagem, roteamento, filas, armazenamento, configuração e ciclo de vida de
+plugins. **Todo o resto é plugin.**
 
 Objetivos:
 
@@ -39,7 +39,7 @@ Objetivos:
   fica no transport. Baileys no M2 e `transport-web` (chatbot dentro de sistemas próprios, como
   ERP e gestão escolar) no M3 validam o contrato antes do 1.0; Telegram e Discord vêm depois. API
   Oficial do WhatsApp (Cloud API), Twilio e Zenvia no futuro, para uso comercial.
-- **Open core**: kernel e transports Baileys, web, Telegram e Discord públicos;
+- **Open core**: core e transports Baileys, web, Telegram e Discord públicos;
   transports comerciais de WhatsApp e integrações privadas.
 
 Analogia guia — **mods de Minecraft**: plugins (mods) são feitos pela comunidade e rodam sobre
@@ -107,7 +107,7 @@ Cada decisão é um ADR em [`docs/adr/`](docs/adr/README.md) (`DNN` = `ADR 00NN`
 ```
 bridger/
 ├── packages/
-│   ├── core/                 # @usebridger/core — o kernel
+│   ├── core/                 # @usebridger/core — o core
 │   ├── transport-baileys/    # @usebridger/transport-baileys
 │   ├── transport-web/        # @usebridger/transport-web (M3, D51)
 │   ├── transport-telegram/   # @usebridger/transport-telegram (pós-v1)

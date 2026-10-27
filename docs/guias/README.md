@@ -1,6 +1,6 @@
 # Guias do autor de plugin
 
-Como escrever um plugin do Bridger sem ler o código interno do kernel. Comece pelo primeiro
+Como escrever um plugin do Bridger sem ler o código interno do core. Comece pelo primeiro
 plugin; os outros guias vão por assunto e apontam para a documentação de cada módulo do core
 quando o detalhe importa.
 
