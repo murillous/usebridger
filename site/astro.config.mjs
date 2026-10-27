@@ -12,7 +12,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'Bridger',
-      description: 'Kernel de bot de mensageria: transports, storage e plugins.',
+      description: 'Framework de bots de mensageria: transports, storage e plugins.',
       defaultLocale: 'root',
       locales: {
         root: { label: 'Português', lang: 'pt-BR' },
@@ -30,7 +30,7 @@ export default defineConfig({
         starlightLlmsTxt({
           projectName: 'Bridger',
           description:
-            'Kernel de bot de mensageria em TypeScript: core, transports, storages e plugins.',
+            'Framework de bots de mensageria em TypeScript: core, transports, storages e plugins.',
           exclude: ['decisoes/**', 'api/**'],
           // O link de âncora dos títulos viraria "[Seção intitulada …](#…)" sob cada título, aqui
           // e no `.md` de cada página (src/pages/[...slug].md.ts), que usa a mesma conversão.

@@ -1,6 +1,6 @@
 # Bridger
 
-Kernel de bot de mensageria extensível por plugins — em construção.
+Framework de bots de mensageria extensível por plugins — em construção.
 Plano, decisões e marcos: [`BRIDGER_PLAN.md`](BRIDGER_PLAN.md).
 O porquê de cada decisão (`DNN` no plano, `ADR 00NN`) está nos ADRs em [`docs/adr/`](docs/adr/README.md).
 Para escrever um plugin, comece pelos [guias do autor](docs/guias/README.md).

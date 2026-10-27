@@ -37,7 +37,7 @@ Por isso o plugin não espera. Ele manda a pergunta, avisa qual **passo** trata 
 
 **A pessoa manda um comando no meio.** Se o texto é um comando registrado (`!ping`), a espera é descartada e o comando roda. A conversa acaba ali; para recomeçar, `!cadastro` de novo.
 
-**A pessoa quer desistir.** O kernel não tem palavra reservada para isso. Para ele, `cancelar` é uma resposta como outra qualquer: quem decide é o passo, como o `nome` faz no exemplo.
+**A pessoa quer desistir.** O core não tem palavra reservada para isso. Para ele, `cancelar` é uma resposta como outra qualquer: quem decide é o passo, como o `nome` faz no exemplo.
 
 **A pessoa não responde.** Passado o `ttlMs`, a espera some e a próxima mensagem segue o fluxo normal. Sem `onExpire`, some em silêncio, como no passo `nome`. Com ele, o plugin avisa, como no passo `cidade`.
 

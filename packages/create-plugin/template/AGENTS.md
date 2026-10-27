@@ -1,7 +1,7 @@
 # AGENTS.md
 
-`__package__` é um plugin do [Bridger](https://github.com/murillous/usebridger), kernel de bot de
-mensageria. O plugin (`name: '__name__'`, export `__export__`) fica em `src/index.ts` e o teste em
+`__package__` é um plugin do [Bridger](https://github.com/murillous/usebridger), framework de bots
+de mensageria. O plugin (`name: '__name__'`, export `__export__`) fica em `src/index.ts` e o teste em
 `src/index.test.ts`.
 
 ## Comandos

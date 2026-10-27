@@ -5,7 +5,7 @@ envelhecerem em dois lugares.
 
 ## Visão geral
 
-- [O Bridger é SDK, framework ou kernel? Quem chama quem?](visao-geral.md#sdk-framework-ou-kernel-quem-chama-quem)
+- [O Bridger é biblioteca ou framework? Quem chama quem?](visao-geral.md#framework-sem-runner-quem-chama-quem)
 - [Quando **não** usar o Bridger?](visao-geral.md#quando-não-usar)
 - [O que é core e o que é plugin? Por que o escopo do core é fechado?](visao-geral.md#o-que-é-core-e-o-que-é-plugin)
 - [Quais plataformas são suportadas hoje e quais estão planejadas?](visao-geral.md#plataformas)
