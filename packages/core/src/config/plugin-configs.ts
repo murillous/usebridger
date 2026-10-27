@@ -130,6 +130,8 @@ export interface PluginConfigs {
   describe(plugin: string): Promise<PluginConfigView>;
   /** JSON Schema da config para gerar formulário; `undefined` se o plugin não declara `config`. */
   jsonSchema(plugin: string): PluginConfigJsonSchema | undefined;
+  /** Caminhos pontilhados dos campos `secret` do schema (ex.: `openai.apiKey`), com ou sem valor. */
+  secretFields(plugin: string): readonly string[];
 }
 
 const MESSAGES_KEY = 'messages';
@@ -241,6 +243,16 @@ function secretPaths(
     if (value[key] === undefined) return [];
     const path = [...prefix, key];
     return isSecretSchema(field) ? [path] : secretPaths(field, value[key], path);
+  });
+}
+
+/** Caminhos de todos os campos `secret` do schema, sem olhar valor. */
+function schemaSecretPaths(schema: z.ZodType, prefix: readonly string[] = []): string[][] {
+  const shape = objectShape(schema);
+  if (!shape) return [];
+  return Object.entries(shape).flatMap(([key, field]) => {
+    const path = [...prefix, key];
+    return isSecretSchema(field) ? [path] : schemaSecretPaths(field, path);
   });
 }
 
@@ -898,6 +910,11 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
       if (!schema) return undefined;
       // `input`: o formulário preenche a entrada (campos com default são opcionais).
       return maskedJsonSchema(schema, keys.current !== undefined);
+    },
+
+    secretFields(name: string): readonly string[] {
+      const schema = definitionOf(name).config;
+      return schema ? schemaSecretPaths(schema).map((path) => path.join('.')) : [];
     },
   };
 }

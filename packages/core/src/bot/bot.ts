@@ -22,6 +22,7 @@ import { createDeferredLogger } from '#logger/deferred.ts';
 import * as LOG from '#logger/events.ts';
 import { createLogger, createNoopLogger } from '#logger/logger.ts';
 import { createPseudonymizer, withPseudonyms } from '#logger/pseudonym.ts';
+import { createRedactor } from '#logger/redact.ts';
 import { createSecretSet } from '#logger/secrets.ts';
 import { createLogSignalTap } from '#logger/signal.ts';
 import { assertTrailMode, createTrail } from '#logger/trail.ts';
@@ -656,6 +657,12 @@ export function createBot(config: BotConfig): Bot {
             audit: () => audit,
           },
           stream,
+          plugins: {
+            plugins: control.plugins,
+            config: control.config,
+            secretFields: (name) => configs?.secretFields(name) ?? [],
+            redact: createRedactor(secrets),
+          },
         },
       );
       httpAttached = http !== undefined;

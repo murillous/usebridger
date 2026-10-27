@@ -41,6 +41,8 @@ export default definePlugin({
 ```
 
 - O caminho é relativo ao dono: `/api/plugins/<nome>` no plugin. Mesmo método e caminho duas vezes lança `HttpRouteConflictError`.
+- `/config`, `/enable` e `/disable` (e o que vier abaixo deles) são do core
+  ([plugins e config](#plugins-e-config)); a operação de plugin ali lança `BotConfigError`.
 - `params`, `query` e `body` são opcionais; presentes, o core valida antes do handler. `body` é
   JSON. `status: 201` troca o status de sucesso.
 - `response` só alimenta a spec: o core não confere o retorno do handler.
@@ -303,6 +305,47 @@ curl http://localhost:3000/api/plugins/tarefas/items \
 O valor (1 a 256 caracteres, sem controle) vai para `actor.onBehalfOf` e para o ator dos eventos
 de auditoria. Não amplia permissão: vale o escopo da chave. Sem `auth.on-behalf-of`, ou vindo de
 sessão de usuário, é 403 auditado. Em frontend de outra origem, o CORS libera o header.
+
+## Plugins e config
+
+Listar, ligar e desligar plugins e editar a config deles, com os segredos cifrados (ADR 0117,
+ADR 0131). Mesmas condições das rotas de conexão: sob `/api` (ou `/sessions/<sessão>/api`), com
+`BotConfig.http`.
+
+| Rota | Permissão | O que faz |
+| --- | --- | --- |
+| `GET /plugins` | `plugins.read` | `bootedAt` e cada plugin: `name`, `version`, `status` (`loaded`/`skipped`), `dependsOn`, `services`, `contributions`, `setupMs` e, se `skipped`, `reason: { kind, message }` |
+| `POST /plugins/{name}/enable` | `plugins.manage` | Liga o plugin; sobem os dependentes que ele libera. Devolve `{ plugin, dependents }` |
+| `POST /plugins/{name}/disable` | `plugins.manage` | Desliga o plugin e os dependentes, até o `enable` |
+| `GET /plugins/{name}/config` | `config.read` | `view` (config com segredos em `********`, `messages`, `sources`), `schema` (JSON Schema da entrada) e `secretsWritable` |
+| `PUT /plugins/{name}/config` | `config.write` | Grava a config (abaixo) e devolve o mesmo que o `GET` |
+
+Plugin desconhecido é 404. Com a config atual inválida, o `GET` responde 200 com `view: null` e
+`issues` (`path`, `message`, `kind`), para o formulário corrigir.
+
+### Gravar a config
+
+O corpo do `PUT` são os **overrides** do plugin, e substitui os salvos (`{}` remove todos). O
+`schema` do `GET` gera o formulário: preencha com o `view.config` e devolva o que o usuário
+editou.
+
+```sh
+curl -X PUT http://localhost:3000/api/plugins/ia/config   -H "Authorization: Bearer $BRIDGER_KEY" -H 'content-type: application/json'   -d '{ "model": "gpt-5", "openai": { "apiKey": "********" } }'
+```
+
+- Campo `secret()` com `********`, ou fora do corpo, **mantém** o valor salvo.
+- Campo `secret()` com outro valor é segredo novo: gravado cifrado e só com `secrets.write`
+  (sem ela, 403 e nada muda). Pede `BRIDGER_SECRET_KEY` (`secretsWritable: true`).
+- O core valida a config resultante no schema Zod do plugin. Inválida, responde 400
+  (problem+json) com `errors[].path` de cada campo, sem o valor recebido.
+- Campo que o env ou o arquivo decidem não aceita segredo salvo: 409.
+- Válida, o plugin recarrega com a config nova.
+
+Os segredos novos gravam antes dos overrides, cada um com seu reload. Se os overrides falharem
+depois, o segredo fica salvo: confira o `GET` antes de repetir.
+
+Toda escrita entra na auditoria em nome de quem chamou: `kernel.config.update` com o diff
+mascarado, `kernel.secret.update` só com o caminho, `kernel.plugin.enable`/`disable`.
 
 ## Conexão e tempo real
 
