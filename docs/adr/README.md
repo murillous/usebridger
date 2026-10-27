@@ -151,3 +151,4 @@ Um ADR novo entra no fim da lista.
 - [0129](0129-conexao-e-tempo-real-pela-api.md) — Conexão e tempo real pela API: pareamento e logout no transport, stream SSE por sessão com retomada
 - [0130](0129-framework-na-vitrine.md) — Bridger se apresenta como framework; "core" no dia a dia, "microkernel" como arquitetura
 - [0131](0131-plugins-e-config-pela-api.md) — Plugins e config pela API: rotas do core sob `/api/plugins/{name}`, máscara de segredo no `PUT`, `plugins.read` e caminhos reservados
+- [0132](0132-pseudonimo-de-volta-ao-id-pela-api.md) — Pseudônimo de volta ao id pela API: mapa `pseudônimo → id` cifrado no storage, `pseudonyms.resolve` e consulta auditada

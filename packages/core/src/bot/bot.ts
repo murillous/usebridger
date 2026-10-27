@@ -22,6 +22,7 @@ import { createDeferredLogger } from '#logger/deferred.ts';
 import * as LOG from '#logger/events.ts';
 import { createLogger, createNoopLogger } from '#logger/logger.ts';
 import { createPseudonymizer, withPseudonyms } from '#logger/pseudonym.ts';
+import { createPseudonymMap } from '#logger/pseudonym-map.ts';
 import { createRedactor } from '#logger/redact.ts';
 import { createSecretSet } from '#logger/secrets.ts';
 import { createLogSignalTap } from '#logger/signal.ts';
@@ -236,8 +237,15 @@ export function createBot(config: BotConfig): Bot {
   );
   const logTap = createLogSignalTap(observers, secrets);
   // Chave mestra lida só no start (o ambiente é da config); sem ela a chave é do processo (ADR 0119).
+  // O mapa reverso guarda cada par cifrado, para a API resolver o pseudônimo (ADR 0132).
+  const pseudonymMap = createPseudonymMap({
+    kv: () => kernelStorage(scoped, 'pseudonyms').kv,
+    keys: () => readSecretKeys(config.env ?? processEnv()),
+    onError: (error) => getLog().event(LOG.pseudonymMapFailed, { err: error }),
+  });
   const pseudonymizer = createPseudonymizer(
     () => readSecretKeys(config.env ?? processEnv()).current,
+    pseudonymMap.remember,
   );
   // Ordem dos pontos de extensão: a tabela do host, já na ordem de carga (ADR 0092).
   const services = createServiceRegistry({
@@ -663,6 +671,7 @@ export function createBot(config: BotConfig): Bot {
             secretFields: (name) => configs?.secretFields(name) ?? [],
             redact: createRedactor(secrets),
           },
+          pseudonyms: { map: pseudonymMap, audit: () => audit },
         },
       );
       httpAttached = http !== undefined;

@@ -347,6 +347,11 @@ depois, o segredo fica salvo: confira o `GET` antes de repetir.
 Toda escrita entra na auditoria em nome de quem chamou: `kernel.config.update` com o diff
 mascarado, `kernel.secret.update` só com o caminho, `kernel.plugin.enable`/`disable`.
 
+## Pseudônimos
+
+`GET /pseudonyms/{pseudonym}` (`pseudonyms.resolve`) devolve o id real de um `u_…`/`g_…` dos logs,
+com cada consulta auditada. Detalhes em [Logger](logger.md) e no ADR 0132.
+
 ## Conexão e tempo real
 
 Um app conecta o número sem o dashboard (ADR 0129). As rotas ficam sob `/api` (ou
