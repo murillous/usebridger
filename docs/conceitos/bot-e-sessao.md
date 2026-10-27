@@ -3,7 +3,16 @@
 ## O mínimo para subir um bot
 
 Só o transport é obrigatório: `createBot({ transport })` sobe um bot sem plugins, com os dados em
-memória. Um bot útil tem também storage e plugins:
+memória. O `@usebridger/core` não traz transport; ele vem de outro pacote, então o mínimo instalado
+é **core + um transport**:
+
+| Pacote | Plataforma |
+| --- | --- |
+| `@usebridger/transport-baileys` | WhatsApp, pareado por QR ou código |
+| `@usebridger/transport-web` | Chat web dentro de um sistema seu, por WebSocket e JWT |
+
+Storage, plugins, servidor HTTP, API, autenticação e dashboard são opcionais. Um bot útil tem
+também storage e plugins:
 
 ```ts
 import { createBot } from '@usebridger/core';
@@ -29,6 +38,7 @@ O passo a passo está em [Seu primeiro bot](/usebridger/comecando/primeiro-bot/)
 | `plugins` | O comportamento do bot | o bot conecta e não responde nada |
 | `logger` | Linhas JSON (ou `pretty`) com os segredos censurados | o bot cria um, no nível `logLevel` |
 | `http` | O servidor HTTP do processo, para rotas de plugin, webhooks e `/health` | `ctx.http` lança, e transports que precisam de HTTP (web) não sobem |
+| `api` | A API do core sob `/api` (conexão, plugins, auditoria) e a autenticação dela (`api.auth`) | sem `http`, não há API nem login; com `http` e sem `api.auth`, a API fica aberta e o bot só sobe em loopback ([ADR 0128](../adr/0128-limitacoes-da-autenticacao-da-api.md)) |
 
 O transport entra como **fábrica** (`baileys({ ... })` devolve uma), não como objeto pronto: o
 bot a chama com o que só ele tem, como as credenciais da sessão no storage e um logger com o nome

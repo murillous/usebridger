@@ -15,7 +15,9 @@ await bot.start();
 
 ## `createBot(config)`
 
-Só `transport` é obrigatório; `createBot({ transport })` sobe um bot sem plugins.
+Só `transport` é obrigatório; `createBot({ transport })` sobe um bot sem plugins. O core não traz
+transport: instale um (`@usebridger/transport-baileys` para WhatsApp, `@usebridger/transport-web`
+para chat web). O resto, inclusive a API e a autenticação, é opcional.
 
 | Opção | Padrão | O que faz |
 | --- | --- | --- |
@@ -23,6 +25,7 @@ Só `transport` é obrigatório; `createBot({ transport })` sobe um bot sem plug
 | `session` | `'default'` | Sessão (o número) que o bot opera; kebab-case. Escopo de tudo o que ele persiste ([Sessão](#sessão)) |
 | `storage` | memória, com aviso no log | `StoragePort` de plugins, scheduler e overrides de config. O bot o fecha no `stop()` (o último a parar, se vários o dividem) |
 | `http` | — | Servidor HTTP do processo (`createHttp`), o mesmo para todos os bots; dá `ctx.http` e `deps.http` ([HTTP](http.md)) |
+| `api` | — | API do core sob `/api` e a autenticação dela (`api.auth`), `api.cors`. Só com `http`; sem `api.auth`, o bot só sobe em loopback ([API](api.md#autenticação)) |
 | `plugins` | `[]` | Plugins da config (pacotes npm que o app importa) |
 | `pluginDirs` / `cwd` | — / `process.cwd()` | Pastas de plugins locais ([Plugins](plugins.md#fontes-config-e-plugindirs)) |
 | `disabledPlugins` | `[]` | Nomes que não carregam |

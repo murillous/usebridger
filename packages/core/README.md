@@ -7,6 +7,10 @@ filas, middlewares e storage; a plataforma (WhatsApp, chat web) entra por um tra
 npm install @usebridger/core @usebridger/storage-sqlite @usebridger/transport-baileys
 ```
 
+O mínimo é o core e um transport (`transport-baileys` para WhatsApp, `transport-web` para chat
+web). O storage é opcional, mas sem ele os dados ficam em memória e o WhatsApp pede pareamento a
+cada restart. Servidor HTTP, API e autenticação também são opcionais.
+
 ```ts
 import { bold, createBot, definePlugin, fmt } from '@usebridger/core';
 import { sqlite } from '@usebridger/storage-sqlite';
