@@ -1,4 +1,5 @@
 // #region teste
+import { createHttp } from '@usebridger/core';
 import { createTestBot, PROFILE_NAMES, PROFILES } from '@usebridger/testing';
 import { describe, expect, it } from 'vitest';
 import { ola } from './index.ts';
@@ -22,6 +23,27 @@ describe.each(PROFILE_NAMES)('no %s', (profile) => {
 
     const reacts = PROFILES[profile].capabilities.includes('reactions');
     expect(bot.transport.reactions).toHaveLength(reacts ? 1 : 0);
+    await bot.stop();
+  });
+});
+
+describe('recurso saudacoes na API', () => {
+  it('lista quantas vezes cada pessoa foi cumprimentada', async () => {
+    // Porta livre em loopback: sem `api.auth`, a API só sobe assim.
+    const http = createHttp({ port: 0, hostname: '127.0.0.1' });
+    const bot = await createTestBot({ http, plugins: [ola] });
+
+    await bot.receive({ text: '!ola', sender: { name: 'Ana' } });
+    await bot.receive({ text: '!ola', sender: { name: 'Ana' } });
+    await bot.receive({ text: '!ola', sender: { name: 'Bia' } });
+
+    const res = await fetch(`http://127.0.0.1:${http.port}/api/resources/ola/saudacoes`);
+    expect(await res.json()).toEqual({
+      items: [
+        expect.objectContaining({ pessoa: 'Ana', vezes: 2 }),
+        expect.objectContaining({ pessoa: 'Bia', vezes: 1 }),
+      ],
+    });
     await bot.stop();
   });
 });

@@ -131,6 +131,10 @@ host parado) 409 com a mensagem; outro erro é logado e responde 500.
 
 ## Abas de plugins (`dashboard.tabs`)
 
+> Substituído pelo `api.resources` do core (ADR 0125, ADR 0134); o dashboard troca na M7-10.
+> Plugin novo já usa o recurso; para migrar, veja o
+> [guia](../../core/docs/api.md#migrar-do-dashboardtabs).
+
 Outro plugin ganha uma tela no painel sem mexer no dashboard ([ADR 0104](../../../docs/adr/0104-abas-do-dashboard-por-ponto-de-extensao.md)):
 contribui uma `DashboardTab` ao ponto `dashboard.tabs` e o dashboard desenha os widgets. O plugin só
 devolve dados; nunca manda HTML, CSS ou script. Os tipos saem de `@usebridger/plugin-dashboard`.

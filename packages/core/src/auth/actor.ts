@@ -1,7 +1,7 @@
 // Ator do request: cookie de sessão (pessoa) ou `Authorization: Bearer` (máquina). Sessão vencida,
 // revogada ou de usuário desativado, e chave revogada ou desconhecida, não dão ator (ADR 0127).
 
-import { isRole, rolePermissions } from './permissions.ts';
+import { type AuthRole, isRole, rolePermissions } from './permissions.ts';
 import type { AuthStore } from './store.ts';
 import type { ApiActor } from './types.ts';
 
@@ -15,6 +15,8 @@ export interface ActorResolverOptions {
   /** Inatividade máxima entre dois requests da sessão. */
   readonly idleMs?: number;
   readonly now?: () => Date;
+  /** Permissões dos plugins carregados: os papéis as recebem como as do core (ADR 0134). */
+  readonly pluginPermissions?: () => readonly string[];
 }
 
 export function cookie(request: Request, name: string): string | undefined {
@@ -31,6 +33,8 @@ export function createActorResolver(
   const { store } = options;
   const idleMs = options.idleMs ?? DEFAULT_IDLE_MS;
   const now = options.now ?? (() => new Date());
+  const roleOf = (role: AuthRole): readonly string[] =>
+    rolePermissions(role, options.pluginPermissions?.() ?? []);
 
   async function fromKey(secret: string): Promise<ApiActor | undefined> {
     const key = await store.findApiKeyBySecret(secret);
@@ -54,7 +58,7 @@ export function createActorResolver(
     const user = await store.getUser(key.createdBy);
     if (user !== undefined) {
       if (user.status !== 'active' || !isRole(user.role)) return undefined;
-      const allowed = rolePermissions(user.role);
+      const allowed = roleOf(user.role);
       return key.permissions.filter((p) => allowed.includes(p));
     }
     const parent = await store.getApiKey(key.createdBy);
@@ -82,7 +86,7 @@ export function createActorResolver(
       kind: 'user',
       name: user.name,
       role: user.role,
-      permissions: rolePermissions(user.role),
+      permissions: roleOf(user.role),
     };
   }
 

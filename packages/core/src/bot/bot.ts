@@ -163,6 +163,8 @@ export function createBot(config: BotConfig): Bot {
           store: createAuthStore(authStorage),
           audit: () => audit,
           sessionMaxAgeMs,
+          // Lido a cada request: o `http` nasce logo abaixo, e as permissões mudam com os plugins.
+          pluginPermissions: (): readonly string[] => http?.pluginPermissions() ?? [],
           ...(apiAuth.trustProxy !== undefined && { trustProxy: apiAuth.trustProxy }),
           accounts: createAccounts({
             storage: authStorage,

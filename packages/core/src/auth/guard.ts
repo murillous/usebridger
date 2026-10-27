@@ -13,6 +13,8 @@ export interface KeysDeps {
   readonly store: AuthStore;
   readonly audit: () => Audit;
   readonly now: () => Date;
+  /** Permissões declaradas pelos plugins carregados, aceitas no escopo da chave (ADR 0134). */
+  readonly pluginPermissions: () => readonly string[];
 }
 
 /** O que `operationHandler` precisa para proteger uma rota. */
@@ -54,6 +56,8 @@ export interface ApiGuardOptions {
   /** Saltos de proxy confiáveis; 0 (padrão) usa só o endereço do socket. */
   readonly trustProxy?: number;
   readonly now?: () => Date;
+  /** Permissões declaradas pelos plugins carregados; lido a cada request (ADR 0134). */
+  readonly pluginPermissions?: () => readonly string[];
 }
 
 function subject(actor: ApiActor, request: Request, ip?: string): AuditSubject {
@@ -81,6 +85,7 @@ export function createApiGuard(options: ApiGuardOptions): ApiGuard {
       store: options.store,
       audit: options.audit,
       now: options.now ?? (() => new Date()),
+      pluginPermissions: options.pluginPermissions ?? (() => []),
     },
     accounts: options.accounts,
     sessionMaxAgeMs: options.sessionMaxAgeMs,

@@ -1,7 +1,8 @@
 # __package__
 
 Plugin do [Bridger](https://github.com/murillous/usebridger). Responde `!ola` cumprimentando quem
-chamou.
+chamou e expõe quantas vezes cada pessoa foi cumprimentada na API do core, no recurso
+`GET /api/resources/__name__/saudacoes` (permissão `__name__.read`).
 
 ## Usar no bot
 
@@ -28,7 +29,9 @@ await bot.start();
 
 O plugin fica em `src/index.ts`, na forma curta: comandos em `commands` e eventos em `on`, direto
 no manifesto. O `setup(ctx)` entra quando precisar de algo dinâmico (registrar sob condição da
-config, rotas HTTP, serviços).
+config, rotas HTTP, serviços). Nele, o `ctx.services.contribute('api.resources', ...)` publica
+dados do plugin na API sem escrever UI: o dashboard, ou outro app, desenha a tela pelo schema
+([Recursos de plugin](https://github.com/murillous/usebridger/blob/main/packages/core/docs/api.md#recursos-de-plugin)).
 
 ## Rodar em qualquer plataforma
 

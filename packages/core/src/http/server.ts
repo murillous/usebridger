@@ -22,7 +22,14 @@ import { loadApiLibs } from '#api/libs.ts';
 import { createOpenApiDocument } from '#api/openapi.ts';
 import { type AnyApiOperation, operationHandler } from '#api/operation.ts';
 import { ApiError, problemResponse } from '#api/problem.ts';
+import {
+  type ApiResource,
+  resourceOperations,
+  resourcePermissions,
+  validateResource,
+} from '#api/resources.ts';
 import type { ApiGuard } from '#auth/guard.ts';
+import { isPermission } from '#auth/permissions.ts';
 import { BotConfigError } from '#config/owners.ts';
 import * as LOG from '#logger/events.ts';
 import { NO_TRAIL, type Trail } from '#logger/trail.ts';
@@ -117,8 +124,6 @@ export function createHttp(options: HttpOptions): HttpServer {
   return server;
 }
 
-const PERMISSION_FORMAT = /^[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*$/;
-
 /**
  * Primeiros segmentos que o core usa sob `/api/plugins/:name` (ADR 0131). O core monta antes, e a
  * operação do plugin no mesmo caminho ficaria sombreada sem aviso.
@@ -175,6 +180,12 @@ function normalizePath(path: string): string {
   return path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
 }
 
+interface ResourceEntry {
+  readonly owner: string;
+  readonly resource: ApiResource;
+  readonly onError: (error: unknown, route: string) => void;
+}
+
 /** Rotas de um bot no servidor. Publicadas no `attach` (start) e retiradas no `detach` (stop). */
 export class SessionHttp {
   readonly session: string;
@@ -182,6 +193,7 @@ export class SessionHttp {
   readonly #hub: HttpHub;
   readonly #prefix: string;
   readonly #entries = new Map<string, RouteEntry>();
+  readonly #resources: ResourceEntry[] = [];
   readonly #trail: Trail;
   readonly #guard: ApiGuard | undefined;
   #state: () => string = () => 'idle';
@@ -261,7 +273,7 @@ export class SessionHttp {
           throw new TypeError(`http: método não suportado: ${String(operation.method)}`);
         }
         // Falha no registro: permissão fora do formato nunca casaria, e a rota daria 403 para todos.
-        if (operation.permission !== undefined && !PERMISSION_FORMAT.test(operation.permission)) {
+        if (operation.permission !== undefined && !isPermission(operation.permission)) {
           throw new BotConfigError(
             `http: permissão "${operation.permission}" de ${operation.method} ${operation.path} fora do formato <área>.<ação> (ex.: "logs.read")`,
           );
@@ -284,6 +296,41 @@ export class SessionHttp {
         );
       },
     };
+  }
+
+  /**
+   * Recurso de plugin (`api.resources`, ADR 0134). Vira operações em
+   * `/api/resources/<dono>/<id>` a cada montagem do app (os schemas Zod só carregam com a porta) e
+   * sai com o dono no `removeOwner`. Inválido ou repetido no dono lança `BotConfigError`.
+   */
+  resource(
+    owner: string,
+    resource: ApiResource,
+    onError: (error: unknown, route: string) => void,
+  ): void {
+    validateResource(owner, resource);
+    if (this.#resources.some((r) => r.owner === owner && r.resource.id === resource.id)) {
+      throw new BotConfigError(
+        `plugin "${owner}": api.resources "${resource.id}" contribuído duas vezes`,
+      );
+    }
+    this.#resources.push({ owner, resource, onError });
+    if (this.#attached) this.#hub.changed();
+  }
+
+  /**
+   * Permissões declaradas pelos plugins (operações de `ctx.http.api` e recursos), lidas a cada
+   * request: entram nos papéis e no escopo de chave enquanto o plugin estiver carregado.
+   */
+  pluginPermissions(): readonly string[] {
+    const all = new Set<string>();
+    for (const entry of this.#entries.values()) {
+      if (entry.api?.permission !== undefined) all.add(entry.api.permission);
+    }
+    for (const { resource } of this.#resources) {
+      for (const permission of resourcePermissions(resource)) all.add(permission);
+    }
+    return [...all];
   }
 
   /** Operações do core nesta sessão (`/api/...`); não contam como rota para abrir a porta. */
@@ -330,12 +377,31 @@ export class SessionHttp {
     return this.#prefix;
   }
 
-  entries(): Iterable<RouteEntry> {
-    return this.#entries.values();
+  /** Rotas registradas e as dos recursos; com recurso, precisa de `loadApiLibs()` antes. */
+  *entries(): Iterable<RouteEntry> {
+    yield* this.#entries.values();
+    for (const { owner, resource, onError } of this.#resources) {
+      const base = (): string => `${this.#prefix}/api/resources/${owner}`;
+      for (const api of resourceOperations(owner, resource)) {
+        const route = `${api.method} ${api.path}`;
+        const fail = (error: unknown): void => onError(error, route);
+        yield {
+          owner,
+          method: api.method,
+          path: normalizePath(api.path),
+          base,
+          api,
+          target: operationHandler(api, fail, this.#guard),
+          onError: fail,
+          trail: this.#trail,
+          sockets: new Set(),
+        };
+      }
+    }
   }
 
   get hasRoutes(): boolean {
-    return this.#entries.size > 0;
+    return this.#entries.size > 0 || this.#resources.length > 0;
   }
 
   state(): string {
@@ -349,6 +415,11 @@ export class SessionHttp {
       if (entry.owner !== owner) continue;
       this.#entries.delete(key);
       closeSockets(entry);
+      removed = true;
+    }
+    for (let i = this.#resources.length - 1; i >= 0; i--) {
+      if (this.#resources[i]?.owner !== owner) continue;
+      this.#resources.splice(i, 1);
       removed = true;
     }
     if (removed && this.#attached) this.#hub.changed();
@@ -378,6 +449,7 @@ export class SessionHttp {
     this.#realtime?.stream.close();
     for (const entry of this.#entries.values()) closeSockets(entry);
     this.#entries.clear();
+    this.#resources.length = 0;
     await this.#hub.detach(this);
   }
 }
