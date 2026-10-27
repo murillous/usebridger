@@ -49,6 +49,140 @@ export default definePlugin({
 - Query string repetida chega como array; use `z.coerce` para números.
 - A porta só abre se algum plugin ou transport registrar rota; sozinha, a API do core não abre.
 
+## Recursos de plugin
+
+([ADR 0134](../../../docs/adr/0134-recursos-de-plugin-pela-api.md).) Para expor dados que um
+frontend lista, abre e edita, declare um **recurso** no ponto `api.resources` em vez de escrever
+cada operação. O core monta as rotas, a validação, a auth e a spec; o plugin não declara UI, e o
+dashboard (ou outro app) desenha a tela a partir do schema.
+
+```ts
+import { ApiError, definePlugin, defineResource } from '@usebridger/core';
+import { z } from '@usebridger/core/zod';
+
+type Linha = { nome: string; pontos: number };
+
+export const ranking = definePlugin({
+  name: 'rank',
+  version: '1.0.0',
+  engine: '>=0.9.0',
+  setup(ctx) {
+    const linhas = ctx.storage.collection<Linha>('linhas', { indexes: ['pontos'] });
+    ctx.services.contribute(
+      'api.resources',
+      defineResource({
+        id: 'ranking',
+        schema: z.object({ id: z.string(), nome: z.string(), pontos: z.number() }).meta({ id: 'RankRow' }),
+        permissions: { read: 'rank.read', write: 'rank.write' },
+        filter: z.object({ min: z.coerce.number().optional() }), // campos da query string
+        list: async ({ cursor, limit, filter }) => {
+          const offset = cursor === undefined ? 0 : Number(cursor);
+          const items = await linhas.find({
+            ...(filter.min !== undefined && { where: { pontos: { gte: filter.min } } }),
+            orderBy: { field: 'pontos', direction: 'desc' },
+            offset,
+            limit: limit + 1,
+          });
+          return {
+            items: items.slice(0, limit),
+            cursor: items.length > limit ? String(offset + limit) : undefined,
+          };
+        },
+        get: ({ id }) => linhas.get(id), // `undefined` vira 404
+        actions: [
+          {
+            id: 'zerar',
+            permission: 'rank.reset', // sem ela, vale `permissions.write`
+            input: z.object({ motivo: z.string().min(3) }),
+            confirm: true, // o frontend pede confirmação antes
+            run: async ({ id }) => {
+              if ((await linhas.update(id, { pontos: 0 })) === 0) {
+                throw new ApiError(404, 'linha não existe');
+              }
+            },
+          },
+        ],
+      }),
+    );
+  },
+});
+```
+
+| Operação | Rota sob `/api/resources/<plugin>/<id>` | Permissão | Retorno do handler |
+| --- | --- | --- | --- |
+| `list({ cursor, limit, filter, actor })` | `GET` na coleção; `limit` 1–100, padrão 20 | `read` | `{ items, cursor? }`; o cliente devolve o `cursor` para a próxima página |
+| `get({ id, actor })` | `GET /{id}` | `read` | o item; `undefined` é 404 |
+| `create: { input, run({ input, actor }) }` | `POST` na coleção, 201 | `write` | o item criado |
+| `update: { input, run({ id, input, actor }) }` | `PATCH /{id}` | `write` | o item; `undefined` é 404 |
+| `delete({ id, actor })` | `DELETE /{id}`, responde `{ id }` | `write` | `false` é 404 |
+| `actions[]: { id, summary?, input?, output?, permission?, confirm?, run({ id, input, actor }) }` | `POST /{id}/actions/<ação>` | a da ação, ou `write` | o `output`; sem ele, `{}` |
+
+- **Tudo é opcional**, mas o recurso precisa de ao menos uma operação. A ausente não vira rota (404)
+  nem entra na spec.
+- **Entrada inválida** (query, `input` do create, do update ou da ação) é 400 com `errors`, antes do
+  handler. Para os outros 4xx, `throw new ApiError(...)`.
+- **Permissões** no formato `<área>.<ação>`. Sem `permissions.read`, ler exige só estar autenticado.
+  As do plugin entram no catálogo da auth enquanto ele estiver carregado: `owner` e `admin` as têm,
+  `viewer` só as `.read`, e elas valem no escopo de uma API key. Prefixe pela área do plugin
+  (`rank.*`): dois plugins com o mesmo nome dividem a permissão. Vale também para a `permission` das
+  operações de `ctx.http.api`.
+- **`actor`** traz `id`, `kind` (`user` ou `key`), `name`, `onBehalfOf?` e `can(permissão)`, para
+  filtrar os dados por quem chama. Com a auth desligada (loopback), fica `undefined`.
+- **Spec**: cada operação sai com `x-permission`, `x-resource`
+  (`{ plugin, resource, operation, action?, confirm? }`) e a tag `resources:<plugin>/<id>`. Dê
+  `.meta({ id })` ao schema do item para ele virar componente nomeado.
+- **Validação no `contribute`**: id fora de `[a-z0-9-]`, até 40, schema que não é Zod, permissão fora
+  do formato, `filter` com `cursor` ou `limit`, ação repetida ou nenhuma operação lançam
+  `BotConfigError` e falham o `setup`. O mesmo `id` duas vezes no plugin também.
+- **Ciclo de vida**: o recurso sai da API e da spec no teardown, reload e disable do plugin, e volta
+  no enable. Sem `http` no `createBot`, ele só fica no ponto (`ctx.services.extensionPoint`).
+
+### Migrar do `dashboard.tabs`
+
+O `dashboard.tabs` (ADR 0104, 0109, 0114) sai com o dashboard novo (M7-10). Cada widget vira dado
+num recurso, e o desenho fica com o frontend:
+
+| Widget da aba | No recurso |
+| --- | --- |
+| `table` (`columns`, `load({ cursor })`, linhas com `id`) | `schema` do item (uma coluna por campo) e `list` devolvendo `{ items, cursor }` |
+| `table.actions` (`id`, `label`, `confirm`, `run({ row })`) | `actions` (`id`, `summary`, `confirm`, `run({ id })`): o `id` da linha chega pelo caminho |
+| `form` (`schema`, `submit(input)`) | `create: { input: schema, run }`, ou uma ação com `input` quando não cria item |
+| `stats` (`load()` → `{ label, value }[]`) | recurso com `list` devolvendo um item por número (`{ id, label, value }`) |
+| `series` (`load({ days })`) | `list` com `filter: z.object({ days: z.coerce.number() })` e um item por ponto |
+| `text` (`markdown`) | fica no frontend: não é dado |
+| `title`, `tone`, `order`, `submitLabel` | ficam no frontend: são decisões de UI |
+
+Antes:
+
+```ts
+ctx.services.contribute('dashboard.tabs', {
+  id: 'lembretes',
+  title: 'Lembretes',
+  widgets: [{
+    kind: 'table',
+    id: 'pendentes',
+    columns: [{ key: 'texto', label: 'Texto' }],
+    load: async () => ({ rows: await pendentes() }),
+    actions: [{ id: 'cancelar', label: 'Cancelar', confirm: true, run: ({ row }) => cancelar(row.id) }],
+  }],
+});
+```
+
+Depois:
+
+```ts
+ctx.services.contribute('api.resources', defineResource({
+  id: 'lembretes',
+  schema: z.object({ id: z.string(), texto: z.string() }),
+  permissions: { read: 'lembretes.read', write: 'lembretes.manage' },
+  list: async () => ({ items: await pendentes() }),
+  actions: [{ id: 'cancelar', summary: 'Cancelar', confirm: true, run: ({ id }) => cancelar(id) }],
+}));
+```
+
+Na aba, `row` vinha do browser e só o `id` era confiável. No recurso, o `id` vem do caminho, o
+`input` chega validado pelo schema e a permissão é conferida antes do handler.
+
 ## Erros (problem+json)
 
 Todo erro sob a API sai como `application/problem+json` (RFC 9457) e o componente `Problem` da
@@ -100,7 +234,7 @@ comando o importa, e isso é seguro porque importar o módulo do app não tem ef
 
 Para coletar as operações, o comando roda o `setup` de cada plugin (prazo de 10 s, e depois o
 `teardown`, com `ctx.signal` abortado) com um contexto em que só `ctx.http`, `ctx.plugin`,
-`ctx.signal` e `ctx.config` são reais. `ctx.config` traz os defaults do schema do plugin; se o
+`ctx.signal`, `ctx.config` e o `ctx.services.contribute('api.resources', ...)` são reais. `ctx.config` traz os defaults do schema do plugin; se o
 schema tem campo obrigatório, `config` e o resto de `ctx` (storage, scheduler, commands) viram um
 no-op. O kernel não toca em nada externo, mas o código do próprio plugin roda: registre a API no
 começo do `setup` e deixe conexões e timers para depois. Operações registradas sob condição da
@@ -168,7 +302,8 @@ ctx.http.api({
 });
 ```
 
-Papéis: `owner` e `admin` têm todas as permissões do core; `viewer`, só as `.read`. O admin não
+Papéis: `owner` e `admin` têm todas as permissões do core e as dos plugins carregados
+([recursos de plugin](#recursos-de-plugin)); `viewer`, só as `.read`. O admin não
 gerencia owner (`canManageRole`). A spec traz `securitySchemes` (`cookieAuth`, `bearerAuth`),
 `security` por operação e `x-permission`.
 
@@ -282,7 +417,8 @@ curl -X POST http://localhost:3000/api/keys \
 ```
 
 A resposta traz `secret` (`brk_...`) **uma única vez**; o storage guarda só o hash. O escopo só
-aceita permissões do core e só as que quem cria também tem (senão 403). `GET /api/keys` lista com
+aceita permissões do core ou de plugin carregado (senão 400) e só as que quem cria também tem
+(senão 403). `GET /api/keys` lista com
 `lastUsedAt` e `revokedAt`, sem o segredo; `DELETE /api/keys/:id` revoga (a chave passa a dar 401).
 Criar e revogar geram os eventos `kernel.key.created` e `kernel.key.revoked` na auditoria.
 

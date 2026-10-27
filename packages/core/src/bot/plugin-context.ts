@@ -2,6 +2,7 @@
 // nome do plugin, e desfaz tudo no `dispose`. É a única peça que conhece todos os serviços; o
 // host de plugins só recebe a fábrica.
 
+import { type ApiResource, validateResource } from '#api/resources.ts';
 import type { Audit } from '#audit/audit.ts';
 import { commandInfo } from '#commands/catalog.ts';
 import {
@@ -334,6 +335,23 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
           // Depois do `dispose` o `removePlugin` já passou: aceitar a contribuição a deixaria
           // órfã, rodando em nome de um plugin que saiu.
           guard('services.contribute');
+          // O recurso é validado e publicado antes de entrar no ponto: inválido falha o `setup`.
+          // Sem servidor HTTP fica só no ponto, sem rota (ADR 0134).
+          if (point === 'api.resources') {
+            const resource = contribution as ApiResource;
+            if (deps.http === undefined) validateResource(name, resource);
+            else {
+              deps.http.resource(name, resource, (error, route) =>
+                deps.onHttpError({
+                  plugin: name,
+                  phase: 'http',
+                  event: route,
+                  error,
+                  timedOut: false,
+                }),
+              );
+            }
+          }
           services.contribute(point, contribution);
         },
         extensionPoint: (point) => services.extensionPoint(point),

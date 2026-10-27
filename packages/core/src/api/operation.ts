@@ -37,6 +37,8 @@ export interface ApiOperation<
   readonly permission?: string;
   /** Rota sem autenticação (ex.: `/health`). Exclui `permission`. */
   readonly public?: true;
+  /** Campos `x-*` copiados para a operação na spec (ex.: `x-resource` dos recursos de plugin). */
+  readonly extensions?: Readonly<Record<`x-${string}`, unknown>>;
   readonly handler: (
     input: {
       params: z.output<Params>;

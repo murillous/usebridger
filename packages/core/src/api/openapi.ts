@@ -33,6 +33,7 @@ export async function createOpenApiDocument(
       // `security: []` marca a rota pública; as duas formas de credencial valem como alternativas.
       security: operation.public ? [] : [{ cookieAuth: [] }, { bearerAuth: [] }],
       ...(operation.permission && { 'x-permission': operation.permission }),
+      ...operation.extensions,
       ...(Object.keys(requestParams).length > 0 && { requestParams }),
       ...(operation.body && {
         requestBody: {

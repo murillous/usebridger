@@ -1,13 +1,16 @@
 // Coleta as operações de API de plugins sem bot, transport nem porta (CLI `bridger openapi`).
 // `ctx.http.api` só existe dentro do `setup`, então ele roda aqui com um contexto em que só
-// `ctx.http`, `ctx.plugin`, `ctx.signal` e `ctx.config` (defaults do schema) são reais. Importar
+// `ctx.http`, `ctx.plugin`, `ctx.signal`, `ctx.config` (defaults do schema) e o `contribute` de
+// `api.resources` são reais. Importar
 // o módulo do app não tem efeito colateral (ADR 0003), o que permite chegar até aqui.
 
 import { createHttp, sessionHttp } from '#http/server.ts';
 import { createNoopLogger } from '#logger/logger.ts';
 import { DEFAULT_SETUP_TIMEOUT_MS } from '#plugin/host.ts';
 import type { PluginDefinition } from '#plugin/types.ts';
+import { loadApiLibs } from './libs.ts';
 import type { ApiRoute } from './operation.ts';
+import type { ApiResource } from './resources.ts';
 
 // Qualquer outro `ctx.*` vira um no-op encadeável e aguardável: o plugin registra rota sem que o
 // kernel toque storage, scheduler ou transport. shortcut: efeito colateral do código do próprio
@@ -63,9 +66,17 @@ export async function pluginApiRoutes(
     // Signal real que não aborta durante o `setup`: `if (ctx.signal.aborted) return` não some com
     // a rota. Abortar no fim roda a limpeza que o plugin amarrou a ele (ADR 0029).
     const controller = new AbortController();
+    // Só o ponto da API importa aqui; as outras contribuições somem como o resto do no-op.
+    const services = inertContext({
+      contribute: (point: string, value: unknown) => {
+        if (point === 'api.resources')
+          session.resource(plugin.name, value as ApiResource, () => undefined);
+      },
+    });
     const ctx = inertContext(
       {
         http,
+        services,
         signal: controller.signal,
         plugin: { name: plugin.name, version: plugin.version, messages: plugin.messages ?? {} },
       },
@@ -79,6 +90,8 @@ export async function pluginApiRoutes(
       await withDeadline(async () => plugin.teardown?.(ctx), plugin.name);
     }
   }
+  // Os recursos viram operações com schemas montados pelo Zod do core.
+  await loadApiLibs();
   const routes: ApiRoute[] = [];
   for (const entry of session.entries()) {
     if (entry.api) {

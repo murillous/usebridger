@@ -90,7 +90,8 @@ export function keyOperations(deps?: AuthRoutesDeps): readonly AnyApiOperation[]
         const who = need(actor);
         const { name, permissions } = body as { name: string; permissions: string[] };
         const scope = [...new Set(permissions)];
-        const unknown = scope.filter((p) => !(CORE_PERMISSIONS as readonly string[]).includes(p));
+        const known = new Set<string>([...CORE_PERMISSIONS, ...guard().keys.pluginPermissions()]);
+        const unknown = scope.filter((p) => !known.has(p));
         if (unknown.length > 0) {
           throw new ApiError(400, `permissão desconhecida: ${unknown.join(', ')}`);
         }

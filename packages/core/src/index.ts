@@ -9,6 +9,13 @@ export type { ApiOptions } from '#api/cors.ts';
 export { createOpenApiDocument } from '#api/openapi.ts';
 export type { AnyApiOperation, ApiOperation, ApiRoute } from '#api/operation.ts';
 export { ApiError } from '#api/problem.ts';
+export type {
+  ApiResource,
+  ResourceAction,
+  ResourceActor,
+  ResourceCall,
+} from '#api/resources.ts';
+export { defineResource } from '#api/resources.ts';
 export {
   AuditPermissionError,
   type VerifyAuditOptions,

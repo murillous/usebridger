@@ -1,6 +1,8 @@
 // Contrato do service registry (M1-9, ADR 0016). O M1-9 completa este arquivo; os nomes
 // exportados aqui são usados por outros módulos e não mudam.
 
+import type { ApiResource } from '#api/resources.ts';
+
 /**
  * Mapa nome → tipo do serviço, preenchido por declaration merging no plugin que provê:
  *
@@ -26,8 +28,10 @@ export type ServiceName = Extract<keyof Services, string>;
  * }
  * ```
  */
-// biome-ignore lint/suspicious/noEmptyInterface: vazio de propósito; plugins estendem por declaration merging.
-export interface ExtensionPoints {}
+export interface ExtensionPoints {
+  /** Recursos do plugin na API do core, em `/api/resources/<plugin>/<id>` (ADR 0134). */
+  'api.resources': ApiResource;
+}
 
 /** Nomes declarados em `ExtensionPoints`. */
 export type ExtensionPointName = Extract<keyof ExtensionPoints, string>;

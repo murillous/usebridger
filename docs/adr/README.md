@@ -153,3 +153,4 @@ Um ADR novo entra no fim da lista.
 - [0131](0131-plugins-e-config-pela-api.md) — Plugins e config pela API: rotas do core sob `/api/plugins/{name}`, máscara de segredo no `PUT`, `plugins.read` e caminhos reservados
 - [0132](0132-pseudonimo-de-volta-ao-id-pela-api.md) — Pseudônimo de volta ao id pela API: mapa `pseudônimo → id` cifrado no storage, `pseudonyms.resolve` e consulta auditada
 - [0133](0133-auditoria-pela-api.md) — Auditoria pela API: `GET /audit` com cursor, exportação CSV/JSON em stream e auditada, `POST /audit/verify`, tudo com `audit.read`
+- [0134](0134-recursos-de-plugin-pela-api.md) — Recursos de plugin pela API: `api.resources` em `/api/resources/<plugin>/<id>`, `x-resource` na spec e permissões de plugin no catálogo da auth
