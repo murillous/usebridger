@@ -472,6 +472,12 @@ export const auditFlushFailed: LogEvent = defineLogEvent({
   level: 'error',
   message: 'falha ao gravar a auditoria; a fila fica retida e tenta de novo',
 });
+
+export const auditExportFailed: LogEvent = defineLogEvent({
+  name: 'audit.export.failed',
+  level: 'error',
+  message: 'falha ao ler a auditoria no meio da exportação; o arquivo saiu cortado',
+});
 export const auditDropped: LogEvent = defineLogEvent({
   name: 'audit.dropped',
   level: 'error',

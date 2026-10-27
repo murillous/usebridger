@@ -352,6 +352,47 @@ mascarado, `kernel.secret.update` só com o caminho, `kernel.plugin.enable`/`dis
 `GET /pseudonyms/{pseudonym}` (`pseudonyms.resolve`) devolve o id real de um `u_…`/`g_…` dos logs,
 com cada consulta auditada. Detalhes em [Logger](logger.md) e no ADR 0132.
 
+## Auditoria
+
+Consulta, exportação e verificação do log de auditoria (ADR 0122, ADR 0133), com as condições das
+rotas de conexão (sob `/api`, com `BotConfig.http`). As três pedem `audit.read`: owner, admin e
+viewer.
+
+| Rota | O que faz |
+| --- | --- |
+| `GET /audit` | Página de eventos por `seq`: `{ events, next? }` |
+| `GET /audit/export?format=json\|csv` | Todos os eventos dos filtros, em stream, como anexo |
+| `POST /audit/verify` | Confere a cadeia de hash: `{ ok, checked, brokenAt? }` |
+
+Filtros (query string, nos dois `GET`): `from` e `to` (ISO 8601, inclusivos, por `at`), `actor`
+(`actorId`), `action`, `target` (`targetId`) e `outcome` (`success`, `denied`, `error`). O
+`GET /audit` aceita ainda `limit` (1 a 1000, padrão 100) e `after`, o cursor:
+
+```sh
+curl "http://localhost:3000/api/audit?action=kernel.config.update&limit=50"   -H "Authorization: Bearer $BRIDGER_KEY"
+# próxima página: o `next` da resposta
+curl "http://localhost:3000/api/audit?action=kernel.config.update&limit=50&after=1234"   -H "Authorization: Bearer $BRIDGER_KEY"
+# sem `next`, acabou
+```
+
+A exportação lê o storage de mil em mil, conforme o cliente consome, e não monta o arquivo na
+memória. O JSON é um array de eventos, no formato do `GET /audit`. O CSV tem uma linha de cabeçalho
+e uma coluna por campo (`actorKind`, `actorId`, `actorName`, `onBehalfOf`, `targetType`...), com
+`details` em JSON; célula que começaria com `=`, `+`, `-` ou `@` leva um `'` na frente para a
+planilha não a executar.
+
+```sh
+curl -OJ "http://localhost:3000/api/audit/export?format=csv&from=2026-10-01T00:00:00Z"   -H "Authorization: Bearer $BRIDGER_KEY"
+```
+
+Cada exportação grava `kernel.audit.export` com o ator da requisição e
+`details: { format, filters }`. Falha do storage na primeira página é 500; numa página seguinte, o
+200 já saiu: o arquivo vem cortado e o log registra `audit.export.failed`.
+
+O ator chamado pelo BFF traz o `onBehalfOf` (`X-Bridger-On-Behalf-Of`) nas linhas, no JSON e na
+coluna do CSV. O `verify` percorre a cadeia inteira; em base grande, prefira rodá-lo fora do
+horário de pico ou pelo script do app (ver [Auditoria](audit.md)).
+
 ## Conexão e tempo real
 
 Um app conecta o número sem o dashboard (ADR 0129). As rotas ficam sob `/api` (ou

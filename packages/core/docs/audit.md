@@ -46,6 +46,7 @@ O core grava sozinho, com `actor` `system` (chamada direta de `bot.plugins`/`bot
 | `kernel.config.update` (`setOverrides`) | `plugin` | `{ plugin, changes }`: diff por caminho `{ from, to }`; campos `secret` ficam no `SECRET_MASK` |
 | `kernel.secret.update` (`setSecret`/`clearSecret`) | `plugin` | `{ plugin, path, op: 'set' \| 'clear' }`; nunca o valor |
 | `kernel.boot` / `kernel.stop` | | `{ version, plugins }` (plugins carregados) |
+| `kernel.audit.export` (`GET /api/audit/export`) | | `{ format, filters }`; ator da requisição |
 
 `outcome` é `success` ou `error` (exceção, ou `setup` novo que falhou no `reload`/`enable`). A
 recusa do `ctx.admin` sobre o próprio plugin (ADR 0107) grava `denied`. `kernel.stop` é gravado
@@ -65,6 +66,10 @@ const result = await ctx.audit.verify(); // { ok, checked, brokenAt? }
 Filtros: `from`/`to` (por `at`), `actor`, `action`, `target`, `outcome`, `tenant`, `after`,
 `limit` (padrão 100, máximo 1000). Num request de tenant o core impõe o tenant do escopo,
 ignorando o `tenant` do filtro. Não há `update` nem `delete`.
+
+Fora de plugin, a mesma consulta, a exportação em CSV/JSON e o `verify` estão na API do core
+(`GET /api/audit`, `GET /api/audit/export`, `POST /api/audit/verify`), com a permissão
+`audit.read`: ver [API](api.md#auditoria).
 
 ## Fila, falha e descarte
 

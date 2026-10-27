@@ -25,6 +25,7 @@ cada linha seguem o [dicionário do logger](logger.md#campos).
 | `session.lease.waiting` | `warn` | sessão travada por outro processo; esperando a trava vencer |
 | `session.lease.renew-failed` | `warn` | falha ao renovar a trava da sessão; tentando no próximo intervalo |
 | `audit.flush.failed` | `error` | falha ao gravar a auditoria; a fila fica retida e tenta de novo |
+| `audit.export.failed` | `error` | falha ao ler a auditoria no meio da exportação; o arquivo saiu cortado |
 | `audit.dropped` | `error` | eventos de auditoria descartados |
 | `audit.purged` | `info` | auditoria vencida expurgada |
 | `audit.purge.skipped` | `warn` | expurgação da auditoria adiada: o registro kernel.audit.purge não foi gravado |
