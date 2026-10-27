@@ -421,10 +421,32 @@ const bot = await createTestBot({ transport, plugins: [meuPlugin()] });
 | `setGroup(metadata)` | Registra o grupo que `getGroupMetadata` devolve. Um grupo não registrado faz a chamada falhar |
 | `setRaw(source, raw)` / `raw(source)` | Registra e lê o objeto bruto falso de uma mensagem ou interação, o que o `ctx.unsafe.raw()` devolve. Sem registro, `undefined` |
 | `clear()` | Esvazia os registros de saída |
+| `requestPairingCode(phone)` | Capability `pairing`. Devolve `FAKE-` mais os 4 últimos dígitos do telefone, emite o mesmo código em `connection.pairing-code` e guarda o telefone em `pairingRequests` |
+| `logout()` | Capability `pairing`. Soma em `logouts`, zera o `self` e emite `closed` com `logged-out` |
 
 Um método ligado a uma capability que o transport não declara lança `UnsupportedError`, como no
 transport real. Um plugin que exige essa capability no manifesto (`requires`) faz o
 `createTestBot` rejeitar com `PluginBootError`, com o motivo em `reason`.
+
+### Pareamento e logout pela API
+
+`requestPairingCode` e `logout` atendem às rotas `POST /connection/pairing-code` e
+`POST /connection/logout` do core (ADR 0129). Para testar o app que conecta o número pela API,
+monte o bot com `createBot` e um servidor `createHttp` em loopback:
+
+```ts
+const transport = new FakeTransport();
+const http = createHttp({ port: 0, hostname: '127.0.0.1' });
+const bot = createBot({ transport, http, env: {}, plugins: [comRota] }); // a porta abre com rota
+await bot.start();
+transport.emit('connection.status', { status: 'connecting' });
+const res = await fetch(`http://127.0.0.1:${http.port}/api/connection/pairing-code`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ phone: '5511999991234' }),
+});
+expect(await res.json()).toEqual({ code: 'FAKE-1234' });
+```
 
 ### Janela de atendimento
 

@@ -1,4 +1,5 @@
 import { ActionRegistry } from '#actions/actions.ts';
+import { EventStream } from '#api/events.ts';
 import { AUDIT_COLLECTION, AUDIT_INDEXES, createAudit } from '#audit/audit.ts';
 import { createAuditRetention, validateRetentionDays } from '#audit/retention.ts';
 import { createAccounts } from '#auth/accounts.ts';
@@ -107,6 +108,8 @@ const STOP_TIMEOUTS = {
 
 // Dono das rotas do transport na tabela HTTP da sessão; nome de plugin não tem `$`.
 const TRANSPORT_ROUTE_OWNER = '$transport';
+/** Dono do observador de log do stream da API; `$` não cabe em nome de plugin. */
+const KERNEL_OBSERVER = '$kernel';
 
 /**
  * Cria um bot. Valida a config e monta as peças sem efeito colateral (sem conexão, timer,
@@ -375,12 +378,25 @@ export function createBot(config: BotConfig): Bot {
   // Snapshot do último status para plugin que sobe depois do evento (ADR 0106).
   let lastConnection: ConnectionStatus | undefined;
   const connectionTracker = createConnectionTracker();
+  // Tempo real da API (ADR 0129): só com servidor HTTP, para o bot sem ele não montar sinal de log.
+  const stream = http === undefined ? undefined : new EventStream();
+  if (stream !== undefined) {
+    observers.add(KERNEL_OBSERVER, 'log', (signal) => stream.publish('log', signal));
+  }
   const entry = createTransportEntry({
     recordStatus: (status) => {
       lastConnection = status;
       connectionTracker.onStatus(status);
+      stream?.publish('connection.status', {
+        status: status.status,
+        ...(status.status === 'closed' && { reason: status.reason }),
+      });
     },
-    recordQr: connectionTracker.onQr,
+    recordQr: (payload) => {
+      connectionTracker.onQr(payload.expiresAt);
+      stream?.publish('connection.qr', payload);
+    },
+    recordPairingCode: (payload) => stream?.publish('connection.pairing-code', payload),
     transport,
     inbound,
     outbound,
@@ -414,6 +430,17 @@ export function createBot(config: BotConfig): Bot {
     lifecycleError: pluginErrors.lifecycle,
     audit,
     log: getLog,
+    ...(stream && {
+      onChange: (entries) => {
+        for (const each of entries) {
+          stream.publish('plugin.status', {
+            name: each.name,
+            status: each.status,
+            ...(each.status === 'skipped' && { reason: each.reason.kind }),
+          });
+        }
+      },
+    }),
   });
 
   // --- Boot ---------------------------------------------------------------------------------
@@ -619,7 +646,18 @@ export function createBot(config: BotConfig): Bot {
       releaseSession = claimSession(storage, session);
       booted = true;
       // Ligada já no boot: o `/health` mostra a sessão subindo (503) até ela ficar `running`.
-      http?.attach(() => state);
+      http?.attach(
+        () => state,
+        stream && {
+          connection: {
+            transport,
+            status: () => lastConnection,
+            info: connectionTracker.info,
+            audit: () => audit,
+          },
+          stream,
+        },
+      );
       httpAttached = http !== undefined;
       // Chave malformada lança aqui (`BotConfigError`), como já lançaria na config dos plugins.
       if (pseudonymizer.ephemeral()) log.event(LOG.pseudonymEphemeral);

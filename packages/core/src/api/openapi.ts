@@ -43,7 +43,9 @@ export async function createOpenApiDocument(
       responses: {
         [String(operation.status ?? 200)]: {
           description: 'Sucesso',
-          content: { 'application/json': { schema: operation.response } },
+          content: operation.stream
+            ? { 'text/event-stream': { itemSchema: operation.response } }
+            : { 'application/json': { schema: operation.response } },
         },
         default: {
           description: 'Erro (RFC 9457)',

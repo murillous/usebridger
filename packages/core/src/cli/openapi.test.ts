@@ -30,6 +30,10 @@ const CORE_PATHS = [
   '/api/users/{id}/reset-password',
   '/api/keys',
   '/api/keys/{id}',
+  '/api/connection',
+  '/api/connection/pairing-code',
+  '/api/connection/logout',
+  '/api/events',
 ];
 
 const PLUGIN_MODULE = `

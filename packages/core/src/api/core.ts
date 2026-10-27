@@ -4,6 +4,8 @@
 import type { z } from 'zod';
 import { keyOperations } from '#auth/keys.ts';
 import { type AuthRoutesDeps, authOperations } from '#auth/routes.ts';
+import { type ConnectionApiDeps, connectionOperations } from './connection.ts';
+import { type EventStream, eventsOperation } from './events.ts';
 import { apiLibs, loadApiLibs } from './libs.ts';
 import type { AnyApiOperation, ApiRoute } from './operation.ts';
 
@@ -25,6 +27,8 @@ export function coreApiOperations(
   states: () => Record<string, string> = () => ({}),
   /** Com a auth ligada (`api.auth`), monta as rotas `/auth` e `/users`. */
   auth?: AuthRoutesDeps,
+  /** Do bot da sessão: monta `/connection` e `/events` (ADR 0129). */
+  realtime?: { readonly connection: ConnectionApiDeps; readonly stream: EventStream },
 ): readonly AnyApiOperation[] {
   return [
     {
@@ -42,6 +46,9 @@ export function coreApiOperations(
       },
     },
     ...(auth ? [...authOperations(auth), ...keyOperations(auth)] : []),
+    ...(realtime
+      ? [...connectionOperations(realtime.connection), eventsOperation(realtime.stream)]
+      : []),
   ];
 }
 
@@ -50,8 +57,14 @@ export function coreApiOperations(
  */
 export async function coreApiRoutes(): Promise<readonly ApiRoute[]> {
   await loadApiLibs();
-  // A spec descreve as rotas de auth mesmo sem auth ligada: o contrato é o mesmo.
-  return [...coreApiOperations(), ...authOperations(), ...keyOperations()].map((operation) => ({
+  // A spec descreve as rotas de auth e de conexão mesmo sem auth ligada nem bot: o contrato é o mesmo.
+  return [
+    ...coreApiOperations(),
+    ...authOperations(),
+    ...keyOperations(),
+    ...connectionOperations(),
+    eventsOperation(),
+  ].map((operation) => ({
     path: `/api${operation.path}`,
     operation,
   }));
