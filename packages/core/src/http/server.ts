@@ -10,6 +10,7 @@ import type { upgradeWebSocket as UpgradeWebSocket } from '@hono/node-server';
 import type { Context, Hono } from 'hono';
 import type { WSContext, WSEvents } from 'hono/ws';
 import type { WebSocketServer } from 'ws';
+import type { ConnectionApiDeps } from '#api/connection.ts';
 import { coreApiOperations } from '#api/core.ts';
 import {
   type ApiOptions,
@@ -18,6 +19,7 @@ import {
   socketAddress,
   validateApiOptions,
 } from '#api/cors.ts';
+import type { EventStream } from '#api/events.ts';
 import { loadApiLibs } from '#api/libs.ts';
 import { createOpenApiDocument } from '#api/openapi.ts';
 import { type AnyApiOperation, operationHandler } from '#api/operation.ts';
@@ -179,6 +181,7 @@ export class SessionHttp {
   readonly #trail: Trail;
   readonly #guard: ApiGuard | undefined;
   #state: () => string = () => 'idle';
+  #realtime: { readonly connection: ConnectionApiDeps; readonly stream: EventStream } | undefined;
   #attached = false;
 
   /** Origens CORS permitidas na API desta sessão; `undefined` desliga o CORS. */
@@ -291,7 +294,7 @@ export class SessionHttp {
             denied: guard.denied,
           }
         : undefined;
-    return coreApiOperations(states, auth).map((api) => ({
+    return coreApiOperations(states, auth, this.#realtime).map((api) => ({
       owner: 'core',
       method: api.method,
       path: normalizePath(api.path),
@@ -341,10 +344,17 @@ export class SessionHttp {
     if (removed && this.#attached) this.#hub.changed();
   }
 
-  /** Publica as rotas no servidor; sessão repetida no mesmo servidor é erro de config. */
-  attach(state: () => string): void {
+  /**
+   * Publica as rotas no servidor; sessão repetida no mesmo servidor é erro de config. `realtime`,
+   * do bot, liga `/connection` e `/events` (ADR 0129).
+   */
+  attach(
+    state: () => string,
+    realtime?: { readonly connection: ConnectionApiDeps; readonly stream: EventStream },
+  ): void {
     this.#hub.attach(this);
     this.#state = state;
+    this.#realtime = realtime;
     this.#attached = true;
   }
 
@@ -357,6 +367,8 @@ export class SessionHttp {
   async detach(): Promise<void> {
     if (!this.#attached) return;
     this.#attached = false;
+    // Os streams SSE abertos acabam junto, como os WebSockets das rotas.
+    this.#realtime?.stream.close();
     for (const entry of this.#entries.values()) closeSockets(entry);
     this.#entries.clear();
     await this.#hub.detach(this);

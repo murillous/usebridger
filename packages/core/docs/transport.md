@@ -23,6 +23,8 @@ interface Transport {
 
   connect(): Promise<void>;
   disconnect(): Promise<void>;
+  requestPairingCode?(phone): Promise<string>;  // opcional, com pairing
+  logout?(): Promise<void>;                      // opcional, com pairing
   on(event, handler): Unsubscribe;
 
   send(chatId, content, options?): Promise<MessageKey>;
@@ -50,6 +52,12 @@ esperar o `open`; rejeita só se nem deu para começar. O resto chega por `conne
 `disconnect()` tem de ser seguro e idempotente: resolve sem lançar se chamado sem `connect()`,
 após um `connect()` que falhou ou que ainda não terminou, ou mais de uma vez. O shutdown do
 `Bot` conta com isso.
+
+`requestPairingCode(phone)` e `logout()` atendem às rotas `POST /connection/pairing-code` e
+`POST /connection/logout` da API ([ADR 0129](../../../docs/adr/0129-conexao-e-tempo-real-pela-api.md)).
+O primeiro resolve com o código e também o emite em `connection.pairing-code`. O segundo
+desvincula a sessão na plataforma e emite `closed` com `logged-out`; a política de reconexão
+limpa a credencial e pareia de novo. Sem eles, as rotas respondem 409.
 
 O tipo `Transport` tem todos os métodos. O kernel confere a capability antes de chamar, então
 quem escreve uma classe implementa os das capabilities que declara e faz o resto lançar

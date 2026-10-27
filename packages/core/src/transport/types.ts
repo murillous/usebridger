@@ -429,6 +429,19 @@ export interface Transport {
    * vez, porque o shutdown do `Bot` chama `disconnect()` em qualquer desses estados.
    */
   disconnect(): Promise<void>;
+  /**
+   * Pede um código de pareamento para o telefone (só dígitos, com DDI), a alternativa ao QR
+   * (capability `pairing`). Resolve com o código e também o emite em `connection.pairing-code`,
+   * para o barramento e o stream da API o verem. Opcional: sem ele, `POST
+   * /connection/pairing-code` responde 409 (ADR 0129).
+   */
+  requestPairingCode?(phone: string): Promise<string>;
+  /**
+   * Desvincula a sessão na plataforma (no WhatsApp, "desconectar aparelho"). Emite `closed` com
+   * `logged-out`, e a política de reconexão limpa a sessão e pareia de novo. Opcional: sem ele,
+   * `POST /connection/logout` responde 409 (ADR 0129).
+   */
+  logout?(): Promise<void>;
 
   /** Assina um evento. Sem estado global: as assinaturas vivem na instância do transport. */
   on<E extends TransportEventName>(event: E, handler: TransportEventHandler<E>): Unsubscribe;

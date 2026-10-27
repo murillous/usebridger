@@ -86,6 +86,8 @@ export interface BaileysSocket {
     readonly lidMapping: { getPNForLID(lid: string): Promise<string | null> };
   };
   end(error: Error | undefined): Promise<void>;
+  /** Desvincula o aparelho; o socket fecha com `loggedOut`. */
+  logout(): Promise<void>;
   requestPairingCode(phoneNumber: string): Promise<string>;
   /** Pede ao aparelho que reenvie uma mídia cujo link expirou. */
   updateMediaMessage(message: WAMessage): Promise<WAMessage>;
@@ -469,6 +471,22 @@ export class BaileysTransport implements Transport {
       this.#log.event(LOG.lidResolveFailed, { err: error });
       return null;
     });
+  }
+
+  /**
+   * Código sob demanda (`POST /connection/pairing-code`, ADR 0129), para o app que pede pela API
+   * em vez de fixar `pairing.phone`. Vale na tentativa atual, enquanto ela mostra QR.
+   */
+  async requestPairingCode(phone: string): Promise<string> {
+    const socket = this.#connected();
+    const code = await socket.requestPairingCode(phone);
+    if (this.#socket === socket) this.#events.emit('connection.pairing-code', { code });
+    return code;
+  }
+
+  /** O fechamento com `loggedOut` chega como `logged-out`, e a política limpa a sessão. */
+  async logout(): Promise<void> {
+    await this.#connected().logout();
   }
 
   #requestPairingCode(socket: BaileysSocket, phone: string): void {

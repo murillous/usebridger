@@ -14,7 +14,12 @@ import type { OutboundQueue } from '#outbound/queue.ts';
 import type { InboundQueue } from '#queue/inbound.ts';
 import type { TenantScope } from '#tenant/scope.ts';
 import { newTraceId, runInTrace } from '#trace/scope.ts';
-import type { ConnectionStatus, Interaction, Transport } from '#transport/types.ts';
+import type {
+  ConnectionStatus,
+  Interaction,
+  Transport,
+  TransportEvents,
+} from '#transport/types.ts';
 import { DIRECT_EVENTS, type DirectEvent } from './direct-events.ts';
 import type { InboundFlow } from './inbound-flow.ts';
 import type { ExpireOrigin, KernelMessageContext } from './message-context.ts';
@@ -42,8 +47,10 @@ export interface TransportEntryDeps {
   readonly stopping: () => boolean;
   /** Guarda o último `connection.status`, antes de reemitir no barramento (ADR 0106). */
   readonly recordStatus?: (status: ConnectionStatus) => void;
-  /** Guarda a expiração do QR, antes de reemitir no barramento (ADR 0111). */
-  readonly recordQr?: (expiresAt: number | undefined) => void;
+  /** Guarda o QR (expiração, ADR 0111; stream da API, ADR 0129), antes de reemitir no barramento. */
+  readonly recordQr?: (payload: TransportEvents['connection.qr']) => void;
+  /** Leva o código de pareamento ao stream da API (ADR 0129), antes de reemitir no barramento. */
+  readonly recordPairingCode?: (payload: TransportEvents['connection.pairing-code']) => void;
   /** O giveUp da reconexão já levou o bot a `failed` (ADR 0116). */
   readonly failed?: () => boolean;
   /** Trilha de eventos (ADR 0120). Padrão: desligada. */
@@ -168,7 +175,7 @@ export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
       }),
       deps.transport.on('connection.qr', (payload) => {
         deps.reconnector?.onQr();
-        deps.recordQr?.(payload.expiresAt);
+        deps.recordQr?.(payload);
         // Quem lê o log em info (agregador, arquivo) pareia o número com o QR enquanto ele vale:
         // o valor fica em debug e no barramento (`connection.qr`), para quem exibe a tela.
         deps.log().event(LOG.pairingQr);
@@ -178,6 +185,7 @@ export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
       deps.transport.on('connection.pairing-code', (payload) => {
         // Mesma tentativa de pareamento que o QR (ADR 0046), e o mesmo risco no log.
         deps.reconnector?.onQr();
+        deps.recordPairingCode?.(payload);
         deps.log().event(LOG.pairingCode);
         deps.log().event(LOG.pairingCodeValue, { code: payload.code });
         void deps.bus.emit('connection.pairing-code', payload);
