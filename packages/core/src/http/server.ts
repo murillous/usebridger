@@ -651,8 +651,14 @@ class HttpHub {
       // Fora do `mount`, então o trace nasce aqui para o `traceId` do problema (ADR 0120).
       const header = c.req.header('traceparent');
       const trace = parseTraceparent(header) ?? newTraceId();
+      // A rota de plugin só existe com ele carregado (ex.: as de métricas do `plugin-metrics`).
+      const plugin = /\/api\/plugins\/([^/]+)\/./.exec(c.req.path)?.[1];
+      const detail =
+        plugin === undefined
+          ? undefined
+          : `rota não registrada pelo plugin "${plugin}": ele está carregado e habilitado nesta sessão?`;
       return runInTrace(trace, () =>
-        withTraceparent(problemResponse(new ApiError(404)), trace, parseTraceFlags(header)),
+        withTraceparent(problemResponse(new ApiError(404, detail)), trace, parseTraceFlags(header)),
       );
     });
     app.onError((error, c) => {

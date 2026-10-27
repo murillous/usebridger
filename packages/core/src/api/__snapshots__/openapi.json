@@ -1744,6 +1744,125 @@
         }
       }
     },
+    "/api/logs": {
+      "get": {
+        "summary": "Linhas recentes de log, da mais nova para a mais antiga, com cursor",
+        "tags": [
+          "logs"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-permission": "logs.read",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "level",
+            "schema": {
+              "description": "Nível mínimo",
+              "type": "string",
+              "enum": [
+                "trace",
+                "debug",
+                "info",
+                "warn",
+                "error",
+                "fatal"
+              ]
+            },
+            "description": "Nível mínimo"
+          },
+          {
+            "in": "query",
+            "name": "plugin",
+            "schema": {
+              "description": "Campo `plugin` da linha",
+              "type": "string"
+            },
+            "description": "Campo `plugin` da linha"
+          },
+          {
+            "in": "query",
+            "name": "event",
+            "schema": {
+              "description": "Campo `event` da linha (ADR 0118)",
+              "type": "string"
+            },
+            "description": "Campo `event` da linha (ADR 0118)"
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "description": "Início (inclusivo)",
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            "description": "Início (inclusivo)"
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "description": "Fim (inclusivo)",
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            "description": "Fim (inclusivo)"
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "description": "Cursor: o `next` da página anterior",
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "description": "Cursor: o `next` da página anterior"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 100,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro (RFC 9457)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins": {
       "get": {
         "summary": "Plugins: versão, estado, dependências, serviços e contribuições",
@@ -2836,6 +2955,61 @@
           "id",
           "event",
           "data"
+        ],
+        "additionalProperties": false
+      },
+      "LogPage": {
+        "type": "object",
+        "properties": {
+          "logs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LogLine"
+            }
+          },
+          "next": {
+            "description": "Cursor da próxima página (mais antiga)",
+            "type": "number"
+          }
+        },
+        "required": [
+          "logs"
+        ],
+        "additionalProperties": false
+      },
+      "LogLine": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": [
+              "trace",
+              "debug",
+              "info",
+              "warn",
+              "error",
+              "fatal"
+            ]
+          },
+          "time": {
+            "type": "number"
+          },
+          "message": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "level",
+          "time",
+          "message",
+          "fields"
         ],
         "additionalProperties": false
       },

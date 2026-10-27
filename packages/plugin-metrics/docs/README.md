@@ -233,6 +233,37 @@ dono atual, `core` no kernel) com a coleção `catalog` (`live: false` e sem `ow
 só existe no histórico). `buckets` só vem no histograma, com o padrão do `prom-client` quando a
 declaração não passou.
 
+### Pela API
+
+Com `http` no bot, o plugin registra o `query` e o `catalog()` na API do core
+([API](../../core/docs/api.md), ADR 0135), com a auth dela e a permissão `metrics.read` (owner,
+admin e viewer). Sob `/api/plugins/metrics` na sessão `default` e
+`/sessions/<sessão>/api/plugins/metrics` nas outras:
+
+| Rota | Resposta |
+| --- | --- |
+| `GET /catalog` | `{ metrics }`, o `catalog()` |
+| `GET /query` | `{ rows }`, o `query` |
+
+O `GET /query` recebe o `MetricQuery` na query string:
+
+- `name`, `from` e `to` como no serviço; `granularity` `hour` ou `day` (padrão `day`);
+- `where=rótulo:valor`, repetido para mais de um rótulo;
+- `groupBy=a,b` (rótulos por vírgula); `groupBy=` vazio é o total (`[]`); ausente, uma linha por
+  série.
+
+```sh
+curl "http://localhost:3000/api/plugins/metrics/query?name=bridger_message_handle_duration_seconds&from=2026-10-24T00&to=2026-10-24T23&granularity=hour&where=status:ok&groupBy=route" \
+  -H "Authorization: Bearer $BRIDGER_KEY"
+```
+
+As linhas são as do serviço, com uma diferença: JSON não tem `Infinity`, então o último balde do
+histograma sai com `"le": "+Inf"`, como no Prometheus. O `TypeError` do serviço (intervalo
+inválido, fora da retenção) vira 400 problem+json com a mensagem no `detail`.
+
+Sem o plugin carregado, o core responde 404 problem+json nesses caminhos. O `GET /metrics` do
+Prometheus segue à parte, com o `scrapeToken`, fora da auth da API.
+
 ### Exportadores
 
 Plugins contribuem com o ponto `metrics.exporters` para mandar o histórico a outro lugar:

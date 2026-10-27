@@ -3,6 +3,7 @@ import { BotConfigError, definePlugin, type PluginDefinition, secret } from '@us
 import { z } from '@usebridger/core/zod';
 import { Gauge, Registry } from 'prom-client';
 import { createActiveTracker } from '#active.ts';
+import { registerMetricsApi } from '#api.ts';
 import {
   type CatalogDoc,
   createHistory,
@@ -278,6 +279,8 @@ export const metrics: PluginDefinition = definePlugin({
       if (scrapeToken === undefined) {
         ctx.log.event(LOG.scrapeOpen, { path: `${ctx.http.basePath}/metrics` });
       }
+      // `catalog` e `query` na API do core, com a auth dela (ADR 0135); o scrape segue à parte.
+      registerMetricsApi(ctx.http, history);
     } catch (error) {
       // Sem servidor HTTP o bot ainda mede; só o scrape fica indisponível.
       if (!(error instanceof BotConfigError)) throw error;

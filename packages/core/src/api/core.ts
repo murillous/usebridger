@@ -8,6 +8,7 @@ import { type AuditApiDeps, auditOperations } from './audit.ts';
 import { type ConnectionApiDeps, connectionOperations } from './connection.ts';
 import { type EventStream, eventsOperation } from './events.ts';
 import { apiLibs, loadApiLibs } from './libs.ts';
+import { type LogHistory, logsOperation } from './logs.ts';
 import type { AnyApiOperation, ApiRoute } from './operation.ts';
 import { type PluginsApiDeps, pluginAdminOperations } from './plugin-admin.ts';
 import { type PseudonymApiDeps, pseudonymOperations } from './pseudonyms.ts';
@@ -16,6 +17,7 @@ import { type PseudonymApiDeps, pseudonymOperations } from './pseudonyms.ts';
 export interface BotApiDeps {
   readonly connection: ConnectionApiDeps;
   readonly stream: EventStream;
+  readonly logs: LogHistory;
   readonly plugins: PluginsApiDeps;
   readonly pseudonyms: PseudonymApiDeps;
   readonly audit: AuditApiDeps;
@@ -39,7 +41,7 @@ export function coreApiOperations(
   states: () => Record<string, string> = () => ({}),
   /** Com a auth ligada (`api.auth`), monta as rotas `/auth` e `/users`. */
   auth?: AuthRoutesDeps,
-  /** Do bot da sessão: monta `/connection`, `/events` (ADR 0129), `/plugins`, `/pseudonyms` e `/audit`. */
+  /** Do bot da sessão: monta `/connection`, `/events` (ADR 0129), `/logs`, `/plugins`, `/pseudonyms` e `/audit`. */
   realtime?: BotApiDeps,
 ): readonly AnyApiOperation[] {
   return [
@@ -62,6 +64,7 @@ export function coreApiOperations(
       ? [
           ...connectionOperations(realtime.connection),
           eventsOperation(realtime.stream),
+          logsOperation(realtime.logs),
           ...pluginAdminOperations(realtime.plugins),
           ...pseudonymOperations(realtime.pseudonyms),
           ...auditOperations(realtime.audit),
@@ -82,6 +85,7 @@ export async function coreApiRoutes(): Promise<readonly ApiRoute[]> {
     ...keyOperations(),
     ...connectionOperations(),
     eventsOperation(),
+    logsOperation(),
     ...pluginAdminOperations(),
     ...pseudonymOperations(),
     ...auditOperations(),

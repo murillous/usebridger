@@ -34,6 +34,7 @@ const CORE_PATHS = [
   '/api/connection/pairing-code',
   '/api/connection/logout',
   '/api/events',
+  '/api/logs',
   '/api/plugins',
   '/api/plugins/{name}/enable',
   '/api/plugins/{name}/disable',

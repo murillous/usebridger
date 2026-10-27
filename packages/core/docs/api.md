@@ -529,6 +529,37 @@ O ator chamado pelo BFF traz o `onBehalfOf` (`X-Bridger-On-Behalf-Of`) nas linha
 coluna do CSV. O `verify` percorre a cadeia inteira; em base grande, prefira rodá-lo fora do
 horário de pico ou pelo script do app (ver [Auditoria](audit.md)).
 
+## Logs
+
+`GET /logs` (`logs.read`) devolve as linhas de log recentes do processo, da mais nova para a mais
+antiga (ADR 0135). Cada linha tem o formato do `data` do evento `log` do SSE:
+`{ level, time, message, fields }`. A rota existe com `BotConfig.http`, como as de conexão.
+
+Filtros (query string): `level` (nível mínimo: `warn` traz `warn`, `error` e `fatal`), `plugin` e
+`event` (iguais aos campos da linha), `from` e `to` (ISO 8601, inclusivos), `limit` (1 a 1000,
+padrão 100) e `before`, o cursor:
+
+```sh
+curl "http://localhost:3000/api/logs?plugin=ia&level=warn&limit=50" -H "Authorization: Bearer $BRIDGER_KEY"
+# {"logs":[{"level":"error","time":1761600000000,"message":"…","fields":{"plugin":"ia","event":"…"}}],"next":1234}
+# página mais antiga: o `next` da resposta; sem `next`, acabou
+curl "http://localhost:3000/api/logs?plugin=ia&level=warn&limit=50&before=1234" -H "Authorization: Bearer $BRIDGER_KEY"
+```
+
+- **É memória:** guarda as últimas 1000 linhas por bot. O restart começa vazio; o log durável é o
+  do destino do logger (stdout, agregador). O cursor só vale no processo que o deu.
+- **Mesmo filtro do SSE:** a linha com o valor do QR ou do código de pareamento só sai para quem tem
+  `connection.manage`.
+- **Ao vivo:** para acompanhar o que chega, use o stream (`GET /events?types=log`); o `GET /logs`
+  preenche o que veio antes.
+
+## Métricas
+
+Com o `plugin-metrics` carregado, o `query` e o `catalog()` do serviço `metrics` saem em
+`GET /plugins/metrics/query` e `GET /plugins/metrics/catalog`, com `metrics.read`. As rotas são do
+plugin: sem ele, o caminho responde 404 problem+json dizendo que a rota é de um plugin não
+carregado. Formato e filtros na [doc do plugin](../../plugin-metrics/docs/README.md#pela-api).
+
 ## Conexão e tempo real
 
 Um app conecta o número sem o dashboard (ADR 0129). As rotas ficam sob `/api` (ou
