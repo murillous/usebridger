@@ -5,6 +5,7 @@ export const CORE_PERMISSIONS = [
   'connection.read',
   'connection.manage',
   'logs.read',
+  'plugins.read',
   'plugins.manage',
   'config.read',
   'config.write',

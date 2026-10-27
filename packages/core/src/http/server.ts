@@ -10,8 +10,7 @@ import type { upgradeWebSocket as UpgradeWebSocket } from '@hono/node-server';
 import type { Context, Hono } from 'hono';
 import type { WSContext, WSEvents } from 'hono/ws';
 import type { WebSocketServer } from 'ws';
-import type { ConnectionApiDeps } from '#api/connection.ts';
-import { coreApiOperations } from '#api/core.ts';
+import { type BotApiDeps, coreApiOperations } from '#api/core.ts';
 import {
   type ApiOptions,
   corsMiddleware,
@@ -19,7 +18,6 @@ import {
   socketAddress,
   validateApiOptions,
 } from '#api/cors.ts';
-import type { EventStream } from '#api/events.ts';
 import { loadApiLibs } from '#api/libs.ts';
 import { createOpenApiDocument } from '#api/openapi.ts';
 import { type AnyApiOperation, operationHandler } from '#api/operation.ts';
@@ -121,6 +119,12 @@ export function createHttp(options: HttpOptions): HttpServer {
 
 const PERMISSION_FORMAT = /^[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*$/;
 
+/**
+ * Primeiros segmentos que o core usa sob `/api/plugins/:name` (ADR 0131). O core monta antes, e a
+ * operação do plugin no mesmo caminho ficaria sombreada sem aviso.
+ */
+const RESERVED_PLUGIN_API = new Set(['config', 'enable', 'disable']);
+
 /** Tabela de rotas de uma sessão nesse servidor; sem efeito até o `attach`. */
 export function sessionHttp(
   server: HttpServer,
@@ -181,7 +185,7 @@ export class SessionHttp {
   readonly #trail: Trail;
   readonly #guard: ApiGuard | undefined;
   #state: () => string = () => 'idle';
-  #realtime: { readonly connection: ConnectionApiDeps; readonly stream: EventStream } | undefined;
+  #realtime: BotApiDeps | undefined;
   #attached = false;
 
   /** Origens CORS permitidas na API desta sessão; `undefined` desliga o CORS. */
@@ -260,6 +264,12 @@ export class SessionHttp {
         if (operation.permission !== undefined && !PERMISSION_FORMAT.test(operation.permission)) {
           throw new BotConfigError(
             `http: permissão "${operation.permission}" de ${operation.method} ${operation.path} fora do formato <área>.<ação> (ex.: "logs.read")`,
+          );
+        }
+        const [first = ''] = normalizePath(operation.path).split('/').filter(Boolean);
+        if (RESERVED_PLUGIN_API.has(first)) {
+          throw new BotConfigError(
+            `http: ${operation.method} ${operation.path} usa "/${first}", reservado ao core em /api/plugins/<nome>/${first}`,
           );
         }
         add(
@@ -346,12 +356,9 @@ export class SessionHttp {
 
   /**
    * Publica as rotas no servidor; sessão repetida no mesmo servidor é erro de config. `realtime`,
-   * do bot, liga `/connection` e `/events` (ADR 0129).
+   * do bot, liga `/connection`, `/events` (ADR 0129) e `/plugins`.
    */
-  attach(
-    state: () => string,
-    realtime?: { readonly connection: ConnectionApiDeps; readonly stream: EventStream },
-  ): void {
+  attach(state: () => string, realtime?: BotApiDeps): void {
     this.#hub.attach(this);
     this.#state = state;
     this.#realtime = realtime;
