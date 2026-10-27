@@ -150,3 +150,4 @@ Um ADR novo entra no fim da lista.
 - [0128](0128-limitacoes-da-autenticacao-da-api.md) — Limitações da autenticação da API: rate limit persistente, corridas atômicas, chaves limitadas ao criador e auth obrigatória fora de loopback
 - [0129](0129-conexao-e-tempo-real-pela-api.md) — Conexão e tempo real pela API: pareamento e logout no transport, stream SSE por sessão com retomada
 - [0130](0129-framework-na-vitrine.md) — Bridger se apresenta como framework; "core" no dia a dia, "microkernel" como arquitetura
+- [0131](0131-plugins-e-config-pela-api.md) — Plugins e config pela API: rotas do core sob `/api/plugins/{name}`, máscara de segredo no `PUT`, `plugins.read` e caminhos reservados
