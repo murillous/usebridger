@@ -2041,6 +2041,277 @@
           }
         }
       }
+    },
+    "/api/audit": {
+      "get": {
+        "summary": "Eventos da auditoria, por `seq`, com cursor",
+        "tags": [
+          "audit"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-permission": "audit.read",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "description": "Início (inclusivo) por `at`",
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            "description": "Início (inclusivo) por `at`"
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "description": "Fim (inclusivo) por `at`",
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            "description": "Fim (inclusivo) por `at`"
+          },
+          {
+            "in": "query",
+            "name": "actor",
+            "schema": {
+              "description": "Id do ator (`actorId`)",
+              "type": "string"
+            },
+            "description": "Id do ator (`actorId`)"
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "target",
+            "schema": {
+              "description": "Id do alvo (`targetId`)",
+              "type": "string"
+            },
+            "description": "Id do alvo (`targetId`)"
+          },
+          {
+            "in": "query",
+            "name": "outcome",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "success",
+                "denied",
+                "error"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "schema": {
+              "description": "Cursor: o `next` da página anterior",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "description": "Cursor: o `next` da página anterior"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro (RFC 9457)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/audit/export": {
+      "get": {
+        "summary": "Exportação da auditoria em stream (`format=json` ou `csv`), com os filtros do `GET /audit`",
+        "tags": [
+          "audit"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-permission": "audit.read",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "description": "Início (inclusivo) por `at`",
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            "description": "Início (inclusivo) por `at`"
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "description": "Fim (inclusivo) por `at`",
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            "description": "Fim (inclusivo) por `at`"
+          },
+          {
+            "in": "query",
+            "name": "actor",
+            "schema": {
+              "description": "Id do ator (`actorId`)",
+              "type": "string"
+            },
+            "description": "Id do ator (`actorId`)"
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "target",
+            "schema": {
+              "description": "Id do alvo (`targetId`)",
+              "type": "string"
+            },
+            "description": "Id do alvo (`targetId`)"
+          },
+          {
+            "in": "query",
+            "name": "outcome",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "success",
+                "denied",
+                "error"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "default": "json",
+              "type": "string",
+              "enum": [
+                "csv",
+                "json"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditExport"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro (RFC 9457)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/audit/verify": {
+      "post": {
+        "summary": "Confere a cadeia de hash da auditoria e aponta o primeiro elo quebrado",
+        "tags": [
+          "audit"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-permission": "audit.read",
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditVerifyResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro (RFC 9457)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2838,6 +3109,242 @@
           "pseudonym",
           "kind",
           "id"
+        ],
+        "additionalProperties": false
+      },
+      "AuditPage": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEvent"
+            }
+          },
+          "next": {
+            "description": "Cursor da próxima página",
+            "type": "number"
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "additionalProperties": false
+      },
+      "AuditEvent": {
+        "type": "object",
+        "properties": {
+          "v": {
+            "type": "number",
+            "const": 1
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "number"
+          },
+          "at": {
+            "type": "string"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "user"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "onBehalfOf": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "id",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "system"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "plugin"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "contact"
+                  },
+                  "transport": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "transport",
+                  "id"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "via": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "target": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "success",
+              "denied",
+              "error"
+            ]
+          },
+          "ip": {
+            "type": "string"
+          },
+          "userAgent": {
+            "type": "string"
+          },
+          "tenant": {
+            "type": "string"
+          },
+          "session": {
+            "type": "string"
+          },
+          "trace": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "actorId": {
+            "type": "string"
+          },
+          "targetId": {
+            "type": "string"
+          },
+          "prevHash": {
+            "type": "string"
+          },
+          "hash": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "v",
+          "eventId",
+          "seq",
+          "at",
+          "actor",
+          "action",
+          "outcome",
+          "session",
+          "actorId",
+          "prevHash",
+          "hash"
+        ],
+        "additionalProperties": false
+      },
+      "AuditExport": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AuditEvent"
+        }
+      },
+      "AuditVerifyResult": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "checked": {
+            "type": "number"
+          },
+          "brokenAt": {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "number"
+              },
+              "eventId": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "seq",
+              "eventId",
+              "reason"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "ok",
+          "checked"
         ],
         "additionalProperties": false
       }

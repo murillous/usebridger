@@ -39,6 +39,9 @@ const CORE_PATHS = [
   '/api/plugins/{name}/disable',
   '/api/plugins/{name}/config',
   '/api/pseudonyms/{pseudonym}',
+  '/api/audit',
+  '/api/audit/export',
+  '/api/audit/verify',
 ];
 
 const PLUGIN_MODULE = `

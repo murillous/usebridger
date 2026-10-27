@@ -4,6 +4,7 @@
 import type { z } from 'zod';
 import { keyOperations } from '#auth/keys.ts';
 import { type AuthRoutesDeps, authOperations } from '#auth/routes.ts';
+import { type AuditApiDeps, auditOperations } from './audit.ts';
 import { type ConnectionApiDeps, connectionOperations } from './connection.ts';
 import { type EventStream, eventsOperation } from './events.ts';
 import { apiLibs, loadApiLibs } from './libs.ts';
@@ -17,6 +18,7 @@ export interface BotApiDeps {
   readonly stream: EventStream;
   readonly plugins: PluginsApiDeps;
   readonly pseudonyms: PseudonymApiDeps;
+  readonly audit: AuditApiDeps;
 }
 
 let health: z.ZodType | undefined;
@@ -37,7 +39,7 @@ export function coreApiOperations(
   states: () => Record<string, string> = () => ({}),
   /** Com a auth ligada (`api.auth`), monta as rotas `/auth` e `/users`. */
   auth?: AuthRoutesDeps,
-  /** Do bot da sessão: monta `/connection`, `/events` (ADR 0129), `/plugins` e `/pseudonyms`. */
+  /** Do bot da sessão: monta `/connection`, `/events` (ADR 0129), `/plugins`, `/pseudonyms` e `/audit`. */
   realtime?: BotApiDeps,
 ): readonly AnyApiOperation[] {
   return [
@@ -62,6 +64,7 @@ export function coreApiOperations(
           eventsOperation(realtime.stream),
           ...pluginAdminOperations(realtime.plugins),
           ...pseudonymOperations(realtime.pseudonyms),
+          ...auditOperations(realtime.audit),
         ]
       : []),
   ];
@@ -81,6 +84,7 @@ export async function coreApiRoutes(): Promise<readonly ApiRoute[]> {
     eventsOperation(),
     ...pluginAdminOperations(),
     ...pseudonymOperations(),
+    ...auditOperations(),
   ].map((operation) => ({
     path: `/api${operation.path}`,
     operation,

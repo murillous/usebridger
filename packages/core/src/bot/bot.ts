@@ -672,6 +672,7 @@ export function createBot(config: BotConfig): Bot {
             redact: createRedactor(secrets),
           },
           pseudonyms: { map: pseudonymMap, audit: () => audit },
+          audit: { audit: () => audit, log: () => log },
         },
       );
       httpAttached = http !== undefined;
