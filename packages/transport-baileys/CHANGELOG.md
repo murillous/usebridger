@@ -1,5 +1,62 @@
 # @usebridger/transport-baileys
 
+## 0.6.0
+
+### Minor Changes
+
+- 7b055b7: `requestPairingCode(phone)` pede o código de pareamento sob demanda, sem `pairing.phone` fixo, e
+  `logout()` desvincula o aparelho (ADR 0129). Atendem às rotas `/connection` da API do core.
+- 227bd98: Logs pelo contrato do ADR 0118 (#230): cada linha sai com `event` (`baileys.*`, `web.*`, `dashboard.*`, `metrics.*`, e `transport.handler.failed` nos dois transports), mensagem fixa e os valores em campos. O `plugin-dashboard` deixa de escrever o prefixo `dashboard:` na mensagem (o binding `plugin` já diz de onde vem), e o `plugin-metrics` passa a logar o erro em `err`, com mensagem e stack. A lista dos eventos está em `docs/log-events.md` do core.
+  
+  No `metrics.prometheus.name-collision`, o campo `name` passa a `metric`. Os pacotes usam `log.event`, que existe a partir do `@usebridger/core` 0.10.0: use o core 0.10.0 ou mais novo (nos quatro pacotes, a dependência já sai como `^0.10.0`).
+- abc53c7: Referência de mídia serializável (ADR 0136, #297): `ctx.media.ref(media)` devolve um `MediaRef`
+  JSON para guardar no storage, e `ctx.media.fromRef(ref)` devolve uma `Media` lazy que baixa
+  depois, mesmo após um restart. Capability nova `media.ref`, com o método opcional
+  `Transport.mediaFromRef(data)` (tipo `MediaLoader` no `@usebridger/core/adapter`) e o
+  `MediaSource.ref` para o transport dar o dado da referência. A mídia que a plataforma não tem
+  mais rejeita o download com `MediaExpiredError`.
+  
+  O Baileys declara `media.ref`: a referência leva a chave da mensagem, a `mediaKey`, o
+  `directPath` e a `url`, e o download pede o reenvio ao celular da conta do bot quando a mídia saiu do CDN. A
+  `mediaKey` decifra o arquivo: trate a referência como segredo. O `FakeTransport` e o perfil
+  `whatsapp` do kit de testes também declaram `media.ref`.
+
+### Patch Changes
+
+- a36bc23: Documentação revisada contra o código: páginas e comentários da API sem referências internas de decisão, mais exemplos e as lacunas preenchidas (Telegram, referência de mídia, rotas da API, eventos de log).
+- ab54782: O log `baileys.lid.resolve-failed` deixa de levar o `lid` nos campos (ADR 0119, #231): nenhum LID, JID ou telefone cru sai nos logs do transport.
+- Updated dependencies [9a3a657]
+- Updated dependencies [f4316ad]
+- Updated dependencies [1d4cb96]
+- Updated dependencies [aabf039]
+- Updated dependencies [227bd98]
+- Updated dependencies [184c8cb]
+- Updated dependencies [87041b4]
+- Updated dependencies [0b340df]
+- Updated dependencies [18c56f3]
+- Updated dependencies [cc35cbb]
+- Updated dependencies [ede77ef]
+- Updated dependencies [ae1e2b9]
+- Updated dependencies [1c176d8]
+- Updated dependencies [f7f5501]
+- Updated dependencies [14c3f0c]
+- Updated dependencies [b8b6b6e]
+- Updated dependencies [6ab377b]
+- Updated dependencies [0889b0c]
+- Updated dependencies [a36bc23]
+- Updated dependencies [48d7580]
+- Updated dependencies [0a4c8cd]
+- Updated dependencies [3cc14d5]
+- Updated dependencies [abc53c7]
+- Updated dependencies [48ceea9]
+- Updated dependencies [e0bcb8b]
+- Updated dependencies [ab54782]
+- Updated dependencies [25b0caa]
+- Updated dependencies [b7359b5]
+- Updated dependencies [6681792]
+- Updated dependencies [925a198]
+  - @usebridger/core@0.10.0
+
 ## 0.5.0
 
 ### Minor Changes

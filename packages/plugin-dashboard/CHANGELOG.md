@@ -1,5 +1,66 @@
 # @usebridger/plugin-dashboard
 
+## 0.4.0
+
+### Minor Changes
+
+- 227bd98: Logs pelo contrato do ADR 0118 (#230): cada linha sai com `event` (`baileys.*`, `web.*`, `dashboard.*`, `metrics.*`, e `transport.handler.failed` nos dois transports), mensagem fixa e os valores em campos. O `plugin-dashboard` deixa de escrever o prefixo `dashboard:` na mensagem (o binding `plugin` já diz de onde vem), e o `plugin-metrics` passa a logar o erro em `err`, com mensagem e stack. A lista dos eventos está em `docs/log-events.md` do core.
+  
+  No `metrics.prometheus.name-collision`, o campo `name` passa a `metric`. Os pacotes usam `log.event`, que existe a partir do `@usebridger/core` 0.10.0: use o core 0.10.0 ou mais novo (nos quatro pacotes, a dependência já sai como `^0.10.0`).
+- 3aed49c: Quebra (M7-10, ADR 0125): o dashboard foi refeito como cliente genérico da API HTTP do core. O
+  plugin só serve o app web; não tem mais rota de dados, auth nem config próprias.
+  
+  - Saem a config (`token`, `logBufferSize`, `cookieMaxAgeSec`), as rotas `/plugins/dashboard/api/*`
+    (login por token, status, logs, WebSocket, plugins, config, abas), o ponto `dashboard.tabs` e os
+    tipos `DashboardTab`, `DashboardWidget`, `TableColumn` e afins. O acesso passa a ser o da API
+    (`api.auth`, login por e-mail e senha, papéis e permissões), e o `adminPlugins: ['dashboard']`
+    deixa de ser necessário. Abas viram `api.resources`.
+  - Telas novas: login e aceite de convite (com o primeiro acesso pelo `bootstrapToken`), conexão com
+    QR e código de pareamento ao vivo, logs (histórico com filtros e ao vivo pelo SSE), plugins,
+    config gerada do JSON Schema pelo `@rjsf`, métricas (com o `plugin-metrics`), auditoria, usuários,
+    API keys, minha conta e uma tela genérica para qualquer recurso de `api.resources`. A navegação e os
+    botões seguem as permissões de `GET /auth/me`.
+- 5d14b77: Remove a seção de métricas do dashboard até a reescrita da M7: sai a rota `GET /api/metrics`, a
+  tela Métricas, os KPIs de hoje da Visão geral e a entrada Métricas da navegação, e o evento de log
+  `dashboard.metrics.read-failed`. O dashboard não importa mais o `@usebridger/plugin-metrics`. O
+  resto (QR, status, logs, config, plugins e abas) segue igual.
+
+### Patch Changes
+
+- a36bc23: Documentação revisada contra o código: páginas e comentários da API sem referências internas de decisão, mais exemplos e as lacunas preenchidas (Telegram, referência de mídia, rotas da API, eventos de log).
+- 0a4c8cd: Logger: um `Error` em qualquer chave dos campos (`{ error }`) sai serializado como o `err`, com `type`, `message`, `stack` e `cause`, em vez de `{}`; no formato `pretty`, vai para as linhas seguintes com o nome do campo. O `plugin-dashboard` passa a logar os erros em `{ err }`.
+- Updated dependencies [9a3a657]
+- Updated dependencies [f4316ad]
+- Updated dependencies [1d4cb96]
+- Updated dependencies [aabf039]
+- Updated dependencies [227bd98]
+- Updated dependencies [184c8cb]
+- Updated dependencies [87041b4]
+- Updated dependencies [0b340df]
+- Updated dependencies [18c56f3]
+- Updated dependencies [cc35cbb]
+- Updated dependencies [ede77ef]
+- Updated dependencies [ae1e2b9]
+- Updated dependencies [1c176d8]
+- Updated dependencies [f7f5501]
+- Updated dependencies [14c3f0c]
+- Updated dependencies [b8b6b6e]
+- Updated dependencies [6ab377b]
+- Updated dependencies [0889b0c]
+- Updated dependencies [a36bc23]
+- Updated dependencies [48d7580]
+- Updated dependencies [0a4c8cd]
+- Updated dependencies [3cc14d5]
+- Updated dependencies [abc53c7]
+- Updated dependencies [48ceea9]
+- Updated dependencies [e0bcb8b]
+- Updated dependencies [ab54782]
+- Updated dependencies [25b0caa]
+- Updated dependencies [b7359b5]
+- Updated dependencies [6681792]
+- Updated dependencies [925a198]
+  - @usebridger/core@0.10.0
+
 ## 0.3.0
 
 ### Minor Changes
