@@ -41,7 +41,7 @@ Alternativas consideradas:
   mais rejeita com ele. O plugin a trata como perdida.
 - **Baileys:** `data` é a chave da mensagem, o tipo do conteúdo, a `mediaKey` em base64,
   `directPath` e `url`, sem miniatura. O download usa a conexão do momento, então o Baileys pede o
-  reenvio ao aparelho de quem enviou quando a mídia saiu do CDN. Se o 404/410 persiste, a falha
+  reenvio ao celular principal da conta do bot (não ao de quem enviou) quando a mídia saiu do CDN. Se o 404/410 persiste, a falha
   vira `MediaExpiredError`. Sem conexão, falha com `baileys: sem conexão`, sem dizer que expirou.
 - **`transport-web` não declara** `media.ref`: os arquivos dele vivem só em memória (ADR 0073), e
   nenhuma referência sobreviveria ao restart.

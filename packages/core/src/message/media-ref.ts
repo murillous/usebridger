@@ -23,8 +23,8 @@ export type MediaRef = {
 };
 
 /**
- * A mídia não existe mais na plataforma (no WhatsApp, saiu do CDN e o aparelho de quem enviou não
- * a tem mais). Baixar de novo não adianta: o plugin trata como mídia perdida.
+ * A mídia não existe mais na plataforma (no WhatsApp, saiu do CDN e o celular da conta do bot não a
+ * tem mais). Baixar de novo não adianta: o plugin trata como mídia perdida.
  */
 export class MediaExpiredError extends Error {
   override readonly name = 'MediaExpiredError';

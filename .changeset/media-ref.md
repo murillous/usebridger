@@ -12,6 +12,6 @@ depois, mesmo após um restart. Capability nova `media.ref`, com o método opcio
 mais rejeita o download com `MediaExpiredError`.
 
 O Baileys declara `media.ref`: a referência leva a chave da mensagem, a `mediaKey`, o
-`directPath` e a `url`, e o download pede o reenvio ao aparelho quando a mídia saiu do CDN. A
+`directPath` e a `url`, e o download pede o reenvio ao celular da conta do bot quando a mídia saiu do CDN. A
 `mediaKey` decifra o arquivo: trate a referência como segredo. O `FakeTransport` e o perfil
 `whatsapp` do kit de testes também declaram `media.ref`.

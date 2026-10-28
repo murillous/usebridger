@@ -1,6 +1,6 @@
 // Referência de mídia do WhatsApp (capability `media.ref`, ADR 0136): o mínimo do `WAMessage` que
-// o `downloadMediaMessage` precisa para baixar de novo, inclusive pedir ao aparelho de quem enviou
-// que suba a mídia de novo quando ela saiu do CDN. A `mediaKey` decifra o arquivo: é segredo.
+// o `downloadMediaMessage` precisa para baixar de novo, inclusive pedir ao celular principal da conta do
+// bot que suba a mídia de novo quando ela saiu do CDN. A `mediaKey` decifra o arquivo: é segredo.
 
 import { type JsonValue, MediaExpiredError } from '@usebridger/core';
 import type { proto, WAMessage } from 'baileys';
@@ -96,7 +96,7 @@ function record(value: JsonValue | undefined): Partial<Record<string, JsonValue>
   return value as Partial<Record<string, JsonValue>>;
 }
 
-// 404/410 depois do pedido de reenvio: nem o CDN nem o aparelho de quem enviou têm a mídia.
+// 404/410 depois do pedido de reenvio: nem o CDN nem o celular da conta do bot têm a mídia.
 const GONE: ReadonlySet<unknown> = new Set([404, 410]);
 
 /** `MediaExpiredError` para a mídia que sumiu; os outros erros passam como estão. */

@@ -121,7 +121,8 @@ o link expirou.
 `ctx.media.ref(media)` guarda a chave da mensagem, a `mediaKey`, o `directPath` e a `url`
 ([ADR 0136](../../../docs/adr/0136-referencia-de-midia-serializavel.md)). A `mediaKey` decifra o
 arquivo, então trate a referência como segredo. O download por `ctx.media.fromRef` usa a conexão
-do momento e também pede o reenvio ao aparelho. Se nem o CDN nem o aparelho têm a mídia, rejeita
+do momento e também pede o reenvio, que vai ao celular principal da conta do bot, não ao de quem
+enviou. Se nem o CDN nem esse celular têm a mídia, rejeita
 com `MediaExpiredError`. Sem conexão, rejeita com `baileys: sem conexão`.
 
 ### Contatos e telefone
