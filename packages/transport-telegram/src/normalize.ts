@@ -36,7 +36,7 @@ const UNKNOWN_CONTENT = [
 ] as const;
 
 /**
- * Compõe o `chat.id` com o tópico de fórum (ADR 0054): a resposta precisa do
+ * Compõe o `chat.id` com o tópico de fórum: a resposta precisa do
  * `message_thread_id`, ou cai no "General". `parseChatId` desfaz.
  */
 export function chatIdOf(
@@ -96,7 +96,7 @@ export function toContact(user: TgUser): Contact {
   };
 }
 
-/** Post de canal ou admin anônimo: quem fala é o chat (ADR 0053). */
+/** Post de canal ou admin anônimo: quem fala é o chat. */
 function chatAsContact(chat: TgChat): Contact {
   return {
     id: String(chat.id),

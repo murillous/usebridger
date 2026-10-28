@@ -1,6 +1,6 @@
 # Portabilidade entre plataformas
 
-O mesmo plugin pode rodar no WhatsApp, no Telegram, no Discord e num chat web. Ele só precisa
+O mesmo plugin pode rodar no WhatsApp, no Telegram e num chat web (o Discord está previsto). Ele só precisa
 evitar o que é de uma plataforma: marcação na mão, ID que parece telefone, botão que não existe
 em todo lugar. Este guia junta essas regras. O exemplo do
 [`create-bridger-plugin`](../../packages/create-plugin/docs/README.md) já nasce portátil.

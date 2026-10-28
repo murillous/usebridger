@@ -31,7 +31,7 @@ export type ApiKeyDoc = {
   name: string;
   hash: string;
   permissions: string[];
-  /** Id do ator que criou (null em chave anterior a isso); a chave não depende dele depois (ADR 0127). */
+  /** Id do ator que criou (null em chave anterior a isso); a chave não depende dele depois. */
   createdBy: string | null;
   createdAt: string;
   lastUsedAt: string | null;

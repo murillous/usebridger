@@ -8,7 +8,7 @@
  * roteador, o scheduler, o host); o timer de `armTimer` só conta o tempo, sem expirar sozinho.
  *
  * Com `parent` (o `Deadline` de vida do plugin), a execução expira também quando o pai expira:
- * o descarte do plugin alcança os comandos, listeners e jobs dele ainda em andamento (ADR 0029).
+ * o descarte do plugin alcança os comandos, listeners e jobs dele ainda em andamento.
  * O pai não guarda os filhos: `expired` e `reason` consultam o pai na leitura, e o `signal` só o
  * escuta quando alguém o lê — o caminho quente não paga nada a mais.
  */
@@ -54,7 +54,7 @@ export class Deadline {
   /**
    * Pausa o prazo enquanto `operation` (um envio pela fila de saída) não assenta: a espera pela
    * taxa anti-ban, o "digitando" e as re-tentativas são do kernel, não do plugin, e a fila tem
-   * tetos próprios (ADR 0043). Devolve uma promise nova, que assenta como `operation`: uma
+   * tetos próprios. Devolve uma promise nova, que assenta como `operation`: uma
    * rejeição que o plugin ignore continua não tratada, como sem a pausa.
    */
   hold<T>(operation: Promise<T>): Promise<T> {
@@ -120,7 +120,7 @@ export class Deadline {
 
 /**
  * Uma execução com prazo (comando, listener ou job) estourou o tempo. É o `reason` do `signal`
- * abortado: o plugin distingue timeout de outro motivo com `instanceof` (ADR 0029).
+ * abortado: o plugin distingue timeout de outro motivo com `instanceof`.
  */
 export class ExecutionTimeoutError extends Error {
   override readonly name: string = 'ExecutionTimeoutError';

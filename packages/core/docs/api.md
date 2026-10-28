@@ -1,17 +1,48 @@
 # API HTTP
 
-O core expõe uma API HTTP descrita em OpenAPI 3.2 sobre o [servidor HTTP](http.md)
-([ADR 0125](../../../docs/adr/0125-api-http-do-core-e-dashboard-cliente.md),
-[ADR 0126](../../../docs/adr/0126-rotas-da-api-de-plugin-sob-api-plugins.md)). Sem auth ainda
-fica aberta até ligar `api.auth` (veja [Autenticação](#autenticação)): sem ela, não exponha a porta
-fora de uma rede confiável.
+Esta página mostra como usar a API HTTP do Bridger (conectar o número, ver logs, gerenciar
+plugins, config, usuários e chaves, consultar a auditoria) e como seu plugin registra rotas nela.
+
+O core expõe uma API HTTP descrita em OpenAPI 3.2 sobre o [servidor HTTP](http.md). Sem
+`api.auth` a API fica aberta e só sobe em loopback (veja [Autenticação](#autenticação)). Para
+expô-la na rede, ligue a autenticação.
 
 | Sessão | Base da API | Spec |
 | --- | --- | --- |
 | `default` | `/api` | `GET /openapi.json` |
 | outra (`erp`) | `/sessions/erp/api` | `GET /openapi.json` (uma spec para o processo todo) |
 
-`GET /api/health` é a operação de exemplo (mesmos dados do `/health`, que continua no ar).
+`GET /api/health` devolve os mesmos dados do `/health` (que continua no ar):
+
+```sh
+curl http://localhost:3000/api/health
+# {"status":"ok","sessions":{"default":"running"}}
+```
+
+## Rotas do core
+
+Todas ficam sob `/api` (ou `/sessions/<sessão>/api`). Com `api.auth`, a coluna Permissão diz o que
+o ator precisa ter; "autenticado" basta estar logado; "público" dispensa login.
+
+| Rota | Permissão | Seção |
+| --- | --- | --- |
+| `GET /health` | público | acima |
+| `POST /auth/login`, `POST /auth/invites/accept` | público | [Login e usuários](#rotas-de-login-e-usuários) |
+| `POST /auth/logout`, `GET /auth/me`, `GET /auth/sessions`, `DELETE /auth/sessions/{id}`, `POST /auth/password` | autenticado | [Login e usuários](#rotas-de-login-e-usuários) |
+| `POST /users`, `GET /users`, `GET` e `PATCH /users/{id}`, `POST /users/{id}/disable`, `POST /users/{id}/enable`, `DELETE /users/{id}/sessions`, `POST /users/{id}/reset-password` | `users.manage` | [Login e usuários](#rotas-de-login-e-usuários) |
+| `POST /keys`, `GET /keys`, `DELETE /keys/{id}` | `keys.manage` | [Criar uma API key](#criar-uma-api-key) |
+| `GET /connection`, `GET /events` | `connection.read` | [Conexão e tempo real](#conexão-e-tempo-real) |
+| `POST /connection/pairing-code`, `POST /connection/logout` | `connection.manage` | [Conexão e tempo real](#conexão-e-tempo-real) |
+| `GET /logs` | `logs.read` | [Logs](#logs) |
+| `GET /plugins` | `plugins.read` | [Plugins e config](#plugins-e-config) |
+| `POST /plugins/{name}/enable`, `POST /plugins/{name}/disable` | `plugins.manage` | [Plugins e config](#plugins-e-config) |
+| `GET /plugins/{name}/config` | `config.read` | [Plugins e config](#plugins-e-config) |
+| `PUT /plugins/{name}/config` | `config.write` (e `secrets.write` para segredo novo) | [Plugins e config](#plugins-e-config) |
+| `GET /pseudonyms/{pseudonym}` | `pseudonyms.resolve` | [Pseudônimos](#pseudônimos) |
+| `GET /audit`, `GET /audit/export`, `POST /audit/verify` | `audit.read` | [Auditoria](#auditoria) |
+| `GET /resources/<plugin>/<recurso>...` | as do recurso | [Recursos de plugin](#recursos-de-plugin) |
+
+Mais as rotas dos plugins (`/plugins/<nome>/...`), por exemplo as do `plugin-metrics`.
 
 ## Registrar uma operação
 
@@ -51,7 +82,7 @@ export default definePlugin({
 
 ## Recursos de plugin
 
-([ADR 0134](../../../docs/adr/0134-recursos-de-plugin-pela-api.md).) Para expor dados que um
+Para expor dados que um
 frontend lista, abre e edita, declare um **recurso** no ponto `api.resources` em vez de escrever
 cada operação. O core monta as rotas, a validação, a auth e a spec; o plugin não declara UI, e o
 dashboard (ou outro app) desenha a tela a partir do schema.
@@ -139,7 +170,7 @@ export const ranking = definePlugin({
 
 ### Migrar do `dashboard.tabs`
 
-O `dashboard.tabs` (ADR 0104, 0109, 0114) saiu com o dashboard novo (M7-10), que mostra cada
+O ponto `dashboard.tabs` (abas com widgets) saiu: o dashboard agora mostra cada
 recurso numa tela genérica. Cada widget vira dado num recurso, e o desenho fica com o frontend:
 
 | Widget da aba | No recurso |
@@ -197,12 +228,12 @@ spec:
 | Situação | Status |
 | --- | --- |
 | Params, query ou body inválidos (inclui JSON ilegível) | 400 com `errors` |
-| `throw new ApiError(401 \| 403 \| 404 \| 409, detalhe)` | o status pedido |
+| `throw new ApiError(status, detalhe)`, com `status` 400, 401, 403, 404, 409, 429 ou 500 | o status pedido |
 | Caminho desconhecido sob `/api` | 404 |
 | Qualquer outro erro do handler | 500 sem `detail` nem stack; o erro vai para o log (`plugin.error` com `phase: 'http'` no plugin, `http.unhandled` no core) |
 
-O `traceId` é o do [ADR 0120](../../../docs/adr/0120-trace-e-trilha-de-eventos.md): o mesmo que
-aparece nas linhas de log da requisição.
+O `traceId` é o mesmo `trace` que aparece nas linhas de log da requisição
+([Trace e trilha](logger.md#trace-e-trilha)): com ele você acha no log o que a chamada fez.
 
 ## Ler a spec
 
@@ -229,8 +260,8 @@ bridger openapi ./src/plugins.ts --out openapi.json  # core + plugins do app
 
 O módulo é um arquivo do app que exporta, por named export, a lista de plugins:
 `export const plugins = [meuPlugin, outroPlugin]` (a mesma lista que vai na config do bot). O
-comando o importa, e isso é seguro porque importar o módulo do app não tem efeito colateral
-([ADR 0003](../../../docs/adr/0003-uma-sessao-por-processo.md)).
+comando o importa, e isso é seguro porque importar o módulo do app não deve ter efeito colateral (não crie o bot nem
+abra conexão no topo do arquivo).
 
 Para coletar as operações, o comando roda o `setup` de cada plugin (prazo de 10 s, e depois o
 `teardown`, com `ctx.signal` abortado) com um contexto em que só `ctx.http`, `ctx.plugin`,
@@ -244,8 +275,7 @@ e mensagem no stderr.
 Módulo `.ts` depende do type-stripping do Node: sem `enum`, com imports usando a extensão `.ts` e
 sem os aliases do tsconfig. Se o app usa algo disso, passe o `.js` do build.
 
-Tipos e cliente no frontend (o `openapi-typescript` roda isolado em TypeScript 5,
-[ADR 0125](../../../docs/adr/0125-api-http-do-core-e-dashboard-cliente.md); não é dependência do core):
+Tipos e cliente no frontend (o `openapi-typescript` roda isolado em TypeScript 5 e não é dependência do core):
 
 ```sh
 pnpm dlx --package typescript@5 --package openapi-typescript@7.13.0 openapi-typescript openapi.json -o src/api-types.d.ts
@@ -272,18 +302,18 @@ Origem exata (esquema, host e porta), sem curinga. Só origem da lista recebe
 `Access-Control-Allow-Origin` (com `Allow-Credentials: true` e `Vary: Origin`); o preflight
 dessas origens responde 204. Com o CORS ligado, toda resposta leva `Vary: Origin`. Vale para `/api` e para `/openapi.json` (união das origens das sessões).
 
-## Snapshot da spec do core
+## Para quem contribui: snapshot da spec
 
 A spec do core fica versionada em `packages/core/src/api/__snapshots__/openapi.json`, e o teste
-`src/api/api.test.ts` falha (no CI também, via `pnpm test`) se ela mudar sem o arquivo mudar.
+`src/api/api.test.ts` falha (no CI também) se ela mudar sem o arquivo mudar.
 
 Mudança proposital: rode `pnpm exec vitest run packages/core/src/api -u`, confira o diff do
-arquivo no PR e crie o changeset. A spec é contrato semver: remover ou mudar rota, campo ou enum
-exige changeset **`major`** do `@usebridger/core`; acrescentar é `minor`.
+arquivo no PR e crie o changeset. A spec é contrato de versão: remover ou mudar rota, campo ou enum
+exige changeset `major` do `@usebridger/core`; acrescentar é `minor`.
 
 ## Autenticação
 
-([ADR 0127](../../../docs/adr/0127-base-da-autenticacao-da-api.md).) Ligue com `api: { auth: {} }` no `BotConfig`
+Ligue com `api: { auth: {} }` no `BotConfig`
 (`sessionIdleMs`, padrão 8 h, e `sessionMaxAgeMs`, padrão 7 d, são opcionais; o máximo absoluto vale na criação da sessão, no login). Daí em diante toda
 operação, do core e de plugin, exige um ator:
 
@@ -309,7 +339,7 @@ gerencia owner (`canManageRole`). A spec traz `securitySchemes` (`cookieAuth`, `
 
 ### Auth obrigatória fora de loopback
 
-(ADR 0128.) Sem `api.auth`, a API fica aberta, então o bot só sobe se o `hostname` de
+Sem `api.auth`, a API fica aberta, então o bot só sobe se o `hostname` de
 `createHttp` for loopback (`127.0.0.1`/`127.0.0.0/8`, `::1`, `localhost`). Hostname ausente
 (escuta em todas as interfaces), `0.0.0.0`, `::` ou outro faz o `createBot` lançar `BotConfigError`.
 Corrija configurando `api.auth` ou usando `createHttp({ port, hostname: '127.0.0.1' })`.
@@ -372,10 +402,32 @@ aceites simultâneos criam um owner só (o outro leva 400).
 | `POST /api/users/:id/disable` e `/enable` | desativar encerra as sessões na hora; nunca se apaga |
 | `DELETE /api/users/:id/sessions`, `POST /api/users/:id/reset-password` | encerra sessões; novo convite e senha antiga invalidada |
 
+Entrar e consultar quem você é (o `-c` guarda o cookie da sessão):
+
+```sh
+curl -c cookies.txt -X POST http://localhost:3000/api/auth/login \
+  -H 'content-type: application/json' \
+  -d '{"email":"dona@exemplo.com","password":"uma senha longa"}'
+# {"user":{"id":"…","name":"Dona","email":"dona@exemplo.com","role":"owner","status":"active",
+#   "createdAt":"…","lastLoginAt":"…","mustChangePassword":false,"pendingInvite":false}}
+
+curl -b cookies.txt http://localhost:3000/api/auth/me
+# {"id":"…","kind":"user","name":"Dona","role":"owner","permissions":["connection.read","…"]}
+```
+
+Convidar alguém (o convite aparece só nesta resposta; entregue o `token` à pessoa):
+
+```sh
+curl -X POST http://localhost:3000/api/users \
+  -H "Authorization: Bearer $BRIDGER_KEY" -H 'content-type: application/json' \
+  -d '{"name":"Ana","email":"ana@exemplo.com","role":"viewer"}'
+# {"user":{"id":"…","role":"viewer","status":"active","pendingInvite":true,…},
+#  "invite":{"token":"bri_…","expiresAt":"2026-10-30T12:00:00.000Z"}}
+```
+
 Convite: uso único, vale 48 h, guardado só como hash. Admin não gerencia owner, e o último owner
 ativo não pode ser desativado nem rebaixado (409); e-mail repetido também leva 409. Essas três
-regras (primeiro owner, e-mail único, último owner) rodam sob uma trava curta no storage
-(ADR 0128), então valem com requests e processos simultâneos. A trava é um lease de 15 s: supõe
+regras (primeiro owner, e-mail único, último owner) rodam sob uma trava curta no storage, então valem com requests e processos simultâneos. A trava é um lease de 15 s: supõe
 relógios sincronizados entre os processos (NTP) e seção crítica bem abaixo disso. Quem não a
 pega em até 5 s recebe `409 conta em uso por outra operação; tente de novo`, e depois de uma
 queda no meio da operação as rotas de cadastro, bootstrap, papel e status podem dar esse 409 por
@@ -396,8 +448,7 @@ bridger owner-invite ./app.ts --email dona@exemplo.com --name "Dona"
 
 O módulo deve **só exportar `storage` (e `session`)**, sem efeito colateral: use um arquivo à parte
 e tomaria a trava da sessão). A CLI não toma a trava da sessão (`session:<nome>`), então roda com o bot
-no ar. É seguro porque a checagem e a escrita do owner rodam sob as travas `users`/`owners` no storage
-(ADR 0128), que valem entre processos: se o bot segura uma delas, a CLI espera até 5 s e, passado isso,
+no ar. É seguro porque a checagem e a escrita do owner rodam sob as travas `users`/`owners` no storage, que valem entre processos: se o bot segura uma delas, a CLI espera até 5 s e, passado isso,
 sai com erro claro (409) sem criar nada. SQLite: dois processos no mesmo arquivo em WAL com
 `busy_timeout` de 5 s, sem `SQLITE_BUSY`. Postgres: dois clientes no mesmo banco, com `UPDATE`
 condicional. O uso único do convite é do aceite no bot, não da CLI.
@@ -416,14 +467,20 @@ curl -X POST http://localhost:3000/api/keys \
   -d '{ "name": "backend-do-app", "permissions": ["logs.read", "auth.on-behalf-of"] }'
 ```
 
-A resposta traz `secret` (`brk_...`) **uma única vez**; o storage guarda só o hash. O escopo só
+A resposta traz `secret` (`brk_...`) **uma única vez**; o storage guarda só o hash:
+
+```json
+{ "id": "…", "name": "backend-do-app", "permissions": ["logs.read", "auth.on-behalf-of"],
+  "createdBy": "…", "createdAt": "…", "lastUsedAt": null, "revokedAt": null, "secret": "brk_…" }
+```
+ O escopo só
 aceita permissões do core ou de plugin carregado (senão 400) e só as que quem cria também tem
 (senão 403). `GET /api/keys` lista com
 `lastUsedAt` e `revokedAt`, sem o segredo; `DELETE /api/keys/:id` revoga (a chave passa a dar 401).
 Criar e revogar geram os eventos `kernel.key.created` e `kernel.key.revoked` na auditoria.
 
 A permissão efetiva de uma chave é o escopo dela **∩ as permissões atuais do criador**
-(`createdBy`, ADR 0128). Criador rebaixado: a chave perde o que ele não tem mais (403 na operação).
+(`createdBy`). Criador rebaixado: a chave perde o que ele não tem mais (403 na operação).
 Criador desativado ou removido, ou chave-criadora revogada: a chave dá 401. Reativar ou repromover
 o criador restaura a chave, que não é alterada nem revogada no storage. Chave sem `createdBy`
 (criada fora da API) vale pelo escopo próprio; chave criada por chave segue a cadeia.
@@ -444,8 +501,7 @@ sessão de usuário, é 403 auditado. Em frontend de outra origem, o CORS libera
 
 ## Plugins e config
 
-Listar, ligar e desligar plugins e editar a config deles, com os segredos cifrados (ADR 0117,
-ADR 0131). Mesmas condições das rotas de conexão: sob `/api` (ou `/sessions/<sessão>/api`), com
+Listar, ligar e desligar plugins e editar a config deles, com os segredos cifrados. Mesmas condições das rotas de conexão: sob `/api` (ou `/sessions/<sessão>/api`), com
 `BotConfig.http`.
 
 | Rota | Permissão | O que faz |
@@ -456,7 +512,16 @@ ADR 0131). Mesmas condições das rotas de conexão: sob `/api` (ou `/sessions/<
 | `GET /plugins/{name}/config` | `config.read` | `view` (config com segredos em `********`, `messages`, `sources`), `schema` (JSON Schema da entrada) e `secretsWritable` |
 | `PUT /plugins/{name}/config` | `config.write` | Grava a config (abaixo) e devolve o mesmo que o `GET` |
 
-Plugin desconhecido é 404. Com a config atual inválida, o `GET` responde 200 com `view: null` e
+```sh
+curl http://localhost:3000/api/plugins -H "Authorization: Bearer $BRIDGER_KEY"
+# {"bootedAt":1761600000000,"plugins":[{"name":"ia","version":"1.0.0","origin":"…","status":"loaded",
+#   "dependsOn":{},"services":["ia"],"setupMs":12}]}
+
+curl -X POST http://localhost:3000/api/plugins/ia/disable -H "Authorization: Bearer $BRIDGER_KEY"
+# {"plugin":{"name":"ia","status":"skipped",…},"dependents":[]}
+```
+
+Cada plugin traz também `origin` e `optionalDependsOn`. Plugin desconhecido é 404. Com a config atual inválida, o `GET` responde 200 com `view: null` e
 `issues` (`path`, `message`, `kind`), para o formulário corrigir.
 
 ### Gravar a config
@@ -486,11 +551,11 @@ mascarado, `kernel.secret.update` só com o caminho, `kernel.plugin.enable`/`dis
 ## Pseudônimos
 
 `GET /pseudonyms/{pseudonym}` (`pseudonyms.resolve`) devolve o id real de um `u_…`/`g_…` dos logs,
-com cada consulta auditada. Detalhes em [Logger](logger.md) e no ADR 0132.
+com cada consulta auditada. Detalhes em [Logger](logger.md#pseudônimo-do-usuário).
 
 ## Auditoria
 
-Consulta, exportação e verificação do log de auditoria (ADR 0122, ADR 0133), com as condições das
+Consulta, exportação e verificação do log de auditoria (veja [Auditoria](audit.md)), com as condições das
 rotas de conexão (sob `/api`, com `BotConfig.http`). As três pedem `audit.read`: owner, admin e
 viewer.
 
@@ -506,9 +571,20 @@ Filtros (query string, nos dois `GET`): `from` e `to` (ISO 8601, inclusivos, por
 
 ```sh
 curl "http://localhost:3000/api/audit?action=kernel.config.update&limit=50"   -H "Authorization: Bearer $BRIDGER_KEY"
+# {"events":[{"seq":1234,"at":"…","actor":{"kind":"user","id":"…","name":"Dona"},
+#   "action":"kernel.config.update","target":{"type":"plugin","id":"ia"},"outcome":"success",
+#   "session":"default","hash":"…","prevHash":"…",…}],"next":1200}
 # próxima página: o `next` da resposta
 curl "http://localhost:3000/api/audit?action=kernel.config.update&limit=50&after=1234"   -H "Authorization: Bearer $BRIDGER_KEY"
 # sem `next`, acabou
+```
+
+Conferir a cadeia de hash (veja [Auditoria](audit.md)):
+
+```sh
+curl -X POST http://localhost:3000/api/audit/verify -H "Authorization: Bearer $BRIDGER_KEY"
+# {"ok":true,"checked":1234}
+# adulterado: {"ok":false,"checked":57,"brokenAt":{"seq":58,"eventId":"…","reason":"…"}}
 ```
 
 A exportação lê o storage de mil em mil, conforme o cliente consome, e não monta o arquivo na
@@ -532,7 +608,7 @@ horário de pico ou pelo script do app (ver [Auditoria](audit.md)).
 ## Logs
 
 `GET /logs` (`logs.read`) devolve as linhas de log recentes do processo, da mais nova para a mais
-antiga (ADR 0135). Cada linha tem o formato do `data` do evento `log` do SSE:
+antiga. Cada linha tem o formato do `data` do evento `log` do SSE:
 `{ level, time, message, fields }`. A rota existe com `BotConfig.http`, como as de conexão.
 
 Filtros (query string): `level` (nível mínimo: `warn` traz `warn`, `error` e `fatal`), `plugin` e
@@ -562,9 +638,9 @@ carregado. Formato e filtros na [doc do plugin](../../plugin-metrics/docs/README
 
 ## Conexão e tempo real
 
-Um app conecta o número sem o dashboard (ADR 0129). As rotas ficam sob `/api` (ou
+Um app conecta o número sem o dashboard. As rotas ficam sob `/api` (ou
 `/sessions/<sessão>/api`) e só existem com `BotConfig.http`. A porta abre quando algum plugin ou o
-transport tem rota (ADR 0072).
+transport tem rota.
 
 | Rota | Permissão | O que faz |
 | --- | --- | --- |
@@ -591,7 +667,14 @@ conectada, a resposta é 409.
    # {"code":"ABCD1234"}
    ```
 
-4. Espere o `connection.status` com `open`. `GET /connection` traz a conta em `account`.
+4. Espere o `connection.status` com `open`. `GET /connection` traz a conta em `account`:
+
+   ```sh
+   curl http://localhost:3000/api/connection -H "Authorization: Bearer $BRIDGER_KEY"
+   # {"status":"open","transport":"baileys","pairing":true,
+   #  "account":{"id":"5511999999999@s.whatsapp.net","name":"Meu bot","phone":"5511999999999"},
+   #  "connectedSince":1761600000000,"reconnections":0}
+   ```
 
 Para trocar de número, chame `POST /connection/logout`. O stream mostra o `closed` com
 `logged-out` e, em seguida, o QR novo.

@@ -4,7 +4,7 @@ import { api, unwrap } from '#web/lib/client.ts';
 import { href } from '#web/lib/route.ts';
 import { useCan } from '#web/lib/viewer.ts';
 
-/** Plugins: estado do boot, ligar e desligar (ADR 0131) e o caminho para a config. */
+/** Plugins: estado do boot, ligar e desligar e o caminho para a config. */
 export function Plugins() {
   const can = useCan();
   const queries = useQueryClient();

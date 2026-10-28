@@ -1,14 +1,29 @@
 # Plugins
 
+Esta página explica como um plugin é montado e o que o core faz por ele: capabilities, serviços
+entre plugins, dados, agendamento, texto formatado e o escape hatch.
+
 Um plugin é um objeto criado por `definePlugin`: um **manifesto** (nome, versão, faixa do core, o
 que ele exige) mais o comportamento. O kernel lê o manifesto antes de rodar qualquer código do
 plugin, e é isso que permite recusar o incompatível no boot em vez de falhar no meio de uma
-conversa ([ADR 0014](../adr/0014-manifesto-do-plugin.md)).
+conversa.
+
+```ts
+import { definePlugin } from '@usebridger/core';
+
+export const ola = definePlugin({
+  name: 'ola',
+  version: '1.0.0',
+  engine: '<1.0.0', // faixa do core com que foi testado
+  commands: {
+    ola: { description: 'Cumprimenta', run: () => 'Olá!' }, // devolver texto responde
+  },
+});
+```
 
 ## Manifesto e setup
 
-Há duas formas de declarar o comportamento, e elas levam ao mesmo lugar
-([ADR 0075](../adr/0075-acucar-no-manifesto-do-plugin.md)):
+Há duas formas de declarar o comportamento, e elas levam ao mesmo lugar:
 
 - **`commands` e `on` no manifesto**: um objeto nome → comando e outro evento → listener. É a
   forma curta, e o que o template gera. O `run` que devolve texto responde.
@@ -26,22 +41,60 @@ Use o manifesto para o que é fixo, e o `setup` para o que depende de algo resol
 - vários listeners do mesmo evento, ou listener com filtro e prioridade;
 - comandos que dependem da config.
 
+```ts
+import { command, definePlugin } from '@usebridger/core';
+
+definePlugin({
+  name: 'lembrete',
+  version: '1.0.0',
+  engine: '<1.0.0',
+  setup(ctx) {
+    ctx.scheduler.on('avisar', async (payload) => {
+      const { chatId } = payload as { chatId: string };
+      await ctx.send.send(chatId, 'Hora do lembrete!');
+    });
+    ctx.commands.add(
+      command({
+        name: 'lembrar',
+        run: async (c) => {
+          await ctx.scheduler.at(new Date(Date.now() + 60_000), 'avisar', { chatId: c.message.chat.id });
+          return 'Aviso em 1 minuto.';
+        },
+      }),
+    );
+  },
+});
+```
+
 As duas formas convivem no mesmo plugin.
 
 ## Exigir uma capability ou conferir
 
-Cada transport declara capabilities, e o plugin escolhe como lidar com cada uma
-([ADR 0008](../adr/0008-capabilities-do-transporte.md)):
+Cada transport declara capabilities, e o plugin escolhe como lidar com cada uma:
 
 - **Exigir em `requires`** quando o plugin não faz sentido sem ela. Um plugin de figurinhas sem
   `send.sticker` não tem o que fazer. Num transport sem a capability, o boot para antes de
   conectar e diz o que faltou; para subir o bot sem esse plugin, o operador o põe em
-  `disabledPlugins` ([ADR 0098](../adr/0098-plugin-falho-derruba-o-boot.md)).
+  `disabledPlugins`.
 - **Conferir em `ctx.capabilities.has(...)`** quando ela é um extra. O plugin sobe em todo
   transport e usa o recurso onde ele existe, com outro caminho onde não existe.
 - **Exigir num comando só**, com `command({ requires })`, quando um comando depende dela e o resto
   do plugin não. Sem a capability, só aquele comando fica de fora do roteador, da ajuda e do menu
-  nativo ([ADR 0086](../adr/0086-requires-por-comando.md)).
+  nativo.
+
+```ts
+definePlugin({
+  name: 'figurinhas',
+  version: '1.0.0',
+  engine: '<1.0.0',
+  requires: ['send.sticker'], // sem a capability, o boot para e diz o que faltou
+  setup(ctx) {
+    if (ctx.capabilities.has('reactions')) {
+      // usa reação onde existe; segue sem ela onde não existe
+    }
+  },
+});
+```
 
 A regra é **exigir o mínimo**: cada capability em `requires` tira o plugin de uma plataforma
 inteira. `commands` no manifesto já soma `send.text`. Em runtime, usar uma capability que o
@@ -56,11 +109,26 @@ falta, escolhido pelo que faz sentido para quem está do outro lado:
 | Recurso | Sem a capability |
 | --- | --- |
 | Enviar imagem, vídeo, áudio, documento, figurinha, álbum | Rejeita com `UnsupportedError`; exija em `requires` ou confira antes |
-| Botões (`reply(texto, { actions })`) | O kernel acrescenta uma lista numerada ao texto e aceita o número como resposta ([ADR 0058](../adr/0058-acoes-e-botoes.md)) |
-| Reação pelo atalho do contexto (`c.react`) | Não faz nada e registra em `debug`: a reação é enfeite ([ADR 0089](../adr/0089-react-do-contexto-tolerante.md)) |
+| Botões (`reply(texto, { actions })`) | O kernel acrescenta uma lista numerada ao texto e aceita o número como resposta |
+| Reação pelo atalho do contexto (`c.react`) | Não faz nada e registra em `debug`: a reação é enfeite |
 | Reação por `ctx.send.react` | Rejeita: é o caminho de quem precisa saber se saiu |
 | Enquete (`reply.poll`) | Rejeita; confira `polls` antes |
 | Texto formatado | Sai sem a marcação, como texto visível |
+
+### Guardar uma mídia para depois
+
+Com a capability `media.ref` (WhatsApp e Telegram), o plugin guarda uma **referência** da mídia,
+um JSON pequeno, em vez dos bytes, e baixa depois, mesmo após um restart:
+
+```ts
+// ao receber: guarda só a referência
+const ref = ctx.media.ref(c.message.media);
+// depois: volta a ter uma mídia que se baixa sob demanda
+const buffer = await ctx.media.fromRef(ref).download();
+```
+
+Se a plataforma já não tem o arquivo, o download rejeita com `MediaExpiredError`. Trate a
+referência como segredo: no WhatsApp ela leva a chave que decifra o arquivo.
 
 A matriz do que cada transport suporta está em [Capabilities](../guias/capabilities.md#matriz-por-transport).
 
@@ -68,8 +136,13 @@ A matriz do que cada transport suporta está em [Capabilities](../guias/capabili
 
 Cada plataforma marca negrito de um jeito (`*a*`, `**a**`, HTML). O plugin portátil escreve com
 os helpers do core, `` fmt`Notas de ${bold(nome)}` ``, que montam uma árvore neutra, e o
-transport a traduz para a marcação dele, com o escape certo
-([ADR 0057](../adr/0057-texto-formatado-neutro.md)).
+transport a traduz para a marcação dele, com o escape certo.
+
+```ts
+import { bold, fmt, mention } from '@usebridger/core';
+
+await c.reply(fmt`Notas de ${bold(nome)}, ${mention(c.message.sender)}`);
+```
 
 Duas propriedades importam mais que a sintaxe: o valor interpolado é **literal** (um `*` digitado
 pelo usuário não vira negrito nem quebra a marcação), e `mention(contato)` gera a menção certa em
@@ -77,18 +150,32 @@ cada plataforma. Texto cru continua aceito e vai como veio, para o plugin de uma
 
 ## Um plugin que usa outro
 
-Plugins conversam por **services**, nunca importando o estado um do outro
-([ADR 0016](../adr/0016-service-registry.md)):
+Plugins conversam por **services**, nunca importando o estado um do outro:
 
 - o provedor publica com `ctx.services.provide('traducao', impl)`;
 - o consumidor declara `dependsOn: { traducao: '^1.0.0' }` e pega com `ctx.services.get`;
 - o tipo vem por declaration merging na interface `Services`, exportada pelo pacote do provedor.
 
+```ts
+// provedor
+ctx.services.provide('traducao', { traduzir: async (texto: string) => '...' });
+
+// consumidor
+definePlugin({
+  name: 'resumo',
+  version: '1.0.0',
+  engine: '<1.0.0',
+  dependsOn: { traducao: '^1.0.0' },
+  setup(ctx) {
+    const traducao = ctx.services.get('traducao');
+  },
+});
+```
+
 Por que um registry em vez de `import`? Porque o serviço é **uma instância viva**, com a config
 e o storage do provedor, e pode ser recarregado. O `import` daria o código, não a instância que o
 bot carregou. Quando o provedor recarrega, quem depende dele por `dependsOn` recarrega junto, para
-não ficar segurando um serviço de um contexto já descartado
-([ADR 0037](../adr/0037-reload-em-cascata.md)).
+não ficar segurando um serviço de um contexto já descartado.
 
 Os campos de ordem e dependência servem a coisas diferentes:
 
@@ -100,8 +187,7 @@ Os campos de ordem e dependência servem a coisas diferentes:
 | `priority` | entre os que não têm aresta, maior primeiro | — | não |
 
 `command({ services: [...] })` faz pelo service o que o `requires` por comando faz pela
-capability: sem o serviço, só aquele comando fica de fora
-([ADR 0095](../adr/0095-comando-que-exige-servico.md)).
+capability: sem o serviço, só aquele comando fica de fora.
 
 ### Estender outro plugin
 
@@ -109,15 +195,19 @@ Quando outros plugins acrescentam peças a um serviço (etapas de um pipeline, f
 exportador), o provedor abre um **ponto de extensão** e os outros contribuem com
 `ctx.services.contribute(nome, peça)`. O kernel sabe de quem é cada contribuição e a retira
 quando aquele plugin desce, recarrega ou é desligado, coisa que um `Set` guardado pelo provedor
-não saberia fazer ([ADR 0092](../adr/0092-pontos-de-extensao-em-servicos.md)).
+não saberia fazer.
 
 ## Onde guardar dados
 
-`ctx.storage` dá ao plugin um espaço só dele, com duas formas
-([ADR 0013](../adr/0013-storage-kv-e-colecoes.md)):
+`ctx.storage` dá ao plugin um espaço só dele, com duas formas:
 
 - **KV**, para valores avulsos por chave (`kv.get`, `kv.set`);
 - **coleções**, para documentos com filtro, ordenação, limite e índices declarados.
+
+```ts
+await ctx.storage.kv.set('ultimo-comando', Date.now());
+const visto = await ctx.storage.kv.get<number>('ultimo-comando');
+```
 
 Não há SQL cru: a mesma chamada funciona no SQLite, no Postgres e na memória dos testes, e o
 plugin não sabe qual está embaixo. Os valores são JSON e voltam sempre como cópia.
@@ -127,16 +217,17 @@ O escopo é automático em três níveis, para o plugin não precisar compor cha
 - **sessão**: cada bot tem seus dados ([Bot e sessão](bot-e-sessao.md#sessão));
 - **tenant**: num transport com clientes separados (o web, com o tenant vindo do token), o mesmo
   `ctx.storage` resolve os dados do cliente da mensagem corrente, inclusive em services e timers
-  iniciados ali ([ADR 0068](../adr/0068-isolamento-por-tenant.md));
+  iniciados ali;
 - **compartilhado**: `ctx.storage.shared` é do plugin em todas as sessões, para um dado comum a
-  vários números ([ADR 0071](../adr/0071-varios-bots-e-escopo-compartilhado.md)).
+  vários números.
 
 O plugin nunca alcança os dados de outro plugin nem os do kernel. Para dividir dados, ofereça um
 service.
 
 ## Agendar e o que sobrevive a um restart
 
-`ctx.scheduler.at(quando, job, payload)` agenda, e `ctx.scheduler.on(job, handler)`, registrado no
+`ctx.scheduler.at(quando, job, payload)` agenda uma vez, `ctx.scheduler.every(regra, job)` repete
+(`{ everyMs }` ou `{ time: 'HH:mm', timeZone }`), e `ctx.scheduler.on(job, handler)`, registrado no
 `setup`, trata. O job fica no storage e dispara **pelo menos uma vez**: só sai depois que o
 handler termina, então um crash no meio faz o job rodar de novo no boot. O handler deve tolerar
 uma repetição rara ([Scheduler](../guias/scheduler.md#pelo-menos-uma-vez)).
@@ -160,8 +251,7 @@ prazo, quando o contexto os recusa com `ContextExpiredError`. O modelo inteiro e
 
 A API do core cobre o que as plataformas têm em comum. Para o resto, `ctx.unsafe.native` dá o
 cliente da biblioteca (o socket do Baileys) e `ctx.unsafe.raw(message)` dá o objeto original da
-mensagem, ambos como `unknown` ([ADR 0009](../adr/0009-escape-hatch-unsafe-native.md),
-[ADR 0062](../adr/0062-objeto-bruto-da-mensagem.md)).
+mensagem, ambos como `unknown`.
 
 O preço:
 
@@ -172,5 +262,17 @@ O preço:
   o retry;
 - o primeiro uso loga um `warn` com o plugin e o transport.
 
+```ts
+definePlugin({
+  name: 'so-whatsapp',
+  version: '1.0.0',
+  engine: '<1.0.0',
+  transports: ['baileys'], // o boot recusa este plugin em outros transports
+  setup(ctx) {
+    const socket = ctx.unsafe.native as WASocket; // o tipo é seu
+  },
+});
+```
+
 O aviso é proposital: o que os plugins buscam fora da API é o que vira API depois. Se o que falta é
-comum a várias plataformas, abra uma issue, a lacuna é do core.
+comum a várias plataformas, abra uma issue: a lacuna é do core.

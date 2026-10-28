@@ -20,9 +20,9 @@ export type ReconnectionDecision =
     }
   /**
    * Não reconectar: o bot para. `replaced`: reconectar derrubaria a outra conexão da mesma
-   * sessão, e as duas se derrubariam em laço (ADR 0032). `fatal`: erro de configuração que outra
+   * sessão, e as duas se derrubariam em laço. `fatal`: erro de configuração que outra
    * tentativa repetiria. `auth-failed`: credencial rejeitada num transport sem pareamento, onde
-   * limpar a sessão não traz credencial nova (ADR 0064).
+   * limpar a sessão não traz credencial nova.
    */
   | { readonly action: 'stop'; readonly cause: 'replaced' | 'fatal' | 'auth-failed' };
 
@@ -54,7 +54,7 @@ export interface ReconnectionPolicyOptions {
   /**
    * O transport pareia a sessão por QR ou código (capability `pairing`). Sem pareamento,
    * `auth-failed` decide `stop`: limpar a sessão não traz credencial nova. Padrão `true`, o
-   * comportamento do legacy; o `Bot` o lê da capability (ADR 0064).
+   * comportamento do legacy; o `Bot` o lê da capability.
    */
   readonly pairing?: boolean;
   /** Relógio injetável para testes. Padrão `Date.now`. */

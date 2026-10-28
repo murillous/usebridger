@@ -39,11 +39,11 @@ type JobDocument = {
   /** Epoch ms. Indexado: é por ele que o loop consulta. */
   fireAt: number;
   payload: JsonValue;
-  /** Tenant de quem agendou (ADR 0068); o handler roda no escopo dele. Ausente: sem tenant. */
+  /** Tenant de quem agendou; o handler roda no escopo dele. Ausente: sem tenant. */
   tenant?: string;
   /** Presente só em série (`every`): o documento é a série e `fireAt` a ocorrência pendente. */
   rule?: RecurrenceRule;
-  /** Trace de quem agendou (ADR 0120): vira o `cause` do `job.run`. Ausente: fora de um trace. */
+  /** Trace de quem agendou: vira o `cause` do `job.run`. Ausente: fora de um trace. */
   cause?: string;
 };
 
@@ -75,7 +75,7 @@ export interface SchedulerServiceOptions {
    */
   readonly onStorageError: (error: unknown) => void;
   /**
-   * Escopo de tenant do bot (ADR 0068): `at` guarda o tenant corrente no job, e o handler roda
+   * Escopo de tenant do bot: `at` guarda o tenant corrente no job, e o handler roda
    * no escopo dele. Padrão: um escopo próprio, sem tenant.
    */
   readonly tenants?: TenantScope;
@@ -296,7 +296,7 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
   /**
    * Filtro dos jobs que têm handler, ou `undefined` sem nenhum. Sem ele, os órfãos (plugin
    * desligado, job renomeado) seriam relidos do storage a cada volta, e o custo de cada disparo
-   * cresceria com o lixo acumulado (#228). Como `Where` só combina campos com E, o filtro é o
+   * cresceria com o lixo acumulado. Como `Where` só combina campos com E, o filtro é o
    * produto `plugin × job`: um órfão só passa se outro plugin tiver handler com o mesmo nome de
    * job, e o `dispatch` o pula.
    */
@@ -420,7 +420,7 @@ export function createSchedulerService(options: SchedulerServiceOptions): Schedu
   /**
    * Roda o handler contra o prazo e resolve `false` só se ele foi abandonado no `stop`. Nunca
    * rejeita: toda falha já foi entregue ao `onError`. Estourado o prazo (ou abandonado), o
-   * `signal` do job aborta (ADR 0029).
+   * `signal` do job aborta.
    */
   function run(doc: StoredJob, registered: RegisteredHandler): Promise<boolean> {
     // Trace próprio por execução; o do agendamento fica no `cause`.

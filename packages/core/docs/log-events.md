@@ -1,9 +1,11 @@
 # Eventos de log
 
-Os `event`s que o kernel emite ([ADR 0118](../../../docs/adr/0118-contrato-de-log-estruturado.md)).
-O nome é o contrato: filtro e alerta se escrevem sobre ele. Evento novo é minor; renomear ou
-remover quebra. A mensagem é para quem lê e pode mudar de redação sem quebrar nada. Os campos de
-cada linha seguem o [dicionário do logger](logger.md#campos).
+Lista dos `event`s que o core, os transports e os plugins oficiais emitem nos logs. Use esta página
+para escrever filtros e alertas.
+
+O nome do evento é o contrato: filtro e alerta se escrevem sobre ele. Evento novo entra em versão
+minor; renomear ou remover quebra. A mensagem é para quem lê e pode mudar de redação sem quebrar
+nada. Os campos de cada linha seguem o [dicionário do logger](logger.md#campos).
 
 ```logql
 {service="lumabot"} | json | event=~"connection\..*"
@@ -107,7 +109,7 @@ cada linha seguem o [dicionário do logger](logger.md#campos).
 | `job.run` | `info` | job executado |
 | `http.request` | `info` | requisição HTTP atendida |
 
-Os sete últimos são a [trilha de eventos](logger.md#trace-e-trilha) (ADR 0120): saem em `debug`
+Os sete últimos são a [trilha de eventos](logger.md#trace-e-trilha) : saem em `debug`
 com `trail: 'debug'` e somem com `trail: 'off'`.
 
 ## Transports
@@ -160,20 +162,7 @@ diz qual foi.
 
 ## Plugins oficiais
 
-As linhas saem com `plugin=dashboard` ou `plugin=metrics`.
-
-### `@usebridger/plugin-dashboard`
-
-| Evento | Nível | Mensagem |
-| --- | --- | --- |
-| `dashboard.config.failed` | `error` | falha na config do plugin |
-| `dashboard.admin.missing` | `warn` | controle de plugins indisponível: ponha "dashboard" em adminPlugins no createBot |
-| `dashboard.plugin-action.failed` | `error` | falha na ação sobre o plugin |
-| `dashboard.tab.ignored` | `warn` | aba ignorada |
-| `dashboard.tabs.manifest-failed` | `error` | falha ao montar o manifesto de abas |
-| `dashboard.widget.failed` | `error` | falha no widget da aba |
-| `dashboard.widget.invalid-items` | `warn` | widget devolveu itens fora do contrato; descartados |
-| `dashboard.widget.truncated` | `warn` | widget devolveu itens demais; cortado no limite |
+As linhas saem com `plugin=metrics`. O `plugin-dashboard` não define eventos próprios.
 
 ### `@usebridger/plugin-metrics`
 

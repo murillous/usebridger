@@ -11,7 +11,7 @@ export interface EventHub {
 }
 
 /**
- * Abre `GET /events?types=...` (ADR 0129). O `EventSource` autentica pelo cookie e reconecta
+ * Abre `GET /events?types=...`. O `EventSource` autentica pelo cookie e reconecta
  * sozinho com `Last-Event-ID`, sem repetir evento. `onState` diz se o stream está no ar.
  */
 export function openEvents(

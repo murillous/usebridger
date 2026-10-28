@@ -40,7 +40,7 @@ export async function call<T>(work: () => Promise<T>): Promise<T> {
 }
 
 /**
- * O `file_id` que o Telegram não reconhece mais (ADR 0136). O "file is too big" (acima de 20 MB
+ * O `file_id` que o Telegram não reconhece mais. O "file is too big" (acima de 20 MB
  * na Bot API) não é expiração: segue como erro comum.
  */
 export function expiredOr(error: unknown): unknown {

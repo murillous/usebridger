@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import type { PluginDefinition } from './types.ts';
 
 /**
- * Plugin a carregar e de onde veio. As duas fontes (ADR 0005) produzem a mesma `definition`;
+ * Plugin a carregar e de onde veio. As duas fontes produzem a mesma `definition`;
  * `origin` só serve para mensagens de erro e para a tabela de boot.
  */
 export interface PluginEntry {
@@ -40,7 +40,7 @@ function isIgnored(name: string): boolean {
 
 /**
  * Duck typing de propósito: o core instalado no app pode ser outra cópia que a do plugin.
- * `commands` ou `on` contam como o `setup`: o plugin só declarativo não tem `setup` (ADR 0075).
+ * `commands` ou `on` contam como o `setup`: o plugin só declarativo não tem `setup`.
  */
 const looksLikePlugin = (value: unknown): value is PluginDefinition => {
   if (typeof value !== 'object' || value === null) return false;

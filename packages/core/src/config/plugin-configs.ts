@@ -30,7 +30,7 @@ import { decrypt, encrypt, isEnvelope, keyId } from './secret-cipher.ts';
 
 /**
  * Config de um plugin vinda do app ou do storage: os campos do schema e, opcionalmente,
- * `messages` com textos a sobrescrever (ADR 0022). `messages` é chave reservada.
+ * `messages` com textos a sobrescrever. `messages` é chave reservada.
  */
 export type PluginConfigEntry = Readonly<Record<string, unknown>>;
 
@@ -59,7 +59,7 @@ export interface PluginConfigView {
 /**
  * JSON Schema (draft 2020-12) da entrada da config; campos secretos com `secret: true`,
  * `writeOnly: true` e `x-bridger-override: false` (não editáveis por override). Com chave mestra
- * (`secretsWritable`), também `x-bridger-set-secret: true`: editável por `setSecret` (ADR 0117).
+ * (`secretsWritable`), também `x-bridger-set-secret: true`: editável por `setSecret`.
  */
 export type PluginConfigJsonSchema = Readonly<Record<string, unknown>>;
 
@@ -91,7 +91,7 @@ export interface PluginConfigs {
    * alguma camada tiver valor inválido. Registra os segredos no `SecretSet`.
    */
   resolve(plugin: string): Promise<ResolvedPluginConfig>;
-  /** `true` se há `BRIDGER_SECRET_KEY`: sem ela `setSecret` rejeita (ADR 0117). */
+  /** `true` se há `BRIDGER_SECRET_KEY`: sem ela `setSecret` rejeita. */
   readonly secretsWritable: boolean;
   /**
    * Salva o segredo `path` (pontilhado, ex.: `openai.apiKey`) do plugin, cifrado no storage.
@@ -111,7 +111,7 @@ export interface PluginConfigs {
    */
   clearSecret(plugin: string, path: string): Promise<PluginChangeResult | undefined>;
   /**
-   * Rotação da chave mestra (ADR 0117): migra para a chave atual os envelopes com o `kid` de
+   * Rotação da chave mestra: migra para a chave atual os envelopes com o `kid` de
    * `BRIDGER_SECRET_KEY_PREVIOUS`. Devolve quantos migrou. Chamado no boot.
    */
   rotateSecrets(): Promise<number>;
@@ -283,7 +283,7 @@ function secretStrings(value: unknown, into: string[]): void {
 
 /** Anotação do JSON Schema que diz ao dashboard que o campo não aceita override. */
 const OVERRIDE_ANNOTATION = 'x-bridger-override';
-/** Anotação que diz ao dashboard que o campo secreto é editável por `setSecret` (ADR 0117). */
+/** Anotação que diz ao dashboard que o campo secreto é editável por `setSecret`. */
 const SET_SECRET_ANNOTATION = 'x-bridger-set-secret';
 
 /**
@@ -308,7 +308,7 @@ function markSecrets(node: unknown, writable: boolean): void {
 
 /**
  * JSON Schema de entrada de um schema Zod, já com os secretos marcados e o `default` deles trocado
- * pela máscara. É o que o dashboard usa em formulários de config e de aba (ADR 0104).
+ * pela máscara. É o que o dashboard usa em formulários de config e de aba.
  * Transform não tem JSON Schema; vira `{}` em vez de lançar.
  */
 export function maskedJsonSchema(
@@ -667,7 +667,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
 
   /**
    * O dashboard diria "salvo" para um campo que o arquivo ou o env decidem (precedência do
-   * ADR 0015/0028). Avisa com caminho e fonte; o valor fica de fora (pode ser sensível).
+   * arquivo e do env). Avisa com caminho e fonte; o valor fica de fora (pode ser sensível).
    */
   function warnShadowed(
     name: string,

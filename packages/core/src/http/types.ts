@@ -65,7 +65,7 @@ export interface HttpRoutes {
 /** `ctx.http` do plugin: as rotas e mais as operações da API. */
 export interface PluginHttpRoutes extends HttpRoutes {
   /**
-   * Operação da API (ADR 0125), em `/api` + o segmento do dono (`/plugins/<nome>`) + `operation.path`.
+   * Operação da API, em `/api` + o segmento do dono (`/plugins/<nome>`) + `operation.path`.
    * Valida a entrada com os schemas Zod, responde erro em problem+json e entra na spec
    * `GET /openapi.json`. Mesmo método e caminho duas vezes lança `HttpRouteConflictError`.
    */
@@ -75,7 +75,7 @@ export interface PluginHttpRoutes extends HttpRoutes {
 export interface HttpOptions {
   /** Porta. `0` escolhe uma livre (leia em `HttpServer.port`). */
   readonly port: number;
-  /** Interface de escuta. Padrão: todas; sem `api.auth`, use loopback (ADR 0128). */
+  /** Interface de escuta. Padrão: todas; sem `api.auth`, use loopback. */
   readonly hostname?: string;
 }
 

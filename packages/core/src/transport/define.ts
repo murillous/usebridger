@@ -68,7 +68,7 @@ export function transportSpecIssues(value: unknown): string[] {
 }
 
 /**
- * Monta a fábrica do transport (ADR 0033) a partir da descrição que `build` devolve. A descrição
+ * Monta a fábrica do transport a partir da descrição que `build` devolve. A descrição
  * inválida lança `TypeError` com todos os problemas, e o `createBot` a converte em
  * `BotConfigError`. Cada método confere a capability antes de chamar o do adapter; o que ele não
  * implementa rejeita com `UnsupportedError`.

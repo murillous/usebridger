@@ -31,7 +31,7 @@ export interface UnsafeAccess {
   forPlugin(manifest: Pick<PluginManifest, 'name' | 'transports'>): Unsafe;
 }
 
-/** O que o plugin acessou; cada um avisa uma vez, para o log medir os dois usos (ADR 0009). */
+/** O que o plugin acessou; cada um avisa uma vez, para o log medir os dois usos. */
 type Accessor = 'native' | 'raw';
 
 /**

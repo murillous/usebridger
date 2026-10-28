@@ -57,7 +57,7 @@ export interface Pseudonymizer {
  */
 export function createPseudonymizer(
   masterKey: () => Buffer | undefined,
-  /** Cada pseudônimo calculado, com o id: alimenta o mapa reverso (ADR 0132). */
+  /** Cada pseudônimo calculado, com o id: alimenta o mapa reverso. */
   onPseudonym?: (pseudonym: string, id: string) => void,
 ): Pseudonymizer {
   let resolved: { readonly fn: Pseudonym; readonly ephemeral: boolean } | undefined;

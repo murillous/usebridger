@@ -39,7 +39,7 @@ import {
 import { CommandTimeoutError } from './plugin-context.ts';
 
 /**
- * Dono e passo da espera do menu numerado (ADR 0058). O nome não é kebab-case: nenhum plugin o
+ * Dono e passo da espera do menu numerado. O nome não é kebab-case: nenhum plugin o
  * usa.
  */
 const MENU_OWNER = '#menu';
@@ -58,17 +58,17 @@ export interface InboundFlowDeps {
   /** Portão do boot: `true` com os plugins de pé; senão, a promise do fim do boot (`false` = abortado). */
   readonly ready: () => true | Promise<boolean>;
   readonly reportPluginError: (event: PluginErrorEvent) => void;
-  /** Comandos com `background: true` em andamento (ADR 0083). */
+  /** Comandos com `background: true` em andamento. */
   readonly background: BackgroundTasks;
-  /** Destino do `message.handled` (ADR 0102). */
+  /** Destino do `message.handled`. */
   readonly observers: Pick<Observers, 'emit'>;
-  /** Trilha de eventos (ADR 0120). Padrão: desligada. */
+  /** Trilha de eventos. Padrão: desligada. */
   readonly trail?: Trail;
 }
 
 /**
  * Medida da mensagem para o `message.handled` (sinal e trilha). `queuedMs` só existe quando a
- * entrada mediu a espera na fila, isto é, havia observador no enqueue (ADR 0102): sem ele, não há
+ * entrada mediu a espera na fila, isto é, havia observador no enqueue: sem ele, não há
  * sinal, mas a trilha ainda leva a duração.
  */
 interface Probe {
@@ -87,7 +87,7 @@ export interface InboundFlow {
   readonly handleEdited: (message: Message) => Promise<void>;
   readonly handleInteraction: (interaction: Interaction, queuedMs?: number) => Promise<void>;
   /**
-   * Expira a espera do remetente no chat, se ela venceu, e roda o `onExpire` do passo (ADR 0093).
+   * Expira a espera do remetente no chat, se ela venceu, e roda o `onExpire` do passo.
    * Quem chama a põe na fila do chat: é a tarefa da expiração.
    */
   readonly expireReply: (chat: Chat, sender: Contact) => Promise<void>;
@@ -110,7 +110,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
   /**
    * Barreiras comuns à mensagem nova e à edição: espera o fim do boot e roda os middlewares em
    * volta de `handle`, que só roda se a mensagem atravessar a cadeia. A volta da cebola espera
-   * `handle` terminar (ADR 0010).
+   * `handle` terminar.
    */
   async function admit(
     message: Message,
@@ -280,7 +280,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
   }
 
   /**
-   * A tarefa da expiração, na fila do chat (ADR 0093). A espera só sai aqui, na vez dela: uma
+   * A tarefa da expiração, na fila do chat. A espera só sai aqui, na vez dela: uma
    * mensagem do remetente que entrou antes na fila já a consumiu, e aí não há o que expirar. Não
    * passa pelos middlewares, porque não há mensagem; espera o fim do boot, como a mensagem. A
    * falha vira `plugin.error` com `phase: 'step-expire'`.
@@ -399,7 +399,7 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
   }
 
   /**
-   * Comando nativo da plataforma (ADR 0060): roda como o clique num botão de comando, com o texto
+   * Comando nativo da plataforma: roda como o clique num botão de comando, com o texto
    * livre interpretado como o que vem depois do comando digitado.
    */
   async function handleNativeCommand(

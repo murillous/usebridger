@@ -96,7 +96,7 @@ const groupCapability: { readonly [K in GroupParticipantAction]: Capability } = 
   demote: 'groups.promote',
 };
 
-/** Capability de uma alteração de participantes; `demote` anda junto com `promote` (ADR 0055). */
+/** Capability de uma alteração de participantes; `demote` anda junto com `promote`. */
 export function groupActionCapability(action: GroupParticipantAction): Capability {
   return groupCapability[action];
 }
@@ -116,7 +116,7 @@ const sendCapability: { readonly [K in Exclude<OutgoingContent['type'], 'album'>
 /**
  * Capabilities que um envio exige: a do tipo de conteúdo, mais citação, menções e botões se
  * usados. O álbum exige a de cada tipo de item, e não a `send.album`: sem ela, a fila o envia
- * item a item (ADR 0061).
+ * item a item.
  */
 export function capabilitiesForSend(content: OutgoingContent, options?: SendOptions): Capability[] {
   const required: Capability[] =

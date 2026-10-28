@@ -1,8 +1,8 @@
 # Modelo de mensagem
 
-O core entrega aos plugins uma `Message` normalizada, independente do transport
-([ADR 0007](../../../docs/adr/0007-modelo-de-mensagem-normalizado.md)). Os tipos estão em
-`src/message/types.ts`; a construção, em `createMessage` e `createMedia`.
+Esta página mostra como ler uma mensagem no seu plugin e, para quem escreve um transport, como
+construí-la. O core entrega a todo plugin a mesma `Message`, seja ela do WhatsApp, do Telegram ou
+do chat web: o seu código não muda de uma plataforma para outra.
 
 ## Lendo mensagens (plugins)
 
@@ -33,7 +33,7 @@ if (msg.quoted?.is('sticker')) await msg.quoted.media.download();
   `MediaMessageType` lista os tipos que carregam `media`.
 - `is()` é propriedade própria da mensagem: sobrevive a `{ ...msg }`.
 - `key` (`MessageKey`) é a chave para agir sobre a mensagem: `ctx.send.react(msg.key, '👍')`,
-  `ctx.send.delete(msg.quoted.key)` ([ADR 0036](../../../docs/adr/0036-acoes-do-transport-no-plugin.md)).
+  `ctx.send.delete(msg.quoted.key)`.
   No contexto de comando ou listener, `c.react('👍')` já usa a chave da mensagem recebida.
 
 ### Tipos novos e `unknown`
@@ -41,8 +41,7 @@ if (msg.quoted?.is('sticker')) await msg.quoted.media.download();
 O que a plataforma tem sem equivalente na lista chega como `unknown`: o dado do Telegram, o jogo,
 a fatura, o story, a mensagem do Discord só com embed ou componentes. Um plugin específico de
 plataforma lê o resto pelo objeto bruto ([unsafe](unsafe.md)). O que se trata do mesmo jeito
-chega pelo tipo comum
-([ADR 0065](../../../docs/adr/0065-unioes-de-tipo-antes-do-1-0.md)):
+chega pelo tipo comum:
 
 | Na plataforma | Chega como |
 | --- | --- |
@@ -80,12 +79,14 @@ switch (msg.type) {
 
 ## Referência de mídia
 
-Para baixar uma mídia depois, mesmo após um restart, guarde a referência dela em vez dos bytes
-([ADR 0136](../../../docs/adr/0136-referencia-de-midia-serializavel.md)). Exige a capability
+Para baixar uma mídia depois, mesmo após um restart, guarde a referência dela em vez dos bytes. Exige a capability
 `media.ref`: declare-a em `requires`.
 
 ```ts
+import { MediaExpiredError } from '@usebridger/core';
+
 // Na chegada: um JSON pequeno, sem os bytes.
+// (`audios` é uma coleção do plugin; veja Storage.)
 ctx.events.on('message', async (c) => {
   if (c.message.is('voice')) {
     await audios.insert({ chatId: c.message.chat.id, ref: ctx.media.ref(c.message.media) });
@@ -114,8 +115,7 @@ try {
 
 ## Vários anexos
 
-`attachments` traz todas as mídias da mensagem, na ordem da plataforma
-([ADR 0061](../../../docs/adr/0061-varios-anexos-e-albuns.md)). Uma mensagem do Discord com
+`attachments` traz todas as mídias da mensagem, na ordem da plataforma. Uma mensagem do Discord com
 imagem e PDF, um álbum do Telegram ou os arquivos de uma mensagem do web chegam numa mensagem só.
 
 ```ts
@@ -139,14 +139,13 @@ for (const anexo of ctx.message.attachments) {
 telefone (Discord, web) ou o transport não souber resolvê-lo. Ele é separado de `id` porque o ID
 nativo nem sempre carrega o número (no WhatsApp, por exemplo, o `id` pode ser um identificador sem
 ele), e só o transport sabe resolvê-lo. É por `phone` que o roteador reconhece os `owners`
-telefone ([Comandos](commands.md#role)); com `null`, só um owner `{ id }` reconhece o remetente.
+identificados por telefone ([Comandos](commands.md#role)); com `null`, só um owner `{ id }` reconhece o remetente.
 
 O campo é obrigatório no tipo: o transport precisa decidir, e `null` é uma resposta explícita.
 
 ## `username`, `isBot` e `claims`
 
-Campos opcionais que o transport preenche quando a plataforma tem a informação
-([ADR 0053](../../../docs/adr/0053-contact-multiplataforma.md)). Ausente quer dizer que o
+Campos opcionais que o transport preenche quando a plataforma tem a informação. Ausente quer dizer que o
 transport não sabe:
 
 | Campo | Tipo | O que é |
@@ -168,8 +167,7 @@ plugin usa a própria credencial de serviço: o token do usuário não chega a e
 
 `chat.id` é o ID opaco do transport, e é para ele que vai a resposta. O plugin não o decompõe.
 `isGroup` é verdadeiro em todo chat que não é conversa privada. Os campos opcionais abaixo
-mostram a estrutura quando a plataforma tem a informação
-([ADR 0054](../../../docs/adr/0054-chat-multiplataforma.md)). Ausente quer dizer que o
+mostram a estrutura quando a plataforma tem a informação. Ausente quer dizer que o
 transport não sabe:
 
 | Campo | Tipo | O que é |
@@ -204,6 +202,7 @@ O transport mapeia o formato nativo para `MessageInit` e chama `createMessage`. 
 foto do Telegram (a versão do WhatsApp está no `@usebridger/transport-baileys`):
 
 ```ts
+import { Readable } from 'node:stream';
 import { createMessage } from '@usebridger/core/adapter';
 
 const quoted = createMessage({ /* ... */ });   // citada: construída do mesmo jeito

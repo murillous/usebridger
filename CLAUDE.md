@@ -7,8 +7,8 @@ registradas; para mudar uma, proponha um ADR novo que a substitua.
 ## Onde você está
 
 - **Pacotes** (`packages/*`): pnpm workspace, TypeScript, Node 24+. Setup, comandos, layout de
-  pacote, imports e regras do Biome estão no `README.md` — leia antes de criar ou mexer num
-  pacote.
+  pacote, imports e regras do Biome estão no `CONTRIBUTING.md` (seção "Desenvolvimento do
+  monorepo") — leia antes de criar ou mexer num pacote.
 - O LumaBot (app de referência, plugins da Luma e `legacy/`) vive em `murillous/LumaBot` e usa
   os pacotes do npm ([ADR 0080](docs/adr/0080-repositorios-separados.md),
   [ADR 0082](docs/adr/0082-plugins-da-luma-no-lumabot.md)). O monorepo publica só os plugins

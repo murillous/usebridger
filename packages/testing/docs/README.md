@@ -1,8 +1,7 @@
 # @usebridger/testing — documentação
 
 Kit para testar plugins sem rede. Ele sobe um `Bot` de verdade (plugins, filas, middlewares,
-roteador) sobre o `FakeTransport`, que guarda o que o bot envia. O porquê das escolhas está no
-[ADR 0048](../../../docs/adr/0048-kit-de-testes-sobre-o-vitest.md).
+roteador) sobre o `FakeTransport`, que guarda o que o bot envia.
 
 ## Instalação
 
@@ -91,8 +90,7 @@ await depois.stop();
 - Use o `TestBot` devolvido daí em diante. O storage fecha no `stop()` do último bot; o `stop()`
   do anterior só confirma que ele parou.
 
-A mídia do `receive()` tem referência (capability `media.ref`,
-[ADR 0136](../../../docs/adr/0136-referencia-de-midia-serializavel.md)): a do `FakeTransport` são
+A mídia do `receive()` tem referência (capability `media.ref`): a do `FakeTransport` são
 os próprios bytes, então o `ctx.media.fromRef` do bot novo baixa o que o antigo guardou.
 
 ## Mensagem de entrada
@@ -169,7 +167,7 @@ await bot.receive({
 
 Sem perfil, o `FakeTransport` declara todas as capabilities, e o plugin nunca é testado num
 transport sem grupo, sem citação ou sem figurinha. Com `profile`, o transport declara o que a
-plataforma declararia ([ADR 0069](../../../docs/adr/0069-kit-de-testes-multiplataforma.md)):
+plataforma declararia:
 
 ```ts
 const bot = await createTestBot({ profile: 'telegram', plugins: [meuPlugin()] });
@@ -184,8 +182,8 @@ const bot = await createTestBot({ profile: 'telegram', plugins: [meuPlugin()] })
 
 A lista completa de cada um está em `PROFILES`. O `whatsapp` e o `web` são o que o Baileys e o
 `transport-web` declaram, e um teste em cada transport garante isso. O `telegram` e o `discord`
-seguem a matriz do plano (§6.10) e serão confirmados quando cada transport nascer. Até lá, podem
-mudar numa minor do kit.
+são previsões e podem mudar numa minor do kit: o `telegram` ainda declara `send.album` e `polls`,
+que o `@usebridger/transport-telegram` não tem.
 
 O `receive()` e o `click()` usam o remetente do perfil, inclusive com o perfil passado no
 `FakeTransport` à mão. As opções `capabilities`, `limits` e `self` do `FakeTransport` substituem o
@@ -435,7 +433,7 @@ transport real. Um plugin que exige essa capability no manifesto (`requires`) fa
 ### Pareamento e logout pela API
 
 `requestPairingCode` e `logout` atendem às rotas `POST /connection/pairing-code` e
-`POST /connection/logout` do core (ADR 0129). Para testar o app que conecta o número pela API,
+`POST /connection/logout` do core. Para testar o app que conecta o número pela API,
 monte o bot com `createBot` e um servidor `createHttp` em loopback:
 
 ```ts
@@ -455,7 +453,7 @@ expect(await res.json()).toEqual({ code: 'FAKE-1234' });
 ### Janela de atendimento
 
 Plataformas como o WhatsApp oficial só aceitam conteúdo livre por um tempo após a última
-mensagem do contato (ADR 0124). A opção `window` liga essa regra no transport falso:
+mensagem do contato. A opção `window` liga essa regra no transport falso:
 
 ```ts
 vi.useFakeTimers();

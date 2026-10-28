@@ -10,8 +10,7 @@ o plugin diz do que precisa. O detalhe está em
 Há dois jeitos de lidar com uma capability, e a escolha é do plugin:
 
 **Exigir em `requires`**, quando o plugin não faz sentido sem ela. Num transport sem a capability,
-o boot para antes de conectar, com um erro que diz o que faltou
-([ADR 0098](../adr/0098-plugin-falho-derruba-o-boot.md)):
+o boot para antes de conectar, com um erro que diz o que faltou:
 
 ```ts
 export const figurinha = definePlugin({
@@ -64,6 +63,7 @@ Usar uma capability que o transport não tem rejeita com `UnsupportedError` (com
 | `send.sticker` | Figurinha |
 | `send.album` | Várias mídias numa mensagem |
 | `media.download` | Baixar a mídia recebida (`media.download()`, `stream()`) |
+| `media.ref` | Guardar a referência de uma mídia e baixá-la depois (`ctx.media.ref`, `fromRef`) |
 | `quoted` | Responder citando a mensagem |
 | `mentions` | Menção que notifica a pessoa |
 | `reactions` | Reagir a mensagens (`c.react`, `send.react`) |
@@ -86,14 +86,15 @@ Usar uma capability que o transport não tem rejeita com `UnsupportedError` (com
 | `send.voice` | ✓ | ✓ | — | — |
 | `send.sticker` | ✓ | ✓ | — | — |
 | `send.document` | ✓ | ✓ | ✓ | ✓ |
-| `send.album` | — | previsto (#308) | ✓ | — |
+| `send.album` | — | — | ✓ | — |
 | `media.download` | ✓ | ✓ | ✓ | ✓ |
+| `media.ref` | ✓ | ✓ | — | — |
 | `quoted` | ✓ | ✓ | ✓ | ✓ |
 | `mentions` | ✓ | ✓ | ✓ | — |
 | `reactions` | ✓ | ✓ | ✓ | — |
 | `message.edit` | ✓ | ✓ | ✓ | ✓ |
 | `message.delete` | ✓ | ✓ | ✓ | ✓ |
-| `polls` | ✓ | previsto (#309) | ✓ | — |
+| `polls` | ✓ | — | ✓ | — |
 | `actions` | — | ✓ | ✓ | ✓ |
 | `typing` | ✓ | ✓ | ✓ | ✓ |
 | `groups` | ✓ | ✓ | ✓ | — |
@@ -104,9 +105,8 @@ Usar uma capability que o transport não tem rejeita com `UnsupportedError` (com
 
 As colunas do WhatsApp (`@usebridger/transport-baileys`), do Telegram
 (`@usebridger/transport-telegram`) e do web (`@usebridger/transport-web`) são o que esses
-transports declaram hoje; no Telegram, o álbum e a enquete ainda estão previstos. A do Discord é a
-previsão do [plano](../../BRIDGER_PLAN.md#610-capabilities-por-transport): esse transport ainda
-não existe, e a coluna se confirma quando ele nascer. O kit de testes usa a mesma matriz nos
+transports declaram hoje. A do Discord é uma previsão: esse transport ainda não existe, e a
+coluna se confirma quando ele nascer. O kit de testes usa a mesma matriz nos
 [perfis](testes.md#perfis-de-plataforma).
 
 Um transport de terceiro declara o próprio conjunto. Na dúvida, confira `ctx.capabilities` em vez

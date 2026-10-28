@@ -1,6 +1,6 @@
 // Tipos públicos do plugin: o serviço `metrics` e o ponto de extensão `metrics.exporters`.
 
-/** Rótulos de uma série gravada: nome → valor. Nunca id de chat nem de usuário (ADR 0103). */
+/** Rótulos de uma série gravada: nome → valor. Nunca id de chat nem de usuário. */
 export type MetricLabels = Readonly<Record<string, string>>;
 
 /**
@@ -9,7 +9,7 @@ export type MetricLabels = Readonly<Record<string, string>>;
  */
 export type LabelValues<L extends string> = { readonly [K in L]?: string };
 
-/** Declaração de uma métrica (ADR 0121). */
+/** Declaração de uma métrica. */
 export interface MetricSpec<L extends string> {
   /** Nome Prometheus (`^[a-zA-Z_:][a-zA-Z0-9_:]*$`), com a unidade no nome (`_seconds`, `_bytes`). */
   readonly name: string;

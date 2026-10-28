@@ -30,7 +30,7 @@ export class MediaExpiredError extends Error {
   override readonly name = 'MediaExpiredError';
 }
 
-/** `ctx.media` (ADR 0136): referência serializável de uma mídia e o caminho de volta. */
+/** `ctx.media`: referência serializável de uma mídia e o caminho de volta. */
 export interface MediaRefs {
   /**
    * Referência JSON da mídia (capability `media.ref`). Lança `UnsupportedError` sem a capability

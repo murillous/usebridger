@@ -21,7 +21,7 @@ export class GroupAdminTimeoutError extends Error {
 
 /**
  * Porta `isGroupAdmin` do roteador, a partir do transport: o `isChatAdmin` dele, se houver, ou a
- * lista de participantes do `getGroupMetadata` (capability `groups`, ADR 0055). Com o prazo do
+ * lista de participantes do `getGroupMetadata` (capability `groups`). Com o prazo do
  * comando: uma consulta que nunca resolve seguraria o chat na fila de entrada para sempre. O
  * timer só existe para quem não é owner pedindo comando de admin num grupo.
  */

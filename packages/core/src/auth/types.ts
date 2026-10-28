@@ -10,6 +10,6 @@ export interface ApiActor {
   readonly permissions: readonly string[];
   /** Papel do usuário; a regra "admin não gerencia owner" (`canManageRole`) precisa dele. */
   readonly role?: AuthRole;
-  /** Quem a chave representa (`X-Bridger-On-Behalf-Of`); preenchido na M7-4 parte 3. */
+  /** Quem a chave representa (`X-Bridger-On-Behalf-Of`). */
   readonly onBehalfOf?: string;
 }

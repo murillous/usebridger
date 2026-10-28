@@ -29,7 +29,7 @@ export type ServiceName = Extract<keyof Services, string>;
  * ```
  */
 export interface ExtensionPoints {
-  /** Recursos do plugin na API do core, em `/api/resources/<plugin>/<id>` (ADR 0134). */
+  /** Recursos do plugin na API do core, em `/api/resources/<plugin>/<id>`. */
   'api.resources': ApiResource;
 }
 
@@ -71,7 +71,7 @@ export interface ServiceAccess {
   /**
    * Como `provide`, mas o serviço tem escopo por quem chama: `factory(caller)` roda no primeiro
    * `get` de cada plugin e a instância fica guardada por `(nome, caller)`. Quem consome usa o
-   * mesmo tipo `Services[K]`. Útil quando o serviço precisa saber quem o usa (ADR 0112).
+   * mesmo tipo `Services[K]`. Útil quando o serviço precisa saber quem o usa.
    * `release(caller)` roda para cada instância criada quando o caller sai (`removePlugin`) ou
    * quando o provedor sai. Se lançar, o registry termina a limpeza e o `removePlugin` relança os
    * erros como `AggregateError`.

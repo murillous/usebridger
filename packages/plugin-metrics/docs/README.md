@@ -1,9 +1,8 @@
 # @usebridger/plugin-metrics — documentação
 
 Plugin oficial que provê o serviço `metrics`, mede o kernel sozinho e expõe o `GET /metrics`
-Prometheus ([ADR 0103](../../../docs/adr/0103-plugins-oficiais-de-metricas-e-dashboard.md)). O
-serviço é uma camada fina sobre o [`prom-client`](https://github.com/siimon/prom-client), com as
-métricas declaradas antes do uso ([ADR 0121](../../../docs/adr/0121-plugin-metrics-sobre-o-prom-client.md)).
+Prometheus. O serviço é uma camada fina sobre o [`prom-client`](https://github.com/siimon/prom-client), com as
+métricas declaradas antes do uso.
 
 O plugin grava o histórico por hora e por dia no storage do bot, a partir do delta da registry, e
 o serviço lê esse histórico já agregado (`query`, `catalog`; ver Ler).
@@ -58,7 +57,7 @@ Declaração inválida lança `TypeError`:
 
 - A mesma especificação (tipo, `help`, `labelNames` na mesma ordem e `buckets`) devolve o mesmo
   handle, também a outro plugin. Especificação diferente para o mesmo nome lança `TypeError`.
-- O serviço tem escopo por quem chama ([ADR 0112](../../../docs/adr/0112-servico-com-escopo-por-chamador.md)):
+- O serviço tem escopo por quem chama:
   o dono de uma métrica é o primeiro plugin que a declarou. O que o próprio plugin-metrics declara
   tem o dono `core`.
 - Quando um plugin sai (reload ou disable), ele deixa de declarar as métricas dele. Se outro
@@ -129,7 +128,7 @@ O plugin também amostra, a cada flush, três gauges fora do serviço:
 | --- | --- |
 | `bridger_active_users` | Usuários ativos do dia até o flush (ver Ativos por dia) |
 | `bridger_active_groups` | Grupos ativos do dia até o flush |
-| `bridger_outbound_pending` | Fila de saída somadas as prioridades ([ADR 0113](../../../docs/adr/0113-gauge-e-fila-de-saida-nas-metricas.md)) |
+| `bridger_outbound_pending` | Fila de saída somadas as prioridades |
 
 Falha ao ler as filas registra `metrics.sample.failed` e o resto do flush segue.
 
@@ -236,7 +235,7 @@ declaração não passou.
 ### Pela API
 
 Com `http` no bot, o plugin registra o `query` e o `catalog()` na API do core
-([API](../../core/docs/api.md), ADR 0135), com a auth dela e a permissão `metrics.read` (owner,
+([API](../../core/docs/api.md)), com a auth dela e a permissão `metrics.read` (owner,
 admin e viewer). Sob `/api/plugins/metrics` na sessão `default` e
 `/sessions/<sessão>/api/plugins/metrics` nas outras:
 
@@ -286,7 +285,7 @@ ctx.services.contribute('metrics.exporters', async ({ at, rows }) => {
 ## Métricas do kernel
 
 O plugin assina `message.handled` e `outbound.sent` com `ctx.observe`
-([ADR 0102](../../../docs/adr/0102-observadores-do-core.md)), com rótulos de baixa cardinalidade e
+com rótulos de baixa cardinalidade e
 nunca id de chat ou de usuário:
 
 | Métrica | Tipo | Rótulos |
@@ -370,8 +369,7 @@ do processo não mudam.
 
 ## `GET /metrics`
 
-Registrado no HTTP do core ([ADR 0018](../../../docs/adr/0018-http-unico-hono.md),
-[HTTP](../../core/docs/http.md)), sob a base do plugin: `/plugins/metrics/metrics` na sessão
+Registrado no HTTP do core ([HTTP](../../core/docs/http.md)), sob a base do plugin: `/plugins/metrics/metrics` na sessão
 `default` e `/sessions/<sessão>/plugins/metrics/metrics` nas outras. O corpo é o
 `registry.metrics()` do `prom-client` (a do bot e, com o runtime ligado, a do processo), no formato de texto do Prometheus (`content-type` de
 `registry.contentType`), com `# HELP` e `# TYPE` de cada métrica. Sem `http` no bot a rota não
@@ -393,7 +391,7 @@ Com `scrapeToken` na config, o `GET /metrics` inteiro (bot e runtime) exige
 - Cabeçalho ausente, esquema diferente ou token errado respondem `401` com o corpo
   `unauthorized` e `WWW-Authenticate: Bearer`, sem dizer o motivo. A recusa não registra o
   cabeçalho recebido.
-- O campo é `secret()` ([ADR 0117](../../../docs/adr/0117-segredos-cifrados-editaveis-pelo-dashboard.md)):
+- O campo é `secret()`:
   mascarado na leitura da config, censurado no log e editável pela camada de segredos.
 
 Sem `scrapeToken` a rota fica aberta e o boot registra `metrics.scrape.open` (`warn`, uma vez por

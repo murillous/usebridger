@@ -9,7 +9,7 @@ import type { GroupMetadata, GroupParticipantAction, Transport } from '#transpor
 export interface Groups {
   /**
    * Nome, descrição e participantes do grupo (capability `groups`). `participants` fica ausente
-   * onde a plataforma não lista membros (ADR 0055). Sem cache: cada chamada consulta o transport.
+   * onde a plataforma não lista membros. Sem cache: cada chamada consulta o transport.
    */
   metadata(groupId: string): Promise<GroupMetadata>;
   /**

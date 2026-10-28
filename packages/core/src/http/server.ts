@@ -94,9 +94,9 @@ interface RouteEntry {
   readonly base: () => string;
   readonly target: HttpHandler | { readonly ws: HttpSocketAccept };
   readonly onError: (error: unknown) => void;
-  /** Presente nas operações da API (ADR 0125): alimenta a spec. */
+  /** Presente nas operações da API: alimenta a spec. */
   readonly api?: AnyApiOperation;
-  /** Trilha do bot dono da rota (ADR 0120). */
+  /** Trilha do bot dono da rota. */
   readonly trail: Trail;
   /** Conexões abertas, fechadas quando a rota sai. */
   readonly sockets: Set<WSContext>;
@@ -125,7 +125,7 @@ export function createHttp(options: HttpOptions): HttpServer {
 }
 
 /**
- * Primeiros segmentos que o core usa sob `/api/plugins/:name` (ADR 0131). O core monta antes, e a
+ * Primeiros segmentos que o core usa sob `/api/plugins/:name`. O core monta antes, e a
  * operação do plugin no mesmo caminho ficaria sombreada sem aviso.
  */
 const RESERVED_PLUGIN_API = new Set(['config', 'enable', 'disable']);
@@ -299,7 +299,7 @@ export class SessionHttp {
   }
 
   /**
-   * Recurso de plugin (`api.resources`, ADR 0134). Vira operações em
+   * Recurso de plugin (`api.resources`). Vira operações em
    * `/api/resources/<dono>/<id>` a cada montagem do app (os schemas Zod só carregam com a porta) e
    * sai com o dono no `removeOwner`. Inválido ou repetido no dono lança `BotConfigError`.
    */
@@ -427,7 +427,7 @@ export class SessionHttp {
 
   /**
    * Publica as rotas no servidor; sessão repetida no mesmo servidor é erro de config. `realtime`,
-   * do bot, liga `/connection`, `/events` (ADR 0129) e `/plugins`.
+   * do bot, liga `/connection`, `/events` e `/plugins`.
    */
   attach(state: () => string, realtime?: BotApiDeps): void {
     this.#hub.attach(this);

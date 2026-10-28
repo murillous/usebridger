@@ -57,7 +57,7 @@ export interface WebOptions {
   /** Como validar o JWT do sistema do dono: `{ secret }` (HS256) ou `{ jwksUrl }`. */
   readonly auth: WebAuth;
   /**
-   * Claim do JWT com o cliente do dono (empresa, escola), que vira `chat.tenantId` (ADR 0068).
+   * Claim do JWT com o cliente do dono (empresa, escola), que vira `chat.tenantId`.
    * Configurado, o token sem ele é recusado. Ausente: o transport atende um cliente só.
    */
   readonly tenantClaim?: string;
@@ -338,7 +338,7 @@ export class WebTransport implements Transport {
     this.#close(connection, CLOSE_UNAUTHORIZED, 'não deu para verificar o token');
   }
 
-  /** Fecha a conexão no `exp`; o cliente reconecta com um token novo (ADR 0073). */
+  /** Fecha a conexão no `exp`; o cliente reconecta com um token novo. */
   #expireAt(connection: Connection, expiresAt: number): void {
     const remaining = expiresAt - Date.now();
     if (remaining <= 0) {
@@ -673,7 +673,7 @@ function toSource(media: StoredMedia): MediaSource {
   };
 }
 
-/** Tipo da mensagem pelo mimetype do primeiro anexo (ADR 0061). */
+/** Tipo da mensagem pelo mimetype do primeiro anexo. */
 function mediaType(
   mimetype: string,
   fileName: string | undefined,

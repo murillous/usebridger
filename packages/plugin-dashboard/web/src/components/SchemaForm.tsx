@@ -21,7 +21,7 @@ function withoutDialect(schema: JsonSchema): JsonSchema {
   return rest;
 }
 
-/** Formulário gerado do JSON Schema pelo `@rjsf` (ADR 0125). O servidor segue sendo a autoridade. */
+/** Formulário gerado do JSON Schema pelo `@rjsf`. O servidor segue sendo a autoridade. */
 export function SchemaForm(props: SchemaFormProps) {
   return (
     <Form

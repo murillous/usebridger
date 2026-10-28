@@ -18,7 +18,7 @@ const LEVELS: Readonly<Record<string, readonly [label: string, style: Style]>> =
 
 /**
  * Campos que o cabeçalho já mostra ou que não ajudam a ler no terminal: o `event` é para o
- * agregador, e os bindings base são os mesmos em toda linha (ADR 0118).
+ * agregador, e os bindings base são os mesmos em toda linha.
  */
 const HIDDEN = new Set([
   'level',

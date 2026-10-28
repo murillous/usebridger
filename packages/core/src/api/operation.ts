@@ -32,7 +32,7 @@ export interface ApiOperation<
   readonly status?: 200 | 201;
   /**
    * Permissão `<área>.<ação>` exigida do ator. Com a auth ligada (`api.auth`), sem ela basta estar
-   * autenticado; sem `public`, a rota nunca fica aberta por esquecimento (ADR 0127).
+   * autenticado; sem `public`, a rota nunca fica aberta por esquecimento.
    */
   readonly permission?: string;
   /** Rota sem autenticação (ex.: `/health`). Exclui `permission`. */

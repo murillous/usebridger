@@ -1,12 +1,11 @@
 # @usebridger/transport-baileys — documentação
 
-Transport do WhatsApp sobre o [Baileys](https://github.com/WhiskeySockets/Baileys). Implementa o
-contrato `Transport` do core ([Transport](../../core/docs/transport.md)). O porquê das decisões
-está nos [ADRs](../../../docs/adr/README.md).
-
-> Em construção (M2-1). O pacote conecta, pareia, informa as quedas, entrega as mensagens
-> recebidas e os eventos de reação, edição, apagamento, grupo e contato, envia e age sobre
-> mensagens e grupos.
+Esta página mostra como ligar o bot ao WhatsApp. O transport usa o
+[Baileys](https://github.com/WhiskeySockets/Baileys), que conecta como um aparelho vinculado
+(o mesmo mecanismo do WhatsApp Web), e implementa o contrato `Transport` do core
+([Transport](../../core/docs/transport.md)). Ele conecta, pareia, informa as quedas, entrega as
+mensagens e os eventos (reação, edição, apagamento, grupo, contato, voto de enquete) e envia
+mensagens e age sobre grupos.
 
 ## Uso
 
@@ -30,7 +29,7 @@ const bot = createBot({
 await bot.start();
 ```
 
-`baileys()` devolve uma fábrica ([ADR 0033](../../../docs/adr/0033-transport-por-fabrica.md)): o
+`baileys()` devolve uma fábrica: o
 bot entrega a ela o auth state da sessão e o logger. Nada abre antes do `bot.start()`.
 
 ## Opções
@@ -42,7 +41,7 @@ bot entrega a ela o auth state da sessão e o logger. Nada abre antes do `bot.st
 | `version` | a mais recente | Versão do WhatsApp Web a anunciar (`[2, 3000, 1023223821]`). Sem ela, o transport busca a mais recente na primeira conexão; se a busca falhar, loga em `warn` e usa a que vem com o Baileys |
 
 O código também sai sob demanda, sem `pairing.phone` fixo: `transport.requestPairingCode(phone)`
-(ou `POST /connection/pairing-code` da API, ADR 0129) pede o código na tentativa atual, enquanto
+(ou `POST /connection/pairing-code` da API HTTP) pede o código na tentativa atual, enquanto
 ela mostra QR, e o emite em `connection.pairing-code`. `transport.logout()` (ou
 `POST /connection/logout`) desvincula o aparelho; o bot limpa a sessão e volta a parear.
 
@@ -66,7 +65,7 @@ Só acontece quando a sessão não tem credenciais (primeiro uso ou depois de um
 - **Código**: no primeiro QR da tentativa, o transport pede o código para `pairing.phone` e emite
   `connection.pairing-code` (`{ code }`, 8 caracteres). O usuário digita o código no aparelho em
   *Aparelhos conectados → Conectar com número de telefone*. Um código por tentativa; quando ela
-  expira, o bot reconecta e vem um código novo ([ADR 0046](../../../docs/adr/0046-codigo-de-pareamento.md)).
+  expira, o bot reconecta e vem um código novo.
 
 Os dois contam para o `maxQrCount` da reconexão do bot. Logo depois do pareamento o servidor fecha
 a conexão pedindo restart (515); o bot reconecta sozinho, já com as credenciais novas.
@@ -118,8 +117,7 @@ visualização única ou a mídia traz a flag `viewOnce`.
 `media.stream()` chamam o `downloadMediaMessage` do Baileys, que pede ao aparelho o reenvio quando
 o link expirou.
 
-`ctx.media.ref(media)` guarda a chave da mensagem, a `mediaKey`, o `directPath` e a `url`
-([ADR 0136](../../../docs/adr/0136-referencia-de-midia-serializavel.md)). A `mediaKey` decifra o
+`ctx.media.ref(media)` guarda a chave da mensagem, a `mediaKey`, o `directPath` e a `url`. A `mediaKey` decifra o
 arquivo, então trate a referência como segredo. O download por `ctx.media.fromRef` usa a conexão
 do momento e também pede o reenvio, que vai ao celular principal da conta do bot, não ao de quem
 enviou. Se nem o CDN nem esse celular têm a mídia, rejeita
@@ -128,8 +126,7 @@ com `MediaExpiredError`. Sem conexão, rejeita com `baileys: sem conexão`.
 ### Contatos e telefone
 
 `sender.id` e os ids de `mentions` são o JID nativo sem o aparelho, de telefone
-(`…@s.whatsapp.net`) ou LID (`…@lid`), como o WhatsApp mandou. `phone` é preenchido assim
-([ADR 0042](../../../docs/adr/0042-ids-de-contato-e-metadata-de-grupo.md)):
+(`…@s.whatsapp.net`) ou LID (`…@lid`), como o WhatsApp mandou. `phone` é preenchido assim:
 
 1. JID de telefone: o número do próprio id;
 2. LID com o JID alternativo que o Baileys manda junto (`participantAlt`, `remoteJidAlt`): o
@@ -165,8 +162,7 @@ pushName nem na memória nem no storage.
 
 Os nomes persistem por sessão no auth state (`deps.auth`), no tipo `bridger-contact-name`: o id é
 o JID normalizado e o valor, o nome. O par LID ↔ telefone vira uma entrada própria com o mesmo
-nome. Sobrevivem ao restart e o logout os apaga junto com as credenciais
-([ADR 0097](../../../docs/adr/0097-nomes-de-contatos-no-auth-state.md)).
+nome. Sobrevivem ao restart e o logout os apaga junto com as credenciais.
 
 - **Leitura lazy:** a memória responde primeiro. Só quando ela não sabe o nome (nem pelo telefone
   par) o transport consulta o storage, uma vez por id, num único `getKeys` com o id e o par. A
@@ -244,8 +240,7 @@ remetente (o `trackUsers` do legacy) faz upsert a cada `contact.updated`.
 
 O WhatsApp cifra o voto com o segredo da enquete, que só vem na mensagem que a criou, e o Baileys 7
 não o decifra sozinho. O transport guarda em memória as enquetes que envia e as que recebe, até
-1000 (a mais antiga sai primeiro), e decifra cada voto antes de emitir `poll.vote`
-([ADR 0067](../../../docs/adr/0067-voto-em-enquete.md)):
+1000 (a mais antiga sai primeiro), e decifra cada voto antes de emitir `poll.vote`:
 
 - `options` são os índices das opções marcadas, a escolha inteira de quem votou; `[]` é o voto
   retirado. Opção que a enquete não tem fica de fora.
@@ -267,12 +262,12 @@ uma mensagem que chegou no mesmo lote pode vir incorporada a ela, sem evento pr�
 
 ## Capabilities
 
-O transport declara todas as capabilities do core (plano §6.10): `groups`, `groups.add`,
+O transport declara todas as capabilities do core: `groups`, `groups.add`,
 `groups.remove`, `groups.promote`, `mentions`, `reactions`, `typing`, `send.text`, `send.image`, `send.video`, `send.audio`,
 `send.voice`, `send.sticker`, `send.document`, `media.download`, `media.ref`, `message.edit`,
 `message.delete`, `polls`, `quoted` e `pairing`. Todo plugin que declara `requires` com elas carrega.
 `pairing` diz ao bot que a sessão se pareia por QR ou código: com ela, credencial rejeitada
-(`auth-failed`) limpa a sessão e pareia de novo, em vez de parar o bot (ADR 0064).
+(`auth-failed`) limpa a sessão e pareia de novo, em vez de parar o bot.
 
 ## Envio e ações
 
@@ -293,7 +288,7 @@ fora.
 
 A mídia vai como `Buffer` ou `{ url }`, que o Baileys baixa. `mentions` entra em qualquer tipo.
 
-- **Texto formatado** ([ADR 0057](../../../docs/adr/0057-texto-formatado-neutro.md)): com
+- **Texto formatado** ([Texto formatado](../../core/docs/text.md)): com
   `formatted` (ou `formattedCaption`), o texto sai na marcação do WhatsApp: `*negrito*`,
   `_itálico_`, `` `código` `` e `rótulo (url)` no link. O espaço das pontas fica fora do
   marcador, porque o WhatsApp ignora `* a *`. Uma menção vira `@<usuário do JID>` (o número, ou o
@@ -320,11 +315,9 @@ A mídia vai como `Buffer` ou `{ url }`, que o Baileys baixa. `mentions` entra e
 `getGroupMetadata` traz o nome (`title`, o `subject` do WhatsApp), descrição, dono e a lista
 completa de participantes com `isAdmin`/`isSuperAdmin` e o `phone` resolvido como nas mensagens
 (o `phoneNumber` que o WhatsApp manda junto com um LID ou o mapeamento da sessão). O transport não
-implementa `isChatAdmin`, então é esta lista que o kernel consulta no `role: 'group-admin'`
-([ADR 0055](../../../docs/adr/0055-grupos-multiplataforma.md)).
+implementa `isChatAdmin`, então é esta lista que o kernel consulta no `role: 'group-admin'`.
 
-Os metadados ficam em cache por grupo, porque o kernel os pede a cada comando de admin
-([ADR 0042](../../../docs/adr/0042-ids-de-contato-e-metadata-de-grupo.md)). O cache cai:
+Os metadados ficam em cache por grupo, porque o kernel os pede a cada comando de admin. O cache cai:
 
 - nos eventos `groups.update` e `group-participants.update` do Baileys;
 - depois de `updateGroupParticipants`, sem esperar o evento;
@@ -349,7 +342,7 @@ As chaves de criptografia passam por um cache em memória (o `makeCacheableSigna
 Baileys, 5 minutos por chave): o Signal lê a sessão do remetente a cada mensagem, e o cache poupa
 essas leituras do storage. Toda gravação vai ao storage na hora. O cache é de cada tentativa de
 conexão: depois que o bot limpa a sessão, a próxima tentativa começa sem ele. Ele não vê o que
-outro processo grava na mesma sessão, o que o bot já impede ([ADR 0032](../../../docs/adr/0032-escopo-de-sessao.md)).
+outro processo grava na mesma sessão, o que o bot já impede.
 
 O transport nunca apaga credenciais: quem limpa a sessão é o bot, na decisão `clean-session` da
 política de reconexão.
@@ -370,8 +363,7 @@ O transport não reconecta: emite `connection.status` `closed` com o motivo, e o
 | outro, ou erro sem código | `unknown` | reconecta com backoff |
 
 O 500 não apaga a sessão: o Baileys o usa também para todo stream error sem motivo conhecido, e
-uma queda qualquer não pode custar o pareamento
-([ADR 0041](../../../docs/adr/0041-queda-de-rede-nao-limpa-sessao.md)). Pelo mesmo motivo o 405,
+uma queda qualquer não pode custar o pareamento. Pelo mesmo motivo o 405,
 que o servidor manda quando recusa a versão do cliente, é `server-error`.
 
 ## `self` e `native`
@@ -385,3 +377,14 @@ que o servidor manda quando recusa a versão do cliente, é `server-error`.
 
 As linhas do Baileys passam pelo logger do bot com `{ lib: 'baileys' }`, no mesmo nível e com a
 mesma censura de segredos.
+
+## Problemas comuns
+
+- **O QR não aparece:** quem o exibe é um plugin que ouve `connection.qr`. Sem ele, o evento é
+  emitido e ninguém o mostra.
+- **O bot para com `replaced` (440):** a mesma conta foi aberta em outro lugar com a mesma
+  sessão. Deixe uma instância só por sessão.
+- **Pede QR de novo a cada subida:** o `storage` não está persistindo. Com `':memory:'` ou sem
+  `storage`, as credenciais somem no restart; use um arquivo (`sqlite`) ou o Postgres.
+- **`name` nulo nas menções:** o contato nunca mandou mensagem enquanto o bot esteve de pé (veja
+  [Nome e tag das menções](#nome-e-tag-das-menções)).

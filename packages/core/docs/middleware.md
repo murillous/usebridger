@@ -1,8 +1,11 @@
 # Middlewares
 
-Primeiro estágio do fluxo de uma mensagem ([ADR 0010](../../../docs/adr/0010-pipeline-de-3-estagios.md)):
-middlewares → comando → listeners. Um middleware vê o contexto antes de todo o resto e pode
-barrar a mensagem, enriquecer o contexto ou medir o que acontece depois dele.
+Middleware é uma função que roda antes de comandos e listeners. Esta página mostra como escrever
+um e quais já vêm prontos (filtro de chat, limite de taxa, sanitização...).
+
+Primeiro estágio do fluxo de uma mensagem: middlewares → comando → listeners. Um middleware vê o
+contexto antes de todo o resto e pode barrar a mensagem, enriquecer o contexto ou medir o que
+acontece depois dele.
 
 ## Escrevendo um middleware
 
@@ -43,8 +46,7 @@ Regras:
 ## Prazo
 
 O middleware roda dentro da tarefa da fila do chat: preso, ele seguraria as próximas mensagens
-daquele chat. Por isso, no bot, cada um tem `timeouts.middlewareMs` (padrão 30 s;
-[ADR 0039](../../../docs/adr/0039-prazo-de-middleware.md)).
+daquele chat. Por isso, no bot, cada um tem `timeouts.middlewareMs` (padrão 30 s).
 
 - O relógio conta **só o tempo do próprio middleware**. Ele para no `next()` e volta, com o que
   sobrou, quando o `next()` termina: um comando lento lá dentro não estoura o middleware de fora.
@@ -83,7 +85,7 @@ ligados, `chatFilter` e `rateLimit` quando configurados. Erro de middleware vai 
 
 ## Pipeline
 
-`MiddlewarePipeline` é peça interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md)); o app passa os middlewares em
+`MiddlewarePipeline` é peça interna do kernel, não exportada; o app passa os middlewares em
 `createBot({ middlewares })`. Para quem mexe no core:
 
 ```ts
@@ -171,5 +173,4 @@ ctx.sanitized?.senderName; // nome truncado
 ```
 
 Ele trunca o `ctx.text` que recebeu (de um middleware anterior, se houver), não o
-`message.text` original. Até o M1-16 o texto truncado só ia para `ctx.sanitized.text`, que
-continua preenchido com o mesmo valor.
+`message.text` original. `ctx.sanitized.text` traz o mesmo valor truncado.

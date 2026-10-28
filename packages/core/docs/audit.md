@@ -1,9 +1,11 @@
 # Log de auditoria (`ctx.audit`)
 
-Quem fez o quê, quando e sobre o quê, com cadeia de hash para detectar adulteração. O porquê
-está no [ADR 0122](../../../docs/adr/0122-log-de-auditoria-no-kernel.md). Não é o log do pino
-(`ctx.logger`, operacional) nem a trilha do [ADR 0120](../../../docs/adr/0120-trace-e-trilha-de-eventos.md)
-(diagnóstico, sem conteúdo): é registro de conformidade.
+Esta página explica como registrar e consultar o log de auditoria: quem fez o quê, quando e sobre
+o quê, com uma cadeia de hash para detectar adulteração. Use-o para ações que alguém pode precisar
+justificar depois (transferir um atendimento, mudar uma permissão, apagar dados).
+
+Não é o log operacional (`ctx.log`, para diagnóstico; veja [Logger](logger.md)) nem a
+[trilha de eventos](logger.md#trace-e-trilha): é um registro de conformidade, guardado no storage.
 
 ## Gravar
 
@@ -20,7 +22,7 @@ ctx.audit.record({
   dreno em segundo plano. Valor que não é JSON (função, `bigint`, `Date`) em `details` lança
   `TypeError` na hora.
 - **Custo medido:** `record` com `details` pequeno e storage em memória tem p50 ~0,013 ms e p99
-  ~0,15 ms por chamada (meta do ADR 0122: p99 < 1 ms); o caminho da mensagem fica em p99 ~0,33 ms
+  ~0,15 ms por chamada (a meta é p99 < 1 ms); o caminho da mensagem fica em p99 ~0,33 ms
   (ver [`bench/docs`](../../../bench/docs/README.md#com-o-ctxauditrecord)).
 - **`action`** é `<plugin>.<recurso>.<verbo>`. O core exige o prefixo `<nome do plugin>.` e
   reserva `kernel.` e `audit.`: um plugin não forja a ação de outro nem a do kernel.
@@ -33,12 +35,13 @@ ctx.audit.record({
   `dbPassword`), além de `authorization` e `cookie`, viram `[REDACTED]`. A comparação ignora
   maiúsculas, `_` e `-` (`API_KEY`, `refresh_token`). Só o sufixo conta: `tokenizer` fica em claro. A chave `content` é **removida**; para guardá-la, `includeContent: true` no
   próprio `record`.
-- `tenant` (ADR 0068), `session`, `trace` (ADR 0120) e `at` (relógio do servidor) vêm do core.
+- `tenant`, `session`, `trace` e `at` (relógio do servidor) vêm do core.
 
 ## Ações do kernel
 
 O core grava sozinho, com `actor` `system` (chamada direta de `bot.plugins`/`bot.config`) ou
-`{ kind: 'plugin', name }` (via `ctx.admin`, ADR 0107):
+`{ kind: 'plugin', name }` (via `ctx.admin`, o controle de plugins para plugins listados em
+`adminPlugins`):
 
 | Ação | Alvo | `details` |
 | --- | --- | --- |
@@ -47,14 +50,22 @@ O core grava sozinho, com `actor` `system` (chamada direta de `bot.plugins`/`bot
 | `kernel.secret.update` (`setSecret`/`clearSecret`) | `plugin` | `{ plugin, path, op: 'set' \| 'clear' }`; nunca o valor |
 | `kernel.boot` / `kernel.stop` | | `{ version, plugins }` (plugins carregados) |
 | `kernel.audit.export` (`GET /api/audit/export`) | | `{ format, filters }`; ator da requisição |
+| `kernel.audit.purge` | | `{ fromSeq, toSeq, count, lastHash }` (veja [Retenção](#retenção-e-expurgação)) |
+| `kernel.auth.login`, `kernel.auth.login.failed`, `kernel.auth.logout` | usuário | login e logout pela API |
+| `kernel.auth.invite.created` / `.accepted`, `kernel.auth.password.changed`, `kernel.auth.sessions.revoked` | usuário | convites, troca de senha e sessões encerradas |
+| `kernel.auth.denied` | usuário | recusa de papel (admin sobre owner), de permissão e de CSRF |
+| `kernel.user.created` / `.updated` / `.disabled` / `.enabled` | `user` | gestão de usuários |
+| `kernel.key.created` / `.revoked` | `key` | API keys (nunca o segredo) |
+| `kernel.connection.pairing-code` / `.logout` | `connection` | `POST /api/connection/pairing-code` e `/logout` |
+| `kernel.pseudonym.resolve` | `pseudonym` | `{ found }`; nunca o id real |
 
 `outcome` é `success` ou `error` (exceção, ou `setup` novo que falhou no `reload`/`enable`). A
-recusa do `ctx.admin` sobre o próprio plugin (ADR 0107) grava `denied`. `kernel.stop` é gravado
+recusa do `ctx.admin` sobre o próprio plugin grava `denied`. `kernel.stop` é gravado
 antes do dreno do `stop`, e só se o `kernel.boot` foi gravado.
 
 ## Consultar e verificar (só admin)
 
-`ctx.audit.query` e `ctx.audit.verify` exigem o plugin em `adminPlugins` (ADR 0107); os demais
+`ctx.audit.query` e `ctx.audit.verify` exigem o plugin em `adminPlugins` (opção do `createBot`); os demais
 rejeitam com `AuditPermissionError`.
 
 ```ts
@@ -83,7 +94,7 @@ Fora de plugin, a mesma consulta, a exportação em CSV/JSON e o `verify` estão
 - Evento que o storage recusa sempre (o banco responde à leitura, mas o insert falha 10 vezes
   seguidas no mesmo evento) é descartado com `reason: 'rejected'` e log `error`, para não travar
   a cadeia. `details`, `action` e `target` com caractere NUL são recusados no `record`.
-- Trava de sessão perdida (ADR 0070): a fila é descartada sem gravar, para não bifurcar a cadeia.
+- Trava de sessão perdida (outro processo assumiu a sessão): a fila é descartada sem gravar, para não bifurcar a cadeia.
 - `stop`: drena até `min(shutdown.hookTimeoutMs, o que sobrou de shutdown.timeoutMs)`; insert
   pendurado não segura o prazo, e o resto é descartado. O evento com insert em voo conta como
   descartado, embora possa ainda gravar.
@@ -143,7 +154,7 @@ Logs: `audit.purged` (`info`), `audit.purge.skipped` (`warn`), `audit.purge.fail
 Não é um job do `ctx.scheduler` nem um timer: o scheduler persiste e é por plugin, então agendar a
 cada boot duplicaria a série, e o boot do bot não pode deixar timer vivo (os testes de ciclo de
 vida contam). O gatilho é a passada de `tick`, chamada (1) no boot, (2) quando a auditoria grava
-eventos e (3) a cada renovação da trava de sessão (ADR 0070), que é o que cobre um bot ligado e
+eventos e (3) a cada renovação da trava de sessão, que é o que cobre um bot ligado e
 sem gravar. Em storage sem trava (memória) só valem o boot e a gravação; é aceitável porque esse
 storage não guarda a cadeia entre boots. O intervalo de 24 h é medido em memória (relógio
 monotônico) e recomeça a cada boot; passada que adia ou falha tenta de novo no próximo gatilho.
@@ -170,7 +181,7 @@ console.log(`ok: ${result.checked} eventos`);
 
 Rode fora do pico: o `verify` lê a coleção inteira, em lotes por `seq`.
 
-## Uso interno do core
+## Uso interno do core (para quem mexe no core)
 
 `audit.record({ action: 'kernel.…', details, actor? })` (tipo `Audit` em `src/audit/audit.ts`)
 é a gravação do core: aceita qualquer `action`, usa o titular do escopo e, sem ele, `system`;

@@ -1,11 +1,18 @@
 # Fila de entrada por chat
 
-`InboundQueue` serializa o processamento das mensagens de um mesmo chat e roda chats
-distintos em paralelo, sem bloqueio global. Veio da fila por chat do legacy, agora com limite
-de backlog, métricas e shutdown gracioso.
+Esta página explica como o bot decide a ordem em que processa as mensagens que chegam.
 
-Peça interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md)): o app só a configura por
-`createBot({ inbound: { maxPendingPerChat } })`. Os exemplos abaixo são para quem mexe no core.
+A `InboundQueue` serializa o processamento das mensagens de um mesmo chat (uma de cada vez, na
+ordem) e roda chats distintos em paralelo, sem bloqueio global. Ela tem limite de backlog,
+métricas e shutdown gracioso.
+
+Para o app, o único ajuste é o limite de mensagens esperando por chat:
+
+```ts
+createBot({ transport, inbound: { maxPendingPerChat: 50 } });
+```
+
+A fila em si é interna do core e não é exportada. Os exemplos abaixo são para quem mexe no core.
 
 ```ts
 import { InboundQueue } from '#queue/inbound.ts';
@@ -34,7 +41,7 @@ fecha e drena antes do teardown dos plugins ([Bot](bot.md#fluxo-de-uma-mensagem)
 - A tarefa pode ser síncrona ou devolver uma promise; o chat só avança quando ela termina.
   Uma promise que nunca resolve trava aquele chat (e só ele): ponha timeout na própria tarefa
   se ela depende de I/O. No bot, a tarefa é o tratamento inteiro da mensagem, com comando e
-  listeners: um handler lento segura o chat ([ADR 0038](../../../docs/adr/0038-handler-lento-segura-o-chat.md)).
+  listeners: um handler lento segura o chat.
 
 ## Erros
 
@@ -49,7 +56,7 @@ próprio `onError` lançar, a fila continua e o erro vira exceção não captura
 rodando não conta. Ao exceder, a nova tarefa é rejeitada: `enqueue` devolve `'full'`, ela
 nunca roda e entra em `dropped`. Descarta-se a mais nova porque as anteriores já foram
 aceitas e a ordem do chat se mantém. `0` aceita só a tarefa em execução; `Infinity` desliga o
-limite (comportamento do legacy). O limite isola um chat em rajada: os outros seguem aceitando.
+limite. O limite isola um chat em rajada: os outros seguem aceitando.
 
 | Retorno de `enqueue` | Significado |
 | --- | --- |

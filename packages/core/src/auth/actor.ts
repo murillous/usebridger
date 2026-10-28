@@ -15,7 +15,7 @@ export interface ActorResolverOptions {
   /** Inatividade máxima entre dois requests da sessão. */
   readonly idleMs?: number;
   readonly now?: () => Date;
-  /** Permissões dos plugins carregados: os papéis as recebem como as do core (ADR 0134). */
+  /** Permissões dos plugins carregados: os papéis as recebem como as do core. */
   readonly pluginPermissions?: () => readonly string[];
 }
 

@@ -7,7 +7,7 @@ export type AuditActor =
       readonly kind: 'user';
       readonly id: string;
       readonly name: string;
-      /** Quem uma API key representava (`X-Bridger-On-Behalf-Of`, ADR 0127). */
+      /** Quem uma API key representava (`X-Bridger-On-Behalf-Of`). */
       readonly onBehalfOf?: string;
     }
   | { readonly kind: 'system' }
@@ -85,7 +85,7 @@ export interface AuditVerifyResult {
   readonly brokenAt?: { readonly seq: number; readonly eventId: string; readonly reason: string };
 }
 
-/** `ctx.audit` do plugin. `query` e `verify` exigem `adminPlugins` (ADR 0107). */
+/** `ctx.audit` do plugin. `query` e `verify` exigem `adminPlugins`. */
 export interface PluginAudit {
   /** Síncrono e nunca aguardado: enfileira. Lança `TypeError` com `action` ou `details` inválidos. */
   record(input: AuditRecordInput): void;

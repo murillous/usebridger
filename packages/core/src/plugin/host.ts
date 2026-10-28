@@ -24,7 +24,7 @@ import type { PluginContext, PluginDefinition } from './types.ts';
  * Contexto de um plugin montado pelo `Bot`. `dispose` desfaz tudo o que o plugin registrou
  * por esse contexto (comandos, listeners, serviços, jobs) e roda sempre depois do `teardown` —
  * ou no lugar dele, quando o `setup` falhou no meio. `reason` é a falha do `setup` (o erro de
- * timeout, se ele estourou o prazo), que vira o motivo do `ctx.signal` abortado (ADR 0029).
+ * timeout, se ele estourou o prazo), que vira o motivo do `ctx.signal` abortado.
  */
 export interface PluginContextHandle {
   readonly context: PluginContext;
@@ -39,7 +39,7 @@ export interface PluginContextHandle {
   dispose(reason?: unknown): void | Promise<void>;
 }
 
-/** Monta o contexto de um plugin. O loader não conhece os serviços concretos (M1-16 fornece). */
+/** Monta o contexto de um plugin. O loader não conhece os serviços concretos. */
 export type PluginContextFactory = (
   plugin: PluginDefinition,
 ) => PluginContextHandle | Promise<PluginContextHandle>;
@@ -53,7 +53,7 @@ export interface PluginHostOptions {
   readonly log: Logger;
   /** Nomes de plugin que não carregam. */
   readonly disabledPlugins?: readonly string[];
-  /** Nomes de `adminPlugins`; aqui só para avisar de nome que não existe (ADR 0107). */
+  /** Nomes de `adminPlugins`; aqui só para avisar de nome que não existe. */
   readonly adminPlugins?: readonly string[];
   /** Prazo de criação do contexto e de `setup` em ms. Padrão: 10000. */
   readonly setupTimeoutMs?: number;
@@ -98,7 +98,7 @@ export interface PluginHost {
    * Valida, ordena e roda o `setup` de cada plugin compatível, em ordem topológica. Devolve a
    * tabela de boot (também logada). Rejeita — sem rodar nenhum `setup` — com
    * `PluginManifestError`, `PluginConflictError` ou `PluginCycleError`. Plugin que não carrega
-   * por motivo diferente de `disabled` rejeita com `PluginBootError` (ADR 0098): sem `setup`,
+   * por motivo diferente de `disabled` rejeita com `PluginBootError`: sem `setup`,
    * se o motivo é estático; depois dos `setup`s, com `teardown`/`dispose` de quem subiu, se um
    * falhou. Em ambos, o host termina em `stopped`.
    */
@@ -113,17 +113,17 @@ export interface PluginHost {
   stop(signal?: AbortSignal): Promise<PluginLifecycleError[]>;
   /**
    * Derruba e sobe de novo um plugin (`teardown` → `dispose` → novo contexto → `setup`) e, em
-   * cascata, quem depende dele por `dependsOn` (ADR 0037) ou `optionalDependsOn` (ADR 0095): os
+   * cascata, quem depende dele por `dependsOn` ou `optionalDependsOn`: os
    * dependentes descem antes (ordem inversa) e sobem depois (ordem de carga), reavaliados como
    * no boot. É a primitiva do reload
-   * por mudança de config (ADR 0015): o contexto novo sai da fábrica, que já lê a config
+   * por mudança de config: o contexto novo sai da fábrica, que já lê a config
    * atualizada. Vale para plugin carregado ou cujo `setup` falhou.
    */
   reload(name: string): Promise<PluginChangeResult>;
   /**
    * Desliga um plugin em execução: desce ele e os dependentes, e não carrega mais até `enable`.
    * Quem depende dele por `dependsOn` vira `dependency-skipped`; quem depende por
-   * `optionalDependsOn` sobe de novo sem ele (ADR 0095). Já desligado, não faz nada.
+   * `optionalDependsOn` sobe de novo sem ele. Já desligado, não faz nada.
    */
   disable(name: string): Promise<PluginChangeResult>;
   /**
@@ -135,7 +135,7 @@ export interface PluginHost {
   report(): PluginReportEntry[];
 }
 
-/** Dois plugins com o mesmo `name` (ADR 0005). Erro no boot. */
+/** Dois plugins com o mesmo `name`. Erro no boot. */
 export class PluginConflictError extends Error {
   override readonly name = 'PluginConflictError';
   readonly plugin: string;
@@ -592,7 +592,7 @@ export function createPluginHost(options: PluginHostOptions): PluginHost {
    * O slot e quem depende dele por `dependsOn` ou `optionalDependsOn`, direta ou
    * transitivamente, na ordem de carga. `after` só ordena: quem o usa não pega nada do outro
    * plugin, então não entra. O opcional entra porque o setup dele decide o que registra conforme
-   * o serviço existe (ADR 0095).
+   * o serviço existe.
    */
   function withDependents(root: Slot): Slot[] {
     const names = new Set([root.entry.definition.name]);

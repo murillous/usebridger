@@ -9,7 +9,7 @@ import type { RecurrenceRule } from './rule.ts';
 export interface JobContext {
   /**
    * Aborta quando o handler estoura o prazo (`timeouts.jobMs`), com `reason` = o erro de
-   * timeout. Repasse a `fetch`/SDKs para parar o trabalho a tempo (ADR 0029).
+   * timeout. Repasse a `fetch`/SDKs para parar o trabalho a tempo.
    */
   readonly signal: AbortSignal;
   /** Horário previsto (`fireAt`) desta ocorrência; após downtime, é o horário antigo. */

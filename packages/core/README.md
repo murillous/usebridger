@@ -40,6 +40,5 @@ Requer Node 24 ou mais novo.
 
 - [Documentação](https://github.com/murillous/usebridger/blob/main/packages/core/docs/README.md)
 - [Guias para escrever um plugin](https://github.com/murillous/usebridger/blob/main/docs/guias/README.md)
-- [Decisões de arquitetura (ADRs)](https://github.com/murillous/usebridger/blob/main/docs/adr/README.md)
 
 Licença [Apache-2.0](https://github.com/murillous/usebridger/blob/main/LICENSE).

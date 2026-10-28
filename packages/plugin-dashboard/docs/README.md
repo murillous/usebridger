@@ -1,8 +1,7 @@
 # @usebridger/plugin-dashboard — documentação
 
-App web oficial do Bridger ([ADR 0103](../../../docs/adr/0103-plugins-oficiais-de-metricas-e-dashboard.md)),
-cliente genérico da [API HTTP do core](../../core/docs/api.md)
-([ADR 0125](../../../docs/adr/0125-api-http-do-core-e-dashboard-cliente.md)). O plugin só serve os
+Painel web oficial do Bridger: conexão e QR, logs, plugins, config, métricas, auditoria, usuários
+e API keys. É um cliente da [API HTTP do core](../../core/docs/api.md). O plugin só serve os
 arquivos do app: não tem rota de dados, auth nem config próprias. Tudo o que a tela mostra vem da
 API, com a autenticação e as permissões dela. O desenho está em [design.md](./design.md).
 
@@ -29,7 +28,7 @@ sessão `default`.
 - **Com `api.auth`** (o normal): o app pede login por e-mail e senha. No primeiro acesso, use
   "Tenho um convite", marque "Primeiro acesso" e cole o `bootstrapToken` para criar o owner
   ([primeiro acesso](../../core/docs/api.md#primeiro-acesso-bootstrap)).
-- **Sem `api.auth`**: a API fica aberta, e o core só a sobe em loopback (ADR 0128). O app entra
+- **Sem `api.auth`**: a API fica aberta, e o core só aceita subir em loopback (`createHttp({ port, hostname: '127.0.0.1' })`). O app entra
   direto, mostra "API sem auth (loopback)" e esconde as telas de conta, usuários e chaves.
 
 ## Telas
@@ -126,10 +125,7 @@ API. Passos:
 ## App web
 
 O fonte está em `web/` (React 19 + Vite, só `devDependencies`): cliente tipado `openapi-fetch`,
-cache e mutações pelo React Query (`@tanstack/react-query`) e formulários pelo `@rjsf`
-([ADR 0125](../../../docs/adr/0125-api-http-do-core-e-dashboard-cliente.md)). O Refine headless
-previsto no ADR ficou de fora pela condição do próprio ADR: o `@refinedev/core` no npm segue no
-`5.0.12`, sem a 5.2.
+cache e mutações pelo React Query (`@tanstack/react-query`) e formulários pelo `@rjsf`.
 
 - **Sem caminho fixo:** o plugin injeta `<base href>` no `index.html`; o app tira dele a base da
   API da sessão (`web/src/lib/endpoints.ts`) e funciona atrás de qualquer prefixo.
@@ -159,7 +155,7 @@ partir do fonte.
 ### Testar
 
 Lógica pura em `web/src/lib/*.test.ts` (Node). Componente em `web/src/**/*.test.tsx`, no happy-dom
-com a Testing Library ([ADR 0115](../../../docs/adr/0115-testes-de-componente-do-dashboard-no-happy-dom.md)):
+com a Testing Library:
 
 - A primeira linha do arquivo é `// @vitest-environment happy-dom`.
 - `web/src/test-support.tsx` tem o kit: `useBase()` (o `<base href>` do plugin), `fakeApi({ 'GET

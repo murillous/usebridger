@@ -12,17 +12,17 @@ Bridger é um **framework** para bots de mensageria, escrito em TypeScript para 
 | Peça | O que é | Pacote |
 | --- | --- | --- |
 | **Core** | O centro do framework: `createBot`, filas, roteador de comandos, middlewares, eventos, scheduler, HTTP. | `@usebridger/core` |
-| **Transport** | O adaptador de uma plataforma. Recebe as mensagens e envia as respostas. | `@usebridger/transport-baileys`, `@usebridger/transport-web` |
+| **Transport** | O adaptador de uma plataforma. Recebe as mensagens e envia as respostas. | `@usebridger/transport-baileys`, `@usebridger/transport-telegram`, `@usebridger/transport-web` |
 | **Storage** | Onde ficam os dados do bot, as credenciais da sessão e os jobs agendados. | `@usebridger/storage-sqlite`, `@usebridger/storage-postgres` |
 | **Plugin** | O comportamento do bot: comandos, reações a eventos, tarefas. | o seu, ou de terceiros |
 
 ## Framework, sem runner
 
-O Bridger é um **framework sem runner**: não há um programa `bridger` para rodar. Seu app importa `createBot`, passa transport, storage e plugins, e chama `start()`. A partir daí **o core chama os seus plugins**, não o contrário: um plugin declara seus comandos e listeners e o core decide quando rodá-los. Importar o core não conecta nem agenda nada até o `start()` ([ADR 0030](/usebridger/decisoes/0030-biblioteca-sem-runner/), [ADR 0129](/usebridger/decisoes/0129-framework-na-vitrine/)). A arquitetura é de *microkernel*: o core fica com o indispensável e todo o resto é plugin.
+O Bridger é um **framework sem runner**: não há um programa `bridger` para rodar. Seu app importa `createBot`, passa transport, storage e plugins, e chama `start()`. A partir daí **o core chama os seus plugins**, não o contrário: um plugin declara seus comandos e listeners e o core decide quando rodá-los. Importar o core não conecta nem agenda nada até o `start()`. A arquitetura é de *microkernel*: o core fica com o indispensável e todo o resto é plugin.
 
 ## O que é core e o que é plugin
 
-O core tem um escopo fechado: conexão, filas de entrada e saída, middlewares, comandos, eventos, ciclo de vida dos plugins, storage, scheduler, logger, config, papéis, HTTP e mídia. **Todo o resto é plugin**: ajuda, lembretes, ranking, IA, painel. Entrar algo novo no core exige um ADR ([ADR 0011](/usebridger/decisoes/0011-escopo-do-core/)). O motivo é que, sem essa fronteira, o core acumula funcionalidades "porque todo bot precisa" e passa a obrigar todo mundo a carregá-las.
+O core tem um escopo fechado: conexão, filas de entrada e saída, middlewares, comandos, eventos, ciclo de vida dos plugins, storage, scheduler, logger, config, papéis, HTTP e mídia. **Todo o resto é plugin**: ajuda, lembretes, ranking, IA, painel. Algo novo só entra no core se todo bot precisar. O motivo é que, sem essa fronteira, o core acumula funcionalidades "porque todo bot precisa" e passa a obrigar todo mundo a carregá-las.
 
 O core também não conhece nenhuma plataforma: ele só conhece o contrato do `Transport`. Um plugin que usa só o que o contrato descreve roda em qualquer transport.
 
@@ -32,7 +32,8 @@ O core também não conhece nenhuma plataforma: ele só conhece o contrato do `T
 | --- | --- | --- |
 | WhatsApp | [`transport-baileys`](/usebridger/pacotes/transport-baileys/) | disponível |
 | Sistema web próprio (chat em ERP, site) | [`transport-web`](/usebridger/pacotes/transport-web/) | disponível |
-| Telegram e Discord | `transport-telegram`, `transport-discord` | planejados, depois do 1.0 |
+| Telegram | [`transport-telegram`](/usebridger/pacotes/transport-telegram/) | disponível |
+| Discord | `transport-discord` | planejado |
 
 ## O caminho de uma mensagem
 
@@ -73,8 +74,8 @@ Os prazos e erros de cada etapa estão em [Bot → Fluxo de uma mensagem](/usebr
 ## Quando não usar
 
 - **Para uma chamada avulsa à API de uma plataforma.** Se você só quer mandar uma mensagem de um script, a biblioteca da plataforma (por exemplo, o próprio Baileys) é menos código.
-- **Para rodar vários processos com a mesma sessão.** Uma trava no storage impede dois processos na mesma sessão ([ADR 0003](/usebridger/decisoes/0003-uma-sessao-por-processo/)).
-- **Se você precisa de Telegram ou Discord agora.** Os transports ainda não existem.
+- **Para rodar vários processos com a mesma sessão.** Uma trava no storage impede dois processos na mesma sessão.
+- **Se você precisa de Discord agora.** O transport ainda não existe.
 - **Se você não quer escrever código.** O Bridger não traz um construtor visual nem um bot pronto: ele é a base sobre a qual você escreve o seu.
 
 ## Próximo passo

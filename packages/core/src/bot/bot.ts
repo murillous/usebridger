@@ -94,7 +94,7 @@ export { GroupAdminTimeoutError } from './group-admin.ts';
 /** Prazo padrão do `run` de um comando: o mesmo dos listeners. */
 const DEFAULT_COMMAND_TIMEOUT_MS = 30_000;
 
-/** Prazo padrão de cada middleware: o mesmo dos handlers (ADR 0039). */
+/** Prazo padrão de cada middleware: o mesmo dos handlers. */
 const DEFAULT_MIDDLEWARE_TIMEOUT_MS = 30_000;
 
 /**
@@ -793,7 +793,7 @@ export function createBot(config: BotConfig): Bot {
   }
 
   /**
-   * Desistência da reconexão (ADR 0116): para o transport e as filas, mas mantém plugins, HTTP e
+   * Desistência da reconexão: para o transport e as filas, mas mantém plugins, HTTP e
    * scheduler no ar, para o painel mostrar o erro. O `stop()` encerra o resto.
    */
   function enterFailed(): void {

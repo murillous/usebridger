@@ -13,7 +13,7 @@ export interface KeysDeps {
   readonly store: AuthStore;
   readonly audit: () => Audit;
   readonly now: () => Date;
-  /** Permissões declaradas pelos plugins carregados, aceitas no escopo da chave (ADR 0134). */
+  /** Permissões declaradas pelos plugins carregados, aceitas no escopo da chave. */
   readonly pluginPermissions: () => readonly string[];
 }
 
@@ -56,7 +56,7 @@ export interface ApiGuardOptions {
   /** Saltos de proxy confiáveis; 0 (padrão) usa só o endereço do socket. */
   readonly trustProxy?: number;
   readonly now?: () => Date;
-  /** Permissões declaradas pelos plugins carregados; lido a cada request (ADR 0134). */
+  /** Permissões declaradas pelos plugins carregados; lido a cada request. */
   readonly pluginPermissions?: () => readonly string[];
 }
 
