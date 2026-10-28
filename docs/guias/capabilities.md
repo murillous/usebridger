@@ -86,14 +86,14 @@ Usar uma capability que o transport não tem rejeita com `UnsupportedError` (com
 | `send.voice` | ✓ | ✓ | — | — |
 | `send.sticker` | ✓ | ✓ | — | — |
 | `send.document` | ✓ | ✓ | ✓ | ✓ |
-| `send.album` | — | ✓ | ✓ | — |
+| `send.album` | — | previsto (#308) | ✓ | — |
 | `media.download` | ✓ | ✓ | ✓ | ✓ |
 | `quoted` | ✓ | ✓ | ✓ | ✓ |
 | `mentions` | ✓ | ✓ | ✓ | — |
 | `reactions` | ✓ | ✓ | ✓ | — |
 | `message.edit` | ✓ | ✓ | ✓ | ✓ |
 | `message.delete` | ✓ | ✓ | ✓ | ✓ |
-| `polls` | ✓ | ✓ | ✓ | — |
+| `polls` | ✓ | previsto (#309) | ✓ | — |
 | `actions` | — | ✓ | ✓ | ✓ |
 | `typing` | ✓ | ✓ | ✓ | ✓ |
 | `groups` | ✓ | ✓ | ✓ | — |
@@ -102,10 +102,11 @@ Usar uma capability que o transport não tem rejeita com `UnsupportedError` (com
 | `groups.promote` | ✓ | ✓ | — | — |
 | `pairing` | ✓ | — | — | — |
 
-As colunas do WhatsApp (`@usebridger/transport-baileys`) e do web (`@usebridger/transport-web`) são o
-que esses transports declaram hoje. As do Telegram e do Discord são a previsão do
-[plano](../../BRIDGER_PLAN.md#610-capabilities-por-transport): esses transports ainda não
-existem, e as colunas se confirmam quando cada um nascer. O kit de testes usa a mesma matriz nos
+As colunas do WhatsApp (`@usebridger/transport-baileys`), do Telegram
+(`@usebridger/transport-telegram`) e do web (`@usebridger/transport-web`) são o que esses
+transports declaram hoje; no Telegram, o álbum e a enquete ainda estão previstos. A do Discord é a
+previsão do [plano](../../BRIDGER_PLAN.md#610-capabilities-por-transport): esse transport ainda
+não existe, e a coluna se confirma quando ele nascer. O kit de testes usa a mesma matriz nos
 [perfis](testes.md#perfis-de-plataforma).
 
 Um transport de terceiro declara o próprio conjunto. Na dúvida, confira `ctx.capabilities` em vez

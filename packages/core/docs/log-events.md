@@ -147,6 +147,17 @@ diz qual foi.
 | `web.token.verify-failed` | `warn` | não deu para verificar o token |
 | `web.upload.verify-failed` | `warn` | não deu para verificar o token do upload |
 
+### `@usebridger/transport-telegram`
+
+| Evento | Nível | Mensagem |
+| --- | --- | --- |
+| `transport.handler.failed` | `error` | handler de evento do transport falhou |
+| `telegram.update.failed` | `error` | falha ao converter update do Telegram; descartado |
+| `telegram.callback.answer-failed` | `warn` | falha ao confirmar o clique no Telegram; o botão segue girando até expirar |
+| `telegram.commands.sync-failed` | `warn` | falha ao registrar o menu de comandos no Telegram; tenta de novo na próxima mudança |
+| `telegram.commands.skipped` | `debug` | comando fora do menu do Telegram: nome fora de [a-z0-9_]{1,32} |
+| `telegram.stop.failed` | `warn` | falha ao parar o polling do Telegram |
+
 ## Plugins oficiais
 
 As linhas saem com `plugin=dashboard` ou `plugin=metrics`.

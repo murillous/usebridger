@@ -16,6 +16,7 @@
     { "path": "packages/core" },
     { "path": "packages/transport-baileys" },
     { "path": "packages/transport-web" },
+    { "path": "packages/transport-telegram" },
     { "path": "packages/storage-sqlite" },
     { "path": "packages/storage-postgres" },
     { "path": "packages/plugin-metrics" },
