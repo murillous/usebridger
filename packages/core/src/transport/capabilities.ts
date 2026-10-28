@@ -25,6 +25,8 @@ export const CAPABILITIES = [
   // Template aprovado da plataforma: o que sai com a janela de atendimento fechada (ADR 0124).
   'send.template',
   'media.download',
+  // Referência serializável da mídia, para baixar depois de um restart (ADR 0136).
+  'media.ref',
   'message.edit',
   'message.delete',
   'polls',

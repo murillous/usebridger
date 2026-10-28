@@ -1,7 +1,13 @@
 // `restart()` do kit (ADR 0094): o bot novo sobe sobre o mesmo storage, para testar o que
 // sobrevive a um deploy, como as esperas de passo com `persist: true`.
 
-import { command, createMemoryStorage, definePlugin, type StoragePort } from '@usebridger/core';
+import {
+  command,
+  createMemoryStorage,
+  definePlugin,
+  type MediaRef,
+  type StoragePort,
+} from '@usebridger/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FakeTransport } from './fake-transport.ts';
 import { createTestBot, keepOpen, type TestBot } from './test-bot.ts';
@@ -38,7 +44,43 @@ const notas = (step = 'aluno') =>
     },
   });
 
+/** Guarda a referência de cada áudio (ADR 0136) e só baixa quando alguém pede. */
+const audios = () =>
+  definePlugin({
+    name: 'audios',
+    version: '1.0.0',
+    engine: '>=0.0.0',
+    requires: ['media.ref'],
+    setup(ctx) {
+      ctx.events.on('message', async (c) => {
+        if (!c.message.is('voice')) return;
+        await ctx.storage.kv.set('ultimo', ctx.media.ref(c.message.media));
+      });
+      ctx.commands.add(
+        command({
+          name: 'ouvir',
+          run: async (c) => {
+            const ref = await ctx.storage.kv.get<MediaRef>('ultimo');
+            if (ref === undefined) return c.reply('Nenhum áudio');
+            const media = ctx.media.fromRef(ref);
+            return c.reply(`${media.mimetype}: ${(await media.download()).toString()}`);
+          },
+        }),
+      );
+    },
+  });
+
 describe('TestBot.restart', () => {
+  it('a referência de mídia guardada baixa no bot novo (ADR 0136)', async () => {
+    const first = await createTestBot({ plugins: [audios()] });
+    await first.receive({ voice: Buffer.from('bom dia') });
+
+    const second = await track(first.restart());
+    await second.receive({ text: '!ouvir' });
+
+    expect(second.sent).toContainText('audio/ogg; codecs=opus: bom dia');
+  });
+
   it('a conversa persistida continua no bot novo', async () => {
     const first = await createTestBot({ plugins: [notas()] });
     await first.receive({ text: '!notas' });

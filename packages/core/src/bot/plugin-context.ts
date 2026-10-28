@@ -44,6 +44,7 @@ import type { Pseudonym } from '#logger/pseudonym.ts';
 import { createRedactor } from '#logger/redact.ts';
 import type { SecretSource } from '#logger/secrets.ts';
 import type { Logger } from '#logger/types.ts';
+import type { MediaRefs } from '#message/media-ref.ts';
 import type { Contact, Message } from '#message/types.ts';
 import type { Observers } from '#observers/observers.ts';
 import type { Outbound } from '#outbound/types.ts';
@@ -102,6 +103,8 @@ export interface PluginContextDeps {
   readonly scheduler: SchedulerService;
   readonly send: Outbound;
   readonly groups: Groups;
+  /** Referência serializável de mídia (ADR 0136). */
+  readonly media: MediaRefs;
   /** Rotas da sessão no servidor HTTP; ausente sem `http` na config do bot (ADR 0072). */
   readonly http: SessionHttp | undefined;
   /** Falha de uma rota ou WebSocket do plugin (`phase: 'http'`). */
@@ -383,6 +386,16 @@ export function createPluginContextFactory(deps: PluginContextDeps): PluginConte
             deps.groups.updateParticipants(...args),
         ),
       } satisfies Groups,
+      media: {
+        ref(media) {
+          guard('media.ref');
+          return deps.media.ref(media);
+        },
+        fromRef(ref) {
+          guard('media.fromRef');
+          return deps.media.fromRef(ref);
+        },
+      } satisfies MediaRefs,
       http: pluginHttp(name, deps, guard),
       transportName: deps.transport.name,
       session: deps.session,

@@ -20,7 +20,7 @@ const holder: CapabilityHolder = {
 
 describe('CAPABILITIES', () => {
   it('lista as capabilities iniciais do plano §6.10, sem repetição', () => {
-    expect(CAPABILITIES).toHaveLength(23);
+    expect(CAPABILITIES).toHaveLength(24);
     expect(new Set(CAPABILITIES).size).toBe(CAPABILITIES.length);
   });
 

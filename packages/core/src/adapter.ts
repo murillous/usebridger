@@ -4,7 +4,7 @@
 // contrato a implementar, lá como tipo da config do bot. A lista é fixada em `entries.test.ts`.
 
 export { createMessage, type MessageInit } from '#message/create.ts';
-export { createMedia, type MediaSource } from '#message/media.ts';
+export { createMedia, type MediaLoader, type MediaSource } from '#message/media.ts';
 export { StorageClosedError } from '#storage/errors.ts';
 export {
   assertFieldName,

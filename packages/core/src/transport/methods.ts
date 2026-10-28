@@ -12,7 +12,8 @@ export type CapabilityMethod =
   | 'delete'
   | 'sendTyping'
   | 'getGroupMetadata'
-  | 'updateGroupParticipants';
+  | 'updateGroupParticipants'
+  | 'mediaFromRef';
 
 // As três capabilities de participantes dividem o mesmo método.
 const methods: Partial<Record<Capability, CapabilityMethod>> = {
@@ -24,6 +25,7 @@ const methods: Partial<Record<Capability, CapabilityMethod>> = {
   'groups.add': 'updateGroupParticipants',
   'groups.remove': 'updateGroupParticipants',
   'groups.promote': 'updateGroupParticipants',
+  'media.ref': 'mediaFromRef',
 };
 
 const isFunction = (value: unknown): boolean => typeof value === 'function';

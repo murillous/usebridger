@@ -753,6 +753,18 @@ describe('BaileysTransport: capabilities', () => {
       CAPABILITIES.filter((capability) => !missing.has(capability)).sort(),
     );
   });
+
+  it('mediaFromRef recusa dado malformado e, sem conexão, falha sem dizer que expirou', async () => {
+    const { transport } = setup();
+    expect(() => transport.mediaFromRef('lixo')).toThrow(TypeError);
+    const media = transport.mediaFromRef({
+      key: { remoteJid: '5511911110000@s.whatsapp.net', id: 'MSG1', fromMe: false },
+      type: 'audioMessage',
+      mediaKey: 'AQID',
+      directPath: '/v/t62/abc',
+    });
+    await expect(media.download()).rejects.toThrow('baileys: sem conexão');
+  });
 });
 
 describe('BaileysTransport: envio e ações', () => {

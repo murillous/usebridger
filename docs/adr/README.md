@@ -155,3 +155,4 @@ Um ADR novo entra no fim da lista.
 - [0133](0133-auditoria-pela-api.md) — Auditoria pela API: `GET /audit` com cursor, exportação CSV/JSON em stream e auditada, `POST /audit/verify`, tudo com `audit.read`
 - [0134](0134-recursos-de-plugin-pela-api.md) — Recursos de plugin pela API: `api.resources` em `/api/resources/<plugin>/<id>`, `x-resource` na spec e permissões de plugin no catálogo da auth
 - [0135](0135-logs-e-metricas-pela-api.md) — Logs e métricas pela API: `GET /api/logs` sobre buffer em memória com cursor, e `catalog`/`query` do `plugin-metrics` em `/api/plugins/metrics`
+- [0136](0136-referencia-de-midia-serializavel.md) — Referência de mídia serializável: `ctx.media.ref`/`fromRef`, capability `media.ref`, `Transport.mediaFromRef` e `MediaExpiredError`

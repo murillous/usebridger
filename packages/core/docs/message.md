@@ -78,6 +78,40 @@ switch (msg.type) {
   transport, sem carregar o arquivo inteiro em memória. Streams não são cacheados: cada
   chamada abre um novo. Para APIs do Node que pedem `Readable`, use `Readable.fromWeb(stream)`.
 
+## Referência de mídia
+
+Para baixar uma mídia depois, mesmo após um restart, guarde a referência dela em vez dos bytes
+([ADR 0136](../../../docs/adr/0136-referencia-de-midia-serializavel.md)). Exige a capability
+`media.ref`: declare-a em `requires`.
+
+```ts
+// Na chegada: um JSON pequeno, sem os bytes.
+ctx.events.on('message', async (c) => {
+  if (c.message.is('voice')) {
+    await audios.insert({ chatId: c.message.chat.id, ref: ctx.media.ref(c.message.media) });
+  }
+});
+
+// Depois, quando alguém pedir: uma `Media` lazy, como a da mensagem.
+const media = ctx.media.fromRef(doc.ref);
+try {
+  const buffer = await media.download();
+} catch (error) {
+  if (error instanceof MediaExpiredError) {
+    // A plataforma não tem mais o arquivo: trate como perdido.
+  }
+}
+```
+
+- `MediaRef` é `{ transport, mimetype, size, fileName?, data }`, JSON puro e com `data` opaco. Vai
+  ao storage sem conversão.
+- **Trate a referência como segredo.** No WhatsApp, `data` traz a chave que decifra o arquivo:
+  deixe-a fora de logs e de respostas da API.
+- `fromRef` não baixa nada; o download e o stream têm o mesmo cache e as mesmas regras da seção
+  anterior. Referência malformada ou de outro transport lança `TypeError`.
+- Sem a capability, ou para uma mídia que o transport não sabe referenciar, `ref` e `fromRef`
+  lançam `UnsupportedError`.
+
 ## Vários anexos
 
 `attachments` traz todas as mídias da mensagem, na ordem da plataforma
@@ -201,6 +235,7 @@ const msg = createMessage({
     size: photo.file_size ?? null,
     download: () => downloadFile(photo.file_id),                             // obrigatório
     stream: async () => Readable.toWeb(await downloadStream(photo.file_id)), // opcional
+    ref: { fileId: photo.file_id },                                          // capability media.ref
   },
 });
 ```

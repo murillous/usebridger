@@ -150,6 +150,7 @@ export type {
   LogLevel,
   StandardLogFields,
 } from '#logger/types.ts';
+export { MediaExpiredError, type MediaRef, type MediaRefs } from '#message/media-ref.ts';
 export type {
   AudioMessage,
   Chat,
