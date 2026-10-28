@@ -67,7 +67,8 @@ contrato roda em qualquer transport
 | --- | --- | --- |
 | WhatsApp (pelo Baileys) | `@usebridger/transport-baileys` | disponível |
 | Sistema web próprio (chat num ERP, num site) | `@usebridger/transport-web` | disponível |
-| Telegram e Discord | `transport-telegram`, `transport-discord` | planejados para depois do 1.0 |
+| Telegram (Bot API, pelo grammY) | `@usebridger/transport-telegram` | disponível, sem álbum e enquete ainda |
+| Discord | `transport-discord` | planejado para depois do 1.0 |
 | WhatsApp Cloud API, Twilio, Zenvia | repositório privado | planejados, comerciais |
 
 O web veio antes do Telegram e do Discord de propósito: o dono controla as duas pontas, ele roda

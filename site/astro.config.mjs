@@ -63,6 +63,7 @@ export default defineConfig({
             '../packages/transport-baileys/src/index.ts',
             '../packages/transport-web/src/index.ts',
             '../packages/transport-web/src/client.ts',
+            '../packages/transport-telegram/src/index.ts',
             '../packages/testing/src/index.ts',
             '../packages/testing/src/bot.ts',
           ],

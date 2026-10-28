@@ -1,0 +1,41 @@
+{
+  "name": "@usebridger/transport-telegram",
+  "version": "0.0.0",
+  "description": "Transport do Bridger para o Telegram via Bot API (grammY).",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/murillous/usebridger.git",
+    "directory": "packages/transport-telegram"
+  },
+  "homepage": "https://github.com/murillous/usebridger/tree/develop/packages/transport-telegram/docs#readme",
+  "bugs": "https://github.com/murillous/usebridger/issues",
+  "type": "module",
+  "imports": {
+    "#*": "./src/*"
+  },
+  "exports": {
+    ".": {
+      "@usebridger/source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "files": [
+    "dist",
+    "docs"
+  ],
+  "scripts": {
+    "build": "tsdown"
+  },
+  "dependencies": {
+    "@usebridger/core": "workspace:^",
+    "grammy": "^1.46.0"
+  },
+  "devDependencies": {
+    "@usebridger/testing": "workspace:^"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
