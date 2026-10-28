@@ -139,8 +139,8 @@ export const ranking = definePlugin({
 
 ### Migrar do `dashboard.tabs`
 
-O `dashboard.tabs` (ADR 0104, 0109, 0114) sai com o dashboard novo (M7-10). Cada widget vira dado
-num recurso, e o desenho fica com o frontend:
+O `dashboard.tabs` (ADR 0104, 0109, 0114) saiu com o dashboard novo (M7-10), que mostra cada
+recurso numa tela genérica. Cada widget vira dado num recurso, e o desenho fica com o frontend:
 
 | Widget da aba | No recurso |
 | --- | --- |

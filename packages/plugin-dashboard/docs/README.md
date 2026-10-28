@@ -1,300 +1,173 @@
 # @usebridger/plugin-dashboard — documentação
 
-Base do dashboard ([ADR 0103](../../../docs/adr/0103-plugins-oficiais-de-metricas-e-dashboard.md)):
-autenticação, status, QR, logs e WebSocket sobre o HTTP do core. O app web (telas Login, Visão geral, Logs, Plugins e Config)
-vem junto; o desenho está em [design.md](./design.md). Abas de plugins: veja abaixo.
+App web oficial do Bridger ([ADR 0103](../../../docs/adr/0103-plugins-oficiais-de-metricas-e-dashboard.md)),
+cliente genérico da [API HTTP do core](../../core/docs/api.md)
+([ADR 0125](../../../docs/adr/0125-api-http-do-core-e-dashboard-cliente.md)). O plugin só serve os
+arquivos do app: não tem rota de dados, auth nem config próprias. Tudo o que a tela mostra vem da
+API, com a autenticação e as permissões dela. O desenho está em [design.md](./design.md).
 
 ## Instalar
 
-Precisa de `http` na config do bot (`createHttp`). Carregue `dashboard` em `plugins` e defina o
-token (segredo: mascarado em logs e na config exibida; aceita `BRIDGER_DASHBOARD__TOKEN`).
-
-| Campo             | Padrão  | O que é                                          |
-| ----------------- | ------- | ------------------------------------------------ |
-| `token`           | -       | Obrigatório, mínimo 16 caracteres. Segredo de acesso. |
-| `logBufferSize`   | `500`   | Linhas de log mantidas em memória.               |
-| `cookieMaxAgeSec` | `43200` | Validade da sessão (12 h), mínimo 60.            |
-
-## Rotas
-
-Todas sob `/plugins/dashboard` (ou `/sessions/<sessão>/plugins/dashboard` fora da sessão
-`default`). Menos o login, exigem o cookie de sessão; sem ele, 401.
-
-| Rota                | Resposta                                                                  |
-| ------------------- | ------------------------------------------------------------------------- |
-| `POST /api/login`   | Corpo (até 1 KiB, senão 413) `{ "token": "..." }`. 204 + cookie; token errado 401; JSON inválido 400. |
-| `POST /api/logout`  | 204; invalida a sessão e expira o cookie.                                 |
-| `GET /api/status`   | `{ transport, session, status, reason?, message?, qr?, pairingCode?, updatedAt }` |
-| `GET /api/logs`     | Array de `{ level, time, message, fields }`, do mais antigo ao mais novo. `?level=<nível>` (`trace`, `debug`, `info`, `warn`, `error`, `fatal`) devolve só esse nível e os acima; nível inválido 400. |
-| `GET /api/ws`       | WebSocket (abaixo).                                                       |
-
-`status` é `connecting`, `open` ou `closed`. `qr` e `pairingCode` somem quando a conexão abre.
-`closed` traz `reason` e `message` (texto do erro, truncado); o objeto de erro cru nunca sai.
-`session` é o nome da sessão do bot. Depois de um reload do plugin, o status parte do último
-`ConnectionStatus` guardado pelo core (`ctx.connectionStatus()`, ADR 0106).
-`name` é o nome do bot (`createBot({ name })`, senão o nome do transport) e aparece no cabeçalho
-como `name · sessão X`. `connectedSince`, `reconnections` e `qrExpiresAt` (ms epoch) vêm de
-`ctx.connectionInfo()` (ADR 0111) e alimentam o card do bot; `qrExpiresAt` só existe se o
-transport informar `expiresAt` no `connection.qr` (o Baileys informa).
-
-## Métricas
-
-A seção de métricas (rota `/api/metrics`, tela Métricas e KPIs de hoje na Visão geral) saiu do
-dashboard: ela lia a API do `@usebridger/plugin-metrics` que a M6 substitui pelo `prom-client`
-([ADR 0121](../../../docs/adr/0121-plugin-metrics-sobre-o-prom-client.md)). Ela volta no dashboard
-novo da M7. Enquanto isso, as métricas ficam no `GET /metrics` (Prometheus) do próprio
-`plugin-metrics`, e o dashboard não depende mais dele.
-
-## Config dos plugins
-
-Base dos formulários gerados dos schemas Zod. Exige `createBot({ adminPlugins: ['dashboard'] })`
-(`ctx.admin`, ADR 0107); sem isso as duas rotas respondem 503 e o resto do dashboard segue.
-
-| Rota                       | Resposta                                                                 |
-| -------------------------- | ------------------------------------------------------------------------ |
-| `GET /api/config/:plugin`  | `{ view: { config, messages, sources }, schema, secretsWritable }` (`secretsWritable`: há `BRIDGER_SECRET_KEY`, o core aceita gravar segredo). `schema` é o JSON Schema da config (`null` se o plugin não declara `config`). Se a config atual está inválida, 200 com `{ view: null, schema, secretsWritable, issues: [{ path, message, kind }] }` para o admin corrigir pelo formulário. Plugin desconhecido 404. |
-| `PUT /api/config/:plugin`  | Corpo (objeto JSON de overrides, até 64 KiB, senão 413); recusa (403) `Origin` de outro host; sem `Origin`, passa. 200 com o resultado do reload (`{ plugin, dependents, teardownErrors }`); erros de lifecycle saem só como `{ plugin, phase, timedOut, message }` (mensagem truncada em 300), sem stack nem cause. |
-| `PUT /api/config/:plugin/secrets/:path` | Grava o segredo cifrado (ADR 0117). `:path` é o caminho pontilhado do campo. Corpo `{ "value": ... }` (até 64 KiB, senão 413). 200 com o resultado do reload; o valor nunca volta. 400: JSON inválido, sem `value`, valor inválido ou sem chave mestra (`{ error, issues }`); 403: `Origin` de outro host; 404: plugin desconhecido; 409: `{ error: "shadowed" }` (env ou arquivo definem o campo), ação no próprio dashboard, ou reload que falhou depois de gravar. |
-| `DELETE /api/config/:plugin/secrets/:path` | Remove o segredo (funciona sem chave mestra, também para envelope ilegível). Mesmas respostas, sem corpo. |
-
-Erros do `PUT`: config inválida ou campo `secret` 400 com
-`{ "error": "invalid" | "secret", "issues": [{ "path": "campo.aninhado", "message": "..." }] }`
-(o `path` liga o erro ao campo do formulário); JSON inválido ou corpo que não é objeto 400;
-plugin desconhecido 404; ação no próprio dashboard 409 (sem chamar o core: a config do dashboard vem do arquivo ou do env); outro erro vai ao log e dá 500.
-
-**O override é gravado antes do reload.** Se o reload falhar (409 ou 500), a config válida já ficou salva (a mensagem avisa); corrija e recarregue pelo `reload` de plugins.
-
-**Rótulos, placeholders e datas dos campos.** O rótulo vem do `title` do JSON Schema; sem ele, da
-`description` (que então não repete como ajuda); sem ela, do nome da propriedade com inicial
-maiúscula. Declare o `title` no schema Zod, junto da descrição: `z.string().meta({ title: 'Chave da API', description: '...' })`
-(o core gera o JSON Schema com `toJSONSchema`, que lê o `meta`). `examples[0]` (string ou número,
-`.meta({ examples: ['gpt-4o'] })`) vira o placeholder. `z.iso.datetime()` (`format: 'date-time'`)
-vira um seletor de data e hora, enviado como ISO em UTC. `#/config/<plugin>` abre a Config já
-no plugin (é o destino de "Abrir config" na lista de Plugins).
-Plugin que não declara `config` (`schema: null`) não aparece na lista da Config.
-
-**Listas de objetos.** Um `z.array(z.object({...}))` cujos campos são texto, número, inteiro,
-booleano ou enum vira um editor com um bloco por item: cada campo do item tem o seu input, e os
-botões Subir, Descer, Remover e Adicionar item mudam a lista. A ordem do editor é a ordem salva,
-o que cobre cadeias ordenadas, como a de fallback de modelos de IA. Campo vazio fica ausente
-(vale o default do schema), e um item sem nenhum texto é descartado. Erro do servidor num item
-(`models.1.model`) aparece junto da lista como "Item 2, Modelo: ...". Item com objeto aninhado,
-lista, data ou `secret()` segue no editor JSON cru. O `form` das abas usa o mesmo gerador.
-
-**Secrets são só leitura no dashboard.** O `GET` os devolve mascarados (o valor real nunca sai) e o
-`PUT` recusa qualquer campo `secret`: o valor vem do arquivo (`pluginConfig`) ou do env. A
-`view.sources` diz de onde vem cada campo.
-
-## WebSocket
-
-Mensagens do servidor, em JSON (o cliente não precisa enviar nada):
-
-- `{ "type": "snapshot", "status": <status>, "logs": [<log>...] }` ao abrir;
-- `{ "type": "status", ...<status> }` a cada mudança de conexão;
-- `{ "type": "qr", "qr": "..." }` e `{ "type": "pairing-code", "code": "..." }`;
-- `{ "type": "log", "entry": <log> }` a cada linha de log.
-
-O upgrade exige o cookie e, se o pedido trouxer `Origin` (clientes que não são navegador podem omiti-lo), ele tem de ser do mesmo host do
-pedido (proteção contra CSWSH). Ao reconectar, o cliente recebe um novo snapshot.
-
-## Segurança
-
-- O cookie `bridger_dashboard` guarda um id de sessão aleatório (32 bytes), nunca o token. A
-  sessão fica em memória: reiniciar o bot desloga todos.
-- `HttpOnly`, `SameSite=Strict`, `Path` = caminho do plugin. `Secure` é posto quando o pedido veio
-  por https, direto ou pelo cabeçalho `X-Forwarded-Proto: https` do proxy.
-- O token é comparado em tempo constante. Não há limite de tentativas de login: use um token longo
-  e aleatório e ponha um proxy com rate limit na frente se a porta for pública.
-- O core não faz TLS: exponha o dashboard só atrás de um proxy HTTPS (nginx, Caddy), que deve repassar
-  `Host` e `X-Forwarded-Proto`.
-- As linhas de log já saem com os segredos do bot mascarados, mas `fields` pode ter dado de
-  negócio: trate o token como acesso ao log.
-
-## Plugins (enable, disable, reload)
-
-Exige o acesso admin do core (ADR 0107): ponha `dashboard` em `adminPlugins`, senão as rotas abaixo
-respondem 503 e o setup loga um `warn`. Status e logs seguem funcionando.
+Precisa de `http` na config do bot (`createHttp`). Carregue `dashboard` em `plugins`:
 
 ```ts
-createBot({ plugins: [dashboard], adminPlugins: ['dashboard'] });
-```
+import { createBot, createHttp } from '@usebridger/core';
+import { dashboard } from '@usebridger/plugin-dashboard';
 
-| Rota | Resposta |
-| ---- | -------- |
-| `GET /api/plugins` | Tabela de boot: array de `{ name, version, origin, dependsOn?, optionalDependsOn?, status: 'loaded', setupMs?, unregistered?, services?, contributions?, contributionCounts? }` ou `{ name, version, origin, dependsOn?, optionalDependsOn?, status: 'skipped', reason }`, na ordem de carga. `reason` é `{ kind, ... }` como no core; em `setup-failed`, `error` vira `{ plugin, phase, timedOut, message }` (mensagem truncada, nunca o erro cru) e a `reason` ganha `causeMessage`: `Nome: mensagem` do erro lançado no `setup` (até 300 caracteres, sem stack, secrets já censurados pelo core). |
-| `GET /api/plugins/boot` | `{ bootedAt }` (ms): horário real do boot, lido do core (`bot.plugins.bootedAt`; não reinicia com o reload do dashboard). Fica numa rota própria porque `GET /api/plugins` é um array. Exige sessão (401 sem ela). |
-| `POST /api/plugins/:name/enable`, `/disable`, `/reload` | Sem corpo. 200 `{ plugin, dependents, teardownErrors }` (linhas novas do plugin e dos dependentes; falhas de teardown como `{ plugin, phase, timedOut, message }`). |
-
-Os `POST` exigem o cookie de sessão e `Origin` do mesmo host (senão 403). Nome desconhecido 404;
-ação inválida no estado (o próprio dashboard em `disable`/`reload`, plugin ignorado em `reload`,
-host parado) 409 com a mensagem; outro erro é logado e responde 500.
-
-## Abas de plugins (`dashboard.tabs`)
-
-> Substituído pelo `api.resources` do core (ADR 0125, ADR 0134); o dashboard troca na M7-10.
-> Plugin novo já usa o recurso; para migrar, veja o
-> [guia](../../core/docs/api.md#migrar-do-dashboardtabs).
-
-Outro plugin ganha uma tela no painel sem mexer no dashboard ([ADR 0104](../../../docs/adr/0104-abas-do-dashboard-por-ponto-de-extensao.md)):
-contribui uma `DashboardTab` ao ponto `dashboard.tabs` e o dashboard desenha os widgets. O plugin só
-devolve dados; nunca manda HTML, CSS ou script. Os tipos saem de `@usebridger/plugin-dashboard`.
-
-Exemplo, a aba `Lembretes` do plugin `reminders`:
-
-```ts
-import { definePlugin } from '@usebridger/core';
-import { z } from '@usebridger/core/zod';
-import type { DashboardTab } from '@usebridger/plugin-dashboard';
-
-const lembretes: DashboardTab = {
-  id: 'lembretes', // [a-z0-9-]{1,40}; a chave pública é "reminders/lembretes"
-  title: 'Lembretes',
-  widgets: [
-    {
-      kind: 'stats',
-      id: 'resumo',
-      load: async () => [
-        { label: 'Pendentes', value: 3 },
-        { label: 'Atrasados', value: 1, tone: 'warn' }, // tom: 'ok' | 'warn' | 'danger'
-      ],
-    },
-    {
-      kind: 'table',
-      id: 'lista',
-      title: 'Próximos', // qualquer widget aceita title
-      columns: [
-        { key: 'texto', label: 'Texto' }, // a primeira coluna vira a linha principal no celular
-        { key: 'quando', label: 'Quando' },
-      ],
-      load: async ({ cursor }) => ({ rows: await listar(cursor), cursor: proximo }),
-      actions: [
-        { id: 'cancelar', label: 'Cancelar', confirm: true, run: async ({ row }) => cancelar(row.id) },
-      ],
-    },
-    { kind: 'series', id: 'envios', title: 'Envios', load: async ({ days }) => porDia(days) },
-    {
-      kind: 'form',
-      id: 'novo',
-      title: 'Novo lembrete',
-      submitLabel: 'Agendar', // sem ele, "Enviar"
-      schema: z.object({ texto: z.string().min(3), minutos: z.number().int().min(1) }),
-      submit: async (input) => criar(input),
-    },
-    { kind: 'text', id: 'ajuda', markdown: 'Use !lembrar 10m texto.' },
-  ],
-};
-
-export const reminders = definePlugin({
-  name: 'reminders',
-  version: '1.0.0',
-  engine: '<1.0.0',
-  after: ['dashboard'], // ou dependsOn, se não roda sem ele
-  setup(ctx) {
-    ctx.services.contribute('dashboard.tabs', lembretes);
-  },
+createBot({
+  transport,
+  storage,
+  http: createHttp({ port: 3000 }),
+  api: { auth: { bootstrapToken: appEnv.BRIDGER_BOOTSTRAP_TOKEN } },
+  plugins: [dashboard],
 });
 ```
 
-| Widget   | O plugin entrega                                        | O dashboard desenha                                              |
-| -------- | ------------------------------------------------------- | ---------------------------------------------------------------- |
-| `stats`  | `load(): StatItem[]` (`label`, `value`, `hint?`, `tone?`) | Cartões; até 3 por linha no celular; `tone` (`ok`, `warn`, `danger`) colore o valor, e tom desconhecido vira neutro |
-| `table`  | `columns`, `load({ cursor })`, `actions?`               | Tabela; no celular vira lista (1ª coluna em cima, o resto em mono) |
-| `series` | `load({ days })`: `SeriesPoint[]` (`label`, `value`)     | Gráfico de linha com `role="img"` e rótulo; seletor 7/30/90 dias |
-| `form`   | `schema` Zod, `submit(input)` e `submitLabel?`          | Formulário do mesmo gerador da Config; campo `secret` é entrada de senha, vazia, enviada no corpo    |
-| `text`   | `markdown`                                              | Texto puro: hoje o `markdown` não é renderizado (sem negrito, links ou listas) |
+Abra `http://<host>:3000/plugins/dashboard/`, ou `/sessions/<sessão>/plugins/dashboard/` fora da
+sessão `default`.
 
-Todo widget aceita `title?`: o dashboard desenha o título sobre o widget e o usa como rótulo da
-seção; a `series` o põe dentro do cartão, com "Série" quando falta
-([ADR 0114](../../../docs/adr/0114-titulo-tom-e-rotulo-nos-widgets-das-abas.md)).
+- **Com `api.auth`** (o normal): o app pede login por e-mail e senha. No primeiro acesso, use
+  "Tenho um convite", marque "Primeiro acesso" e cole o `bootstrapToken` para criar o owner
+  ([primeiro acesso](../../core/docs/api.md#primeiro-acesso-bootstrap)).
+- **Sem `api.auth`**: a API fica aberta, e o core só a sobe em loopback (ADR 0128). O app entra
+  direto, mostra "API sem auth (loopback)" e esconde as telas de conta, usuários e chaves.
 
-Rotas (sessão e `Origin` do mesmo host nos `POST`, como no resto):
+## Telas
 
-| Rota                                                    | Faz                                                                                   |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `GET /api/tabs`                                         | Manifesto ordenado por `order` (empate: ordem de carga): `{ key, plugin, id, title, order, widgets }`, sem funções; `form` leva o JSON Schema |
-| `GET /api/tabs/:plugin/:tab/:widget`                    | Roda o `load`. `?cursor=` na tabela, `?days=` (1 a 365, padrão 30) na série           |
-| `POST /api/tabs/:plugin/:tab/:widget/actions/:action`   | Corpo `{ "row": { "id": "..." } }`; roda o `run`. 204. `row` vem do browser: confie só no `id` |
-| `POST /api/tabs/:plugin/:tab/:widget/submit`            | Valida o corpo com o `schema` e roda o `submit`. 204; inválido 400 `{ error: "invalid", issues: [{ path, message }] }` |
+Rotas por hash. A navegação e os botões somem quando falta a permissão (a mesma do `x-permission`
+da spec); a API recusa de qualquer forma.
 
-- **Chave `<plugin>/<id>`:** o dono vem do registry (`entries()`), não da aba; dois plugins podem
-  usar o mesmo `id`. Repetido no mesmo plugin, a primeira vence e sai um `warn` (uma vez).
-- **Leitura viva:** cada pedido lê o registry de novo. Reload, disable ou falha de quem contribuiu
-  tira a aba na hora: 404, e o app mostra "Esta aba não está mais disponível". O app relê o
-  manifesto a cada navegação e a cada reconexão do WebSocket.
-- **Validação:** `id` inválido, `kind` desconhecido ou campo faltando ignora a aba (ou só o widget)
-  com `warn`; um `kind` novo num dashboard antigo some sem quebrar o resto.
-- **Erro por widget:** `load`, `run` ou `submit` que lança responde 500 `erro no widget` (o erro vai
-  para o log com o plugin e a chave) e só aquele widget mostra a falha. O `submit` inválido mostra as
-  issues do Zod junto dos campos.
-- **Manifesto e secret:** o JSON Schema do `form` sai mascarado como o da Config (o `default` de campo
-  `secret` vira a máscara). Diferente da Config, o secret do form de aba é digitado e vai no
-  `submit`. Um widget cujo manifesto não pode ser montado sai com `warn`; o resto da aba fica.
-- **Forma do `load`:** item fora do contrato (`stats` sem `label` string ou `value` string/número;
-  linha sem `id` string; ponto sem `label` string ou `value` número) é descartado com `warn`. `order`
-  que não é número finito vale 0.
-- **Cuidado com o valor de entrada:** `submit` e `refine` não devem pôr o valor recebido em erros ou
-  mensagens. O valor de um `secret` iria sem censura ao `log.error` do dashboard, ou voltaria na issue
-  do Zod ao browser.
-- **Limites:** corpo até 64 KiB (413); resposta cortada em 500 linhas, 1000 pontos e 50 `stats`, com
-  `warn`. Não há prazo próprio: trabalho longo é de quem contribui.
-- **Navegação:** grupo **Extensões** na sidebar. No celular as abas ficam em **Mais**, e a aba
-  aberta traz "← Mais" no topo.
+| Tela | Rota | Permissão | API |
+| --- | --- | --- | --- |
+| Conexão: status, conta, QR ao vivo, código de pareamento, desvincular | `#/` | `connection.read`; QR, código e logout com `connection.manage` | `GET /connection`, stream `GET /events` |
+| Logs: histórico com filtros (nível mínimo, plugin, evento) e linhas novas ao vivo | `#/logs` | `logs.read`; ao vivo também com `connection.read` | `GET /logs`, evento `log` |
+| Plugins: estado do boot, ligar e desligar | `#/plugins` | `plugins.read`; ligar e desligar com `plugins.manage` | `GET /plugins`, `POST /plugins/{name}/enable\|disable` |
+| Config de um plugin, formulário gerado do JSON Schema | `#/plugins/<nome>` | `config.read`; salvar com `config.write` | `GET` e `PUT /plugins/{name}/config` |
+| Métricas: total por dia de uma métrica do catálogo | `#/metricas` | `metrics.read`, com o `plugin-metrics` carregado | `GET /plugins/metrics/catalog` e `/query` |
+| Auditoria: eventos com filtros, verificar a cadeia, exportar CSV e JSON | `#/auditoria` | `audit.read` | `GET /audit`, `POST /audit/verify`, `GET /audit/export` |
+| Usuários: convidar, papel, desativar, encerrar sessões, resetar senha | `#/usuarios` | `users.manage` | `/users` |
+| API keys: criar com escopo e revogar | `#/chaves` | `keys.manage` | `/keys` |
+| Minha conta: trocar a senha, minhas sessões | `#/conta` | pessoa logada | `/auth/password`, `/auth/sessions` |
+| Recurso de plugin: lista, detalhe, formulários e ações | `#/recursos/<plugin>/<id>` | as do recurso | `/resources/<plugin>/<id>` |
+
+Detalhes que valem para todas:
+
+- **Tempo real:** um `EventSource` só, com os tipos que a pessoa pode receber. Ele exige
+  `connection.read` (a permissão do `GET /events`); sem ela, o selo diz "sem tempo real". O selo do cabeçalho
+  diz "ao vivo" ou "reconectando"; o navegador reconecta sozinho com `Last-Event-ID`. Plugin que
+  sobe ou desce (`plugin.status`) relê a lista de plugins e a spec.
+- **Sessão vencida:** um 401 em qualquer chamada volta ao login.
+- **Segredo mostrado uma vez:** o convite (link `#/convite?token=...`) e o segredo da API key
+  aparecem só na resposta da criação. O token do convite fica no hash, que não vai ao servidor.
+
+### Config
+
+O formulário sai do `schema` do `GET` pelo `@rjsf`, preenchido com o `view.config`. Salvar manda
+no `PUT` os overrides que já existiam (inclusive `messages.*`, que não são campos do form) mais o
+que mudou; o plugin recarrega com eles.
+
+- **Segredo** vira campo de senha com `********`. Deixar a máscara mantém o valor salvo; outro
+  valor grava o segredo cifrado (precisa de `secrets.write` e de `BRIDGER_SECRET_KEY` no bot).
+- **Campo do env ou do arquivo** fica só leitura, com a origem como ajuda: o override não teria
+  efeito.
+- **Campo esvaziado** sai do corpo, e volta o default.
+- **Erro 400** aparece junto do campo (`errors[].path`).
+- **Config atual inválida** (`view: null`): o form abre vazio com os erros, e salvar substitui
+  todos os overrides depois de confirmar.
+
+### Recursos de plugin
+
+Cada recurso que um plugin publica em `api.resources`
+([recursos de plugin](../../core/docs/api.md#recursos-de-plugin)) vira uma entrada em "Recursos de
+plugins", montada só com a spec (`x-resource` e `x-permission` de cada operação), sem código do
+plugin no app:
+
+- **Lista:** uma coluna por campo do topo do schema do item, o `id` primeiro; os campos do
+  `filter` viram filtros (enum e boolean como `select`); "Próxima" e "Anterior" seguem o `cursor`.
+- **Novo:** formulário do `create.input`.
+- **Detalhe** (`Abrir` na linha): o item do `get`, o formulário do `update.input` preenchido com os
+  campos que ele aceita, as ações e o Remover. Ação com `input` abre um formulário; `confirm: true`
+  pede confirmação antes; o `output` da ação aparece em JSON.
+
+Dê `title` aos campos do schema (`.meta({ title: 'Nome' })`): é o rótulo do formulário.
+
+## Fazer o próprio frontend
+
+O dashboard é um cliente como outro qualquer: tudo o que ele faz, um app próprio faz pela mesma
+API. Passos:
+
+1. **Tipos e cliente:** gere da spec e use o `openapi-fetch`
+   ([gerar a spec e o cliente](../../core/docs/api.md#gerar-a-spec-e-o-cliente)).
+2. **Mesma origem** (servido pelo seu backend ou atrás do mesmo proxy): login em
+   `POST /api/auth/login` e `fetch` com `credentials: 'same-origin'`; o cookie `HttpOnly` faz o
+   resto.
+3. **Outra origem:** ligue `api.cors.origins` e mande `X-Bridger-CSRF` nas escritas
+   ([configurar a auth e o CORS](../../core/docs/api.md#configurar-a-auth-e-o-cors)).
+4. **Login próprio:** guarde uma API key no seu backend e chame a API em nome da pessoa
+   ([padrão BFF](../../core/docs/api.md#padrão-bff-x-bridger-on-behalf-of)).
+5. **Tempo real:** `EventSource` em `/api/events?types=...` no browser, ou `fetch` em stream com
+   bearer no servidor ([conexão e tempo real](../../core/docs/api.md#conexão-e-tempo-real)).
+6. **Permissões:** `GET /api/auth/me` traz as permissões de quem está logado; esconda o que ela não
+   pode, como faz o `can()` de `web/src/lib/viewer.ts`.
+7. **Recursos de plugin:** leia o `GET /openapi.json` e filtre as operações com `x-resource`
+   (`web/src/lib/spec.ts` faz isso em ~100 linhas).
+
+## Migrar do dashboard antigo (0.3)
+
+- **Saiu a config do plugin** (`token`, `logBufferSize`, `cookieMaxAgeSec`): apague o
+  `pluginConfig.dashboard` e o `BRIDGER_DASHBOARD__TOKEN`. O acesso é o da API: configure
+  `api.auth` e crie o owner pelo bootstrap.
+- **Saíram as rotas** sob `/plugins/dashboard/api/*` (login, status, logs, WebSocket, plugins,
+  config, abas): use as da API do core.
+- **Saiu o `dashboard.tabs`** e os tipos `DashboardTab`, `DashboardWidget` e afins: migre cada aba
+  para `api.resources` ([migrar do `dashboard.tabs`](../../core/docs/api.md#migrar-do-dashboardtabs)).
+- **Não precisa mais de `adminPlugins: ['dashboard']`:** o controle de plugins e config vem da API.
 
 ## App web
 
-O plugin serve o app React em `GET /` e `GET /*` sob o próprio `basePath`: abra
-`http://<host>:<porta>/plugins/dashboard/` (ou `/sessions/<sessão>/plugins/dashboard/`), entre com o
-token e navegue pelas telas (rotas por hash: `#/logs`, `#/plugins`, `#/config`).
+O fonte está em `web/` (React 19 + Vite, só `devDependencies`): cliente tipado `openapi-fetch`,
+cache e mutações pelo React Query (`@tanstack/react-query`) e formulários pelo `@rjsf`
+([ADR 0125](../../../docs/adr/0125-api-http-do-core-e-dashboard-cliente.md)). O Refine headless
+previsto no ADR ficou de fora pela condição do próprio ADR: o `@refinedev/core` no npm segue no
+`5.0.12`, sem a 5.2.
 
-- **Telas:** Visão geral (status, QR, código de pareamento com Copiar, indicador "ao vivo" que
-  vira "Desatualizado" quando o WebSocket cai e reconecta com backoff de 1 a 15 s), Logs (filtro
-  por nível e pausar), Plugins (enable/disable/reload com confirmação ao desativar e resultado da
-  cascata; estado carregado/falhou/pulado/desligado, toggle de ativo, busca, painel com a causa do erro
-  de setup e, no mobile, filtros e card de problema; contribuições sem contagem e setup sem duração, pois o
-  core não expõe nenhum dos dois) e
-  Config (lista de plugins ao lado no desktop, `select` abaixo de 768 px; formulário gerado do JSON
-  Schema, com lista editável para array de primitivos e pares chave/valor (`control: 'record'`) para `z.record` primitivo;
-  secret só como máscara; erros do 400 junto do campo). Abaixo de 768 px a navegação vira a barra inferior.
-- **Sem caminho fixo:** o plugin injeta `<base href>` no `index.html` e o app chama `api/...`
-  relativo a ele; funciona atrás de qualquer prefixo de sessão.
-- **Rotas:** o app só atende GET de arquivos e o fallback do SPA (`index.html`); `api/*` que não
-  existe responde 404 e nada fora da pasta do app é servido. Os arquivos de `assets/` têm hash e
-  cache longo (`immutable`); o resto é `no-cache`. Os estáticos não pedem login (os dados passam
-  pela API autenticada).
-- **Sem fonte externa:** Onest, Funnel Display e Martian Mono (latin e latin-ext) vão empacotadas em `dist/web/assets` via `@fontsource-variable`, com a pilha do sistema como fallback e `font-display: swap`. Nada vem de CDN.
-- **Tema:** segue o `prefers-color-scheme`; o botão do cabeçalho (topo no celular) alterna claro/escuro, guardado em `localStorage`. Em Mais (celular), a linha Tema volta ao Sistema (`auto`).
-- **Cabeçalho e pausa:** `<transport> · sessão <id>`, selo "Ao vivo · atualizado há N s" e "Pausar atualização", que fecha o WebSocket (a tela congela e o selo avisa); retomar reconecta e recebe novo snapshot. O rodapé da sidebar mostra `versions` (core e dashboard) do `/api/status`. O seletor de Sessão lista só a sessão do plugin: a API não expõe as outras.
-- **Config:** o Salvar devolve os overrides que o formulário não edita (`messages.*`, chaves de `z.record`); com a config atual inválida (`view: null`) ele substitui todos os overrides e pede confirmação.
-- **Portão de login:** sem sessão, ou com 401 em qualquer chamada, o app mostra só a tela de login; depois de entrar, volta à rota em que estava. Sair fica na sidebar (desktop) e em Mais (celular).
+- **Sem caminho fixo:** o plugin injeta `<base href>` no `index.html`; o app tira dele a base da
+  API da sessão (`web/src/lib/endpoints.ts`) e funciona atrás de qualquer prefixo.
+- **Estáticos:** só GET de arquivo e o fallback do SPA (`index.html`); nada fora da pasta do app é
+  servido. `assets/` tem hash e cache longo (`immutable`); o resto é `no-cache`. Os estáticos não
+  pedem login.
+- **Sem fonte externa:** Onest, Funnel Display e Martian Mono vão empacotadas via
+  `@fontsource-variable`. Nada vem de CDN; o QR é gerado no browser.
+- **Tema:** segue o `prefers-color-scheme`; o botão do cabeçalho alterna claro e escuro, guardado
+  em `localStorage`.
+
+### Tipos da API
+
+`web/src/lib/api-types.d.ts` é gerado da spec do core versionada
+(`packages/core/src/api/__snapshots__/openapi.json`). Mudou a spec, rode:
+
+```sh
+pnpm --filter @usebridger/plugin-dashboard gen:api
+```
 
 ### Buildar
 
-O fonte está em `web/` (React + Vite, só `devDependencies`). O `pnpm build` do pacote roda o
-`tsdown` e depois `vite build --config web/vite.config.ts`, que gera `dist/web/`; a pasta vai no
-tarball (`files: ["dist"]`). O plugin lê `dist/web` do pacote, então rode o build antes de abrir o
-dashboard a partir do fonte.
+O `pnpm build` do pacote roda o `tsdown` e depois `vite build --config web/vite.config.ts`, que
+gera `dist/web/`. O plugin lê `dist/web` do pacote, então rode o build antes de abrir o dashboard a
+partir do fonte.
 
 ### Testar
 
-Lógica pura do app fica em `web/src/lib` e é testada em Node, como o resto do pacote. Componente
-(`web/src/pages/*.test.tsx`) roda no happy-dom com a Testing Library
-([ADR 0115](../../../docs/adr/0115-testes-de-componente-do-dashboard-no-happy-dom.md)):
+Lógica pura em `web/src/lib/*.test.ts` (Node). Componente em `web/src/**/*.test.tsx`, no happy-dom
+com a Testing Library ([ADR 0115](../../../docs/adr/0115-testes-de-componente-do-dashboard-no-happy-dom.md)):
 
-- A primeira linha do arquivo é `// @vitest-environment happy-dom`; os outros testes seguem em Node.
-- `afterEach` com `cleanup()`, `vi.unstubAllGlobals()` e `vi.restoreAllMocks()`: o Vitest roda sem
-  `globals`, e nem a Testing Library nem o user-event limpam sozinhos (um espião do clipboard
-  vaza para o teste seguinte).
-- Sem servidor: troque o `fetch` com `vi.stubGlobal` e responda por caminho (o `api` chama
-  `fetch('api/<caminho>')`). `Tab.test.tsx` tem o modelo.
-- Consulte por papel e nome (`getByRole('button', { name: 'Agendar' })`): o teste também cobre o
-  rótulo acessível.
-- `#web/*` resolve pelo `imports` do `package.json`, o mesmo mapa do `tsconfig` e do Vite.
-- `userEvent.setup()` instala o próprio `navigator.clipboard`: espione o `writeText` com
-  `vi.spyOn` depois do `setup()`, não antes.
-- O `happy-dom` também está nas `devDependencies` da raiz: sem ele lá, o pnpm cria uma segunda cópia
-  do Vitest e o `toContainText` do `@usebridger/testing` some dos tipos em `examples/`.
-
-## Limites conhecidos
-
-- Depois de um reload, o QR e o código de pareamento não voltam: o snapshot do core só guarda o status de conexão, e eles valem até o próximo evento.
-- No app web, um override guardado num campo que o arquivo ou o env decidem (`sources` = `file`/`env`) não é reenviado pelo Salvar e some, já que o PUT substitui todos os overrides. Ele não tinha efeito mesmo; se a camada de cima sair, o valor volta ao default.
+- A primeira linha do arquivo é `// @vitest-environment happy-dom`.
+- `web/src/test-support.tsx` tem o kit: `useBase()` (o `<base href>` do plugin), `fakeApi({ 'GET
+  /api/connection': () => ({ body }) })` (o `fetch` por rota, com as chamadas em `calls`),
+  `problem(status, detail)`, `useFakeEvents()` (`FakeEventSource.last.emit(tipo, dado)`), `me()`,
+  `spec()` e `renderApp(hash)`.
+- `afterEach` com `cleanup()` e `vi.unstubAllGlobals()`. `window.confirm` se troca com
+  `vi.stubGlobal('confirm', ...)`.
+- Consulte por papel e nome (`getByRole('button', { name: 'Criar' })`).
+- `web/src/e2e.test.tsx` é o ponta a ponta: um bot de verdade (transport falso, auth ligada) e o
+  app no happy-dom, com cookie real: primeiro acesso, login, QR, log ao vivo e editar a config.

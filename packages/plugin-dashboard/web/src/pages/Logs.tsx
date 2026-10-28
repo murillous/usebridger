@@ -1,51 +1,145 @@
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import type { LiveState } from '#web/lib/live.ts';
-import type { LogEntry } from '#web/lib/types.ts';
+import { ErrorNotice } from '#web/components/ui.tsx';
+import type { components } from '#web/lib/api-types.d.ts';
+import { api, unwrap } from '#web/lib/client.ts';
+import { useEvent } from '#web/lib/events.ts';
 
-const LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'];
+type LogLine = components['schemas']['LogLine'];
+type Level = LogLine['level'];
 
-export function Logs({ live }: { live: LiveState }) {
-  const [level, setLevel] = useState('info');
-  // Pausar local: congela só a lista exibida; o WS segue acumulando e "Retomar" volta ao vivo.
-  // Difere do pausar global do cabeçalho (App), que fecha o WS e para todas as telas.
-  const [frozen, setFrozen] = useState<LogEntry[] | null>(null);
-  const source = frozen ?? live.logs;
-  const min = LEVELS.indexOf(level);
-  const shown = source.filter((entry) => LEVELS.indexOf(entry.level) >= min);
+const LEVELS: readonly Level[] = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'];
+
+interface Filters {
+  level?: Level;
+  plugin?: string;
+  event?: string;
+}
+
+/** Mesma regra do `GET /logs`: nível mínimo e igualdade nos campos `plugin` e `event`. */
+export function matches(line: LogLine, filters: Filters): boolean {
+  if (filters.level && LEVELS.indexOf(line.level) < LEVELS.indexOf(filters.level)) return false;
+  if (filters.plugin && line.fields['plugin'] !== filters.plugin) return false;
+  if (filters.event && line.fields['event'] !== filters.event) return false;
+  return true;
+}
+
+const key = (line: LogLine) => `${line.time}|${line.level}|${line.message}`;
+
+/** Logs: histórico com filtros (`GET /logs`) e as linhas novas ao vivo pelo stream. */
+export function Logs() {
+  const [draft, setDraft] = useState<Filters>({});
+  const [filters, setFilters] = useState<Filters>({});
+  const [live, setLive] = useState<LogLine[]>([]);
+
+  const history = useInfiniteQuery({
+    queryKey: ['logs', filters],
+    initialPageParam: undefined as number | undefined,
+    queryFn: ({ pageParam }) =>
+      unwrap(
+        api().GET('/api/logs', {
+          params: {
+            query: {
+              ...filters,
+              ...(pageParam !== undefined && { before: pageParam }),
+            },
+          },
+        }),
+      ),
+    getNextPageParam: (page) => page.next,
+  });
+
+  useEvent('log', (data) => {
+    const line = data as LogLine;
+    if (matches(line, filters)) setLive((lines) => [line, ...lines].slice(0, 1000));
+  });
+
+  // A página de histórico pode já trazer a linha que o stream mandou: mostra uma vez só.
+  const seen = new Set<string>();
+  const lines = [...live, ...(history.data?.pages.flatMap((page) => page.logs) ?? [])].filter(
+    (line) => {
+      const id = key(line);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    },
+  );
 
   return (
-    <>
-      <div className="row spread">
-        <h1>Logs</h1>
-        {frozen !== null && <span className="chip warn">Pausado</span>}
+    <section aria-labelledby="logs-t">
+      <div className="page-head">
+        <h1 id="logs-t">Logs</h1>
       </div>
-      <div className="row" style={{ marginBottom: 16 }}>
-        <div className="field" style={{ margin: 0 }}>
-          <label htmlFor="level">Nível mínimo</label>
+      <form
+        className="filters"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setLive([]);
+          setFilters(draft);
+        }}
+      >
+        <div className="field">
+          <label htmlFor="log-level">Nível mínimo</label>
           <select
-            id="level"
+            id="log-level"
             className="input"
-            value={level}
-            onChange={(e) => setLevel(e.target.value)}
+            value={draft.level ?? ''}
+            onChange={(e) => {
+              const { level, ...rest } = draft;
+              setDraft(e.target.value === '' ? rest : { ...rest, level: e.target.value as Level });
+            }}
           >
-            {LEVELS.map((l) => (
-              <option key={l}>{l}</option>
+            <option value="">todos</option>
+            {LEVELS.map((level) => (
+              <option key={level} value={level}>
+                {level}
+              </option>
             ))}
           </select>
         </div>
-        <button type="button" className="btn" onClick={() => setFrozen(frozen ? null : live.logs)}>
-          {frozen ? 'Retomar' : 'Pausar'}
+        <div className="field">
+          <label htmlFor="log-plugin">Plugin</label>
+          <input
+            id="log-plugin"
+            className="input"
+            value={draft.plugin ?? ''}
+            onChange={(e) => setDraft({ ...draft, plugin: e.target.value || undefined })}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="log-event">Evento</label>
+          <input
+            id="log-event"
+            className="input"
+            value={draft.event ?? ''}
+            onChange={(e) => setDraft({ ...draft, event: e.target.value || undefined })}
+          />
+        </div>
+        <button type="submit" className="btn">
+          Filtrar
         </button>
-      </div>
-      <div className="logs" role="log" aria-label="Logs do bot">
-        {shown.length === 0 && <span className="muted">Nenhuma linha neste nível.</span>}
-        {shown.map((entry, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: linhas só são anexadas; não há reordenação.
-          <div key={i} className={`lv-${entry.level}`}>
-            {new Date(entry.time).toLocaleTimeString()} [{entry.level}] {entry.message}
+      </form>
+      <ErrorNotice error={history.error} />
+      <div className="logs" role="log" aria-label="Linhas de log">
+        {lines.length === 0 && !history.isPending && <div className="muted">Nenhuma linha.</div>}
+        {lines.map((line) => (
+          <div key={key(line)} className={`lv-${line.level}`}>
+            {new Date(line.time).toLocaleTimeString('pt-BR')} {line.level.toUpperCase()}{' '}
+            {typeof line.fields['plugin'] === 'string' && `[${line.fields['plugin']}] `}
+            {line.message}
           </div>
         ))}
       </div>
-    </>
+      {history.hasNextPage && (
+        <button
+          type="button"
+          className="btn"
+          disabled={history.isFetchingNextPage}
+          onClick={() => history.fetchNextPage()}
+        >
+          Mais antigas
+        </button>
+      )}
+    </section>
   );
 }
