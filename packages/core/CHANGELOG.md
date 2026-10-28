@@ -1,5 +1,147 @@
 # @usebridger/core
 
+## 0.10.0
+
+### Minor Changes
+
+- 9a3a657: `ctx.audit` (ADR 0123): a redação dos `details` casa as chaves por sufixo, sem diferenciar
+  maiúscula, `_` nem `-`. `accessToken`, `refresh_token`, `clientSecret` e `dbPassword` passam a
+  sair como `[REDACTED]`; `tokenizer` continua em claro.
+- f4316ad: Base da autenticação da API (ADR 0127, #223 parte 1): `api.auth` liga a checagem por operação
+  (`ApiOperation.permission` / `public`, ator em `input.actor`, 401/403 em problem+json, 403
+  auditado), permissões e papéis (`CORE_PERMISSIONS`, `rolePermissions`, `canManageRole`), senha com
+  scrypt, sessões e API keys no storage, e `securitySchemes`/`x-permission` na spec.
+  
+  Usuários e sessões (parte 2): login por cookie com rate limit, convites de uso único (48 h),
+  usuários (criar, alterar, desativar, reset de senha), sessões próprias, papéis com último owner
+  protegido, CSRF em origem cruzada (`X-Bridger-CSRF`), bootstrap por `api.auth.bootstrapToken`,
+  `bridger owner-invite` e auditoria dos eventos. `ApiOperation.handler` recebe `ip` e pode devolver
+  `Response`.
+  
+  Rate limit de login reservado antes do scrypt, com teto global de hashes simultâneos; aceite de
+  convite sob limite por IP; `api.auth.trustProxy`; cookie com `Path` por sessão do servidor; recusas
+  de papel e CSRF auditadas como `kernel.auth.denied`; IP no titular da auditoria.
+  
+  API keys pela API (parte 3): `POST/GET /api/keys` e `DELETE /api/keys/:id` (`keys.manage`, segredo mostrado
+  uma vez, `createdBy`) e `X-Bridger-On-Behalf-Of` para chaves com `auth.on-behalf-of`, registrado no ator
+  da auditoria (`AuditActor.onBehalfOf`) e devolvido por `/auth/me`.
+- 1d4cb96: A permissão efetiva de uma API key passa a ser o escopo dela limitado às permissões atuais do criador
+  (`createdBy`, M7-4, ADR 0128): criador rebaixado perde permissões na chave; desativado ou inexistente,
+  a chave dá 401; reativar restaura. A chave não é alterada no storage.
+- 227bd98: Contrato de log estruturado (ADR 0118, #230). **Quebra de API antes do 1.0.**
+  
+  - **Formato da linha:** `level` em texto (`"info"`, `"error"`) e `time` em ISO 8601 UTC, no lugar do número do pino e do epoch ms. `pid` e `hostname` saem. Quem parseia o JSON atual precisa se ajustar.
+  - **`log.event(evento, campos?)`** e **`defineLogEvent({ name, level, message })`**: o evento fixa o nível e a mensagem, e a linha sai com o campo `event` (`command.timeout`, `connection.closed`), estável para filtro e alerta. O nome segue `<área>.<coisa>.<verbo>` em kebab-case; fora disso, `defineLogEvent` lança. `log.<nível>(mensagem, campos)` continua valendo. **Quebra:** `event` é método obrigatório de `Logger`, então um `config.logger` próprio ou um fake de teste precisa implementá-lo.
+  - **Todas as linhas do core** saem por evento, com mensagem fixa e os valores em campos. A lista está em `docs/log-events.md`; evento novo é minor, renomear ou remover quebra. A tabela de boot vai no campo `report` dos eventos `plugin.boot.report`/`plugin.boot.review`.
+  - **Bindings base:** toda linha do bot leva `bot` (a `session`); `createBot({ logBindings })` acrescenta `service`, `version` e `env`.
+  - **Dicionário de campos tipado** (`StandardLogFields`): `err`, `plugin`, `transport`, `chat`, `sender`, `messageId`, `command`, `step`, `role`, `route`, `status`, `reason`, `durationMs`, `trace`. **Quebra:** o binding por mensagem `chatId` passa a `chat` (também no sinal `log`), `senderId` a `sender`, e o nome do evento do barramento ou do transport, que ia em `event`, passa a `eventName`.
+  - **`pretty`:** esconde o `event` e os bindings base, e põe texto de várias linhas (a tabela de boot) abaixo da linha.
+  - Exportados: `defineLogEvent` e os tipos `LogEvent`, `LogEventName`, `EmitLevel` e `StandardLogFields`.
+  - **Quebras de tipo e de texto:** `LogFields` fica mais estrito (`StandardLogFields & Record<string, unknown>`): `{ status: true }`, `{ chat: 1 }` e afins deixam de compilar. O `msg` de toda linha do kernel mudou de texto, então quem filtra por texto precisa migrar para `event`. `createBot` recusa `logBindings` com `bot`, `event`, `level`, `time` ou `msg`.
+  - **Campos que mudaram:** a mensagem do erro de ciclo de vida do plugin saiu do `msg` e foi para `reason` (`plugin.lifecycle.failed`); o campo `version` de `plugin.dependency.optional-mismatch` passa a `loaded`; `context.expired` ganha o campo `context`.
+- 184c8cb: Base da API HTTP (ADR 0125, 0126, M7-3): `ctx.http.api(operation)` registra operações com schema
+  Zod sob `/api` (`/sessions/<sessão>/api` fora da `default`), erros em `application/problem+json`
+  com `traceId`, `GET /openapi.json` (OpenAPI 3.2 via `zod-openapi`), `GET /api/health`, CORS por
+  allowlist em `BotConfig.api.cors.origins` e `createOpenApiDocument`/`coreApiRoutes` para gerar a
+  spec sem servidor. `ctx.http` passa a ser `PluginHttpRoutes`, com o método `api`.
+- 87041b4: Ponto de extensão `api.resources` (ADR 0134): o plugin declara um recurso (schema Zod, `list`,
+  `get`, `create`, `update`, `delete`, ações e permissões) e o core o expõe em
+  `/api/resources/<plugin>/<id>`, com validação, problem+json, auth e `x-resource` na spec. O
+  recurso sai da API no disable do plugin. As permissões declaradas pelos plugins (recursos e
+  `ctx.http.api`) entram nos papéis e no escopo de API key. Novos: `defineResource`, `ApiResource`,
+  `ResourceAction`, `ResourceActor`, `ResourceCall`; `rolePermissions(role, extra?)`.
+- 0b340df: Auditoria automática das ações do kernel (ADR 0122): `kernel.plugin.enable|disable|reload`,
+  `kernel.config.update` (diff sem segredo), `kernel.secret.update` (só o caminho), `kernel.boot` e
+  `kernel.stop`, com o ator `system` ou o plugin admin. O dreno pedido (`flush`) agora cancela o timer
+  de 1 s do flush.
+- 18c56f3: Retenção da auditoria (ADR 0122): opção `audit.retentionDays` no `createBot` (padrão 1825) e
+  expurgação (no máximo a cada 24 h) que apaga o prefixo vencido da cadeia, gravando `kernel.audit.purge` antes de apagar.
+  Novos eventos de log `audit.purged`, `audit.purge.skipped` e `audit.purge.failed`.
+- cc35cbb: `ctx.audit` (ADR 0122): `record` síncrono com ator do contexto, redação de `details` e prefixo de
+  `action` validado; fila com dreno e cadeia HMAC-SHA256 na coleção `audit` do kernel; `query` e
+  `verify` para plugins admin; `verifyAudit` para o script do app; sinal de observador
+  `audit.dropped` e os eventos de log `audit.flush.failed` e `audit.dropped`.
+- ede77ef: Auditoria pela API (ADR 0133), com a permissão `audit.read`: `GET /api/audit` consulta os eventos
+  com filtros de período, ator, ação, alvo e resultado e cursor `after`; `GET /api/audit/export`
+  exporta os mesmos filtros em CSV ou JSON, em stream, e grava `kernel.audit.export` na auditoria;
+  `POST /api/audit/verify` confere a cadeia de hash. O `onBehalfOf` do ator aparece nas linhas.
+  Evento de log novo: `audit.export.failed`.
+- ae1e2b9: Comando `bridger openapi [módulo] [--out <arquivo>]` (binário `bridger`): escreve a spec OpenAPI do
+  core e dos plugins do módulo sem transport nem porta.
+- 1c176d8: Conexão e tempo real pela API (ADR 0129, M7-5): `GET /api/connection` (estado, transport, conta
+  conectada), `POST /api/connection/pairing-code` e `POST /api/connection/logout`, e `GET /api/events`
+  em SSE com `connection.status`, `connection.qr`, `connection.pairing-code`, `log` e
+  `plugin.status`, filtrados por permissão e por `?types=`, com retomada pelo `Last-Event-ID`. O
+  `Transport` ganha os métodos opcionais `requestPairingCode(phone)` e `logout()`, e a
+  `ApiOperation`, `stream: true` para descrever resposta SSE na spec.
+- f7f5501: Histórico de logs pela API (ADR 0135): `GET /api/logs`, com `logs.read`, devolve as últimas 1000
+  linhas do processo no formato do evento `log` do SSE, da mais nova para a mais antiga, com filtros
+  `level` (mínimo), `plugin`, `event`, `from`/`to` e cursor `before`. Caminho sem rota sob
+  `/api/plugins/<nome>/` responde 404 problem+json explicando que a rota é do plugin.
+- b8b6b6e: Plugins e config na API (ADR 0131, M7-6): `GET /api/plugins` (`plugins.read`, permissão nova),
+  `POST /api/plugins/{name}/enable` e `/disable` (`plugins.manage`), `GET /api/plugins/{name}/config`
+  com os segredos mascarados e o JSON Schema (`config.read`) e `PUT /api/plugins/{name}/config`
+  (`config.write`; segredo novo exige `secrets.write`, segredo com `********` mantém o valor). As
+  escritas entram na auditoria em nome do ator da requisição. `ctx.http.api` recusa com
+  `BotConfigError` operação de plugin em `/config`, `/enable` ou `/disable`, caminhos do core.
+- 6ab377b: Pseudônimo de volta ao id (ADR 0132): com a `BRIDGER_SECRET_KEY`, o bot guarda cada par
+  `pseudônimo → id` cifrado no storage, e `GET /api/pseudonyms/{pseudonym}` devolve o id real a quem
+  tem a permissão nova `pseudonyms.resolve` (owner e admin). Toda consulta grava
+  `kernel.pseudonym.resolve` na auditoria, sem o id. Evento de log novo:
+  `bot.pseudonym.map-failed`. Os logs continuam só com o pseudônimo.
+- 0889b0c: Envio de template e janela de atendimento (ADR 0124): `OutgoingContent` ganha `template` atrás da
+  capability `send.template`, o transport pode expor `window(chatId)`, e `ctx.send.window(chatId)`
+  devolve o estado da janela (`null` onde a plataforma não tem). Novos exports:
+  `ConversationWindowError` (a fila não o re-tenta), `ConversationWindow` e `TemplateParam`.
+- 3cc14d5: Quebra (M7-4, ADR 0128): sem `api.auth`, o bot só aceita `BotConfig.http` cujo `hostname` é
+  loopback (`127.0.0.0/8`, `::1`, `localhost`). Hostname ausente (todas as interfaces), `0.0.0.0`, `::`
+  ou outro lança `BotConfigError` na criação do bot. Para expor a API, configure `api.auth`; para
+  desenvolvimento local, use `createHttp({ port, hostname: '127.0.0.1' })`.
+- abc53c7: Referência de mídia serializável (ADR 0136, #297): `ctx.media.ref(media)` devolve um `MediaRef`
+  JSON para guardar no storage, e `ctx.media.fromRef(ref)` devolve uma `Media` lazy que baixa
+  depois, mesmo após um restart. Capability nova `media.ref`, com o método opcional
+  `Transport.mediaFromRef(data)` (tipo `MediaLoader` no `@usebridger/core/adapter`) e o
+  `MediaSource.ref` para o transport dar o dado da referência. A mídia que a plataforma não tem
+  mais rejeita o download com `MediaExpiredError`.
+  
+  O Baileys declara `media.ref`: a referência leva a chave da mensagem, a `mediaKey`, o
+  `directPath` e a `url`, e o download pede o reenvio ao celular da conta do bot quando a mídia saiu do CDN. A
+  `mediaKey` decifra o arquivo: trate a referência como segredo. O `FakeTransport` e o perfil
+  `whatsapp` do kit de testes também declaram `media.ref`.
+- e0bcb8b: O payload do `plugin.error` ganha o campo opcional `trace`: o trace (ADR 0120) da mensagem, request ou job em que o erro ocorreu, o mesmo da linha de log. Sem trace ativo, o campo fica ausente (#246).
+- ab54782: Pseudônimo estável do usuário nos logs (ADR 0119, #231). **Muda o valor de `chat` e `sender`.**
+  
+  - **`chat` e `sender`** de toda linha do bot (core, transports, plugins, sinal `log`) saem como pseudônimo `u_…`/`g_…` (HMAC-SHA256 truncado em 16 bytes), com chave derivada por HKDF da `BRIDGER_SECRET_KEY`. O mesmo id dá o mesmo pseudônimo entre restarts; trocar a chave mestra muda todos. Sem a chave, vale só até o restart e o bot loga `bot.pseudonym.ephemeral`. Quem filtrava logs pelo id cru precisa buscar pelo pseudônimo.
+  - **`ctx.pseudonym(id, kind?)`** (sem `kind`, o formato do id decide: `@g.us` é grupo) para o plugin logar algo do usuário sem expor o id.
+  - **Redação de reserva** no `createLogger`: JID (`@s.whatsapp.net`, `@g.us`, `@lid`) e telefone (também o endereço Signal `.0`/`_1.0`) que escaparem em campo, mensagem ou `err` saem como `[REDACTED]`, inclusive no sinal `log` dos observadores. Exporta `isPersonalId` e `redactPersonalIds`.
+  - **CLI `bridger-pseudonym [--group] <id>`** calcula o pseudônimo de um id com a `BRIDGER_SECRET_KEY` do ambiente.
+- 6681792: Correlação (`trace`) e trilha de eventos por mensagem, request e job (ADR 0120, #232).
+  
+  - **`trace`:** cada mensagem (clique, comando nativo, expiração de passo), request HTTP, execução de job e o boot dos plugins ganha um id de 32 hex (W3C Trace Context), guardado num `AsyncLocalStorage`. Ele entra sozinho em toda linha do `createLogger`, inclusive o `ctx.log` dos plugins, e nos `fields` do sinal `log`. O envio sai no trace de quem o enfileirou; um job guarda o trace de quem o agendou como `cause` e roda num trace próprio.
+  - **HTTP:** o `traceparent` válido do request é adotado como `trace`, e a resposta das rotas de plugin e transport devolve o header.
+  - **Trilha:** eventos `message.received`, `message.handled`, `outbound.sent`, `step.entered`, `step.expired`, `job.run` e `http.request`, em `info`, só com fatos e metadados (nunca o texto da mensagem). `createBot({ trail: 'info' | 'debug' | 'off' })` rebaixa ou desliga a trilha sem mexer nos erros. Exportado o tipo `TrailMode`.
+  - Todo logger do `createLogger` carimba o `trace` corrente na linha. Um logger próprio que não vem dele só o leva se o ler do contexto; o sinal `log` o leva sempre.
+
+### Patch Changes
+
+- aabf039: Auth da API sem corridas (ADR 0128): o primeiro owner (bootstrap), o e-mail único e a regra do
+  último owner passam a rodar sob uma trava no storage (`increment` + `update` condicional), então
+  aceites e cadastros simultâneos não criam dois owners nem e-mails repetidos, e dois owners não
+  se desativam juntos. Sem mudança na interface do storage.
+- 14c3f0c: `bridger owner-invite`: o texto de uso e a doc explicam por que é seguro rodar com o bot no ar (travas
+  `users`/`owners` no storage, SQLite em WAL com `busy_timeout`, Postgres com `UPDATE` condicional).
+- a36bc23: Documentação revisada contra o código: páginas e comentários da API sem referências internas de decisão, mais exemplos e as lacunas preenchidas (Telegram, referência de mídia, rotas da API, eventos de log).
+- 48d7580: Descrição do pacote: "Core do Bridger, framework de bots de mensageria extensível por plugins" no
+  lugar de "Kernel do Bridger" (ADR 0129). Sem mudança de API.
+- 0a4c8cd: Logger: um `Error` em qualquer chave dos campos (`{ error }`) sai serializado como o `err`, com `type`, `message`, `stack` e `cause`, em vez de `{}`; no formato `pretty`, vai para as linhas seguintes com o nome do campo. O `plugin-dashboard` passa a logar os erros em `{ err }`.
+- 48ceea9: README e docs do `createBot` deixam claro o mínimo para rodar: o core e um transport
+  (`transport-baileys` ou `transport-web`). Storage, servidor HTTP, API e autenticação são opcionais.
+- 25b0caa: O rate limit de login, aceite de convite e troca de senha da API agora fica no storage (coleção
+  `rateLimits` do namespace `auth`, ADR 0128): reiniciar o bot não zera as contagens e vários
+  processos que dividem o banco compartilham o limite.
+- b7359b5: Correções do `trace` (#246): o timer e o loop do scheduler rodam fora do trace de quem agendou, então `scheduler.storage.failed` não sai mais com o trace de uma mensagem alheia; o `traceparent` de resposta tenta o `set` direto antes de copiar a resposta e devolve a original se a cópia falhar (`Response.error()`); as flags do `traceparent` de entrada voltam na resposta (sem entrada, `01`).
+- 925a198: Trilha cobre edições e fila cheia (#246). `message.edited` gera `message.received` e `message.handled` (com `route: 'edit'`); a espera que vence com a fila do chat cheia emite `step.expired`. `trail` inválido lança `BotConfigError`, não `TypeError`.
+
 ## 0.9.0
 
 ### Minor Changes

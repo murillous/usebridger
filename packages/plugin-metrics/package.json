@@ -1,6 +1,6 @@
 {
   "name": "@usebridger/plugin-metrics",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Plugin oficial do Bridger: serviço de métricas declarativo sobre o prom-client, histórico por hora e dia e GET /metrics do bot.",
   "license": "Apache-2.0",
   "repository": {
