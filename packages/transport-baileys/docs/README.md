@@ -118,6 +118,13 @@ visualização única ou a mídia traz a flag `viewOnce`.
 `media.stream()` chamam o `downloadMediaMessage` do Baileys, que pede ao aparelho o reenvio quando
 o link expirou.
 
+`ctx.media.ref(media)` guarda a chave da mensagem, a `mediaKey`, o `directPath` e a `url`
+([ADR 0136](../../../docs/adr/0136-referencia-de-midia-serializavel.md)). A `mediaKey` decifra o
+arquivo, então trate a referência como segredo. O download por `ctx.media.fromRef` usa a conexão
+do momento e também pede o reenvio, que vai ao celular principal da conta do bot, não ao de quem
+enviou. Se nem o CDN nem esse celular têm a mídia, rejeita
+com `MediaExpiredError`. Sem conexão, rejeita com `baileys: sem conexão`.
+
 ### Contatos e telefone
 
 `sender.id` e os ids de `mentions` são o JID nativo sem o aparelho, de telefone
@@ -262,7 +269,7 @@ uma mensagem que chegou no mesmo lote pode vir incorporada a ela, sem evento pr�
 
 O transport declara todas as capabilities do core (plano §6.10): `groups`, `groups.add`,
 `groups.remove`, `groups.promote`, `mentions`, `reactions`, `typing`, `send.text`, `send.image`, `send.video`, `send.audio`,
-`send.voice`, `send.sticker`, `send.document`, `media.download`, `message.edit`,
+`send.voice`, `send.sticker`, `send.document`, `media.download`, `media.ref`, `message.edit`,
 `message.delete`, `polls`, `quoted` e `pairing`. Todo plugin que declara `requires` com elas carrega.
 `pairing` diz ao bot que a sessão se pareia por QR ou código: com ela, credencial rejeitada
 (`auth-failed`) limpa a sessão e pareia de novo, em vez de parar o bot (ADR 0064).

@@ -91,6 +91,10 @@ await depois.stop();
 - Use o `TestBot` devolvido daí em diante. O storage fecha no `stop()` do último bot; o `stop()`
   do anterior só confirma que ele parou.
 
+A mídia do `receive()` tem referência (capability `media.ref`,
+[ADR 0136](../../../docs/adr/0136-referencia-de-midia-serializavel.md)): a do `FakeTransport` são
+os próprios bytes, então o `ctx.media.fromRef` do bot novo baixa o que o antigo guardou.
+
 ## Mensagem de entrada
 
 O `receive()` recebe só o que importa para o teste. O resto vem preenchido com padrões:

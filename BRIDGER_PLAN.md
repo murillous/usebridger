@@ -388,6 +388,7 @@ previsão, confirmada quando cada transport nascer, depois do v1.0.
 | `send.album` | — | ✓ | ✓ | — |
 | `send.template` | — | — | — | — |
 | `media.download` | ✓ | ✓ | ✓ | ✓ |
+| `media.ref` | ✓ | ✓ | — | — |
 | `message.edit` | ✓ | ✓ | ✓ | ✓ |
 | `message.delete` | ✓ | ✓ | ✓ | ✓ |
 | `polls` | ✓ | ✓ | ✓ | — |

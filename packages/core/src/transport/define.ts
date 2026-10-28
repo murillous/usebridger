@@ -4,6 +4,7 @@
 
 import * as LOG from '#logger/events.ts';
 import type { Chat, Contact, Message } from '#message/types.ts';
+import type { JsonValue } from '#storage/types.ts';
 import {
   assertCanSend,
   assertCapability,
@@ -121,6 +122,7 @@ function assemble(
     raw,
     isChatAdmin,
     window,
+    mediaFromRef,
   } = spec;
   const remove = spec.delete;
   return {
@@ -139,6 +141,12 @@ function assemble(
       isChatAdmin: (chat: Chat, contact: Contact) => isChatAdmin.call(spec, chat, contact),
     }),
     ...(window !== undefined && { window: (chatId: string) => window.call(spec, chatId) }),
+    ...(mediaFromRef !== undefined && {
+      mediaFromRef: (data: JsonValue) => {
+        assertCapability(holder, 'media.ref');
+        return mediaFromRef.call(spec, data);
+      },
+    }),
     connect: () => spec.connect(),
     disconnect: () => spec.disconnect(),
     on: (event, handler) => events.on(event, handler),

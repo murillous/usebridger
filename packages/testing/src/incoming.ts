@@ -140,5 +140,8 @@ function mediaSource(media: IncomingAttachment, defaultMimetype: string): MediaS
     size: data.length,
     ...(fileName === undefined ? null : { fileName }),
     download: async () => data,
+    // Os próprios bytes viram a referência (ADR 0136): o `FakeTransport.mediaFromRef` os devolve,
+    // inclusive num bot recriado, como um restart.
+    ref: data.toString('base64'),
   };
 }

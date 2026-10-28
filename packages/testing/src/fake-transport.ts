@@ -10,6 +10,7 @@ import type {
   FormattedText,
   GroupMetadata,
   GroupParticipantAction,
+  JsonValue,
   Message,
   MessageKey,
   OutgoingAction,
@@ -27,6 +28,7 @@ import {
   CAPABILITIES,
   groupActionCapability,
   type Interaction,
+  type MediaLoader,
   type TransportEventHandler,
   type TransportEventName,
   type TransportEvents,
@@ -270,6 +272,15 @@ export class FakeTransport implements Transport {
   ): Promise<void> {
     assertCapability(this, groupActionCapability(action));
     this.participantUpdates.push({ groupId, participantIds, action });
+  }
+
+  /** Os bytes da referência que o `receive()` deu à mídia (ADR 0136). */
+  mediaFromRef(data: JsonValue): MediaLoader {
+    assertCapability(this, 'media.ref');
+    if (typeof data !== 'string')
+      throw new TypeError('FakeTransport: referência de mídia inválida');
+    const bytes = Buffer.from(data, 'base64');
+    return { download: async () => bytes };
   }
 
   /**

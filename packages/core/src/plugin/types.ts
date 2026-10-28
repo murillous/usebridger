@@ -22,6 +22,7 @@ import type { Groups } from '#groups/groups.ts';
 import type { PluginHttpRoutes } from '#http/types.ts';
 import type { PseudonymKind } from '#logger/pseudonym.ts';
 import type { Logger } from '#logger/types.ts';
+import type { MediaRefs } from '#message/media-ref.ts';
 import type { Contact, Message } from '#message/types.ts';
 import type { Observer, ObserverSignalName } from '#observers/observers.ts';
 import type { Outbound } from '#outbound/types.ts';
@@ -133,6 +134,11 @@ export interface PluginContext<
   readonly send: Outbound;
   /** Metadados e participantes de grupo (ADR 0036). */
   readonly groups: Groups;
+  /**
+   * Referência JSON de uma mídia, para guardar no storage e baixar depois, mesmo após um restart
+   * (capability `media.ref`, ADR 0136).
+   */
+  readonly media: MediaRefs;
   /**
    * Rotas HTTP e WebSocket do plugin sob `/plugins/<nome>` (ADR 0072). Sem `http` na config do
    * bot, `route`, `ws` e `api` lançam `BotConfigError` (o plugin cai no `setup`). `api` monta as

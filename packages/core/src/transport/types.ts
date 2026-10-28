@@ -5,8 +5,9 @@
 import type { CommandInfo } from '#commands/command.ts';
 import type { HttpRoutes } from '#http/types.ts';
 import type { Logger } from '#logger/types.ts';
+import type { MediaLoader } from '#message/media.ts';
 import type { Chat, Contact, Message } from '#message/types.ts';
-import type { AuthStateStore } from '#storage/types.ts';
+import type { AuthStateStore, JsonValue } from '#storage/types.ts';
 import type { FormattedText, MessageText } from '#text/format.ts';
 import type { Capability } from './capabilities.ts';
 import type { ConversationWindow } from './window.ts';
@@ -471,6 +472,15 @@ export interface Transport {
    * chat ou quando a plataforma o expira (5 s no Telegram, 10 s no Discord); não há como parar.
    */
   sendTyping(chatId: string, kind: TypingKind): Promise<void>;
+
+  /**
+   * Capability `media.ref` (ADR 0136): o loader de uma mídia a partir do `ref` que o transport deu
+   * ao `MediaSource` dela, talvez em outro processo. Não baixa nada aqui. Dado malformado lança
+   * `TypeError`; mídia que a plataforma não tem mais rejeita o download com `MediaExpiredError`.
+   * Opcional, para não quebrar os adapters existentes: sem ele, `ctx.media.fromRef` lança
+   * `UnsupportedError`.
+   */
+  mediaFromRef?(data: JsonValue): MediaLoader;
 
   /** Capability `groups`. */
   getGroupMetadata(groupId: string): Promise<GroupMetadata>;

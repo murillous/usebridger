@@ -166,7 +166,8 @@ Uploads e mídia ficam em memória, até 256 MiB no total. Acima disso, sai o ma
 
 `send.text`, `send.image`, `send.video`, `send.audio`, `send.document`, `media.download`,
 `actions`, `quoted`, `typing`, `message.edit` e `message.delete`. Sem limites de tamanho. O perfil
-`web` do [kit de testes](../../testing/docs/README.md) declara as mesmas.
+`web` do [kit de testes](../../testing/docs/README.md) declara as mesmas. Não declara `media.ref`:
+os arquivos vivem só em memória, e nenhuma referência sobreviveria ao restart (ADR 0136).
 
 ## CORS, origem e rate limit
 

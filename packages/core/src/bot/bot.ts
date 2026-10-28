@@ -29,6 +29,7 @@ import { createSecretSet } from '#logger/secrets.ts';
 import { createLogSignalTap } from '#logger/signal.ts';
 import { assertTrailMode, createTrail } from '#logger/trail.ts';
 import type { Logger } from '#logger/types.ts';
+import { createMediaRefs } from '#message/media-ref.ts';
 import { chatAllowed } from '#middleware/chat-filter.ts';
 import { Observers } from '#observers/observers.ts';
 import { createOutbound, enqueueAction } from '#outbound/actions.ts';
@@ -312,6 +313,7 @@ export function createBot(config: BotConfig): Bot {
   // O plugin vê o envio e as ações (ADR 0036): a fila (close, stats) fica com o kernel.
   const send = createOutbound(outbound, transport);
   const groups = createGroups(transport, enqueueAction(outbound, transport));
+  const media = createMediaRefs(transport);
   // Cópia: o plugin recebe um `ReadonlySet`, mas um cast não deve alterar o do transport.
   const capabilities: ReadonlySet<Capability> = new Set(transport.capabilities);
   // Tenant da mensagem ou do evento em andamento (ADR 0068): o storage dos plugins e os jobs
@@ -576,6 +578,7 @@ export function createBot(config: BotConfig): Bot {
       scheduler,
       send,
       groups,
+      media,
       http,
       onHttpError: pluginErrors.report,
       transport: {

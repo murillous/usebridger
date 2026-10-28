@@ -479,6 +479,33 @@ raw(source: Message | Interaction): unknown {
 - Sem `raw`, o `ctx.unsafe.raw()` devolve `undefined`. Se guardar o objeto custa caro na sua
   plataforma, deixe o método de fora.
 
+### Referência de mídia
+
+Com a capability `media.ref`, o plugin guarda a referência de uma mídia e a baixa depois, mesmo
+após um restart ([Mensagem](message.md#referência-de-mídia),
+[ADR 0136](../../../docs/adr/0136-referencia-de-midia-serializavel.md)). O transport faz duas
+coisas:
+
+- Põe no `MediaSource.ref` o JSON que basta para baixar a mídia sem a mensagem: o `file_id` no
+  Telegram, a chave e o caminho no WhatsApp. Mídia sem `ref` não tem referência.
+- Implementa `mediaFromRef(data)`, que recebe esse JSON, talvez em outro processo, e devolve o
+  loader (`{ download, stream? }`) sem baixar nada. Os metadados vêm da referência.
+
+```ts
+mediaFromRef(data: JsonValue): MediaLoader {
+  if (typeof data !== 'object' || data === null || typeof data.fileId !== 'string') {
+    throw new TypeError('telegram: referência de mídia inválida');
+  }
+  const fileId = data.fileId;
+  return { download: () => downloadFile(fileId) };
+}
+```
+
+- Dado malformado lança `TypeError`. A mídia que a plataforma não tem mais rejeita o download com
+  `MediaExpiredError`, para o plugin saber que tentar de novo não adianta.
+- O core confere a capability e recusa a referência de outro transport antes de chamar o método.
+- Não declare `media.ref` se a mídia não sobrevive ao processo (arquivos só em memória).
+
 ### Tipos sem equivalente
 
 O que não tem tipo no core vai como `unknown`, com o objeto bruto no `raw()`: o `dice`, o `game`,
@@ -609,7 +636,7 @@ mantém cache por grupo e o invalida em `group.participants` e `group.updated` (
 
 `actions`, `groups`, `groups.add`, `groups.remove`, `groups.promote`, `mentions`, `reactions`, `typing`,
 `send.text`, `send.image`, `send.video`, `send.audio`, `send.voice`, `send.sticker`, `send.document`, `send.album`, `send.template`, `media.download`,
-`message.edit`, `message.delete`, `polls`, `quoted`, `pairing`.
+`media.ref`, `message.edit`, `message.delete`, `polls`, `quoted`, `pairing`.
 
 `pairing` não é de envio: diz que a sessão se pareia por QR ou código (`connection.qr`,
 `connection.pairing-code`). Com ela, credencial rejeitada (`auth-failed`) limpa a sessão e pareia

@@ -12,6 +12,7 @@ import type {
   FormattedText,
   GroupMetadata,
   GroupParticipantAction,
+  JsonValue,
   LogEvent,
   Logger,
   LogLevel,
@@ -24,6 +25,7 @@ import type {
 } from '@usebridger/core';
 import {
   type Interaction,
+  type MediaLoader,
   type Transport,
   type TransportDeps,
   type TransportEventHandler,
@@ -65,6 +67,7 @@ import {
 import { renderWhatsApp } from './format.ts';
 import * as LOG from './log-events.ts';
 import { type ILogger, toBaileysLogger } from './logger.ts';
+import { expiredOr, refMessage } from './media-ref.ts';
 import { type NormalizeEnv, nativeOf, toMessage } from './normalize.ts';
 import { toContent, toGroupMetadata, toQuoted, toWAKey } from './outgoing.ts';
 import { PollBook, pollUpdateOf, toPollVote } from './polls.ts';
@@ -149,6 +152,8 @@ export class BaileysTransport implements Transport {
     'send.sticker',
     'send.document',
     'media.download',
+    // Referência com a media key, que baixa de novo após restart e pede o reenvio ao aparelho.
+    'media.ref',
     'message.edit',
     'message.delete',
     'polls',
@@ -165,6 +170,8 @@ export class BaileysTransport implements Transport {
   readonly #deps: TransportDeps;
   readonly #events: TypedEmitter<TransportEvents>;
   #socket: BaileysSocket | null = null;
+  /** Download do socket atual, para as mídias que voltam por referência. */
+  #env: NormalizeEnv | null = null;
   #self: Contact | null = null;
   /** Sobe a cada `connect()`/`disconnect()`: invalida a tentativa que ainda estava começando. */
   #attempt = 0;
@@ -261,6 +268,7 @@ export class BaileysTransport implements Transport {
       });
     };
     const env = this.#normalizeEnv(socket, state, logger);
+    this.#env = env;
     const contacts = this.#contacts;
     const polls = this.#polls;
 
@@ -587,6 +595,25 @@ export class BaileysTransport implements Transport {
       const list = failed.map((r) => `${r.jid ?? '?'} (${r.status})`).join(', ');
       throw new Error(`baileys: ${action} recusado para ${list}`);
     }
+  }
+
+  /**
+   * Mídia de uma referência guardada (ADR 0136). Baixa pela conexão do momento do download, que
+   * pede o reenvio ao aparelho se a mídia saiu do CDN; sem conexão, falha sem dizer que expirou.
+   */
+  mediaFromRef(data: JsonValue): MediaLoader {
+    const raw = refMessage(data);
+    // `async`: sem conexão, a falha chega como rejeição, como a do download.
+    const env = async (): Promise<NormalizeEnv> => {
+      this.#connected();
+      return this.#env as NormalizeEnv;
+    };
+    return {
+      download: async () =>
+        (await env()).download(raw).catch((e: unknown) => Promise.reject(expiredOr(e))),
+      stream: async () =>
+        (await env()).stream(raw).catch((e: unknown) => Promise.reject(expiredOr(e))),
+    };
   }
 
   /** Socket da conexão atual; sem ele, a ação falha na hora em vez de esperar. */
