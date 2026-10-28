@@ -3,8 +3,62 @@
 
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal' | 'silent';
 
-/** Campos estruturados de uma linha de log (ex.: `{ chatId, err }`). */
-export type LogFields = Readonly<Record<string, unknown>>;
+/** Nível em que uma linha pode sair (`silent` só desliga o logger). */
+export type EmitLevel = Exclude<LogLevel, 'silent'>;
+
+/**
+ * Dicionário de campos do kernel: o mesmo nome para a mesma coisa em core, transports e
+ * plugins, para filtrar no agregador sem conhecer quem logou. Outros nomes continuam livres.
+ */
+export interface StandardLogFields {
+  /** O erro; serializado com `type`, `message`, `stack` e `cause`. */
+  readonly err?: unknown;
+  /** Nome estável do evento; quem o preenche é o `log.event`. */
+  readonly event?: string;
+  /** Nome do app (binding base, via `logBindings`). */
+  readonly service?: string;
+  /** Sessão do bot (binding base, posto pelo bot). */
+  readonly bot?: string;
+  /** Versão do app (binding base, via `logBindings`). */
+  readonly version?: string;
+  /** Ambiente do app, como `production` (binding base, via `logBindings`). */
+  readonly env?: string;
+  readonly plugin?: string;
+  readonly transport?: string;
+  /** Pseudônimo do chat (o logger do bot troca o id). */
+  readonly chat?: string;
+  /** Pseudônimo de quem enviou a mensagem. */
+  readonly sender?: string;
+  readonly messageId?: string;
+  readonly command?: string;
+  /** Passo de conversa. */
+  readonly step?: string;
+  /** Papel (`role`) de comando. */
+  readonly role?: string;
+  /** Rota HTTP ou do transport. */
+  readonly route?: string;
+  /** Status de algo (HTTP, plugin, conexão). */
+  readonly status?: string | number;
+  /** Motivo em texto curto; o erro vai em `err`. */
+  readonly reason?: string;
+  readonly durationMs?: number;
+  /** Id de correlação; reservado para uso futuro. */
+  readonly trace?: string;
+}
+
+/** Campos estruturados de uma linha de log (ex.: `{ chat, err }`). */
+export type LogFields = StandardLogFields & Readonly<Record<string, unknown>>;
+
+/** Nome de evento: `<área>.<coisa>.<verbo>`, em kebab-case, com pelo menos dois segmentos. */
+export type LogEventName = `${string}.${string}`;
+
+/** Evento de log com nível e mensagem fixos (ver `defineLogEvent`). */
+export interface LogEvent {
+  readonly name: LogEventName;
+  readonly level: EmitLevel;
+  /** Mensagem para quem lê, sem valores: eles vão nos campos. */
+  readonly message: string;
+}
 
 export interface Logger {
   readonly level: LogLevel;
@@ -14,6 +68,8 @@ export interface Logger {
   warn(message: string, fields?: LogFields): void;
   error(message: string, fields?: LogFields): void;
   fatal(message: string, fields?: LogFields): void;
-  /** Logger filho que acrescenta `bindings` (ex.: `{ plugin }`, `{ chatId }`) a toda linha. */
+  /** Emite `event` no nível dele, com `msg` = a mensagem e o campo `event` = o nome. */
+  event(event: LogEvent, fields?: LogFields): void;
+  /** Logger filho que acrescenta `bindings` (ex.: `{ plugin }`, `{ chat }`) a toda linha. */
   child(bindings: LogFields): Logger;
 }

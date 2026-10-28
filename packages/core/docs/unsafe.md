@@ -1,8 +1,6 @@
 # Escape hatch `ctx.unsafe`
 
-Saída explícita para quando a API normalizada ainda não cobre o que o plugin precisa
-([ADR 0009](../../../docs/adr/0009-escape-hatch-unsafe-native.md),
-[ADR 0062](../../../docs/adr/0062-objeto-bruto-da-mensagem.md)). Dá acesso ao objeto nativo do
+Use quando a API normalizada do Bridger ainda não cobre o que o seu plugin precisa. Dá acesso ao objeto nativo do
 transport em `native` (o socket do Baileys, o `Client` do discord.js, o `Bot` do grammY), e ao
 objeto bruto de cada mensagem em `raw()`.
 
@@ -14,7 +12,7 @@ import type { Client } from 'discord.js';
 export const plugin = definePlugin({
   name: 'servidores',
   version: '1.0.0',
-  engine: '^0.1.0',
+  engine: '<1.0.0',
   transports: ['discord'], // o uso do escape hatch prende o plugin a este transport
   setup(ctx) {
     const client = ctx.unsafe.native as Client; // `unknown`: estreite antes de usar
@@ -47,7 +45,7 @@ import type { Message as DiscordMessage } from 'discord.js';
 export const plugin = definePlugin({
   name: 'embeds',
   version: '1.0.0',
-  engine: '^0.1.0',
+  engine: '<1.0.0',
   transports: ['discord'],
   setup(ctx) {
     ctx.commands.add(
@@ -82,7 +80,7 @@ const pushName = raw?.pushName;
 - A mensagem de um clique num botão ou de um comando nativo devolve o objeto bruto da
   **interação** (o token de interação no Discord, a `callback_query` no Telegram).
 - A busca é pela identidade do objeto: uma cópia (`{ ...message }`) devolve `undefined`. Passe a
-  `Message` que o kernel entregou.
+  `Message` que o core entregou.
 - Não guarde o objeto por muito tempo: o transport o solta junto com a mensagem.
 
 ## O aviso no log
@@ -100,14 +98,14 @@ transport, em vez de ele quebrar em runtime.
 O aviso serve de medição: o que os plugins buscam no `native` indica o que promover a API
 oficial.
 
-## Para quem monta o contexto (kernel)
+## Para quem monta o contexto (core)
 
-Peça interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md)).
+Peça interna do core, não exportada. Esta seção só interessa a quem mexe no core.
 
 ```ts
 import { createUnsafeAccess } from '#unsafe/access.ts';
 
-// um por bot; `interactionOf` acha a interação de onde o kernel montou a mensagem
+// um por bot; `interactionOf` acha a interação de onde o core montou a mensagem
 const unsafeAccess = createUnsafeAccess({ transport, log, interactionOf });
 const unsafe = unsafeAccess.forPlugin(manifest); // quantos quiser por plugin
 ```

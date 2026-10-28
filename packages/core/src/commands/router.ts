@@ -1,5 +1,6 @@
 import type { BotOwner } from '#config/owners.ts';
 import type { BotMessageContext, MessageContext } from '#context.ts';
+import * as LOG from '#logger/events.ts';
 import type { Chat, Contact, Media, Message } from '#message/types.ts';
 import { parseArgs } from './args.ts';
 import {
@@ -23,11 +24,11 @@ import {
 } from './roles.ts';
 
 /**
- * Porta para consultar admins de grupo. Vem do transport (`isChatAdmin` ou capability `groups`,
- * ADR 0055); o core não importa transport, então quem compõe o bot injeta. Recebe o chat
+ * Porta para consultar admins de grupo. Vem do transport (`isChatAdmin` ou capability `groups`);
+ * o core não importa transport, então quem compõe o bot injeta. Recebe o chat
  * inteiro, porque no Discord o admin é do servidor (`parentId`), e o contato inteiro, porque o id
  * do remetente e o do participante podem vir em espaços diferentes (no WhatsApp, LID e JID de
- * telefone), e o telefone é o que os liga (ADR 0042).
+ * telefone), e o telefone é o que os liga.
  */
 export type IsGroupAdmin = (chat: Chat, sender: Contact) => boolean | Promise<boolean>;
 
@@ -35,7 +36,7 @@ export interface CommandRouterOptions {
   /**
    * Padrão: `'!'`. Comparado sem diferenciar caixa; vazio faz a primeira palavra ser o token. Uma
    * função resolve o prefixo pelo chat da mensagem (no bot, o override do chat ou o padrão do
-   * tipo, ADR 0059) e deve devolver o texto já validado e em minúsculas.
+   * tipo) e deve devolver o texto já validado e em minúsculas.
    */
   readonly prefix?: string | ((chat: Chat) => string);
   /**
@@ -53,7 +54,7 @@ export interface CommandRouterOptions {
   readonly isGroupAdmin?: IsGroupAdmin;
   /** Registro a usar; padrão: um novo. */
   readonly registry?: CommandRegistry;
-  /** Papéis custom (ADR 0031); padrão: um registro novo, vazio. */
+  /** Papéis custom; padrão: um registro novo, vazio. */
   readonly roles?: RoleRegistry;
   /**
    * Comando exige um papel custom que nenhum plugin carregado define. O comando é recusado
@@ -100,7 +101,7 @@ export type DispatchResult =
     }
   | {
       readonly consumed: true;
-      /** Comando com `background: true`: o `run` começou e `dispatch` não o espera (ADR 0083). */
+      /** Comando com `background: true`: o `run` começou e `dispatch` não o espera. */
       readonly status: 'background';
       readonly command: MatchedCommand;
       /** Assenta quando o `run` termina, com `ran` ou `failed`. Nunca rejeita. */
@@ -117,13 +118,13 @@ export interface CommandRouter {
   match(message: Message, text?: string | null): CommandMatch | null;
   /**
    * Casa, valida papel e `accepts` e roda. Nunca rejeita: erros vêm em `status: 'failed'`. Com
-   * `invocation`, roda o comando dado sem casar o texto (o clique num botão, ADR 0058, ou o
-   * comando nativo da plataforma, ADR 0060).
+   * `invocation`, roda o comando dado sem casar o texto (o clique num botão, ou o
+   * comando nativo da plataforma).
    */
   dispatch(ctx: MessageContext, invocation?: CommandInvocation): Promise<DispatchResult>;
   /**
    * Comandos registrados que o remetente de `ctx.message` passa no papel, com a regra do
-   * `dispatch`: owner passa em todos, e papel sem dono, erro ou prazo recusam (ADR 0031). Não
+   * `dispatch`: owner passa em todos, e papel sem dono, erro ou prazo recusam. Não
    * confere `accepts`. Nunca rejeita: a falha de uma consulta vai para `ctx.log` e tira o comando.
    */
   allowed(ctx: Omit<RoleContext, 'command'>): Promise<RegisteredCommand[]>;
@@ -309,7 +310,7 @@ export function createCommandRouter(options: CommandRouterOptions = {}): Command
           { ...ctx, command: name },
           { plugin: entry.plugin, name, invokedAs: name },
         ).catch((error: unknown) => {
-          ctx.log.warn(`consulta do papel "${role}" falhou: comando fora da lista`, {
+          ctx.log.event(LOG.roleFailed, {
             role,
             command: name,
             err: error,

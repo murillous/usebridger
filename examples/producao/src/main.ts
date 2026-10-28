@@ -15,7 +15,7 @@ const bot = createBot({
   // Fora da pasta do código: o volume do Docker ou a pasta que entra no backup.
   storage: sqlite({ path: 'data/bot.sqlite' }),
   // Com ao menos uma rota de plugin (a do `avisos`), a porta abre e responde também `/health`.
-  http: createHttp({ port: 3000 }),
+  http: createHttp({ port: 3000, hostname: '127.0.0.1' }),
   plugins: [pareamento, ping, avisos],
   // Uma linha JSON por evento no stdout, que o supervisor guarda e o agregador lê.
   logLevel: 'info',

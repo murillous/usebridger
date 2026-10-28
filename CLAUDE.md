@@ -1,17 +1,17 @@
 # CLAUDE.md
 
-Monorepo do **Bridger**, kernel de bot de mensageria extraído do LumaBot. Plano e roadmap:
+Monorepo do **Bridger**, framework de bots de mensageria extraído do LumaBot. Plano e roadmap:
 `BRIDGER_PLAN.md`; o porquê de cada decisão: `docs/adr/`. Siga as decisões
 registradas; para mudar uma, proponha um ADR novo que a substitua.
 
 ## Onde você está
 
-- **Kernel** (`packages/*`): pnpm workspace, TypeScript, Node 24+. Setup, comandos, layout de
-  pacote, imports e regras do Biome estão no `README.md` — leia antes de criar ou mexer num
-  pacote.
+- **Pacotes** (`packages/*`): pnpm workspace, TypeScript, Node 24+. Setup, comandos, layout de
+  pacote, imports e regras do Biome estão no `CONTRIBUTING.md` (seção "Desenvolvimento do
+  monorepo") — leia antes de criar ou mexer num pacote.
 - O LumaBot (app de referência, plugins da Luma e `legacy/`) vive em `murillous/LumaBot` e usa
   os pacotes do npm ([ADR 0080](docs/adr/0080-repositorios-separados.md),
-  [ADR 0082](docs/adr/0082-plugins-da-luma-no-lumabot.md)). O kernel publica só os plugins
+  [ADR 0082](docs/adr/0082-plugins-da-luma-no-lumabot.md)). O monorepo publica só os plugins
   oficiais `plugin-metrics` e `plugin-dashboard` ([ADR 0103](docs/adr/0103-plugins-oficiais-de-metricas-e-dashboard.md)).
 
 ## Git
@@ -24,7 +24,8 @@ Commits em Conventional Commits, descrição em PT-BR, com o ID do roadmap:
 
 ## Convenções
 
-O Biome barra default export, `../`, `process.env` fora da config e `catch` vazio. Além dele:
+O Biome barra default export, `../`, `process.env` fora da config, `catch` vazio e log sem `event`
+nos pacotes ([ADR 0118](docs/adr/0118-contrato-de-log-estruturado.md)). Além dele:
 
 - Comentários em PT-BR explicando o **porquê**; o óbvio fica sem comentário.
 - Erro sempre tem destino: tratado, relançado ou registrado com fallback explícito.

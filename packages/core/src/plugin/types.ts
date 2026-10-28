@@ -3,6 +3,7 @@
 // (M1-16). Os campos do contexto vêm dos contratos de cada módulo.
 
 import type { z } from 'zod';
+import type { PluginAudit } from '#audit/types.ts';
 import type { BotStats, PluginAdmin } from '#bot/config.ts';
 import type { ConnectionInfo } from '#bot/connection-info.ts';
 import type {
@@ -18,8 +19,10 @@ import type { RoleCheck, RoleName } from '#commands/roles.ts';
 import type { Conversations } from '#conversations/conversations.ts';
 import type { BotEventName, EventSubscriber, ListenerContext } from '#events/types.ts';
 import type { Groups } from '#groups/groups.ts';
-import type { HttpRoutes } from '#http/types.ts';
+import type { PluginHttpRoutes } from '#http/types.ts';
+import type { PseudonymKind } from '#logger/pseudonym.ts';
 import type { Logger } from '#logger/types.ts';
+import type { MediaRefs } from '#message/media-ref.ts';
 import type { Contact, Message } from '#message/types.ts';
 import type { Observer, ObserverSignalName } from '#observers/observers.ts';
 import type { Outbound } from '#outbound/types.ts';
@@ -30,7 +33,7 @@ import type { Capability } from '#transport/capabilities.ts';
 import type { ConnectionStatus, Unsubscribe } from '#transport/types.ts';
 import type { Unsafe } from '#unsafe/types.ts';
 
-/** Textos ao usuário, sobrescrevíveis pela config (ADR 0022). */
+/** Textos ao usuário, sobrescrevíveis pela config. */
 export type PluginMessages = Readonly<Record<string, string>>;
 
 export interface PluginManifest {
@@ -50,7 +53,7 @@ export interface PluginManifest {
   /** Carrega depois destes, sem exigir que existam. */
   readonly after?: readonly string[];
   /**
-   * Plugins de que este usa serviços opcionais (ADR 0095): nome → faixa semver, como no
+   * Plugins de que este usa serviços opcionais: nome → faixa semver, como no
    * `dependsOn`. Carregam antes deste, mas sem impedir a carga se estiverem ausentes, ignorados,
    * desligados ou fora da faixa (aí o boot avisa em `warn`); recarregar, desligar ou ligar um
    * deles recarrega este em cascata. É o par do `services` do comando: o comando que exige o
@@ -70,20 +73,25 @@ export interface PluginContext<
     /** `messages` do plugin já mesclado com o que a config sobrescreveu. */
     readonly messages: TMessages;
   };
-  /** Config validada pelo schema do plugin (M1-13). */
+  /** Config validada pelo schema do plugin. */
   readonly config: TConfig;
-  /** Logger com `plugin` no contexto (M1-14). */
+  /** Logger com `plugin` no contexto. */
   readonly log: Logger;
+  /**
+   * Pseudônimo estável de um id de chat ou usuário (`u_…`, ou `g_…` com `'group'`), para o
+   * plugin logar ou rotular algo do usuário sem expor o id. Só vai do id ao pseudônimo.
+   */
+  pseudonym(id: string, kind?: PseudonymKind): string;
   /**
    * Aborta quando o contexto é descartado: no `teardown`/reload, ou quando o `setup` falha ou
    * estoura o prazo (`reason` = o erro do `setup`). Repasse ao trabalho de fundo do plugin
-   * (ADR 0029). Descartado o contexto, `send` (com as ações), `groups`, `storage` e
+   *. Descartado o contexto, `send` (com as ações), `groups`, `storage` e
    * `scheduler.at`/`cancel` rejeitam com `ContextExpiredError`.
    */
   readonly signal: AbortSignal;
   readonly commands: {
     add(definition: CommandDefinition): void;
-    /** Comandos registrados por todos os plugins carregados, na ordem de registro (ADR 0036). */
+    /** Comandos registrados por todos os plugins carregados, na ordem de registro. */
     list(): CommandInfo[];
     /**
      * Só os comandos que o remetente de `for` passa no papel, com a regra do roteador: owner
@@ -93,19 +101,19 @@ export interface PluginContext<
     list(options: { readonly for: Message }): Promise<CommandInfo[]>;
   };
   /**
-   * Papéis custom (ADR 0031): `define('moderador', check)` deixa qualquer plugin exigir
+   * Papéis custom: `define('moderador', check)` deixa qualquer plugin exigir
    * `role: 'moderador'`. O nome vem de `Roles` (declaration merging). Nome reservado lança
    * `TypeError`; nome que já tem dono, `RoleConflictError`. O papel sai no teardown/reload.
    */
   readonly roles: { define<K extends RoleName>(name: K, check: RoleCheck): void };
   /**
-   * Prefixo de comando por chat (ADR 0059): `get(chat)` dá o que vale no chat (para mostrar
+   * Prefixo de comando por chat: `get(chat)` dá o que vale no chat (para mostrar
    * `!ajuda` certo), `set(chatId, prefixo)` grava o override e `reset(chatId)` volta ao padrão do
    * tipo de chat. O override vale para o bot inteiro, não só para o plugin.
    */
   readonly prefixes: Prefixes;
   /**
-   * Passos de conversa (ADR 0056): `define('aluno', handler)` trata a resposta que um comando,
+   * Passos de conversa: `define('aluno', handler)` trata a resposta que um comando,
    * listener ou passo pediu com `ctx.expectReply('aluno')`, sem segurar o chat.
    */
   readonly conversations: Conversations;
@@ -114,23 +122,29 @@ export interface PluginContext<
   /**
    * Storage do plugin. Numa mensagem ou evento de chat com `tenantId`, e em tudo o que o handler
    * dispara, vale o namespace daquele tenant; fora dele (`setup`, timer solto, job sem tenant),
-   * o da sessão, compartilhado entre tenants. `forTenant(id)` escolhe um tenant à mão (ADR 0068).
-   * `shared` é o comum a todas as sessões no mesmo storage, também por tenant (ADR 0071).
+   * o da sessão, compartilhado entre tenants. `forTenant(id)` escolhe um tenant à mão.
+   * `shared` é o comum a todas as sessões no mesmo storage, também por tenant.
    */
   readonly storage: PluginContextStorage;
   readonly scheduler: Scheduler;
   /**
    * Envio e ações sobre mensagens e chats (`react`, `edit`, `delete`, `typing`), todos pela
-   * fila de saída (ADR 0036).
+   * fila de saída.
    */
   readonly send: Outbound;
-  /** Metadados e participantes de grupo (ADR 0036). */
+  /** Metadados e participantes de grupo. */
   readonly groups: Groups;
   /**
-   * Rotas HTTP e WebSocket do plugin sob `/plugins/<nome>` (ADR 0072). Sem `http` na config do
-   * bot, `route` e `ws` lançam `BotConfigError` (o plugin cai no `setup`).
+   * Referência JSON de uma mídia, para guardar no storage e baixar depois, mesmo após um restart
+   * (capability `media.ref`).
    */
-  readonly http: HttpRoutes;
+  readonly media: MediaRefs;
+  /**
+   * Rotas HTTP e WebSocket do plugin sob `/plugins/<nome>`. Sem `http` na config do
+   * bot, `route`, `ws` e `api` lançam `BotConfigError` (o plugin cai no `setup`). `api` monta as
+   * operações da API em `/api/plugins/<nome>`.
+   */
+  readonly http: PluginHttpRoutes;
   /**
    * O que o transport suporta. Para recurso opcional: confira aqui em vez de exigir em
    * `requires` (ex.: reagir se der, responder em texto se não).
@@ -145,43 +159,49 @@ export interface PluginContext<
   readonly session: string;
   /**
    * Último `ConnectionStatus` que o transport emitiu, o mesmo do `connection.status` no
-   * barramento (ADR 0106). `undefined` antes do primeiro evento. Serve a quem sobe depois do
+   * barramento. `undefined` antes do primeiro evento. Serve a quem sobe depois do
    * boot (ou num reload) e não pode esperar o próximo evento.
    */
   connectionStatus(): ConnectionStatus | undefined;
   /**
    * Desde quando a conexão está no ar, quantas vezes reconectou e quando o QR atual expira
-   * (ADR 0111). Leitura O(1); devolve uma cópia.
+   *. Leitura O(1); devolve uma cópia.
    */
   connectionInfo(): ConnectionInfo;
-  /** Nome do bot: `createBot({ name })`, senão o `Transport.name` (ADR 0111). */
+  /** Nome do bot: `createBot({ name })`, senão o `Transport.name`. */
   readonly botName: string;
   /** Contato da própria sessão; `null` até a primeira conexão aberta. */
   readonly self: Contact | null;
   /**
-   * Contadores das filas de entrada e de saída deste bot, os mesmos de `bot.stats()` (ADR 0102).
+   * Contadores das filas de entrada e de saída deste bot, os mesmos de `bot.stats()`.
    * Leitura O(1) e instantânea, para amostrar sob demanda: guarde a série no plugin. Devolve uma
    * cópia.
    */
   stats(): BotStats;
   /**
    * Controle dos plugins (`bot.plugins` e `bot.config`), só para quem está em `adminPlugins` do
-   * `createBot`; os demais recebem `undefined` (ADR 0107). `disable`/`reload` do próprio plugin e
+   * `createBot`; os demais recebem `undefined`. `disable`/`reload` do próprio plugin e
    * `setOverrides` nele rejeitam.
    */
   readonly admin: PluginAdmin | undefined;
   /**
-   * Observa um sinal do core (ADR 0102): `message.handled` quando o bot termina de tratar uma
+   * Observa um sinal do core: `message.handled` quando o bot termina de tratar uma
    * mensagem, `outbound.sent` quando um envio sai da fila de saída. O observador é síncrono e
    * nunca aguardado: não segura o chat. A exceção dele vira `plugin.error` com
    * `phase: 'observer'`. A assinatura sai sozinha no dispose do plugin.
    */
   observe<S extends ObserverSignalName>(signal: S, observer: Observer<S>): Unsubscribe;
   readonly unsafe: Unsafe;
+  /**
+   * Log de auditoria do kernel. `record` é síncrono, nunca aguardado, e leva o ator do
+   * contexto (o plugin, ou o `user`/`contact` do request); `action` começa com `<plugin>.`.
+   * `query` e `verify` só para quem está em `adminPlugins`.
+   */
+  readonly audit: PluginAudit;
 }
 
 /**
- * Comando declarado no manifesto (ADR 0075): o `CommandDefinition` sem `name`, que vem da chave em
+ * Comando declarado no manifesto: o `CommandDefinition` sem `name`, que vem da chave em
  * `commands`. O kernel o registra com `ctx.commands.add` antes do `setup`. `TAccepts` é o
  * `accepts` declarado, que o `definePlugin` infere para tipar o contexto do `run`.
  */
@@ -204,7 +224,7 @@ export interface PluginCommand<
   ): unknown;
   /**
    * O `onReject` do comando, com o contexto do plugin no 3º argumento: a recusa pode usar
-   * `plugin.plugin.messages`, que a config sobrescreve (ADR 0022).
+   * `plugin.plugin.messages`, que a config sobrescreve.
    */
   onReject?(
     ctx: RejectContext<keyof TMessages & string>,
@@ -242,11 +262,11 @@ export interface PluginDefinition<
   TMessages extends PluginMessages = PluginMessages,
   TAccepts extends PluginAccepts = PluginAccepts,
 > extends PluginManifest {
-  /** Schema Zod da config (ADR 0015). */
+  /** Schema Zod da config. */
   readonly config?: TSchema;
   readonly messages?: TMessages;
   /**
-   * Comandos fixos, nome → definição (ADR 0075). Ficam conhecidos sem rodar o plugin, e o kernel
+   * Comandos fixos, nome → definição. Ficam conhecidos sem rodar o plugin, e o kernel
    * os registra antes do `setup`. Declará-los implica `requires: ['send.text']`.
    */
   readonly commands?: {
@@ -256,7 +276,7 @@ export interface PluginDefinition<
       AcceptsOf<TAccepts[K]>
     >;
   };
-  /** Listeners fixos, evento → listener (ADR 0075), registrados antes do `setup`. */
+  /** Listeners fixos, evento → listener, registrados antes do `setup`. */
   readonly on?: PluginListeners<z.output<TSchema>, TMessages>;
   /** O que é dinâmico: depende da config, registra sob condição, prepara estado. */
   setup?(ctx: PluginContext<z.output<TSchema>, TMessages>): void | Promise<void>;

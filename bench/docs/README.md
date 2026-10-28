@@ -58,7 +58,11 @@ coisa.
 | --- | --- | --- |
 | `overhead` | p99 < 1 ms | Uma mensagem por vez, do `emit` do transport até o `bot.settled()`: middlewares, roteador, listeners e fila de saída. 20 mil mensagens depois de 5 mil de aquecimento |
 | `overhead-observed` | p99 < 1 ms | O `overhead` com um observador vazio em `message.handled` e em `outbound.sent` (ADR 0102) |
+| `overhead-metrics` | p99 < 1 ms | O `overhead` com o `plugin-metrics` carregado ([abaixo](#com-o-plugin-metrics)) |
+| `overhead-audit` | p99 < 1 ms | O `overhead` com o `bench-0` chamando `ctx.audit.record` em cada mensagem que chega aos listeners ([abaixo](#com-o-ctxauditrecord)) |
+| `audit-record` | p99 < 1 ms | O `record` em si (síncrono), cronometrado dentro do handler, na mesma carga do `overhead-audit` |
 | `throughput` | ≥ 5.000 msg/s | Rajadas de 5 mil mensagens (10 por chat), esperando o bot assentar entre elas. 200 mil mensagens depois de 20 mil de aquecimento |
+| `throughput-metrics` | ≥ 5.000 msg/s | O `throughput` com o `plugin-metrics` carregado ([abaixo](#com-o-plugin-metrics)) |
 | `idle-memory` | < 80 MB | RSS do processo com o bot no ar e ocioso, depois de um `gc()` |
 | `memory-growth` | < 5 MB | Heap depois de 1M mensagens menos o heap depois de 100 mil de aquecimento, ambos após `gc()` |
 | `boot` | < 500 ms | Do `createBot` ao fim do `start()` com os 20 plugins, num processo frio (sem contar o `import`) |
@@ -72,12 +76,79 @@ Como ler as metas:
 - **`idle-memory`** mede o processo inteiro. Cerca de 45 MB são do próprio Node. O bot vem do
   `@usebridger/testing/bot`, que não importa o Vitest: o entry principal o carrega para registrar
   os matchers, o que soma ~6 MB que não são do kernel. No runner do CI (Linux), o RSS fica uns
-  10 MB acima do medido no Windows.
+  10 MB acima do medido no Windows. Pelo mesmo motivo, o `plugin-metrics` só é importado pelos
+  cenários `*-metrics`: o `prom-client` dele soma ~4 MB a qualquer processo que o carregue.
 - **`overhead`** inclui o custo do `settled()`, então é um teto do overhead real.
 
 O `boot` mede também o primeiro uso do Zod pelas configs dos plugins, como num processo de
 produção. Por isso o runner não cria schema Zod ao carregar: aquecido antes da medida, o Zod
 tirava ~3 ms (12%) do `boot`.
+
+## Com o plugin-metrics
+
+`overhead-metrics` e `throughput-metrics` sobem o bot de referência com o `plugin-metrics`
+oficial, com a config padrão e o storage em memória do `createTestBot`. Medem o caminho da
+mensagem com os observadores dele em `message.handled` e `outbound.sent`: contadores, histograma
+de duração e o rastreio de ativos. O flush periódico fica fora da janela medida: o workload
+configura `flushIntervalMs` em 24 h, para o número não depender de quando o timer dispara. O
+flush do `teardown` roda no `stop()`, depois da medida. O flush, o `query` e o `/metrics` não
+entram nestes cenários.
+
+Não há meta própria no plano §7: valem as do `overhead` e do `throughput`, e a regra de não
+piorar mais de 10% sobre a base. Para medir só eles:
+
+```sh
+pnpm bench --only overhead,overhead-metrics,throughput,throughput-metrics
+```
+
+Linha de base no `plugin-metrics` 0.2.0 (Linux, desktop, sem preparar a máquina), com o bot sem
+o plugin na mesma rodada para comparar:
+
+```
+overhead       0.201 ms (meta < 1; execuções: 0.251, 0.201, 0.202, 0.199, 0.208, 0.197, 0.191, 0.197, 0.201) ok
+overhead-metrics 0.298 ms (meta < 1; execuções: 0.321, 0.304, 0.261, 0.294, 0.298, 0.260, 0.278, 0.309, 0.299) ok
+throughput     11531 msg/s (meta ≥ 5000; execuções: 11446, 11708, 11621, 11284, 11531) ok
+throughput-metrics 7798 msg/s (meta ≥ 5000; execuções: 7332, 7740, 7820, 7798, 7924) ok
+```
+
+O plugin custa ~48% no p99 do `overhead` e ~32% na vazão. As mudanças do redesenho da M6
+(`prom-client`, histórico por delta) comparam com esta base pelo `pnpm bench --baseline`, com
+um checkout de antes delas.
+
+## Com o ctx.audit.record
+
+`overhead-audit` e `audit-record` ([ADR 0122](../../docs/adr/0122-log-de-auditoria-no-kernel.md),
+issue #224) rodam a mesma carga do `overhead` com um listener do `bench-0` que chama
+`ctx.audit.record({ action, target, details })` com `details` pequeno (`{ kind, length }`), com o
+storage em memória do `createTestBot`. O roteador consome o comando antes dos listeners, então o
+`record` roda em 2 de cada 3 mensagens (`oi` e o texto solto). Os dois cenários vêm da mesma
+função (`auditOverhead`): um devolve o p99 do caminho inteiro (`emit` até o `settled()`), o outro o
+p99 do `record`. O `record` que completa 100 eventos inicia o dreno de forma síncrona e paga
+o hash do primeiro (1% das chamadas, na fronteira do p99); o lote inteiro cai em ~0,7% das
+mensagens, acima do p99 do caminho. Um evento descartado (`audit.dropped`) conta como erro e
+falha o cenário.
+
+Só o `overhead-audit` compara com o baseline (no `audit-record`, 10% de ~0,1 ms é ruído). Para
+medir:
+
+```sh
+pnpm bench --only overhead,overhead-audit,audit-record
+```
+
+Não há cenário com `storage-sqlite`: o bench todo roda em memória, e o `record` só enfileira
+(o insert é do dreno, fora do caminho).
+
+Resultado (AMD Ryzen 7 5700U, Linux, Node 24, sem preparar a máquina; mediana de 9 execuções):
+
+```
+overhead       0.175 ms (meta < 1; execuções: 0.175, 0.164, 0.162, 0.179, 0.190, 0.185, 0.170, 0.194, 0.165) ok
+overhead-audit 0.334 ms (meta < 1; execuções: 0.344, 0.334, 0.332, 0.335, 0.333, 0.329, 0.350, 0.320, 0.384) ok
+audit-record   0.149 ms (meta < 1; execuções: 0.149, 0.148, 0.151, 0.147, 0.158, 0.151, 0.148, 0.149, 0.151) ok
+```
+
+O p50 (de uma execução avulsa; o runner só reporta o p99) é ~0,013 ms no `record` e ~0,099 ms no
+caminho inteiro. A meta de p99 < 1 ms do `record` é atingida com folga de ~8x. O p99 do caminho
+sobe ~0,16 ms sobre o `overhead`: o listener extra do `bench-0` com o `record`; o flush fica fora do p99.
 
 ## Comparar com um baseline
 

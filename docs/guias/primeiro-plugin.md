@@ -137,7 +137,7 @@ import { ola } from './src/index.ts';
 // Só para desenvolver: num sistema de verdade, o segredo vem do ambiente e o token, do seu login.
 const secret = 'segredo-de-desenvolvimento-com-32-bytes-ou-mais';
 
-const http = createHttp({ port: 3000 });
+const http = createHttp({ port: 3000, hostname: '127.0.0.1' });
 const bot = createBot({
   transport: web({ auth: { secret } }),
   http,

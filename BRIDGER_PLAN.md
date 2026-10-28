@@ -1,4 +1,4 @@
-# Bridger — Plano do Kernel
+# Bridger — Plano do framework
 
 > Documento de planejamento consolidado a partir da sessão de levantamento de requisitos
 > de 2026-10-06. Fonte única de verdade para criar o GitHub Project (milestones, issues e
@@ -25,10 +25,10 @@
 
 ## 1. Visão
 
-**Bridger** é um *kernel* para bots de mensageria (WhatsApp, Discord, Telegram e sistemas web
-próprios, D51) que contém apenas
-o indispensável — conexão, modelo de mensagem, roteamento, filas, armazenamento, configuração
-e ciclo de vida de plugins. **Todo o resto é plugin.**
+**Bridger** é um framework para bots de mensageria (WhatsApp, Discord, Telegram e sistemas web
+próprios, D51) em arquitetura de *microkernel* (D129): o core contém apenas o indispensável —
+conexão, modelo de mensagem, roteamento, filas, armazenamento, configuração e ciclo de vida de
+plugins. **Todo o resto é plugin.**
 
 Objetivos:
 
@@ -39,7 +39,7 @@ Objetivos:
   fica no transport. Baileys no M2 e `transport-web` (chatbot dentro de sistemas próprios, como
   ERP e gestão escolar) no M3 validam o contrato antes do 1.0; Telegram e Discord vêm depois. API
   Oficial do WhatsApp (Cloud API), Twilio e Zenvia no futuro, para uso comercial.
-- **Open core**: kernel e transports Baileys, web, Telegram e Discord públicos;
+- **Open core**: core e transports Baileys, web, Telegram e Discord públicos;
   transports comerciais de WhatsApp e integrações privadas.
 
 Analogia guia — **mods de Minecraft**: plugins (mods) são feitos pela comunidade e rodam sobre
@@ -90,7 +90,7 @@ Débitos que **impedem** um kernel de verdade e que o Bridger deve corrigir por 
 | 9 | Sem contrato de eventos | Só `messages.upsert` chega aos plugins | Barramento tipado: mensagem, reação, edição, deleção, grupo (entrada/saída/update), conexão, QR |
 | 10 | Sem fila de saída | Só há rate limit de entrada; rajadas de envio arriscam ban | Fila de saída com taxa global/por chat, prioridade e retry |
 | 11 | Auth em arquivos | `useMultiFileAuthState` (não recomendado pelo Baileys em produção) | Auth state no `StoragePort` (SQLite/Postgres) |
-| 12 | Dashboard via stdout | Sinais `[LUMA_QR]`, `[LUMA_STATUS]` parseados de texto; processo filho | Dashboard vira plugin lendo o barramento de eventos via HTTP/WS do core |
+| 12 | Dashboard via stdout | Sinais `[LUMA_QR]`, `[LUMA_STATUS]` parseados de texto; processo filho | Dashboard vira plugin, cliente da API HTTP do core (D19, D125) |
 
 ---
 
@@ -107,7 +107,7 @@ Cada decisão é um ADR em [`docs/adr/`](docs/adr/README.md) (`DNN` = `ADR 00NN`
 ```
 bridger/
 ├── packages/
-│   ├── core/                 # @usebridger/core — o kernel
+│   ├── core/                 # @usebridger/core — o core
 │   ├── transport-baileys/    # @usebridger/transport-baileys
 │   ├── transport-web/        # @usebridger/transport-web (M3, D51)
 │   ├── transport-telegram/   # @usebridger/transport-telegram (pós-v1)
@@ -147,6 +147,7 @@ bridger/
 | Config | Zod por plugin, precedência, secrets, reload de plugin |
 | Papéis | owner / group-admin / everyone; middleware de allow/blocklist |
 | HTTP | Hono sob demanda, `/health`, rotas namespaced |
+| API HTTP | OpenAPI em `/openapi.json`, auth (usuários, API keys, papéis), SSE, `api.resources` (D125) |
 | Logger | pino estruturado com `plugin` no contexto |
 
 **Plugins oficiais** (no `usebridger`, D103): metrics e dashboard.
@@ -385,7 +386,9 @@ previsão, confirmada quando cada transport nascer, depois do v1.0.
 | `send.sticker` | ✓ | ✓ | — | — |
 | `send.document` | ✓ | ✓ | ✓ | ✓ |
 | `send.album` | — | ✓ | ✓ | — |
+| `send.template` | — | — | — | — |
 | `media.download` | ✓ | ✓ | ✓ | ✓ |
+| `media.ref` | ✓ | ✓ | — | — |
 | `message.edit` | ✓ | ✓ | ✓ | ✓ |
 | `message.delete` | ✓ | ✓ | ✓ | ✓ |
 | `polls` | ✓ | ✓ | ✓ | — |
@@ -486,6 +489,35 @@ o M5 (exceto M5-4 e M5-6) e a virada (V1-1, V1-2 e V1-4) vivem no `murillous/Lum
 - #M5-4 `plugin-dashboard`
 - #M5-6 `plugin-metrics` — serviço `metrics`, métricas do kernel pelos observadores do core (D102), `/metrics` Prometheus, retenção de 90 dias (D103)
 
+### M6 — Métricas sobre o `prom-client` (D121)
+
+- #M6-1 ADR 0121: `plugin-metrics` redesenhado sobre o `prom-client` (#233)
+- #M6-2 Bench: linha de base do caminho de mensagem com o `plugin-metrics` (#234)
+- #M6-3 Dashboard atual: remover a seção de métricas (#235)
+- #M6-4 Serviço declarativo sobre o `prom-client` e `/metrics` da registry (#236)
+- #M6-5 Histórico por hora e dia a partir do delta da registry (#237)
+- #M6-6 `query` com `where`/`groupBy`, percentil interpolado e `catalog()` (#238)
+- #M6-7 Métricas do runtime do Node no `/metrics` e no histórico (#239)
+- #M6-8 `scrapeToken` no `GET /metrics` (#240)
+- #M6-9 Reconhecedor de id pessoal do core no lugar do regex local (#241)
+
+### M7 — API HTTP do core e dashboard como cliente (D125)
+
+Tudo o que o dashboard mostra sai da API pública do core, descrita em OpenAPI: um app que consome
+o Bridger chega às mesmas informações sem o `plugin-dashboard`. O dashboard vira cliente genérico,
+sem rota nem auth próprias. Atendimento humano fica com cada app (ex.: Chatwoot), fora do kernel.
+
+- #M7-1 Pesquisa e protótipo: OpenAPI a partir do Zod, SSE na spec e Refine (#273)
+- #M7-2 ADR 0125: API HTTP do core em OpenAPI e dashboard como cliente (#274)
+- #M7-3 Base da API HTTP, problem+json e `/openapi.json` (#275)
+- #M7-4 Autenticação da API: usuários, sessões, API keys e papéis (#223)
+- #M7-5 Conexão e tempo real por SSE: status, QR, pareamento, logs ao vivo (#276)
+- #M7-6 Plugins e configuração na API, com segredos (#277)
+- #M7-7 Histórico de logs e métricas na API (#278)
+- #M7-8 Ponto de extensão `api.resources` no lugar do `dashboard.tabs` (#279)
+- #M7-9 Auditoria na API: consulta, exportação e `verify` (#261)
+- #M7-10 `plugin-dashboard` refeito como cliente genérico da API (#280)
+
 ### v1.0
 
 - #V1-3 Release 1.0.0 de todos os pacotes públicos via Changesets, depois do contrato validado pelo `transport-web` (M3-5, D51)
@@ -523,7 +555,8 @@ Vive no `murillous/LumaBot`, com o M4 e o M5 (D80, D82).
 ## 12. Sugestão de organização do GitHub Project
 
 - **Milestones**: `M0 Fundação`, `M1 Core`, `M2 Baileys + SQLite + Testing`,
-  `M3 Postgres + HTTP + DX`, `M4 Plugins`, `M5 Luma + Dashboard`, `v1.0 Virada`.
+  `M3 Postgres + HTTP + DX`, `M4 Plugins`, `M5 Luma + Dashboard`, `M6 Métricas`,
+  `M7 API e Dashboard`, `v1.0 Virada`.
 - **Issues**: uma por item `#Mx-y` acima (épico/entrega), com os critérios de aceite.
 - **Sub-issues**: os bullets dentro de cada item.
 - **Labels**:

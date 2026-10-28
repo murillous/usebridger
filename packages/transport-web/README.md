@@ -12,9 +12,10 @@ npm install @usebridger/transport-web
 import { createBot, createHttp } from '@usebridger/core';
 import { web } from '@usebridger/transport-web';
 
+// Para expor publicamente, configure `api.auth`, ou fique em loopback atrás de proxy reverso.
 const bot = createBot({
   transport: web({ auth: { jwksUrl: 'https://erp.exemplo.com/.well-known/jwks.json' } }),
-  http: createHttp({ port: 3000 }),
+  http: createHttp({ port: 3000, hostname: '127.0.0.1' }),
   prefix: '', // no web, o comando pode vir sem prefixo
   plugins: [],
 });

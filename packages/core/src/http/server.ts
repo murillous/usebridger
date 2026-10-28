@@ -5,23 +5,53 @@
 // abrir a porta: bot sem rota não paga a memória deles.
 
 import type { Server } from 'node:http';
+import { BlockList, isIP } from 'node:net';
 import type { upgradeWebSocket as UpgradeWebSocket } from '@hono/node-server';
 import type { Context, Hono } from 'hono';
 import type { WSContext, WSEvents } from 'hono/ws';
 import type { WebSocketServer } from 'ws';
+import { type BotApiDeps, coreApiOperations } from '#api/core.ts';
+import {
+  type ApiOptions,
+  corsMiddleware,
+  csrfMiddleware,
+  socketAddress,
+  validateApiOptions,
+} from '#api/cors.ts';
+import { loadApiLibs } from '#api/libs.ts';
+import { createOpenApiDocument } from '#api/openapi.ts';
+import { type AnyApiOperation, operationHandler } from '#api/operation.ts';
+import { ApiError, problemResponse } from '#api/problem.ts';
+import {
+  type ApiResource,
+  resourceOperations,
+  resourcePermissions,
+  validateResource,
+} from '#api/resources.ts';
+import type { ApiGuard } from '#auth/guard.ts';
+import { isPermission } from '#auth/permissions.ts';
 import { BotConfigError } from '#config/owners.ts';
+import * as LOG from '#logger/events.ts';
+import { NO_TRAIL, type Trail } from '#logger/trail.ts';
 import type { Logger } from '#logger/types.ts';
 import { DEFAULT_SESSION } from '#storage/namespace.ts';
+import {
+  formatTraceparent,
+  newTraceId,
+  parseTraceFlags,
+  parseTraceparent,
+  runInTrace,
+} from '#trace/scope.ts';
 import type {
   HttpHandler,
   HttpMethod,
   HttpOptions,
   HttpRequestInfo,
-  HttpRoutes,
   HttpServer,
   HttpSocket,
   HttpSocketAccept,
   HttpSocketHandlers,
+  PluginHttpRoutes,
 } from './types.ts';
 
 const METHODS: ReadonlySet<string> = new Set<HttpMethod>([
@@ -64,6 +94,10 @@ interface RouteEntry {
   readonly base: () => string;
   readonly target: HttpHandler | { readonly ws: HttpSocketAccept };
   readonly onError: (error: unknown) => void;
+  /** Presente nas operações da API: alimenta a spec. */
+  readonly api?: AnyApiOperation;
+  /** Trilha do bot dono da rota. */
+  readonly trail: Trail;
   /** Conexões abertas, fechadas quando a rota sai. */
   readonly sockets: Set<WSContext>;
 }
@@ -90,13 +124,48 @@ export function createHttp(options: HttpOptions): HttpServer {
   return server;
 }
 
+/**
+ * Primeiros segmentos que o core usa sob `/api/plugins/:name`. O core monta antes, e a
+ * operação do plugin no mesmo caminho ficaria sombreada sem aviso.
+ */
+const RESERVED_PLUGIN_API = new Set(['config', 'enable', 'disable']);
+
 /** Tabela de rotas de uma sessão nesse servidor; sem efeito até o `attach`. */
-export function sessionHttp(server: HttpServer, session: string, log: () => Logger): SessionHttp {
+export function sessionHttp(
+  server: HttpServer,
+  session: string,
+  log: () => Logger,
+  trail: Trail = NO_TRAIL,
+  api: ApiOptions = {},
+  guard?: ApiGuard,
+): SessionHttp {
   const hub = hubs.get(server);
   if (hub === undefined) {
     throw new BotConfigError('http: passe o servidor criado por `createHttp({ port })`');
   }
-  return new SessionHttp(hub, session, log);
+  validateApiOptions(api);
+  // Cedo, no config: sem auth a API só pode escutar em loopback (ADR 0128).
+  if (guard === undefined && !isLoopbackHost(hub.hostname)) {
+    throw new BotConfigError(
+      `http: a API não pode escutar em ${hub.hostname ?? 'todas as interfaces'} sem autenticação; ` +
+        'configure `api.auth` ou use `createHttp({ port, hostname: "127.0.0.1" })` (loopback)',
+    );
+  }
+  return new SessionHttp(hub, session, log, trail, api.cors?.origins, guard);
+}
+
+/** Loopback: 127.0.0.0/8, `::1` ou `localhost`. Hostname ausente escuta em todas as interfaces. */
+const LOOPBACK = new BlockList();
+LOOPBACK.addSubnet('127.0.0.0', 8, 'ipv4');
+LOOPBACK.addAddress('::1', 'ipv6');
+
+function isLoopbackHost(hostname: string | undefined): boolean {
+  if (hostname === undefined) return false;
+  const host = hostname.toLowerCase();
+  const family = isIP(host);
+  return (
+    host === 'localhost' || (family !== 0 && LOOPBACK.check(host, family === 6 ? 'ipv6' : 'ipv4'))
+  );
 }
 
 /** Prefixo das rotas da sessão: nenhum na `default`, para a URL não mudar quando entra outro bot. */
@@ -111,6 +180,12 @@ function normalizePath(path: string): string {
   return path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
 }
 
+interface ResourceEntry {
+  readonly owner: string;
+  readonly resource: ApiResource;
+  readonly onError: (error: unknown, route: string) => void;
+}
+
 /** Rotas de um bot no servidor. Publicadas no `attach` (start) e retiradas no `detach` (stop). */
 export class SessionHttp {
   readonly session: string;
@@ -118,13 +193,30 @@ export class SessionHttp {
   readonly #hub: HttpHub;
   readonly #prefix: string;
   readonly #entries = new Map<string, RouteEntry>();
+  readonly #resources: ResourceEntry[] = [];
+  readonly #trail: Trail;
+  readonly #guard: ApiGuard | undefined;
   #state: () => string = () => 'idle';
+  #realtime: BotApiDeps | undefined;
   #attached = false;
 
-  constructor(hub: HttpHub, session: string, log: () => Logger) {
+  /** Origens CORS permitidas na API desta sessão; `undefined` desliga o CORS. */
+  readonly corsOrigins: readonly string[] | undefined;
+
+  constructor(
+    hub: HttpHub,
+    session: string,
+    log: () => Logger,
+    trail: Trail,
+    corsOrigins?: readonly string[],
+    guard?: ApiGuard,
+  ) {
+    this.corsOrigins = corsOrigins;
+    this.#guard = guard;
     this.#hub = hub;
     this.session = session;
     this.log = log;
+    this.#trail = trail;
     this.#prefix = sessionPrefix(session);
   }
 
@@ -136,19 +228,29 @@ export class SessionHttp {
     owner: string,
     segment: () => string,
     onError: (error: unknown, route: string) => void,
-  ): HttpRoutes {
+  ): PluginHttpRoutes {
     const base = (): string => this.#prefix + segment();
-    const add = (method: HttpMethod, rawPath: string, target: RouteEntry['target']): void => {
+    // A API vive sob `<sessão>/api`, e a rota do plugin sob o segmento dele (ADR 0125).
+    const apiBase = (): string => `${this.#prefix}/api${segment()}`;
+    const guard = this.#guard;
+    const add = (
+      method: HttpMethod,
+      rawPath: string,
+      target: RouteEntry['target'],
+      api?: AnyApiOperation,
+    ): void => {
       const path = normalizePath(rawPath);
-      const key = `${owner} ${method} ${path}`;
+      const key = `${owner} ${api ? 'api ' : ''}${method} ${path}`;
       if (this.#entries.has(key)) throw new HttpRouteConflictError(method, path);
       this.#entries.set(key, {
         owner,
         method,
         path,
-        base,
+        base: api ? apiBase : base,
+        ...(api && { api }),
         target,
         onError: (error) => onError(error, `${method} ${path}`),
+        trail: this.#trail,
         sockets: new Set(),
       });
       if (this.#attached) this.#hub.changed();
@@ -166,15 +268,140 @@ export class SessionHttp {
       ws(path, accept) {
         add('GET', path, { ws: accept });
       },
+      api(operation) {
+        if (!METHODS.has(operation.method)) {
+          throw new TypeError(`http: método não suportado: ${String(operation.method)}`);
+        }
+        // Falha no registro: permissão fora do formato nunca casaria, e a rota daria 403 para todos.
+        if (operation.permission !== undefined && !isPermission(operation.permission)) {
+          throw new BotConfigError(
+            `http: permissão "${operation.permission}" de ${operation.method} ${operation.path} fora do formato <área>.<ação> (ex.: "logs.read")`,
+          );
+        }
+        const [first = ''] = normalizePath(operation.path).split('/').filter(Boolean);
+        if (RESERVED_PLUGIN_API.has(first)) {
+          throw new BotConfigError(
+            `http: ${operation.method} ${operation.path} usa "/${first}", reservado ao core em /api/plugins/<nome>/${first}`,
+          );
+        }
+        add(
+          operation.method,
+          operation.path,
+          operationHandler(
+            operation,
+            (error) => onError(error, `${operation.method} ${operation.path}`),
+            guard,
+          ),
+          operation,
+        );
+      },
     };
   }
 
-  entries(): Iterable<RouteEntry> {
-    return this.#entries.values();
+  /**
+   * Recurso de plugin (`api.resources`). Vira operações em
+   * `/api/resources/<dono>/<id>` a cada montagem do app (os schemas Zod só carregam com a porta) e
+   * sai com o dono no `removeOwner`. Inválido ou repetido no dono lança `BotConfigError`.
+   */
+  resource(
+    owner: string,
+    resource: ApiResource,
+    onError: (error: unknown, route: string) => void,
+  ): void {
+    validateResource(owner, resource);
+    if (this.#resources.some((r) => r.owner === owner && r.resource.id === resource.id)) {
+      throw new BotConfigError(
+        `plugin "${owner}": api.resources "${resource.id}" contribuído duas vezes`,
+      );
+    }
+    this.#resources.push({ owner, resource, onError });
+    if (this.#attached) this.#hub.changed();
+  }
+
+  /**
+   * Permissões declaradas pelos plugins (operações de `ctx.http.api` e recursos), lidas a cada
+   * request: entram nos papéis e no escopo de chave enquanto o plugin estiver carregado.
+   */
+  pluginPermissions(): readonly string[] {
+    const all = new Set<string>();
+    for (const entry of this.#entries.values()) {
+      if (entry.api?.permission !== undefined) all.add(entry.api.permission);
+    }
+    for (const { resource } of this.#resources) {
+      for (const permission of resourcePermissions(resource)) all.add(permission);
+    }
+    return [...all];
+  }
+
+  /** Operações do core nesta sessão (`/api/...`); não contam como rota para abrir a porta. */
+  coreEntries(states: () => Record<string, string>): RouteEntry[] {
+    const base = (): string => `${this.#prefix}/api`;
+    const onError = (error: unknown): void => this.log().event(LOG.httpUnhandled, { err: error });
+    const guard = this.#guard;
+    const { accounts, sessionMaxAgeMs } = guard ?? {};
+    const auth =
+      guard && accounts && sessionMaxAgeMs !== undefined
+        ? {
+            accounts,
+            sessionMaxAgeMs,
+            corsOrigins: this.corsOrigins,
+            // Um cookie por sessão do servidor: bots em /sessions/<nome> não sobrescrevem o do outro.
+            cookiePath: `${this.#prefix}/api`,
+            keys: guard.keys,
+            denied: guard.denied,
+          }
+        : undefined;
+    return coreApiOperations(states, auth, this.#realtime).map((api) => ({
+      owner: 'core',
+      method: api.method,
+      path: normalizePath(api.path),
+      base,
+      api,
+      target: operationHandler(api, onError, this.#guard),
+      onError,
+      trail: this.#trail,
+      sockets: new Set(),
+    }));
+  }
+
+  get guard(): ApiGuard | undefined {
+    return this.#guard;
+  }
+
+  /** CORS com auth: o cookie cruza origens e as escritas exigem o header anti-CSRF. */
+  get csrf(): boolean {
+    return this.corsOrigins !== undefined && this.#guard?.accounts !== undefined;
+  }
+
+  get prefix(): string {
+    return this.#prefix;
+  }
+
+  /** Rotas registradas e as dos recursos; com recurso, precisa de `loadApiLibs()` antes. */
+  *entries(): Iterable<RouteEntry> {
+    yield* this.#entries.values();
+    for (const { owner, resource, onError } of this.#resources) {
+      const base = (): string => `${this.#prefix}/api/resources/${owner}`;
+      for (const api of resourceOperations(owner, resource)) {
+        const route = `${api.method} ${api.path}`;
+        const fail = (error: unknown): void => onError(error, route);
+        yield {
+          owner,
+          method: api.method,
+          path: normalizePath(api.path),
+          base,
+          api,
+          target: operationHandler(api, fail, this.#guard),
+          onError: fail,
+          trail: this.#trail,
+          sockets: new Set(),
+        };
+      }
+    }
   }
 
   get hasRoutes(): boolean {
-    return this.#entries.size > 0;
+    return this.#entries.size > 0 || this.#resources.length > 0;
   }
 
   state(): string {
@@ -190,13 +417,22 @@ export class SessionHttp {
       closeSockets(entry);
       removed = true;
     }
+    for (let i = this.#resources.length - 1; i >= 0; i--) {
+      if (this.#resources[i]?.owner !== owner) continue;
+      this.#resources.splice(i, 1);
+      removed = true;
+    }
     if (removed && this.#attached) this.#hub.changed();
   }
 
-  /** Publica as rotas no servidor; sessão repetida no mesmo servidor é erro de config. */
-  attach(state: () => string): void {
+  /**
+   * Publica as rotas no servidor; sessão repetida no mesmo servidor é erro de config. `realtime`,
+   * do bot, liga `/connection`, `/events` e `/plugins`.
+   */
+  attach(state: () => string, realtime?: BotApiDeps): void {
     this.#hub.attach(this);
     this.#state = state;
+    this.#realtime = realtime;
     this.#attached = true;
   }
 
@@ -209,8 +445,11 @@ export class SessionHttp {
   async detach(): Promise<void> {
     if (!this.#attached) return;
     this.#attached = false;
+    // Os streams SSE abertos acabam junto, como os WebSockets das rotas.
+    this.#realtime?.stream.close();
     for (const entry of this.#entries.values()) closeSockets(entry);
     this.#entries.clear();
+    this.#resources.length = 0;
     await this.#hub.detach(this);
   }
 }
@@ -229,6 +468,10 @@ class HttpHub {
 
   constructor(options: HttpOptions) {
     this.#options = options;
+  }
+
+  get hostname(): string | undefined {
+    return this.#options.hostname;
   }
 
   get port(): number | undefined {
@@ -258,7 +501,7 @@ class HttpHub {
     this.#app = undefined;
     if (this.#armed && this.#listening === undefined && this.#hasRoutes()) {
       this.#listen().catch((error: unknown) =>
-        this.#log()?.error('http: falha ao abrir a porta', {
+        this.#log()?.event(LOG.httpListenFailed, {
           err: error,
           port: this.#options.port,
         }),
@@ -296,7 +539,7 @@ class HttpHub {
 
   async #open(): Promise<void> {
     const [{ createAdaptorServer, upgradeWebSocket }, { Hono }, { WebSocketServer }] =
-      await Promise.all([import('@hono/node-server'), import('hono'), import('ws')]);
+      await Promise.all([import('@hono/node-server'), import('hono'), import('ws'), loadApiLibs()]);
     this.#lib = { Hono, upgradeWebSocket };
     const wss = new WebSocketServer({ noServer: true });
     const server = createAdaptorServer({
@@ -310,7 +553,7 @@ class HttpHub {
         resolve();
       });
     });
-    server.on('error', (error) => this.#log()?.error('http: erro no servidor', { err: error }));
+    server.on('error', (error) => this.#log()?.event(LOG.httpServerError, { err: error }));
     this.#server = server;
     this.#wss = wss;
   }
@@ -352,17 +595,74 @@ class HttpHub {
 
   #build(lib: ServerLib): Hono {
     const app = new lib.Hono({ strict: false });
-    app.get('/health', (c) => {
+    const states = (): Record<string, string> => {
       const sessions: Record<string, string> = {};
       for (const [name, session] of this.#sessions) sessions[name] = session.state();
+      return sessions;
+    };
+    const entries: RouteEntry[] = [];
+    const corsAll: string[] = [];
+    for (const session of this.#sessions.values()) {
+      if (session.corsOrigins !== undefined) {
+        corsAll.push(...session.corsOrigins);
+        const cors = corsMiddleware(session.corsOrigins);
+        app.use(`${session.prefix}/api`, cors);
+        app.use(`${session.prefix}/api/*`, cors);
+        if (session.csrf) {
+          const csrf = csrfMiddleware(session.guard);
+          app.use(`${session.prefix}/api`, csrf);
+          app.use(`${session.prefix}/api/*`, csrf);
+        }
+      }
+      entries.push(...session.coreEntries(states), ...session.entries());
+    }
+    // A spec é lida pelo painel no browser: vale a união das allowlists das sessões.
+    if (corsAll.length > 0) app.use('/openapi.json', corsMiddleware(corsAll));
+    app.get('/health', (c) => {
+      const sessions = states();
       const ok = Object.values(sessions).every((state) => state === 'running');
       return c.json({ status: ok ? 'ok' : 'degraded', sessions }, ok ? 200 : 503);
     });
-    for (const session of this.#sessions.values()) {
-      for (const entry of session.entries()) mount(app, entry, lib.upgradeWebSocket);
-    }
+    for (const entry of entries) mount(app, entry, lib.upgradeWebSocket);
+    // Gerada a cada pedido da tabela atual: plugin que carrega depois aparece na spec (ADR 0125).
+    app.get('/openapi.json', async (c) => {
+      try {
+        const routes = entries.flatMap((entry) =>
+          entry.api
+            ? [
+                {
+                  path: entry.path === '/' ? entry.base() : entry.base() + entry.path,
+                  operation: entry.api,
+                },
+              ]
+            : [],
+        );
+        return c.json(await createOpenApiDocument(routes));
+      } catch (error) {
+        // Schema de plugin que o gerador recusa: 500 sem detalhe, causa no log.
+        this.#log()?.event(LOG.httpUnhandled, { err: error });
+        return problemResponse(new ApiError(500));
+      }
+    });
+    app.notFound((c) => {
+      if (!/^(\/sessions\/[^/]+)?\/api(\/|$)/.test(c.req.path)) {
+        return c.text('404 Not Found', 404);
+      }
+      // Fora do `mount`, então o trace nasce aqui para o `traceId` do problema (ADR 0120).
+      const header = c.req.header('traceparent');
+      const trace = parseTraceparent(header) ?? newTraceId();
+      // A rota de plugin só existe com ele carregado (ex.: as de métricas do `plugin-metrics`).
+      const plugin = /\/api\/plugins\/([^/]+)\/./.exec(c.req.path)?.[1];
+      const detail =
+        plugin === undefined
+          ? undefined
+          : `rota não registrada pelo plugin "${plugin}": ele está carregado e habilitado nesta sessão?`;
+      return runInTrace(trace, () =>
+        withTraceparent(problemResponse(new ApiError(404, detail)), trace, parseTraceFlags(header)),
+      );
+    });
     app.onError((error, c) => {
-      this.#log()?.error('http: erro fora de um handler', { err: error });
+      this.#log()?.event(LOG.httpUnhandled, { err: error });
       return c.text('Internal Server Error', 500);
     });
     return app;
@@ -372,18 +672,45 @@ class HttpHub {
 function mount(app: Hono, entry: RouteEntry, upgradeWebSocket: typeof UpgradeWebSocket): void {
   const base = entry.base();
   const path = entry.path === '/' ? base : base + entry.path;
-  const info = (c: Context): HttpRequestInfo => ({ params: c.req.param() });
+  const info = (c: Context): HttpRequestInfo => {
+    const ip = socketAddress(c.env);
+    return { params: c.req.param(), ...(ip !== undefined && { ip }) };
+  };
   const { target } = entry;
   if (typeof target === 'function') {
-    app.on(entry.method, path, async (c) => {
-      try {
-        const response = await target(c.req.raw, info(c));
-        if (response instanceof Response) return response;
-        throw new TypeError(`o handler de ${entry.method} ${entry.path} não devolveu um Response`);
-      } catch (error) {
-        entry.onError(error);
-        return c.text('Internal Server Error', 500);
-      }
+    const handler = target;
+    app.on(entry.method, path, (c) => {
+      const header = c.req.header('traceparent');
+      const trace = parseTraceparent(header) ?? newTraceId();
+      // Um trace por request (ADR 0120): o `traceparent` válido de entrada é adotado, para a linha
+      // do proxy e a do bot se cruzarem; o header volta na resposta.
+      return runInTrace(trace, async () => {
+        const started = performance.now();
+        let response: Response;
+        try {
+          const result = await handler(c.req.raw, info(c));
+          if (!(result instanceof Response)) {
+            throw new TypeError(
+              `o handler de ${entry.method} ${entry.path} não devolveu um Response`,
+            );
+          }
+          response = result;
+        } catch (error) {
+          entry.onError(error);
+          response = new Response('Internal Server Error', {
+            status: 500,
+            headers: { 'content-type': 'text/plain; charset=UTF-8' },
+          });
+        }
+        // Rota e método, nunca query string nem corpo: o `path` é o padrão, sem os valores.
+        entry.trail.emit(LOG.httpRequest, {
+          method: entry.method,
+          route: path,
+          status: response.status,
+          durationMs: Math.round((performance.now() - started) * 100) / 100,
+        });
+        return withTraceparent(response, trace, parseTraceFlags(header));
+      });
     });
     return;
   }
@@ -405,6 +732,34 @@ function mount(app: Hono, entry: RouteEntry, upgradeWebSocket: typeof UpgradeWeb
     });
     return (await upgrade(c, next)) ?? c.text('Internal Server Error', 500);
   });
+}
+
+// O `Response` do handler pode ter headers imutáveis (`fetch`, `Response.redirect`): tenta o `set`
+// direto e só então copia, com o corpo seguindo como stream. Se nem a cópia vale (`Response.error()`
+// tem status 0 e o construtor recusa), devolve a resposta original, sem o header.
+// Exportada só para o teste dos três ramos; fora do índice do pacote.
+export function withTraceparent(response: Response, trace: string, flags?: string): Response {
+  const value = formatTraceparent(trace, flags);
+  try {
+    response.headers.set('traceparent', value);
+    return response;
+  } catch {
+    // Headers imutáveis: segue para a cópia abaixo.
+    void 0;
+  }
+  // O `Response` do node-server não recusa o status 0 e viraria um 200: o erro de rede fica como está.
+  if (response.type === 'error') return response;
+  try {
+    const headers = new Headers(response.headers);
+    headers.set('traceparent', value);
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  } catch {
+    return response;
+  }
 }
 
 /** Callbacks do Hono ligados aos do autor, com cada conexão registrada na rota. */

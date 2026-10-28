@@ -22,7 +22,11 @@ export const CAPABILITIES = [
   'send.sticker',
   'send.document',
   'send.album',
+  // Template aprovado da plataforma: o que sai com a janela de atendimento fechada (ADR 0124).
+  'send.template',
   'media.download',
+  // Referência serializável da mídia, para baixar depois de um restart (ADR 0136).
+  'media.ref',
   'message.edit',
   'message.delete',
   'polls',
@@ -92,7 +96,7 @@ const groupCapability: { readonly [K in GroupParticipantAction]: Capability } = 
   demote: 'groups.promote',
 };
 
-/** Capability de uma alteração de participantes; `demote` anda junto com `promote` (ADR 0055). */
+/** Capability de uma alteração de participantes; `demote` anda junto com `promote`. */
 export function groupActionCapability(action: GroupParticipantAction): Capability {
   return groupCapability[action];
 }
@@ -106,12 +110,13 @@ const sendCapability: { readonly [K in Exclude<OutgoingContent['type'], 'album'>
   sticker: 'send.sticker',
   document: 'send.document',
   poll: 'polls',
+  template: 'send.template',
 };
 
 /**
  * Capabilities que um envio exige: a do tipo de conteúdo, mais citação, menções e botões se
  * usados. O álbum exige a de cada tipo de item, e não a `send.album`: sem ela, a fila o envia
- * item a item (ADR 0061).
+ * item a item.
  */
 export function capabilitiesForSend(content: OutgoingContent, options?: SendOptions): Capability[] {
   const required: Capability[] =

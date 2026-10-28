@@ -6,9 +6,11 @@
 import type {
   Capability,
   Contact,
+  ConversationWindow,
   FormattedText,
   GroupMetadata,
   GroupParticipantAction,
+  JsonValue,
   Message,
   MessageKey,
   OutgoingAction,
@@ -19,12 +21,14 @@ import type {
   TypingKind,
   Unsubscribe,
 } from '@usebridger/core';
+import { ConversationWindowError } from '@usebridger/core';
 import {
   assertCanSend,
   assertCapability,
   CAPABILITIES,
   groupActionCapability,
   type Interaction,
+  type MediaLoader,
   type TransportEventHandler,
   type TransportEventName,
   type TransportEvents,
@@ -49,7 +53,7 @@ export interface SentMessage {
   /** IDs mencionados. */
   readonly mentions: readonly string[];
   /**
-   * Botões enviados (capability `actions`, ADR 0058); ausente sem botões. O `click()` do
+   * Botões enviados (capability `actions`); ausente sem botões. O `click()` do
    * `TestBot` clica num deles pelo rótulo.
    */
   readonly actions?: readonly OutgoingAction[];
@@ -59,7 +63,7 @@ export interface SentMessage {
 
 export interface FakeTransportOptions {
   /**
-   * Perfil da plataforma (ADR 0069): capabilities, limites e contatos como o transport dela
+   * Perfil da plataforma: capabilities, limites e contatos como o transport dela
    * declararia. As opções abaixo substituem o campo do perfil. Ausente: todas as capabilities,
    * sem limites, contatos com telefone.
    */
@@ -71,10 +75,16 @@ export interface FakeTransportOptions {
   /** Grupos que `getGroupMetadata` conhece; dá para incluir depois com `setGroup`. */
   readonly groups?: readonly GroupMetadata[];
   /**
-   * Limites de tamanho, para testar a divisão de texto longo (ADR 0057). Padrão: os do perfil ou,
+   * Limites de tamanho, para testar a divisão de texto longo. Padrão: os do perfil ou,
    * sem perfil, nenhum, e o texto vai inteiro.
    */
   readonly limits?: TextLimits;
+  /**
+   * Janela de atendimento, como a do WhatsApp oficial: conteúdo que não é template só
+   * passa até `ttlMs` depois da última mensagem recebida (`fromMe: false`) do chat; fora dela, o
+   * envio rejeita com `ConversationWindowError`. Ausente ou `enabled: false`: sem janela.
+   */
+  readonly window?: { readonly enabled: boolean; readonly ttlMs: number };
 }
 
 export class FakeTransport implements Transport {
@@ -94,6 +104,10 @@ export class FakeTransport implements Transport {
   }[] = [];
   readonly deletions: MessageKey[] = [];
   readonly typing: { readonly chatId: string; readonly kind: TypingKind }[] = [];
+  /** Telefones de cada `requestPairingCode`, na ordem. */
+  readonly pairingRequests: string[] = [];
+  /** Quantas vezes o `logout()` foi chamado. */
+  logouts = 0;
   readonly participantUpdates: {
     readonly groupId: string;
     readonly participantIds: readonly string[];
@@ -110,6 +124,9 @@ export class FakeTransport implements Transport {
   // Por instância e chaveado pelo objeto emitido, como num transport real (ADR 0062).
   readonly #raws = new WeakMap<Message | Interaction, unknown>();
   readonly #emitter = new TypedEmitter<TransportEvents>((error) => this.errors.push(error));
+  readonly #ttlMs: number | null;
+  // Último inbound por chat, em `Date.now()` (o teste controla com `vi.useFakeTimers`).
+  readonly #lastInbound = new Map<string, number>();
   #connected = false;
   #nextId = 0;
 
@@ -120,6 +137,12 @@ export class FakeTransport implements Transport {
     this.#selfOnConnect = options.self ?? profile?.self ?? DEFAULT_SELF;
     const limits = options.limits ?? profile?.limits;
     if (limits !== undefined) this.limits = limits;
+    this.#ttlMs = options.window?.enabled ? options.window.ttlMs : null;
+    if (this.#ttlMs !== null) {
+      this.#emitter.on('message', (message) => {
+        if (!message.fromMe) this.#lastInbound.set(message.chat.id, Date.now());
+      });
+    }
     for (const group of options.groups ?? []) this.setGroup(group);
   }
 
@@ -144,6 +167,31 @@ export class FakeTransport implements Transport {
     this.#emitter.emit('connection.status', { status: 'closed', reason: 'unknown', error: null });
   }
 
+  /**
+   * Capability `pairing`. Devolve `FAKE-` mais os 4 últimos dígitos do telefone e emite o mesmo
+   * código em `connection.pairing-code`, como um transport real.
+   */
+  async requestPairingCode(phone: string): Promise<string> {
+    assertCapability(this, 'pairing');
+    this.pairingRequests.push(phone);
+    const code = `FAKE-${phone.slice(-4)}`;
+    this.#emitter.emit('connection.pairing-code', { code });
+    return code;
+  }
+
+  /** Capability `pairing`. Desvincula a sessão: emite `closed` com `logged-out`. */
+  async logout(): Promise<void> {
+    assertCapability(this, 'pairing');
+    this.logouts++;
+    this.#connected = false;
+    this.#self = null;
+    this.#emitter.emit('connection.status', {
+      status: 'closed',
+      reason: 'logged-out',
+      error: null,
+    });
+  }
+
   on<E extends TransportEventName>(event: E, handler: TransportEventHandler<E>): Unsubscribe {
     return this.#emitter.on(event, handler);
   }
@@ -155,6 +203,15 @@ export class FakeTransport implements Transport {
 
   async send(chatId: string, content: OutgoingContent, options?: SendOptions): Promise<MessageKey> {
     assertCanSend(this, content, options);
+    if (content.type !== 'template' && this.#ttlMs !== null) {
+      const last = this.#lastInbound.get(chatId);
+      if (last === undefined || Date.now() >= last + this.#ttlMs) {
+        throw new ConversationWindowError(
+          chatId,
+          last === undefined ? null : new Date(last + this.#ttlMs),
+        );
+      }
+    }
     this.#nextId++;
     const key: MessageKey = { chatId, id: `fake-${this.#nextId}`, fromMe: true, senderId: null };
     this.sent.push({
@@ -166,6 +223,16 @@ export class FakeTransport implements Transport {
       key,
     });
     return key;
+  }
+
+  /** Estado da janela; `null` sem a opção `window`, como numa plataforma que não tem janela. */
+  async window(chatId: string): Promise<ConversationWindow | null> {
+    if (this.#ttlMs === null) return null;
+    const last = this.#lastInbound.get(chatId);
+    if (last === undefined || Date.now() >= last + this.#ttlMs) {
+      return { open: false, expiresAt: null };
+    }
+    return { open: true, expiresAt: new Date(last + this.#ttlMs) };
   }
 
   async react(key: MessageKey, emoji: string | null): Promise<void> {
@@ -207,9 +274,18 @@ export class FakeTransport implements Transport {
     this.participantUpdates.push({ groupId, participantIds, action });
   }
 
+  /** Os bytes da referência que o `receive()` deu à mídia. */
+  mediaFromRef(data: JsonValue): MediaLoader {
+    assertCapability(this, 'media.ref');
+    if (typeof data !== 'string')
+      throw new TypeError('FakeTransport: referência de mídia inválida');
+    const bytes = Buffer.from(data, 'base64');
+    return { download: async () => bytes };
+  }
+
   /**
    * Objeto bruto registrado com `setRaw` para a mensagem ou interação, que o `ctx.unsafe.raw()`
-   * devolve (ADR 0062); `undefined` sem registro.
+   * devolve; `undefined` sem registro.
    */
   raw(source: Message | Interaction): unknown {
     return this.#raws.get(source);

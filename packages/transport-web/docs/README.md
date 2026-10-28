@@ -1,8 +1,9 @@
 # @usebridger/transport-web
 
 Transport do Bridger para o chatbot dentro de um sistema web próprio (ERP, gestão escolar). O
-sistema emite um JWT para o widget, e o widget conversa com o bot por WebSocket. As decisões estão
-no [ADR 0073](../../../docs/adr/0073-transport-web.md).
+sistema emite um JWT (token assinado que prova quem é o usuário) para o widget, e o widget
+conversa com o bot por WebSocket. Esta página mostra como ligar o bot, o formato do token e o
+protocolo que o widget fala.
 
 ## Uso
 
@@ -10,11 +11,12 @@ no [ADR 0073](../../../docs/adr/0073-transport-web.md).
 import { createBot, createHttp } from '@usebridger/core';
 import { web } from '@usebridger/transport-web';
 
-const http = createHttp({ port: 3000 });
+// Para expor publicamente, configure `api.auth`, ou fique em loopback atrás de proxy reverso.
+const http = createHttp({ port: 3000, hostname: '127.0.0.1' });
 
 const bot = createBot({
   transport: web({
-    auth: { secret: process.env.CHAT_JWT_SECRET },   // ou { jwksUrl: 'https://erp/.well-known/jwks.json' }
+    auth: { secret: process.env.CHAT_JWT_SECRET ?? '' }, // ou { jwksUrl: 'https://erp/.well-known/jwks.json' }
     tenantClaim: 'escola',                          // opcional: o claim vira chat.tenantId
     origins: ['https://erp.exemplo.com'],           // opcional
   }),
@@ -66,7 +68,7 @@ command({
 - **Contato:** `id` é o `sub` (com o tenant na frente, `<tenant>:<sub>`), `name` vem do claim `name`
   e `phone` é `null`.
 - **Tenant:** com `tenantClaim`, o valor do claim vira `chat.tenantId`, e o `ctx.storage` dos
-  plugins fica no escopo dele ([ADR 0068](../../../docs/adr/0068-isolamento-por-tenant.md)). O mesmo
+  plugins fica no escopo dele. O mesmo
   `sub` em dois tenants são duas pessoas.
 - **Validade:** o token é validado uma vez por conexão. No `exp`, a conexão fecha com 4401, e o
   widget reconecta com um token novo. O que o bot enviar no meio-tempo espera no buffer.
@@ -165,7 +167,8 @@ Uploads e mídia ficam em memória, até 256 MiB no total. Acima disso, sai o ma
 
 `send.text`, `send.image`, `send.video`, `send.audio`, `send.document`, `media.download`,
 `actions`, `quoted`, `typing`, `message.edit` e `message.delete`. Sem limites de tamanho. O perfil
-`web` do [kit de testes](../../testing/docs/README.md) declara as mesmas.
+`web` do [kit de testes](../../testing/docs/README.md) declara as mesmas. Não declara `media.ref`:
+os arquivos vivem só em memória, e nenhuma referência sobreviveria ao restart.
 
 ## CORS, origem e rate limit
 

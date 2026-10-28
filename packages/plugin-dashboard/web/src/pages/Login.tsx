@@ -1,71 +1,188 @@
-import { type FormEvent, useEffect, useRef, useState } from 'react';
-import { api } from '#web/lib/api.ts';
-import { loginMessage } from '#web/lib/gate.ts';
+import { type FormEvent, useState } from 'react';
+import { ApiProblem, api, unwrap } from '#web/lib/client.ts';
+import { hashParam } from '#web/lib/route.ts';
 
-/** Portão: cobre o app inteiro enquanto não há sessão. Enter envia (é um `<form>`). */
-export function Login({ onDone }: { onDone: () => void }) {
-  const [token, setToken] = useState('');
-  const [shown, setShown] = useState(false);
+const message = (error: unknown): string =>
+  error instanceof ApiProblem && error.status === 429
+    ? 'Muitas tentativas. Espere um pouco e tente de novo.'
+    : error instanceof Error
+      ? error.message
+      : String(error);
+
+function Gate({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="gate">
+      <section className="card login" aria-labelledby="gate-t">
+        <h1 id="gate-t">{title}</h1>
+        {children}
+      </section>
+    </div>
+  );
+}
+
+/** Login por e-mail e senha (`POST /auth/login`); a sessão volta no cookie. */
+export function Login({ onDone }: { onDone(): void }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
-  useEffect(() => input.current?.focus(), []);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (busy || token === '') return;
     setBusy(true);
     setError(undefined);
     try {
-      await api('login', { method: 'POST', body: { token } });
+      await unwrap(api().POST('/api/auth/login', { body: { email, password } }));
       onDone();
-    } catch (e) {
-      setError(loginMessage(e));
-      input.current?.focus();
+    } catch (failure) {
+      setError(message(failure));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="gate">
-      <form className="card login" onSubmit={submit}>
-        <h1>Entrar no dashboard</h1>
+    <Gate title="Entrar">
+      <form onSubmit={submit}>
         <div className="field">
-          <label htmlFor="token">Token de acesso</label>
-          <div className="row" style={{ flexWrap: 'nowrap' }}>
-            <input
-              ref={input}
-              id="token"
-              className="input"
-              type={shown ? 'text' : 'password'}
-              autoComplete="current-password"
-              spellCheck={false}
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              aria-invalid={error ? true : undefined}
-              aria-describedby={error ? 'token-err' : undefined}
-            />
-            <button
-              type="button"
-              className="btn"
-              aria-label={shown ? 'Ocultar token' : 'Mostrar token'}
-              aria-pressed={shown}
-              onClick={() => setShown((v) => !v)}
-            >
-              {shown ? 'Ocultar' : 'Mostrar'}
-            </button>
-          </div>
-          {error && (
-            <span id="token-err" className="err" role="alert">
-              {error}
-            </span>
-          )}
+          <label htmlFor="email">E-mail</label>
+          <input
+            id="email"
+            className="input"
+            type="email"
+            autoComplete="username"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
         </div>
-        <button type="submit" className="btn primary" disabled={busy || token === ''}>
-          {busy ? 'Entrando…' : 'Entrar'}
-        </button>
+        <div className="field">
+          <label htmlFor="password">Senha</label>
+          <input
+            id="password"
+            className="input"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
+        {error && (
+          <p className="notice danger" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="row spread">
+          <button type="submit" className="btn primary" disabled={busy}>
+            Entrar
+          </button>
+          <a href="#/convite">Tenho um convite</a>
+        </div>
       </form>
-    </div>
+    </Gate>
+  );
+}
+
+/**
+ * Aceite de convite (`POST /auth/invites/accept`). O link `#/convite?token=...` preenche o token;
+ * no primeiro acesso, o `bootstrapToken` da config vale como convite e pede nome e e-mail.
+ */
+export function AcceptInvite({ onDone }: { onDone(): void }) {
+  const [token, setToken] = useState(() => hashParam(window.location.hash, 'token') ?? '');
+  const [first, setFirst] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError(undefined);
+    try {
+      await unwrap(
+        api().POST('/api/auth/invites/accept', {
+          body: { token, password, ...(first && { name, email }) },
+        }),
+      );
+      // O token não fica no histórico do navegador depois de usado.
+      window.history.replaceState(null, '', '#/');
+      onDone();
+    } catch (failure) {
+      setError(message(failure));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Gate title="Aceitar convite">
+      <form onSubmit={submit}>
+        <div className="field">
+          <label htmlFor="token">Token do convite</label>
+          <input
+            id="token"
+            className="input mono"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            required
+          />
+        </div>
+        <label className="row field">
+          <input type="checkbox" checked={first} onChange={(e) => setFirst(e.target.checked)} />
+          Primeiro acesso (token de bootstrap)
+        </label>
+        {first && (
+          <>
+            <div className="field">
+              <label htmlFor="name">Nome</label>
+              <input
+                id="name"
+                className="input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="new-email">E-mail</label>
+              <input
+                id="new-email"
+                className="input"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+          </>
+        )}
+        <div className="field">
+          <label htmlFor="new-password">Senha nova</label>
+          <input
+            id="new-password"
+            className="input"
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
+        {error && (
+          <p className="notice danger" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="row spread">
+          <button type="submit" className="btn primary" disabled={busy}>
+            Entrar
+          </button>
+          <a href="#/">Voltar ao login</a>
+        </div>
+      </form>
+    </Gate>
   );
 }

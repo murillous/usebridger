@@ -1,8 +1,7 @@
 # @usebridger/testing — documentação
 
 Kit para testar plugins sem rede. Ele sobe um `Bot` de verdade (plugins, filas, middlewares,
-roteador) sobre o `FakeTransport`, que guarda o que o bot envia. O porquê das escolhas está no
-[ADR 0048](../../../docs/adr/0048-kit-de-testes-sobre-o-vitest.md).
+roteador) sobre o `FakeTransport`, que guarda o que o bot envia.
 
 ## Instalação
 
@@ -91,6 +90,9 @@ await depois.stop();
 - Use o `TestBot` devolvido daí em diante. O storage fecha no `stop()` do último bot; o `stop()`
   do anterior só confirma que ele parou.
 
+A mídia do `receive()` tem referência (capability `media.ref`): a do `FakeTransport` são
+os próprios bytes, então o `ctx.media.fromRef` do bot novo baixa o que o antigo guardou.
+
 ## Mensagem de entrada
 
 O `receive()` recebe só o que importa para o teste. O resto vem preenchido com padrões:
@@ -165,7 +167,7 @@ await bot.receive({
 
 Sem perfil, o `FakeTransport` declara todas as capabilities, e o plugin nunca é testado num
 transport sem grupo, sem citação ou sem figurinha. Com `profile`, o transport declara o que a
-plataforma declararia ([ADR 0069](../../../docs/adr/0069-kit-de-testes-multiplataforma.md)):
+plataforma declararia:
 
 ```ts
 const bot = await createTestBot({ profile: 'telegram', plugins: [meuPlugin()] });
@@ -180,8 +182,8 @@ const bot = await createTestBot({ profile: 'telegram', plugins: [meuPlugin()] })
 
 A lista completa de cada um está em `PROFILES`. O `whatsapp` e o `web` são o que o Baileys e o
 `transport-web` declaram, e um teste em cada transport garante isso. O `telegram` e o `discord`
-seguem a matriz do plano (§6.10) e serão confirmados quando cada transport nascer. Até lá, podem
-mudar numa minor do kit.
+são previsões e podem mudar numa minor do kit: o `telegram` ainda declara `send.album` e `polls`,
+que o `@usebridger/transport-telegram` não tem.
 
 O `receive()` e o `click()` usam o remetente do perfil, inclusive com o perfil passado no
 `FakeTransport` à mão. As opções `capabilities`, `limits` e `self` do `FakeTransport` substituem o
@@ -362,6 +364,7 @@ Os matchers recebem `bot.sent` ou o próprio `TestBot`:
 | `toContainVideo()` | Algum envio é vídeo |
 | `toContainAudio()` | Algum envio é áudio (`audio`; a nota de voz é `voice`, outro tipo) |
 | `toContainDocument({ fileName?, mimetype? })` | Algum envio é documento. Com `fileName` ou `mimetype`, iguais à string ou casando com a RegExp |
+| `toContainTemplate(name?)` | Algum envio é template (`type: 'template'`). Com `name`, o nome é igual à string ou casa com a RegExp |
 | `toHaveReplied(text?)` | Algum envio cita uma mensagem, como faz o `ctx.reply`. Com `text`, é uma resposta de texto com esse conteúdo |
 
 Todos funcionam com `.not`. Quando um matcher falha, a mensagem lista o que foi enviado:
@@ -420,10 +423,54 @@ const bot = await createTestBot({ transport, plugins: [meuPlugin()] });
 | `setGroup(metadata)` | Registra o grupo que `getGroupMetadata` devolve. Um grupo não registrado faz a chamada falhar |
 | `setRaw(source, raw)` / `raw(source)` | Registra e lê o objeto bruto falso de uma mensagem ou interação, o que o `ctx.unsafe.raw()` devolve. Sem registro, `undefined` |
 | `clear()` | Esvazia os registros de saída |
+| `requestPairingCode(phone)` | Capability `pairing`. Devolve `FAKE-` mais os 4 últimos dígitos do telefone, emite o mesmo código em `connection.pairing-code` e guarda o telefone em `pairingRequests` |
+| `logout()` | Capability `pairing`. Soma em `logouts`, zera o `self` e emite `closed` com `logged-out` |
 
 Um método ligado a uma capability que o transport não declara lança `UnsupportedError`, como no
 transport real. Um plugin que exige essa capability no manifesto (`requires`) faz o
 `createTestBot` rejeitar com `PluginBootError`, com o motivo em `reason`.
+
+### Pareamento e logout pela API
+
+`requestPairingCode` e `logout` atendem às rotas `POST /connection/pairing-code` e
+`POST /connection/logout` do core. Para testar o app que conecta o número pela API,
+monte o bot com `createBot` e um servidor `createHttp` em loopback:
+
+```ts
+const transport = new FakeTransport();
+const http = createHttp({ port: 0, hostname: '127.0.0.1' });
+const bot = createBot({ transport, http, env: {}, plugins: [comRota] }); // a porta abre com rota
+await bot.start();
+transport.emit('connection.status', { status: 'connecting' });
+const res = await fetch(`http://127.0.0.1:${http.port}/api/connection/pairing-code`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ phone: '5511999991234' }),
+});
+expect(await res.json()).toEqual({ code: 'FAKE-1234' });
+```
+
+### Janela de atendimento
+
+Plataformas como o WhatsApp oficial só aceitam conteúdo livre por um tempo após a última
+mensagem do contato. A opção `window` liga essa regra no transport falso:
+
+```ts
+vi.useFakeTimers();
+const transport = new FakeTransport({ window: { enabled: true, ttlMs: 24 * 60 * 60 * 1000 } });
+const bot = await createTestBot({ transport, plugins: [meuPlugin()] });
+await bot.receive({ text: 'oi' }); // abre a janela do chat em Date.now()
+vi.advanceTimersByTime(25 * 60 * 60 * 1000); // fecha
+```
+
+Cada mensagem recebida (`fromMe: false`) abre ou renova a janela do chat. Com a janela fechada
+(sem mensagem recebida, ou passado o `ttlMs`), o envio que não é template rejeita com
+`ConversationWindowError` (`closedAt` é `null` se o contato nunca escreveu) e não entra em `sent`;
+template passa sempre e entra em `sent` (`expect(bot).toContainTemplate('retomar')`).
+`transport.window(chatId)` (e o `ctx.send.window`) devolve `{ open, expiresAt }`, com `expiresAt`
+`null` se fechada. Sem a opção, ou com `enabled: false`, não há janela: o envio livre passa e
+`window()` resolve `null`. A capability `send.template` está em todas as capabilities por padrão,
+mas em nenhum perfil de plataforma.
 
 O `self` é `null` até o `connect()` e depois vale o `self` passado nas opções, o do perfil ou
 `DEFAULT_SELF`.

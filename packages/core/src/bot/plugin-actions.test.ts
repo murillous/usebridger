@@ -151,6 +151,12 @@ describe('ctx.send: ações pela fila de saída', () => {
     }
     expect(transport.actions).toEqual([]);
   });
+
+  it('ctx.send.window depois do dispose rejeita com ContextExpiredError (ADR 0124)', async () => {
+    const { ctx, bot: b } = await withContext(new ActionTransport(ALL));
+    await b.stop();
+    await expect(ctx.send.window('c')).rejects.toBeInstanceOf(ContextExpiredError);
+  });
 });
 
 describe('ctx.groups', () => {

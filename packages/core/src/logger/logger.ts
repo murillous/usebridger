@@ -2,6 +2,8 @@
 // `Logger`/`LoggerOptions`, para trocar a implementação sem quebrar plugins.
 
 import { type Logger as PinoLogger, pino, stdSerializers } from 'pino';
+import { currentTrace } from '#trace/scope.ts';
+import { redactPersonalIds } from './personal-id.ts';
 import { prettyDestination } from './pretty.ts';
 import type { SecretSource } from './secrets.ts';
 import type { LogFields, Logger, LogLevel } from './types.ts';
@@ -52,24 +54,53 @@ const CENSOR = '[REDACTED]';
 export const MIN_SECRET_LENGTH = 4;
 
 /**
- * Logger estruturado em JSON. `child({ plugin })` e `child({ chatId })` acumulam contexto; o
- * campo `err` é serializado com `message`, `stack` e `cause`.
+ * Logger estruturado em JSON. `child({ plugin })` e `child({ chat })` acumulam contexto; um
+ * `Error` nos campos, sob qualquer chave, é serializado com `type`, `message`, `stack` e `cause`.
+ * A convenção é o campo `err`.
  */
 export function createLogger(options: LoggerOptions = {}): Logger {
-  const destination = withSecretsCensored(formatted(options), options.secrets);
+  const destination = withPersonalIdsRedacted(
+    withSecretsCensored(formatted(options), options.secrets),
+  );
   const root = pino(
     {
       level: options.level ?? 'info',
       // `errWithCause` mantém a `cause` como objeto estruturado (com stack própria), em vez de
       // concatená-la na mensagem como o serializer padrão.
       serializers: { err: stdSerializers.errWithCause },
+      // Formato do ADR 0118: nível em texto e hora ISO UTC, que o Loki e o Grafana leem sem
+      // pipeline extra. `pid` e `hostname` saem: quem identifica a origem são os bindings base.
+      base: null,
+      // Carimba o `trace` da unidade de trabalho corrente (ADR 0120) na linha que sai, sem copiar
+      // os campos de quem loga; o campo da chamada vence.
+      mixin: traceFields,
+      timestamp: pino.stdTimeFunctions.isoTime,
+      formatters: { level: (label) => ({ level: label }), log: serializeErrors },
       ...(options.redact && options.redact.length > 0
         ? { redact: { paths: [...options.redact], censor: CENSOR } }
         : {}),
     },
     destination,
   );
-  return wrap(options.bindings ? root.child(options.bindings) : root);
+  return wrap(options.bindings ? root.child(withoutReserved(options.bindings, true)) : root);
+}
+
+function traceFields(): Record<string, string> {
+  const trace = currentTrace();
+  return trace === undefined ? {} : { trace };
+}
+
+// O serializer do pino só cobre o `err`. Um `Error` sob outra chave (`{ error }`) sairia `{}`,
+// porque message e stack não são enumeráveis; aqui ele ganha o mesmo tratamento do `err`. Copia
+// os campos só quando há o que trocar: o objeto é de quem chamou.
+function serializeErrors(fields: Record<string, unknown>): Record<string, unknown> {
+  let out = fields;
+  for (const [key, value] of Object.entries(fields)) {
+    if (key === 'err' || !(value instanceof Error)) continue;
+    if (out === fields) out = { ...fields };
+    out[key] = stdSerializers.errWithCause(value);
+  }
+  return out;
 }
 
 // O `pretty` converte a linha que sai da censura: os segredos são achados no JSON, onde a forma
@@ -111,6 +142,13 @@ function withSecretsCensored(
   };
 }
 
+// Redação de reserva do ADR 0119: JID e telefone que escaparem (em campo, mensagem ou `err`)
+// saem como `[REDACTED]`. Sempre ligada: id pessoal não tem opção de ficar no log.
+function withPersonalIdsRedacted(destination: LogDestination | undefined): LogDestination {
+  const target = destination ?? pino.destination(1);
+  return { write: (line) => target.write(redactPersonalIds(line)) };
+}
+
 // O segredo aparece na linha na forma escapada do JSON; o mais longo primeiro, para um segredo
 // que contém outro ser trocado inteiro.
 function toNeedles(secrets: readonly string[]): string[] {
@@ -120,6 +158,22 @@ function toNeedles(secrets: readonly string[]): string[] {
     .sort((a, b) => b.length - a.length);
 }
 
+// Chaves que o pino já escreve na linha: repeti-las nos campos geraria chave duplicada no JSON, e
+// quem lê fica com a última (o `level` é rótulo de stream no Loki, então errar aqui custa caro).
+// Nos bindings o `event` também é reservado: quem o escreve é o `logger.event`.
+// Checagem direta com `in`, sem iterar um Set: o caminho comum não aloca nada, nem iterador.
+export function withoutReserved(fields: LogFields, bindings = false): LogFields {
+  const reserved =
+    'level' in fields || 'time' in fields || 'msg' in fields || (bindings && 'event' in fields);
+  if (!reserved) return fields;
+  return Object.fromEntries(
+    Object.entries(fields).filter(
+      ([key]) =>
+        key !== 'level' && key !== 'time' && key !== 'msg' && !(bindings && key === 'event'),
+    ),
+  );
+}
+
 function wrap(log: PinoLogger): Logger {
   // Sem campos, chama o pino só com a mensagem: evita alocar um objeto vazio por linha. Em nível
   // desabilitado o método do pino já é um no-op, então nada é serializado.
@@ -127,13 +181,27 @@ function wrap(log: PinoLogger): Logger {
     get level(): LogLevel {
       return log.level as LogLevel;
     },
-    trace: (message, fields) => (fields ? log.trace(fields, message) : log.trace(message)),
-    debug: (message, fields) => (fields ? log.debug(fields, message) : log.debug(message)),
-    info: (message, fields) => (fields ? log.info(fields, message) : log.info(message)),
-    warn: (message, fields) => (fields ? log.warn(fields, message) : log.warn(message)),
-    error: (message, fields) => (fields ? log.error(fields, message) : log.error(message)),
-    fatal: (message, fields) => (fields ? log.fatal(fields, message) : log.fatal(message)),
-    child: (bindings) => wrap(log.child(bindings)),
+    trace: (message, fields) =>
+      fields ? log.trace(withoutReserved(fields), message) : log.trace(message),
+    debug: (message, fields) =>
+      fields ? log.debug(withoutReserved(fields), message) : log.debug(message),
+    info: (message, fields) =>
+      fields ? log.info(withoutReserved(fields), message) : log.info(message),
+    warn: (message, fields) =>
+      fields ? log.warn(withoutReserved(fields), message) : log.warn(message),
+    error: (message, fields) =>
+      fields ? log.error(withoutReserved(fields), message) : log.error(message),
+    fatal: (message, fields) =>
+      fields ? log.fatal(withoutReserved(fields), message) : log.fatal(message),
+    // O nível é checado antes: em nível desabilitado, nem o objeto com o `event` é alocado.
+    event: (event, fields) => {
+      if (log.isLevelEnabled(event.level))
+        log[event.level](
+          { ...(fields && withoutReserved(fields)), event: event.name },
+          event.message,
+        );
+    },
+    child: (bindings) => wrap(log.child(withoutReserved(bindings, true))),
   };
 }
 
@@ -151,6 +219,7 @@ const NOOP_LOGGER: Logger = Object.freeze({
   warn: noop,
   error: noop,
   fatal: noop,
+  event: noop,
   child: (): Logger => NOOP_LOGGER,
 });
 

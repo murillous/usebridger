@@ -49,7 +49,7 @@ function spyStore() {
 
 function warnLog() {
   const warns: string[] = [];
-  const log = { warn: (message: string) => warns.push(message) } as unknown as Pick<Logger, 'warn'>;
+  const log: Pick<Logger, 'event'> = { event: (event) => void warns.push(event.message) };
   return { log, warns };
 }
 
@@ -245,7 +245,14 @@ describe('BaileysTransport: nomes persistidos', () => {
   function setup() {
     const { store, calls, inner } = spyStore();
     const driver = new FakeDriver();
-    const log = { warn: vi.fn(), error: vi.fn(), debug: vi.fn(), info: vi.fn(), child: () => log };
+    const log = {
+      warn: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+      info: vi.fn(),
+      event: vi.fn(),
+      child: () => log,
+    };
     const transport = new BaileysTransport(
       { pairing: 'qr', driver },
       { session: 'default', auth: store, log: log as unknown as Logger },

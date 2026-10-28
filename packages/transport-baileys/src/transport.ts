@@ -12,6 +12,8 @@ import type {
   FormattedText,
   GroupMetadata,
   GroupParticipantAction,
+  JsonValue,
+  LogEvent,
   Logger,
   LogLevel,
   Message,
@@ -23,6 +25,7 @@ import type {
 } from '@usebridger/core';
 import {
   type Interaction,
+  type MediaLoader,
   type Transport,
   type TransportDeps,
   type TransportEventHandler,
@@ -62,7 +65,9 @@ import {
   toReaction,
 } from './events.ts';
 import { renderWhatsApp } from './format.ts';
+import * as LOG from './log-events.ts';
 import { type ILogger, toBaileysLogger } from './logger.ts';
+import { expiredOr, refMessage } from './media-ref.ts';
 import { type NormalizeEnv, nativeOf, toMessage } from './normalize.ts';
 import { toContent, toGroupMetadata, toQuoted, toWAKey } from './outgoing.ts';
 import { PollBook, pollUpdateOf, toPollVote } from './polls.ts';
@@ -84,6 +89,8 @@ export interface BaileysSocket {
     readonly lidMapping: { getPNForLID(lid: string): Promise<string | null> };
   };
   end(error: Error | undefined): Promise<void>;
+  /** Desvincula o aparelho; o socket fecha com `loggedOut`. */
+  logout(): Promise<void>;
   requestPairingCode(phoneNumber: string): Promise<string>;
   /** Pede ao aparelho que reenvie uma mídia cujo link expirou. */
   updateMediaMessage(message: WAMessage): Promise<WAMessage>;
@@ -127,7 +134,7 @@ export class BaileysTransport implements Transport {
   readonly name = 'baileys';
   /**
    * Todas as capabilities do core, menos `actions`: o WhatsApp pelo Baileys não tem botões
-   * confiáveis, e o kernel envia o menu em texto numerado (ADR 0058).
+   * confiáveis, e o kernel envia o menu em texto numerado.
    */
   readonly capabilities: ReadonlySet<Capability> = new Set<Capability>([
     'groups',
@@ -145,6 +152,8 @@ export class BaileysTransport implements Transport {
     'send.sticker',
     'send.document',
     'media.download',
+    // Referência com a media key, que baixa de novo após restart e pede o reenvio ao aparelho.
+    'media.ref',
     'message.edit',
     'message.delete',
     'polls',
@@ -161,17 +170,19 @@ export class BaileysTransport implements Transport {
   readonly #deps: TransportDeps;
   readonly #events: TypedEmitter<TransportEvents>;
   #socket: BaileysSocket | null = null;
+  /** Download do socket atual, para as mídias que voltam por referência. */
+  #env: NormalizeEnv | null = null;
   #self: Contact | null = null;
   /** Sobe a cada `connect()`/`disconnect()`: invalida a tentativa que ainda estava começando. */
   #attempt = 0;
   /**
-   * Metadados por grupo (ADR 0042): o kernel os pede a cada comando `group-admin`. Invalidado
+   * Metadados por grupo: o kernel os pede a cada comando `group-admin`. Invalidado
    * pelos eventos de grupo do Baileys e a cada conexão, porque a queda pode ter perdido algum.
    */
   readonly #groups = new Map<string, Promise<BaileysGroupMetadata>>();
   /** Contatos já vistos, entre conexões: o `contact.updated` sai só no que é novo. */
   readonly #contacts: ContactBook;
-  /** Enquetes vistas, para decifrar os votos (ADR 0067); o `disconnect()` as esquece. */
+  /** Enquetes vistas, para decifrar os votos; o `disconnect()` as esquece. */
   readonly #polls = new PollBook();
 
   constructor(options: BaileysTransportOptions, deps: TransportDeps) {
@@ -182,7 +193,7 @@ export class BaileysTransport implements Transport {
     // Os nomes persistem no auth state da sessão, que o logout apaga (ADR 0097).
     this.#contacts = new ContactBook({ store: deps.auth, log: deps.log });
     this.#events = new TypedEmitter<TransportEvents>((error, event) =>
-      this.#log.error('handler de evento do transport falhou', { err: error, event }),
+      this.#log.event(LOG.handlerFailed, { err: error, eventName: event }),
     );
   }
 
@@ -196,7 +207,7 @@ export class BaileysTransport implements Transport {
   }
 
   /**
-   * O `WAMessage` de onde a mensagem saiu (ADR 0062), o mesmo que o envio usa para citar. A citada
+   * O `WAMessage` de onde a mensagem saiu, o mesmo que o envio usa para citar. A citada
    * devolve o proto montado do `contextInfo`, sem `pushName` nem horário. O Baileys não emite
    * `interaction`: para ela, e para mensagem que não veio daqui, `undefined`.
    */
@@ -243,7 +254,7 @@ export class BaileysTransport implements Transport {
     socket.ev.on('creds.update', () => {
       if (!current()) return;
       saving = saving.then(saveCreds).catch((error: unknown) => {
-        this.#log.error('falha ao gravar as credenciais da sessão', { err: error });
+        this.#log.event(LOG.credsSaveFailed, { err: error });
       });
     });
 
@@ -251,12 +262,13 @@ export class BaileysTransport implements Transport {
     // chegada, que a fila de entrada do bot preserva por chat. Reação, edição e apagamento entram
     // na mesma fila: a edição de uma mensagem não passa à frente dela.
     let inbound = Promise.resolve();
-    const enqueue = (work: () => Promise<void>, failure: string, messageId?: string | null) => {
+    const enqueue = (work: () => Promise<void>, failure: LogEvent, messageId?: string | null) => {
       inbound = inbound.then(work).catch((error: unknown) => {
-        this.#log.error(failure, { err: error, messageId });
+        this.#log.event(failure, { err: error, messageId: messageId ?? undefined });
       });
     };
     const env = this.#normalizeEnv(socket, state, logger);
+    this.#env = env;
     const contacts = this.#contacts;
     const polls = this.#polls;
 
@@ -275,8 +287,8 @@ export class BaileysTransport implements Transport {
             if (pollUpdateOf(raw) !== null) {
               const vote = await toPollVote(raw, polls, env, contacts);
               if (vote === null) {
-                this.#log.debug('voto de enquete desconhecida; descartado', {
-                  messageId: raw.key.id,
+                this.#log.event(LOG.pollVoteUnknown, {
+                  messageId: raw.key.id ?? undefined,
                 });
               } else if (current()) {
                 this.#events.emit('poll.vote', vote);
@@ -293,7 +305,7 @@ export class BaileysTransport implements Transport {
             if (contact !== null) this.#events.emit('contact.updated', contact);
             this.#events.emit('message', message);
           },
-          'falha ao normalizar mensagem do Baileys; descartada',
+          LOG.messageNormalizeFailed,
           raw.key.id,
         );
       }
@@ -308,7 +320,7 @@ export class BaileysTransport implements Transport {
         for (const update of learnContacts(list, contacts)) {
           if (current()) this.#events.emit('contact.updated', update);
         }
-      }, 'falha ao aprender nomes de contatos do Baileys; descartados');
+      }, LOG.contactsLearnFailed);
     };
     socket.ev.on('contacts.upsert', learn);
     socket.ev.on('contacts.update', learn);
@@ -322,7 +334,7 @@ export class BaileysTransport implements Transport {
             const reaction = await toReaction(item, env, contacts);
             if (reaction !== null && current()) this.#events.emit('reaction', reaction);
           },
-          'falha ao converter reação do Baileys; descartada',
+          LOG.reactionConvertFailed,
           item.key.id,
         );
       }
@@ -338,7 +350,7 @@ export class BaileysTransport implements Transport {
               const message = await toEdited(item, env, contacts);
               if (message !== null && current()) this.#events.emit('message.edited', message);
             },
-            'falha ao converter edição do Baileys; descartada',
+            LOG.editConvertFailed,
             item.key.id,
           );
         } else if (item.update.messageStubType === WAMessageStubType.REVOKE) {
@@ -347,7 +359,7 @@ export class BaileysTransport implements Transport {
               const deleted = await toDeleted(item, env, contacts);
               if (deleted !== null && current()) this.#events.emit('message.deleted', deleted);
             },
-            'falha ao converter apagamento do Baileys; descartado',
+            LOG.deleteConvertFailed,
             item.key.id,
           );
         }
@@ -361,7 +373,7 @@ export class BaileysTransport implements Transport {
       for (const { id } of groups) {
         enqueue(async () => {
           if (current()) this.#events.emit('group.joined', { chat: chatOf(id) });
-        }, 'falha ao repassar grupo novo');
+        }, LOG.groupJoinedFailed);
       }
     });
     socket.ev.on('groups.update', (updates) => {
@@ -372,7 +384,7 @@ export class BaileysTransport implements Transport {
         if (changed === null) continue;
         enqueue(async () => {
           if (current()) this.#events.emit('group.updated', changed);
-        }, 'falha ao repassar alteração de grupo');
+        }, LOG.groupUpdatedFailed);
       }
     });
     socket.ev.on('group-participants.update', (update) => {
@@ -383,7 +395,7 @@ export class BaileysTransport implements Transport {
         if (!current()) return;
         if (self !== null) this.#events.emit(self, { chat: chatOf(update.id) });
         if (others !== null) this.#events.emit('group.participants', others);
-      }, 'falha ao converter alteração de participantes do Baileys; descartada');
+      }, LOG.participantsConvertFailed);
     });
 
     socket.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
@@ -439,7 +451,7 @@ export class BaileysTransport implements Transport {
     this.#releaseConsole?.();
     this.#releaseConsole = undefined;
     socket.end(undefined).catch((error: unknown) => {
-      this.#log.warn('falha ao encerrar o socket do Baileys', { err: error });
+      this.#log.event(LOG.socketEndFailed, { err: error });
     });
   }
 
@@ -463,9 +475,26 @@ export class BaileysTransport implements Transport {
   #pnForLid(socket: BaileysSocket, lid: string): Promise<string | null> {
     return socket.signalRepository.lidMapping.getPNForLID(lid).catch((error: unknown) => {
       // Sem o par, o contato segue com `phone: null`: os papéis falham fechados (ADR 0042).
-      this.#log.warn('falha ao resolver o telefone de um LID', { err: error, lid });
+      // Sem o `lid` nos campos: é id pessoal e o transport não pseudonimiza (ADR 0119).
+      this.#log.event(LOG.lidResolveFailed, { err: error });
       return null;
     });
+  }
+
+  /**
+   * Código sob demanda (`POST /connection/pairing-code`), para o app que pede pela API
+   * em vez de fixar `pairing.phone`. Vale na tentativa atual, enquanto ela mostra QR.
+   */
+  async requestPairingCode(phone: string): Promise<string> {
+    const socket = this.#connected();
+    const code = await socket.requestPairingCode(phone);
+    if (this.#socket === socket) this.#events.emit('connection.pairing-code', { code });
+    return code;
+  }
+
+  /** O fechamento com `loggedOut` chega como `logged-out`, e a política limpa a sessão. */
+  async logout(): Promise<void> {
+    await this.#connected().logout();
   }
 
   #requestPairingCode(socket: BaileysSocket, phone: string): void {
@@ -475,7 +504,7 @@ export class BaileysTransport implements Transport {
       },
       (error: unknown) => {
         // Sem código, a tentativa expira (`qr-timeout`) e a próxima pede outro.
-        this.#log.error('falha ao pedir o código de pareamento', { err: error });
+        this.#log.event(LOG.pairingCodeFailed, { err: error });
       },
     );
   }
@@ -566,6 +595,25 @@ export class BaileysTransport implements Transport {
       const list = failed.map((r) => `${r.jid ?? '?'} (${r.status})`).join(', ');
       throw new Error(`baileys: ${action} recusado para ${list}`);
     }
+  }
+
+  /**
+   * Mídia de uma referência guardada. Baixa pela conexão do momento do download, que
+   * pede o reenvio ao aparelho se a mídia saiu do CDN; sem conexão, falha sem dizer que expirou.
+   */
+  mediaFromRef(data: JsonValue): MediaLoader {
+    const raw = refMessage(data);
+    // `async`: sem conexão, a falha chega como rejeição, como a do download.
+    const env = async (): Promise<NormalizeEnv> => {
+      this.#connected();
+      return this.#env as NormalizeEnv;
+    };
+    return {
+      download: async () =>
+        (await env()).download(raw).catch((e: unknown) => Promise.reject(expiredOr(e))),
+      stream: async () =>
+        (await env()).stream(raw).catch((e: unknown) => Promise.reject(expiredOr(e))),
+    };
   }
 
   /** Socket da conexão atual; sem ele, a ação falha na hora em vez de esperar. */

@@ -49,7 +49,7 @@ veio o valor.
 
 ## De onde vem o valor
 
-O dono do bot define a config em três lugares. Para cada campo, vale o primeiro que tiver valor:
+O dono do bot define a config em até quatro lugares. Para cada campo, vale o primeiro que tiver valor:
 
 | Ordem | Onde | Exemplo para o `clima` |
 | --- | --- | --- |

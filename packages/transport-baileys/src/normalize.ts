@@ -2,7 +2,7 @@
 // envelopes (ephemeral, viewOnce, documentWithCaption), resolve o telefone de cada contato,
 // inclusive com LID (M1-16.4, ADR 0042), e monta a citada como `Message` também.
 
-import type { Contact, Mention, Message } from '@usebridger/core';
+import type { Contact, JsonValue, Mention, Message } from '@usebridger/core';
 import { createMessage, type MediaSource, type MessageInit } from '@usebridger/core/adapter';
 import {
   isJidGroup,
@@ -16,6 +16,7 @@ import {
   type WAMessageKey,
 } from 'baileys';
 import { mentionTag } from './format.ts';
+import { type MediaNode, mediaRefData } from './media-ref.ts';
 
 /** O nome já visto de um contato; `null` se nunca apareceu. Quem chama liga ao `ContactBook`. */
 export type NameOf = (id: string) => Promise<string | null>;
@@ -155,6 +156,7 @@ async function build(
     size: m.fileLength == null ? null : toNumber(m.fileLength) || null,
     download: () => env.download(unwrapped),
     stream: () => env.stream(unwrapped),
+    ...refOf(raw.key, key, m),
   });
 
   const message = createMessage(init(key, content, base, media));
@@ -174,10 +176,18 @@ export function nativeOf(message: Message): WAMessage | undefined {
 }
 
 type Base = Omit<Extract<MessageInit, { type: 'unknown' }>, 'type' | 'text'>;
-type MediaOf = (m: {
-  readonly mimetype?: string | null;
-  readonly fileLength?: Parameters<typeof toNumber>[0];
-}) => MediaSource;
+type MediaOf = (
+  m: MediaNode & {
+    readonly mimetype?: string | null;
+    readonly fileLength?: Parameters<typeof toNumber>[0];
+  },
+) => MediaSource;
+
+/** O `ref` do `MediaSource`, só quando a mídia tem o que baixá-la de novo. */
+function refOf(key: WAMessageKey, type: string, node: MediaNode): { ref?: JsonValue } {
+  const ref = mediaRefData(key, type, node);
+  return ref === undefined ? {} : { ref };
+}
 
 function init(key: keyof Content, c: Content, base: Base, media: MediaOf): MessageInit {
   switch (key) {

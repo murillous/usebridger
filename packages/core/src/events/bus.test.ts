@@ -3,6 +3,7 @@ import { createEventBus, type EventBus } from '#events/bus.ts';
 import type { PluginErrorEvent } from '#events/types.ts';
 import { createMessage } from '#message/create.ts';
 import type { Message } from '#message/types.ts';
+import { runInTrace } from '#trace/scope.ts';
 
 const base = {
   id: 'm1',
@@ -370,5 +371,25 @@ describe('isolamento (M1-7.2)', () => {
   it('emit nunca rejeita', async () => {
     bus.forPlugin('a').on('message', () => Promise.reject(new Error('x')));
     await expect(bus.emit('message', text())).resolves.toMatchObject({ failed: 1 });
+  });
+});
+
+describe('trace no plugin.error', () => {
+  it('sem trace ativo o campo fica ausente; com trace, leva o ativo', async () => {
+    bus.forPlugin('a').on('reaction', () => {
+      throw new Error('boom');
+    });
+    const payload = {
+      chat: base.chat,
+      messageId: 'x',
+      sender: base.sender,
+      emoji: '👍',
+      fromMe: false,
+    };
+    await bus.emit('reaction', payload);
+    await runInTrace('a'.repeat(32), () => bus.emit('reaction', payload));
+
+    expect('trace' in (errors[0] as object)).toBe(false);
+    expect(errors[1]?.trace).toBe('a'.repeat(32));
   });
 });

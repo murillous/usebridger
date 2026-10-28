@@ -318,7 +318,12 @@ describe('rotação da chave mestra', () => {
       env: { BRIDGER_SECRET_KEY: keyB, BRIDGER_SECRET_KEY_PREVIOUS: keyA },
     });
     expect(await rotated.configs.rotateSecrets()).toBe(3);
-    expect(rotated.log.lines.some((l) => l.level === 'info' && l.message.includes('3'))).toBe(true);
+    expect(rotated.log.lines).toContainEqual(
+      expect.objectContaining({
+        level: 'info',
+        fields: expect.objectContaining({ event: 'config.key.rotated', migrated: 3 }),
+      }),
+    );
     expect((await rotated.configs.resolve('ai')).config).toMatchObject({ apiKey: VALUE });
     expect((await rotated.configs.resolve('strict')).config).toMatchObject({
       apiKey: 'strict-key-123',

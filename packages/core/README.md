@@ -1,11 +1,15 @@
 # @usebridger/core
 
-Kernel do Bridger: bot de mensageria extensível por plugins. O core cuida de plugins, comandos,
+Core do Bridger, framework de bots de mensageria extensível por plugins. O core cuida de plugins, comandos,
 filas, middlewares e storage; a plataforma (WhatsApp, chat web) entra por um transport.
 
 ```sh
 npm install @usebridger/core @usebridger/storage-sqlite @usebridger/transport-baileys
 ```
+
+O mínimo é o core e um transport (`transport-baileys` para WhatsApp, `transport-web` para chat
+web). O storage é opcional, mas sem ele os dados ficam em memória e o WhatsApp pede pareamento a
+cada restart. Servidor HTTP, API e autenticação também são opcionais.
 
 ```ts
 import { bold, createBot, definePlugin, fmt } from '@usebridger/core';
@@ -36,6 +40,5 @@ Requer Node 24 ou mais novo.
 
 - [Documentação](https://github.com/murillous/usebridger/blob/main/packages/core/docs/README.md)
 - [Guias para escrever um plugin](https://github.com/murillous/usebridger/blob/main/docs/guias/README.md)
-- [Decisões de arquitetura (ADRs)](https://github.com/murillous/usebridger/blob/main/docs/adr/README.md)
 
 Licença [Apache-2.0](https://github.com/murillous/usebridger/blob/main/LICENSE).

@@ -44,14 +44,21 @@ export interface LogSignal {
   /** `Date.now()` de quando a linha foi emitida. */
   readonly time: number;
   readonly message: string;
-  /** Campos da chamada mais os bindings do logger filho (`plugin`, `chatId`, `transport`...). */
+  /** Campos da chamada mais os bindings do logger filho (`plugin`, `chat`, `transport`...). */
   readonly fields: LogFields;
+}
+
+/** Eventos de auditoria descartados; `count` é o incremento deste descarte. */
+export interface AuditDroppedSignal {
+  readonly count: number;
+  readonly reason: 'queue-full' | 'lease-lost' | 'shutdown' | 'rejected' | 'before-observer';
 }
 
 export interface ObserverSignals {
   readonly 'message.handled': MessageHandledSignal;
   readonly 'outbound.sent': OutboundSentSignal;
   readonly log: LogSignal;
+  readonly 'audit.dropped': AuditDroppedSignal;
 }
 
 export type ObserverSignalName = keyof ObserverSignals;
@@ -70,6 +77,7 @@ export class Observers {
     'message.handled': [],
     'outbound.sent': [],
     log: [],
+    'audit.dropped': [],
   };
   readonly #onError: (event: PluginErrorEvent) => void;
 

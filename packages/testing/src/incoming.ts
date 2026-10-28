@@ -12,7 +12,7 @@ export { DEFAULT_SENDER };
 /** Mídia de entrada: os bytes ou os bytes com o mimetype. */
 export type IncomingMedia = Buffer | { readonly data: Buffer; readonly mimetype: string };
 
-/** Anexo além da mídia principal (ADR 0061): os bytes ou os bytes com mimetype e nome. */
+/** Anexo além da mídia principal: os bytes ou os bytes com mimetype e nome. */
 export type IncomingAttachment =
   | Buffer
   | { readonly data: Buffer; readonly mimetype: string; readonly fileName?: string };
@@ -51,7 +51,7 @@ export interface IncomingMessage {
   /** Epoch em ms. Padrão: `Date.now()`. */
   readonly timestamp?: number;
   /**
-   * Objeto bruto falso que o `ctx.unsafe.raw()` devolve para esta mensagem (ADR 0062), para
+   * Objeto bruto falso que o `ctx.unsafe.raw()` devolve para esta mensagem, para
    * testar plugin específico de plataforma. Vale também na citada descrita. Ausente: `undefined`.
    */
   readonly raw?: unknown;
@@ -74,7 +74,7 @@ const DEFAULT_MIMETYPES: Record<MediaType, string> = {
 
 /** De onde vêm o ID e o remetente que a descrição não informa. */
 export interface BuildOptions {
-  /** Gera o ID da mensagem sem `id`. Padrão: um UUID, sem estado de módulo (ADR 0003). */
+  /** Gera o ID da mensagem sem `id`. Padrão: um UUID, sem estado de módulo. */
   readonly nextId?: () => string;
   /** Base do remetente, que `sender` completa. Padrão: `DEFAULT_SENDER`. */
   readonly sender?: Contact;
@@ -140,5 +140,8 @@ function mediaSource(media: IncomingAttachment, defaultMimetype: string): MediaS
     size: data.length,
     ...(fileName === undefined ? null : { fileName }),
     download: async () => data,
+    // Os próprios bytes viram a referência (ADR 0136): o `FakeTransport.mediaFromRef` os devolve,
+    // inclusive num bot recriado, como um restart.
+    ref: data.toString('base64'),
   };
 }

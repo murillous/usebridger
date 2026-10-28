@@ -103,8 +103,8 @@ describe('services por comando (ADR 0095)', () => {
         }),
       }),
     );
-    const table = lines.find((line) => line.message.startsWith('Plugins:'));
-    expect(table?.message).toContain('carregado; sem ds (serviço figurinhas)');
+    const table = lines.find((line) => line.fields['event'] === 'plugin.boot.review');
+    expect(table?.fields['report']).toContain('carregado; sem ds (serviço figurinhas)');
 
     transport.emit('message', message('!ds'));
     transport.emit('message', message('!baixa'));
@@ -268,7 +268,7 @@ describe('services por comando (ADR 0095)', () => {
           plugin: 'download',
           dependency: 'sticker',
           range: '^2.0.0',
-          version: '1.0.0',
+          loaded: '1.0.0',
         }),
       }),
     );
@@ -287,7 +287,12 @@ describe('services por comando (ADR 0095)', () => {
     expect(lines).toContainEqual(
       expect.objectContaining({
         level: 'warn',
-        message: expect.stringContaining('optionalDependsOn["sticker"] = "^0.0.3"'),
+        fields: expect.objectContaining({
+          event: 'plugin.dependency.exact-range',
+          field: 'optionalDependsOn',
+          dependency: 'sticker',
+          range: '^0.0.3',
+        }),
       }),
     );
   });

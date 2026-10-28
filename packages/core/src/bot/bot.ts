@@ -1,8 +1,17 @@
 import { ActionRegistry } from '#actions/actions.ts';
+import { EventStream } from '#api/events.ts';
+import { LogHistory } from '#api/logs.ts';
+import { AUDIT_COLLECTION, AUDIT_INDEXES, createAudit } from '#audit/audit.ts';
+import { createAuditRetention, validateRetentionDays } from '#audit/retention.ts';
+import { createAccounts } from '#auth/accounts.ts';
+import { DEFAULT_MAX_AGE_MS } from '#auth/actor.ts';
+import { createApiGuard } from '#auth/guard.ts';
+import { createAuthStore } from '#auth/store.ts';
 import { createCommandCatalog } from '#commands/catalog.ts';
 import { createPrefixStore } from '#commands/prefixes.ts';
 import { createCommandRegistry } from '#commands/registry.ts';
 import { createCommandRouter } from '#commands/router.ts';
+import { processEnv, readSecretKeys } from '#config/env.ts';
 import { normalizeOwners } from '#config/owners.ts';
 import { createPluginConfigs, type PluginConfigs } from '#config/plugin-configs.ts';
 import { ConversationRegistry, type WaitRecord } from '#conversations/conversations.ts';
@@ -11,10 +20,16 @@ import { createEventBus } from '#events/bus.ts';
 import { createGroups } from '#groups/groups.ts';
 import { sessionHttp } from '#http/server.ts';
 import { createDeferredLogger } from '#logger/deferred.ts';
+import * as LOG from '#logger/events.ts';
 import { createLogger, createNoopLogger } from '#logger/logger.ts';
+import { createPseudonymizer, withPseudonyms } from '#logger/pseudonym.ts';
+import { createPseudonymMap } from '#logger/pseudonym-map.ts';
+import { createRedactor } from '#logger/redact.ts';
 import { createSecretSet } from '#logger/secrets.ts';
 import { createLogSignalTap } from '#logger/signal.ts';
+import { assertTrailMode, createTrail } from '#logger/trail.ts';
 import type { Logger } from '#logger/types.ts';
+import { createMediaRefs } from '#message/media-ref.ts';
 import { chatAllowed } from '#middleware/chat-filter.ts';
 import { Observers } from '#observers/observers.ts';
 import { createOutbound, enqueueAction } from '#outbound/actions.ts';
@@ -33,15 +48,18 @@ import {
   sharedStorage,
 } from '#storage/namespace.ts';
 import { TenantScope } from '#tenant/scope.ts';
+import { newTraceId, runInTrace } from '#trace/scope.ts';
 import { type Capability, hasCapability } from '#transport/capabilities.ts';
 import type { ConnectionStatus, Transport } from '#transport/types.ts';
 import { createUnsafeAccess } from '#unsafe/access.ts';
+import { CORE_VERSION } from '#version.ts';
 import { BackgroundTasks } from './background-tasks.ts';
 import {
   buttonLimit,
   callConnect,
   isBootConflict,
   resolveTransport,
+  validateLogBindings,
   validateSession,
 } from './bot-setup.ts';
 import type { Bot, BotConfig, BotState, BotStats } from './config.ts';
@@ -59,6 +77,8 @@ import { createReconnector, type Reconnector } from './reconnect.ts';
 import { claimSession, type ReleaseSession } from './session.ts';
 import { acquireSessionLease, type SessionLease } from './session-lease.ts';
 import {
+  DEFAULT_HOOK_TIMEOUT_MS,
+  DEFAULT_SHUTDOWN_TIMEOUT_MS,
   type RegisteredStopHook,
   runStopHooks,
   type StopHook,
@@ -74,7 +94,7 @@ export { GroupAdminTimeoutError } from './group-admin.ts';
 /** Prazo padrão do `run` de um comando: o mesmo dos listeners. */
 const DEFAULT_COMMAND_TIMEOUT_MS = 30_000;
 
-/** Prazo padrão de cada middleware: o mesmo dos handlers (ADR 0039). */
+/** Prazo padrão de cada middleware: o mesmo dos handlers. */
 const DEFAULT_MIDDLEWARE_TIMEOUT_MS = 30_000;
 
 /**
@@ -92,6 +112,8 @@ const STOP_TIMEOUTS = {
 
 // Dono das rotas do transport na tabela HTTP da sessão; nome de plugin não tem `$`.
 const TRANSPORT_ROUTE_OWNER = '$transport';
+/** Dono do observador de log do stream da API; `$` não cabe em nome de plugin. */
+const KERNEL_OBSERVER = '$kernel';
 
 /**
  * Cria um bot. Valida a config e monta as peças sem efeito colateral (sem conexão, timer,
@@ -101,6 +123,8 @@ const TRANSPORT_ROUTE_OWNER = '$transport';
  */
 export function createBot(config: BotConfig): Bot {
   const session = validateSession(config.session ?? DEFAULT_SESSION);
+  validateLogBindings(config.logBindings);
+  assertTrailMode(config.trail);
   // Todo o estado vive neste closure (ADR 0003): duas instâncias nunca se enxergam.
   const hooks: RegisteredStopHook[] = [];
   let state: BotState = 'idle';
@@ -113,6 +137,8 @@ export function createBot(config: BotConfig): Bot {
   // logar (nada deveria) cai no no-op.
   let log: Logger = createNoopLogger();
   const getLog = (): Logger => log;
+  // Trilha de eventos por unidade de trabalho (ADR 0120); o `trace` vem do escopo do core.
+  const trail = createTrail(config.trail ?? 'info', getLog);
   const secrets = config.secrets ?? createSecretSet();
   const storage = config.storage ?? createMemoryStorage();
   // O escopo da sessão é aplicado aqui, uma vez: scheduler, config e plugins só veem esta visão.
@@ -125,12 +151,38 @@ export function createBot(config: BotConfig): Bot {
   // catálogo, que junta os avisos em lote.
   const catalog = createCommandCatalog({
     list: () => registry.list(),
-    onError: (error) =>
-      log.error('listener de commands.onChange do transport falhou', { err: error }),
+    onError: (error) => log.event(LOG.transportCommandsListenerFailed, { err: error }),
   });
   const registry = createCommandRegistry({ onChange: () => catalog.changed() });
+  // Autenticação da API (ADR 0127): só com `api.auth`. A auditoria nasce depois, daí o `() => audit`.
+  const apiAuth = config.api?.auth;
+  const authStorage = kernelStorage(scoped, 'auth');
+  const sessionMaxAgeMs = apiAuth?.sessionMaxAgeMs ?? DEFAULT_MAX_AGE_MS;
+  const apiGuard =
+    apiAuth === undefined
+      ? undefined
+      : createApiGuard({
+          store: createAuthStore(authStorage),
+          audit: () => audit,
+          sessionMaxAgeMs,
+          // Lido a cada request: o `http` nasce logo abaixo, e as permissões mudam com os plugins.
+          pluginPermissions: (): readonly string[] => http?.pluginPermissions() ?? [],
+          ...(apiAuth.trustProxy !== undefined && { trustProxy: apiAuth.trustProxy }),
+          accounts: createAccounts({
+            storage: authStorage,
+            store: createAuthStore(authStorage),
+            audit: () => audit,
+            log: getLog,
+            sessionMaxAgeMs,
+            ...(apiAuth.bootstrapToken !== undefined && { bootstrapToken: apiAuth.bootstrapToken }),
+          }),
+          ...(apiAuth.sessionIdleMs !== undefined && { idleMs: apiAuth.sessionIdleMs }),
+        });
   // Rotas da sessão no servidor do processo (ADR 0072); só entram nele no start().
-  const http = config.http === undefined ? undefined : sessionHttp(config.http, session, getLog);
+  const http =
+    config.http === undefined
+      ? undefined
+      : sessionHttp(config.http, session, getLog, trail, config.api, apiGuard);
   let resolvedTransport: Transport | undefined;
   const transport = resolveTransport(config.transport, {
     session,
@@ -146,7 +198,7 @@ export function createBot(config: BotConfig): Bot {
           }
           return `/transports/${encodeURIComponent(resolvedTransport.name)}`;
         },
-        (error, route) => log.error(`rota ${route} do transport falhou`, { err: error }),
+        (error, route) => log.event(LOG.transportRouteFailed, { route, err: error }),
       ),
     }),
   });
@@ -188,6 +240,17 @@ export function createBot(config: BotConfig): Bot {
       : pluginErrors.report(event),
   );
   const logTap = createLogSignalTap(observers, secrets);
+  // Chave mestra lida só no start (o ambiente é da config); sem ela a chave é do processo (ADR 0119).
+  // O mapa reverso guarda cada par cifrado, para a API resolver o pseudônimo (ADR 0132).
+  const pseudonymMap = createPseudonymMap({
+    kv: () => kernelStorage(scoped, 'pseudonyms').kv,
+    keys: () => readSecretKeys(config.env ?? processEnv()),
+    onError: (error) => getLog().event(LOG.pseudonymMapFailed, { err: error }),
+  });
+  const pseudonymizer = createPseudonymizer(
+    () => readSecretKeys(config.env ?? processEnv()).current,
+    pseudonymMap.remember,
+  );
   // Ordem dos pontos de extensão: a tabela do host, já na ordem de carga (ADR 0092).
   const services = createServiceRegistry({
     loadOrder: () => host?.report().map((entry) => entry.name) ?? [],
@@ -201,16 +264,16 @@ export function createBot(config: BotConfig): Bot {
     isGroupAdmin: groupAdminPort(
       transport,
       commandTimeoutMs,
-      (error) => log.warn('consulta de admin do grupo falhou depois do prazo', { err: error }),
+      (error) => log.event(LOG.groupAdminTimeout, { err: error }),
       armed,
     ),
     // O comando é recusado de todo jeito (fail-closed); o log diz ao autor o que falta.
     onUnknownRole: (role, command) =>
-      log.error(
-        `comando "${command.name}" exige o papel "${role}", que nenhum plugin carregado define: ` +
-          `declare dependsOn no plugin dono do papel (em "${command.plugin}")`,
-        { plugin: command.plugin, command: command.name, role },
-      ),
+      log.event(LOG.commandUnknownRole, {
+        plugin: command.plugin,
+        command: command.name,
+        role,
+      }),
   });
   // A espera com `onExpire` que vence entra na fila do chat como uma mensagem (ADR 0093). As de
   // passo com `persist` ficam no storage da sessão (ADR 0094); a coleção só abre no primeiro uso.
@@ -219,6 +282,7 @@ export function createBot(config: BotConfig): Bot {
     onDue: (chat, sender) => entry.expireWait(chat, sender),
     store: () => kernelStorage(scoped, 'conversations').collection<WaitRecord>('waits'),
     log: getLog,
+    trail,
   });
   const actions = new ActionRegistry();
   // Validado mesmo sem a capability: `limits.actions` malformado é erro de config de todo jeito.
@@ -236,31 +300,55 @@ export function createBot(config: BotConfig): Bot {
   const dropsBots = config.middlewares?.ignoreBots !== false;
   const inbound = new InboundQueue({
     maxPendingPerChat: config.inbound?.maxPendingPerChat,
-    onError: (error, chatId) => log.error('falha ao processar mensagem', { chatId, err: error }),
+    onError: (error, chat) => log.event(LOG.messageFailed, { chat, err: error }),
   });
   const outbound = new OutboundQueue({
-    onTypingError: (error, chatId) =>
-      log.debug('falha ao enviar "digitando"', { chatId, err: error }),
+    onTypingError: (error, chat) => log.event(LOG.typingFailed, { chat, err: error }),
     ...config.outbound,
     transport,
     observers,
+    trail,
   });
   const stats = (): BotStats => ({ inbound: inbound.stats(), outbound: outbound.stats() });
   // O plugin vê o envio e as ações (ADR 0036): a fila (close, stats) fica com o kernel.
   const send = createOutbound(outbound, transport);
   const groups = createGroups(transport, enqueueAction(outbound, transport));
+  const media = createMediaRefs(transport);
   // Cópia: o plugin recebe um `ReadonlySet`, mas um cast não deve alterar o do transport.
   const capabilities: ReadonlySet<Capability> = new Set(transport.capabilities);
   // Tenant da mensagem ou do evento em andamento (ADR 0068): o storage dos plugins e os jobs
   // agendados seguem ele.
   const tenants = new TenantScope();
+  // Auditoria (ADR 0122): uma cadeia por sessão, no namespace do kernel.
+  const auditCollection = () =>
+    kernelStorage(scoped, AUDIT_COLLECTION).collection(AUDIT_COLLECTION, {
+      indexes: AUDIT_INDEXES,
+    });
+  const audit = createAudit({
+    collection: auditCollection,
+    onFlushed: () => auditRetention.tick(),
+    session,
+    tenants,
+    log: getLog,
+    observers,
+    secrets,
+    masterKeys: () => readSecretKeys(config.env ?? processEnv()),
+  });
+  // Expurgação diária, disparada pela gravação (sem timer; ver docs/audit.md).
+  const auditRetention = createAuditRetention({
+    audit,
+    collection: auditCollection,
+    retentionDays: validateRetentionDays(config.audit?.retentionDays),
+    log: getLog,
+  });
   const scheduler = createSchedulerService({
     storage: scoped,
     tenants,
+    trail,
     jobTimeoutMs: timeouts.jobMs,
     onError: pluginErrors.report,
     onLateError: (event) => logPluginError(log, event),
-    onStorageError: (error) => log.error('scheduler: falha no storage', { err: error }),
+    onStorageError: (error) => log.event(LOG.schedulerStorageFailed, { err: error }),
   });
   const gate = new ReadyGate();
   const flow = createInboundFlow({
@@ -274,12 +362,14 @@ export function createBot(config: BotConfig): Bot {
       quote: hasCapability(transport, 'quoted'),
       reactions: hasCapability(transport, 'reactions'),
       log: getLog,
+      pseudonym: pseudonymizer.pseudonym,
     },
     maxButtons,
     ready: () => gate.ready || gate.promise,
     reportPluginError: pluginErrors.report,
     background,
     observers,
+    trail,
   });
   const reconnector: Reconnector | undefined =
     config.reconnection === false
@@ -302,12 +392,30 @@ export function createBot(config: BotConfig): Bot {
   // Snapshot do último status para plugin que sobe depois do evento (ADR 0106).
   let lastConnection: ConnectionStatus | undefined;
   const connectionTracker = createConnectionTracker();
+  // Tempo real da API (ADR 0129): só com servidor HTTP, para o bot sem ele não montar sinal de log.
+  const stream = http === undefined ? undefined : new EventStream();
+  // Histórico do `GET /logs` (ADR 0135), alimentado pelo mesmo sinal do stream.
+  const logHistory = new LogHistory();
+  if (stream !== undefined) {
+    observers.add(KERNEL_OBSERVER, 'log', (signal) => {
+      stream.publish('log', signal);
+      logHistory.push(signal);
+    });
+  }
   const entry = createTransportEntry({
     recordStatus: (status) => {
       lastConnection = status;
       connectionTracker.onStatus(status);
+      stream?.publish('connection.status', {
+        status: status.status,
+        ...(status.status === 'closed' && { reason: status.reason }),
+      });
     },
-    recordQr: connectionTracker.onQr,
+    recordQr: (payload) => {
+      connectionTracker.onQr(payload.expiresAt);
+      stream?.publish('connection.qr', payload);
+    },
+    recordPairingCode: (payload) => stream?.publish('connection.pairing-code', payload),
     transport,
     inbound,
     outbound,
@@ -323,12 +431,15 @@ export function createBot(config: BotConfig): Bot {
     dropsBots,
     stopping: () => state === 'stopping' || state === 'stopped' || state === 'failed',
     failed: () => state === 'failed',
+    trail,
     log: getLog,
   });
 
   let host: PluginHost | undefined;
   let configs: PluginConfigs | undefined;
   let booted = false;
+  // `kernel.stop` só existe se o `kernel.boot` foi gravado.
+  let bootAudited = false;
   const control = createPluginControl({
     host: () => host,
     configs: () => configs,
@@ -336,6 +447,19 @@ export function createBot(config: BotConfig): Bot {
     catalog,
     conversations,
     lifecycleError: pluginErrors.lifecycle,
+    audit,
+    log: getLog,
+    ...(stream && {
+      onChange: (entries) => {
+        for (const each of entries) {
+          stream.publish('plugin.status', {
+            name: each.name,
+            status: each.status,
+            ...(each.status === 'skipped' && { reason: each.reason.kind }),
+          });
+        }
+      },
+    }),
   });
 
   // --- Boot ---------------------------------------------------------------------------------
@@ -409,6 +533,9 @@ export function createBot(config: BotConfig): Bot {
     conversations.close();
     actions.clear();
     void outbound.close({ drain: false });
+    // Gancho que não coube no prazo: o que resta na fila vira `audit.dropped`.
+    audit.close();
+    void auditRetention.stop();
   }
 
   async function bootPlugins(): Promise<void> {
@@ -451,6 +578,7 @@ export function createBot(config: BotConfig): Bot {
       scheduler,
       send,
       groups,
+      media,
       http,
       onHttpError: pluginErrors.report,
       transport: {
@@ -466,9 +594,12 @@ export function createBot(config: BotConfig): Bot {
       botName: config.name ?? transport.name,
       stats,
       observers,
+      audit,
       adminPlugins: new Set(config.adminPlugins ?? []),
       admin: control,
+      adminFor: (plugin) => control.as({ kind: 'plugin', name: plugin }),
       secrets,
+      pseudonym: pseudonymizer.pseudonym,
       unsafe: createUnsafeAccess({
         transport,
         log,
@@ -480,11 +611,7 @@ export function createBot(config: BotConfig): Bot {
       onLateCommandError: (plugin, command, error) => {
         // A recusa de um contexto expirado já foi logada quando aconteceu (ADR 0029).
         if (error instanceof ContextExpiredError) return;
-        log.error(`comando "${command}" rejeitou depois do prazo`, {
-          plugin,
-          command,
-          err: error,
-        });
+        log.event(LOG.commandTimeout, { plugin, command, err: error });
       },
     });
     const pluginHost = createPluginHost({
@@ -518,23 +645,57 @@ export function createBot(config: BotConfig): Bot {
 
   async function runStart(): Promise<void> {
     try {
-      log = logTap.wrap(
-        config.logger ??
-          createLogger({
-            level: config.logLevel ?? 'info',
-            ...(config.logFormat && { format: config.logFormat }),
-            secrets,
-          }),
+      // Bindings base em toda linha (ADR 0118): `bot` é a sessão; o app acrescenta `service`,
+      // `version` e `env`. Valem também sobre o logger próprio do app. O `createBot` já recusou
+      // `bot` em `logBindings`, então o spread não o sobrescreve.
+      log = withPseudonyms(
+        logTap
+          .wrap(
+            config.logger ??
+              createLogger({
+                level: config.logLevel ?? 'info',
+                ...(config.logFormat && { format: config.logFormat }),
+                secrets,
+              }),
+          )
+          .child({ bot: session, ...config.logBindings }),
+        pseudonymizer.pseudonym,
       );
       transportLog = log.child({ transport: transport.name });
       // Antes de `booted`: um bot recusado aqui não fecha o storage do bot que usa a sessão.
       releaseSession = claimSession(storage, session);
       booted = true;
       // Ligada já no boot: o `/health` mostra a sessão subindo (503) até ela ficar `running`.
-      http?.attach(() => state);
+      http?.attach(
+        () => state,
+        stream && {
+          connection: {
+            transport,
+            status: () => lastConnection,
+            info: connectionTracker.info,
+            audit: () => audit,
+          },
+          stream,
+          logs: logHistory,
+          plugins: {
+            plugins: control.plugins,
+            config: control.config,
+            secretFields: (name) => configs?.secretFields(name) ?? [],
+            redact: createRedactor(secrets),
+          },
+          pseudonyms: { map: pseudonymMap, audit: () => audit },
+          audit: { audit: () => audit, log: () => log },
+        },
+      );
       httpAttached = http !== undefined;
+      // Chave malformada lança aqui (`BotConfigError`), como já lançaria na config dos plugins.
+      if (pseudonymizer.ephemeral()) log.event(LOG.pseudonymEphemeral);
+      // Mesma chave do pseudônimo: sem ela a cadeia de auditoria usa uma chave pública (ADR 0122).
+      if (readSecretKeys(config.env ?? processEnv()).current === undefined) {
+        log.event(LOG.auditUnkeyed);
+      }
       if (config.storage === undefined) {
-        log.warn('sem storage configurado: usando memória, os dados somem ao reiniciar');
+        log.event(LOG.storageMissing);
       }
       // Sem conexão até o primeiro `open`: o `connect()` resolve ao iniciar a tentativa, e os
       // envios do setup e dos jobs vencidos iriam para um socket ainda fechado (ADR 0044). O
@@ -549,26 +710,36 @@ export function createBot(config: BotConfig): Bot {
         session,
         log,
         signal: bootAbort.signal,
+        onRenewed: () => auditRetention.tick(),
         onLost: () => {
-          log.error('outro processo assumiu a trava da sessão; parando o bot', { session });
-          bot.stop().catch((error: unknown) => log.error('falha ao parar o bot', { err: error }));
+          // Outro processo pode ter assumido a cadeia: gravar agora a bifurcaria (ADR 0122).
+          audit.leaseLost();
+          void auditRetention.stop();
+          log.event(LOG.sessionTaken, { session });
+          bot.stop().catch((error: unknown) => log.event(LOG.stopFailed, { err: error }));
         },
       });
     } catch (error) {
       // Nada conectou ainda: só desfaz o que foi registrado.
       await shutdown().catch((cleanup: unknown) =>
-        log.error('falha ao encerrar após erro no start', { err: cleanup }),
+        log.event(LOG.startCleanupFailed, { err: cleanup }),
       );
       throw error;
     }
+
+    // Depois da trava, o único escritor da cadeia: lê o topo e liga o flush (ADR 0122).
+    audit.start();
+    auditRetention.start();
+    auditRetention.tick();
 
     // Plugins primeiro, connect depois (plano §5.3): um plugin quebrado (conflito de comando,
     // manifesto inválido, ciclo) derruba o boot antes de o transport abrir sessão — sem QR nem
     // handshake à toa.
     try {
-      await bootPlugins();
+      // O boot é uma unidade de trabalho: o `setup` de todos os plugins loga sob o mesmo trace.
+      await runInTrace(newTraceId(), bootPlugins);
     } catch (error) {
-      log.error('falha ao carregar os plugins; encerrando', { err: error });
+      log.event(LOG.pluginsLoadFailed, { err: error });
       // O transport nunca conectou: o encerramento não chama `disconnect()`.
       await failBoot(error);
     }
@@ -578,7 +749,7 @@ export function createBot(config: BotConfig): Bot {
     try {
       await http?.listen();
     } catch (error) {
-      log.error('falha ao abrir a porta HTTP; encerrando', { err: error });
+      log.event(LOG.httpOpenFailedOnBoot, { err: error });
       await failBoot(error);
     }
     // Daqui em diante, mudança na lista de comandos avisa o transport.
@@ -612,10 +783,17 @@ export function createBot(config: BotConfig): Bot {
     scheduler.start();
     gate.settle(true);
     state = 'running';
+    bootAudited = true;
+    audit.record({
+      action: 'kernel.boot',
+      details: { version: CORE_VERSION, plugins: loadedPlugins() },
+    });
+    // Dreno já, sem esperar o timer de 1 s: o boot não deixa timer pendente no caminho quente.
+    void audit.flush();
   }
 
   /**
-   * Desistência da reconexão (ADR 0116): para o transport e as filas, mas mantém plugins, HTTP e
+   * Desistência da reconexão: para o transport e as filas, mas mantém plugins, HTTP e
    * scheduler no ar, para o painel mostrar o erro. O `stop()` encerra o resto.
    */
   function enterFailed(): void {
@@ -633,7 +811,7 @@ export function createBot(config: BotConfig): Bot {
     // Os jobs ficam no storage para o próximo boot, como no `abandonInternals`.
     void scheduler.stop(AbortSignal.abort());
     failedDisconnect = transport.disconnect().catch((error: unknown) => {
-      log.error('falha ao desconectar o transport no estado failed', { err: error });
+      log.event(LOG.failedDisconnectFailed, { err: error });
     });
   }
 
@@ -648,6 +826,9 @@ export function createBot(config: BotConfig): Bot {
     throw failure;
   }
 
+  const loadedPlugins = (): string[] =>
+    (host?.report() ?? []).filter((each) => each.status === 'loaded').map((each) => each.name);
+
   // --- Shutdown -----------------------------------------------------------------------------
 
   function shutdown(): Promise<void> {
@@ -660,8 +841,33 @@ export function createBot(config: BotConfig): Bot {
     // O teardown tira os comandos de cada plugin: o transport não deve apagar o menu da plataforma.
     catalog.close();
     // LIFO: quem subiu por último depende de quem subiu antes, então desce primeiro.
+    const totalDeadline = Date.now() + (config.shutdown?.timeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS);
     const errors: unknown[] = await runStopHooks(hooks.toReversed(), config.shutdown);
     hooks.length = 0;
+    // Antes do `audit.stop`, para o evento entrar no dreno.
+    if (bootAudited) {
+      audit.record({
+        action: 'kernel.stop',
+        details: { version: CORE_VERSION, plugins: loadedPlugins() },
+      });
+    }
+    // Depois do teardown dos plugins, que ainda auditam: drena com o prazo de um gancho
+    // (`shutdown.hookTimeoutMs`) limitado ao que sobrou do prazo total (`shutdown.timeoutMs`);
+    // o que não couber vira `audit.dropped`. Não é um gancho da lista para não competir com os
+    // demais pelo prazo.
+    const auditMs = Math.min(
+      config.shutdown?.hookTimeoutMs ?? DEFAULT_HOOK_TIMEOUT_MS,
+      totalDeadline - Date.now(),
+    );
+    const auditSignal = auditMs > 0 ? AbortSignal.timeout(auditMs) : AbortSignal.abort();
+    // Uma expurgação em voo termina (ou desiste no próximo passo) antes de a fila ser drenada.
+    await Promise.race([
+      auditRetention.stop(),
+      new Promise<void>((resolve) => {
+        auditSignal.addEventListener('abort', () => resolve(), { once: true });
+      }),
+    ]);
+    await audit.stop(auditSignal);
     await abandonInternals();
     // Em `failed` o transport já foi desconectado; o storage só fecha depois disso.
     if (failedDisconnect !== undefined) await failedDisconnect;

@@ -1,11 +1,67 @@
 # Transport
 
-O `Transport` é a porta entre o kernel e um canal de mensageria: WhatsApp, Telegram, Discord ou
-um chat web próprio. O core só conhece a interface; cada adapter traduz o formato nativo para os
-tipos normalizados, e nada do contrato supõe uma plataforma. Porquê:
-[ADR 0002](../../../docs/adr/0002-transport-abstrato.md),
-[ADR 0008](../../../docs/adr/0008-capabilities-do-transporte.md),
-[ADR 0009](../../../docs/adr/0009-escape-hatch-unsafe-native.md).
+Este guia é para quem **escreve um transport**: o pedaço de código que liga o Bridger a uma
+plataforma de mensagens (WhatsApp, Telegram, Discord, um chat web próprio). Quem só usa um
+transport pronto (`@usebridger/transport-baileys`, `-telegram`, `-web`) não precisa dele.
+
+O core só conhece a interface `Transport`. Cada adapter traduz o formato nativo da plataforma
+para os tipos normalizados (`Message`, `Contact`, `Chat`) e executa o que a fila de saída manda
+(enviar, reagir, editar...). O adapter declara em `capabilities` o que sabe fazer, e o core
+só pede isso.
+
+## Um transport mínimo
+
+O menor transport que funciona: conecta, entrega uma mensagem ao bot e responde no console.
+`defineTransport` cuida do emissor de eventos, do `self` e das capabilities.
+
+```ts
+import { createMessage, defineTransport } from '@usebridger/core/adapter';
+
+export function eco() {
+  return defineTransport((deps, { emit, setSelf }) => ({
+    name: 'eco',
+    capabilities: ['send.text'],
+
+    async connect() {
+      setSelf({ id: 'bot', name: 'Eco', phone: null, isBot: true });
+      emit('connection.status', { status: 'open' }); // sem `open`, a fila de saída não envia nada
+      // Num transport de verdade, aqui você escuta a plataforma e emite cada mensagem recebida:
+      emit(
+        'message',
+        createMessage({
+          type: 'text',
+          id: '1',
+          chat: { id: 'sala', isGroup: false, kind: 'dm' },
+          sender: { id: 'ana', name: 'Ana', phone: null },
+          text: '!ping',
+          timestamp: Date.now(),
+          fromMe: false, // obrigatório: sem ele o bot responderia a si mesmo
+        }),
+      );
+    },
+
+    async disconnect() {}, // tem de ser seguro mesmo sem `connect()` e se chamado duas vezes
+
+    async send(chatId, content) {
+      if (content.type === 'text') console.log(`[${chatId}] ${content.text}`);
+      return { chatId, id: String(Date.now()), fromMe: true, senderId: null };
+    },
+  }));
+}
+```
+
+Uso:
+
+```ts
+import { createBot } from '@usebridger/core';
+import { eco } from './eco.ts';
+
+const bot = createBot({ transport: eco(), plugins: [meuPlugin] });
+await bot.start();
+```
+
+O resto deste guia detalha cada parte do contrato. Leia na ordem que precisar; o
+[transport do Telegram](../../transport-telegram/README.md) é um exemplo completo e real.
 
 ## A interface
 
@@ -23,6 +79,8 @@ interface Transport {
 
   connect(): Promise<void>;
   disconnect(): Promise<void>;
+  requestPairingCode?(phone): Promise<string>;  // opcional, com pairing
+  logout?(): Promise<void>;                      // opcional, com pairing
   on(event, handler): Unsubscribe;
 
   send(chatId, content, options?): Promise<MessageKey>;
@@ -32,13 +90,14 @@ interface Transport {
   sendTyping(chatId, kind): Promise<void>;       // typing
   getGroupMetadata(groupId): Promise<GroupMetadata>;            // groups
   isChatAdmin?(chat, contact): Promise<boolean>;                // opcional
+  window?(chatId): Promise<ConversationWindow | null>;         // opcional
+  mediaFromRef?(data): MediaLoader;                             // media.ref
   updateGroupParticipants(groupId, ids, action): Promise<void>; // groups.add/remove/promote
 }
 ```
 
 `connect()` inicia uma tentativa de conexão e resolve assim que ela começou (socket criado), sem
-esperar o `open`; rejeita só se nem deu para começar. O resto chega por `connection.status`
-([ADR 0044](../../../docs/adr/0044-connect-resolve-ao-iniciar.md)):
+esperar o `open`; rejeita só se nem deu para começar. O resto chega por `connection.status`:
 
 - `open` quando dá para enviar. O `Bot` só despacha a fila de saída depois do primeiro `open`:
   um transport que nunca o emite não envia nada.
@@ -50,18 +109,25 @@ esperar o `open`; rejeita só se nem deu para começar. O resto chega por `conne
 após um `connect()` que falhou ou que ainda não terminou, ou mais de uma vez. O shutdown do
 `Bot` conta com isso.
 
-O tipo `Transport` tem todos os métodos. O kernel confere a capability antes de chamar, então
+`requestPairingCode(phone)` e `logout()` atendem às rotas `POST /connection/pairing-code` e
+`POST /connection/logout` da API ([API HTTP](api.md)).
+O primeiro resolve com o código e também o emite em `connection.pairing-code`. O segundo
+desvincula a sessão na plataforma e emite `closed` com `logged-out`; a política de reconexão
+limpa a credencial e pareia de novo. Sem eles, as rotas respondem 409.
+
+O tipo `Transport` tem todos os métodos. O core confere a capability antes de chamar, então
 quem escreve uma classe implementa os das capabilities que declara e faz o resto lançar
 `UnsupportedError`. O objeto escrito à mão (em JS, por exemplo) pode simplesmente omiti-los. O
 `createBot` recusa com `BotConfigError` o transport que declara uma capability sem o método dela
 (`reactions` sem `react`), que declara uma capability desconhecida ou que não tem `connect`,
-`disconnect`, `on` ou `send`
-([ADR 0076](../../../docs/adr/0076-acucar-para-o-autor-de-transport.md)).
+`disconnect`, `on` ou `send`.
 
 ## Forma curta: `defineTransport`
 
 Para não montar à mão o emissor, o `on()`, o `self`, o `Set` de capabilities e os métodos que só
 lançam `UnsupportedError`, descreva só o que é do adapter:
+
+O exemplo abaixo mostra uma capability opcional (`reactions`, que exige o método `react`):
 
 ```js
 import { defineTransport } from '@usebridger/core/adapter';
@@ -90,24 +156,24 @@ export function echo(options) {
 `defineTransport(build)` devolve a fábrica que o app passa em `createBot({ transport })`
 ([Adapter com fábrica](#adapter-com-fábrica)). O `build` recebe as `TransportDeps` e um kit:
 
-- `emit(evento, payload)` entrega um evento ao kernel. O erro de um handler vai para o
+- `emit(evento, payload)` entrega um evento ao core. O erro de um handler vai para o
   `deps.log`, nunca para o adapter.
 - `setSelf(contato)` define o `Transport.self`. Chame ao abrir a conexão.
 
 A descrição (`TransportSpec`) é o contrato sem o `on` e o `self`: `capabilities` em lista, e
 `react`, `edit`, `delete`, `sendTyping`, `getGroupMetadata`, `updateGroupParticipants`, `raw`,
-`isChatAdmin`, `native`, `limits` e `pacing` opcionais. O transport montado:
+`isChatAdmin`, `window`, `mediaFromRef`, `native`, `limits` e `pacing` opcionais. O transport montado:
 
 - confere a capability no `send` (a do conteúdo, mais citação, menções e botões) e em cada
   método antes de chamar o do adapter, que roda com `this` na descrição;
 - faz o método não implementado rejeitar com `UnsupportedError`;
-- só expõe `raw`, `isChatAdmin`, `limits` e `pacing` quando a descrição os tem.
+- só expõe `raw`, `isChatAdmin`, `window`, `limits` e `pacing` quando a descrição os tem.
 
 Descrição inválida (capability com erro de digitação, capability sem o método, `send` faltando)
 lança `TypeError` com todos os problemas, e o `createBot` o converte em `BotConfigError`.
 
 O adapter com estado grande, como o do Baileys, pode seguir em classe com `implements Transport`.
-As duas formas dão o mesmo `Transport` ao kernel.
+As duas formas dão o mesmo `Transport` ao core.
 
 ## Ids de contato
 
@@ -122,24 +188,21 @@ Onde a plataforma tem telefone, é o `phone` que liga os dois:
   `transport.self` sempre que souber resolvê-lo. Sem telefone na plataforma (Discord, web) ou sem
   como resolvê-lo, vai `null`.
 - Para saber se dois contatos são o mesmo, compare o `id` e, se os dois tiverem, o `phone`. É o
-  que o kernel faz no `role: 'group-admin'`
-  ([ADR 0042](../../../docs/adr/0042-ids-de-contato-e-metadata-de-grupo.md)). Os `owners` da
+  que o core faz no `role: 'group-admin'`. Os `owners` da
   config dizem qual dos dois comparar: telefone com `phone`, `{ id }` com `id`.
 - `username` e `isBot` vão no remetente, nos participantes e no `transport.self` quando a
   plataforma informa. Marque `isBot: true` nos outros bots: é o que o `ignoreBots` lê para evitar
   loop entre bots. `claims` só vai no contato que fez a ação, e só com o que o transport
-  verificou ([ADR 0053](../../../docs/adr/0053-contact-multiplataforma.md)).
+  verificou.
 
 - O `chat.id` precisa apontar para onde a resposta deve cair: no Telegram, componha o chat e o
   tópico (`message_thread_id`) e decomponha no envio. `parentId` é o espaço (servidor do
-  Discord, supergrupo do Telegram), e `kind`/`title` vão quando a plataforma informa
-  ([ADR 0054](../../../docs/adr/0054-chat-multiplataforma.md)).
+  Discord, supergrupo do Telegram), e `kind`/`title` vão quando a plataforma informa.
 - `chat.tenantId` só com o que o transport **verificou** (o claim configurado do JWT, nunca um
   campo que o usuário escolhe), em todo evento do chat: mensagem, edição, clique, reação, voto,
   apagada e eventos de grupo. Com tenant, **componha o tenant no `chat.id` e no `id` dos
   contatos**: prefixos por chat, esperas de resposta, ações e rate limit são chaveados por esses
-  IDs, e dois tenants não podem dividir um deles
-  ([ADR 0068](../../../docs/adr/0068-isolamento-por-tenant.md)).
+  IDs, e dois tenants não podem dividir um deles.
 
 ## Eventos
 
@@ -157,11 +220,11 @@ Os eventos chegam já normalizados (`TransportEvents`):
 | `group.updated` | `{ chat, title?, description?, announce?, restrict? }` |
 | `contact.updated` | `{ id, name?, phone? }` (nome ou telefone de um contato mudou; só os campos alterados) |
 | `connection.status` | `{ status: 'connecting' \| 'open' }` ou `{ status: 'closed', reason, error }` |
-| `connection.qr` | `{ qr }` |
+| `connection.qr` | `{ qr, expiresAt? }` (`expiresAt`: epoch em ms em que o QR deixa de valer, se a plataforma informa) |
 | `connection.pairing-code` | `{ code }` (código de pareamento, a alternativa ao QR; quem pareia por código não emite `connection.qr`) |
 | `interaction` | `{ id, chat, sender, actionId, timestamp }` (clique num botão; ver [Botões](#botões)) ou `{ id, chat, sender, command, args, timestamp }` (comando nativo; ver [Comandos nativos](#comandos-nativos)) |
 
-`message:<type>` e `plugin.error` (plano §6.4) são gerados pelo kernel, não pelo transport.
+`message:<type>` e `plugin.error` são gerados pelo core, não pelo transport.
 
 ```ts
 const off = transport.on('reaction', ({ messageId, emoji }) => { ... });
@@ -176,11 +239,19 @@ Use o `TypedEmitter`. Um handler que lança ou rejeita não interrompe os demais
 o adapter: o erro vai para o `onError` passado no construtor.
 
 ```ts
+import { defineLogEvent } from '@usebridger/core';
 import { TypedEmitter, type TransportEvents } from '@usebridger/core/adapter';
+
+// Mesmo nome que o core e os outros transports usam: o binding `transport` diz qual.
+const HandlerFailed = defineLogEvent({
+  name: 'transport.handler.failed',
+  level: 'error',
+  message: 'handler de evento do transport falhou',
+});
 
 class TelegramTransport implements Transport {
   readonly #events = new TypedEmitter<TransportEvents>((error, event) =>
-    this.#log.error({ error, event }, 'handler de evento falhou'),
+    this.#log.event(HandlerFailed, { err: error, eventName: event }),
   );
 
   on: Transport['on'] = (event, handler) => this.#events.on(event, handler);
@@ -195,8 +266,7 @@ class TelegramTransport implements Transport {
 
 Um adapter que precisa do bot (credenciais, logger) exporta uma fábrica, não a classe:
 `BotConfig.transport` aceita `(deps: TransportDeps) => Transport`
-([ADR 0033](../../../docs/adr/0033-transport-por-fabrica.md); uso em
-[Bot → Transport por fábrica](bot.md#transport-por-fábrica)).
+(uso em [Bot → Transport por fábrica](bot.md#transport-por-fábrica)).
 
 ```ts
 import type { Transport, TransportDeps } from '@usebridger/core/adapter';
@@ -213,7 +283,7 @@ export function telegram(options: TelegramOptions): (deps: TransportDeps) => Tra
   ([Storage → Auth state](storage.md#auth-state-para-transports)).
 - `log` já vem com `{ transport: name }` e passa pela censura de segredos do bot. Antes do
   `start()` descarta as linhas; guarde a referência, ela passa a valer sozinha.
-- A fábrica roda dentro do `createBot`, que não pode ter efeito colateral (ADR 0003): **só monte o
+- A fábrica roda dentro do `createBot`, que não pode ter efeito colateral: **só monte o
   objeto**. Socket, timer, leitura de credenciais e qualquer I/O ficam no `connect()`. O
   transport sai da fábrica pronto para `connect()`, sem passo de inicialização extra.
 - `commands` é a lista de comandos do bot, para o menu nativo da plataforma (ver
@@ -226,8 +296,7 @@ export function telegram(options: TelegramOptions): (deps: TransportDeps) => Tra
 ## Comandos nativos
 
 Onde a plataforma tem menu de comandos (slash commands do Discord, `setMyCommands` do Telegram,
-menu do web), o transport registra os comandos do bot a partir de `deps.commands`
-([ADR 0060](../../../docs/adr/0060-comandos-nativos.md)):
+menu do web), o transport registra os comandos do bot a partir de `deps.commands`:
 
 - `list()` devolve os comandos registrados agora (`plugin`, `name`, `aliases`, `description`,
   `role`), como o `ctx.commands.list()` dos plugins;
@@ -260,7 +329,7 @@ O que registrar:
   aceita 100 comandos globais).
 - **O `role` decide quem vê o comando.** `everyone` para todos; `group-admin` só para admins,
   onde a plataforma permite (`default_member_permissions` no Discord, escopo
-  `all_chat_administrators` no Telegram); `owner` e papéis custom ficam fora do menu. O kernel
+  `all_chat_administrators` no Telegram); `owner` e papéis custom ficam fora do menu. O core
   checa o papel na execução de todo jeito.
 - **Argumentos em texto livre.** No Discord, uma opção de texto opcional (`args`) por comando.
   O nome e a descrição seguem as regras da plataforma: ajuste ou pule, com log, o que ela não
@@ -282,12 +351,12 @@ emitter.emit('interaction', {
 });
 ```
 
-O kernel roda o comando como o digitado, sem prefixo: mesma fila do chat, middlewares, papel,
+O core roda o comando como o digitado, sem prefixo: mesma fila do chat, middlewares, papel,
 recusa e evento `command`. O `args` é interpretado como o texto depois do comando (aspas,
 `rawArgs`), e a mensagem do comando tem o texto `/<command> <args>`. Comando que não existe mais
 é descartado com log em `debug`; o transport encerra a interação pendente quando o prazo dela
 vencer. No Telegram, o comando chega como texto comum (`/start@MeuBot`), pelo evento `message`,
-e o roteador trata o prefixo ([ADR 0059](../../../docs/adr/0059-prefixo-por-chat.md)).
+e o roteador trata o prefixo.
 
 A resposta do plugin chega por `send` com `quoted` igual à mensagem do comando (`id` = o `id` da
 interação), pela fila de saída. Responda como follow-up enquanto a plataforma aceitar (15 min no
@@ -312,8 +381,7 @@ await transport.send(chatId, {
 
 O core só entrega um `type` cuja capability o transport declara (`send.sticker` para figurinha,
 por exemplo; o Discord, que não deixa bot enviar figurinha arbitrária, não a declara). O
-`OutgoingContent` pode ganhar membros numa minor, cada um com capability nova
-([ADR 0065](../../../docs/adr/0065-unioes-de-tipo-antes-do-1-0.md)). No `switch` sobre
+`OutgoingContent` pode ganhar membros numa minor, cada um com capability nova. No `switch` sobre
 `content.type`, lance erro no `default` em vez do `never` exaustivo. O caso só acontece se algo
 fora da fila chamar o `send` direto:
 
@@ -330,8 +398,7 @@ switch (content.type) {
 
 ### Texto formatado
 
-Quando o plugin usa a árvore neutra ([Texto formatado](text.md), [ADR
-0057](../../../docs/adr/0057-texto-formatado-neutro.md)), o conteúdo chega com `formatted` (ou
+Quando o plugin usa a árvore neutra ([Texto formatado](text.md)), o conteúdo chega com `formatted` (ou
 `formattedCaption`), e `text` (ou `caption`) traz o texto visível dela. O `edit` recebe a árvore
 no terceiro parâmetro.
 
@@ -380,7 +447,7 @@ Discord conta a marcação (`**`, `<@id>`) e precisa do `measure`. Sem `limits`,
 ### Botões
 
 Com a capability `actions`, o `SendOptions.actions` traz os botões da mensagem, na ordem, como
-`{ id, label }` ([ADR 0058](../../../docs/adr/0058-acoes-e-botoes.md)). Eles só vêm com
+`{ id, label }`. Eles só vêm com
 `type: 'text'`, e num texto dividido, só na última parte. O transport os renderiza do jeito da
 plataforma (teclado inline no Telegram, componentes no Discord, botões ou lista no WhatsApp
 oficial).
@@ -395,25 +462,24 @@ emitter.emit('interaction', {
   id: query.id,                 // vira o ID da mensagem do clique; o `ctx.reply` a cita
   chat: toChat(query.message.chat),
   sender: toContact(query.from),
-  actionId: query.data,         // o `id` do botão, como o kernel o enviou
+  actionId: query.data,         // o `id` do botão, como o core o enviou
   timestamp: Date.now(),
 });
 ```
 
-A confirmação é do transport: o kernel processa o clique na fila do chat, sem prazo de
+A confirmação é do transport: o core processa o clique na fila do chat, sem prazo de
 plataforma. A resposta do plugin chega por `send` com `quoted` igual à mensagem do clique (`id` =
 o `id` da interação), e o transport decide como responder a ela (follow-up no Discord, mensagem
 nova no Telegram).
 
 `limits.actions` diz quantos botões cabem numa mensagem (no WhatsApp Cloud API, 3). Acima dele, ou
-sem a capability, o kernel envia o menu em texto numerado e o transport não vê botão nenhum. Um
+sem a capability, o core envia o menu em texto numerado e o transport não vê botão nenhum. Um
 limite que não é inteiro ≥ 1 faz o `createBot` lançar `RangeError`.
 
 ### Álbum
 
 Com a capability `send.album`, o transport recebe `{ type: 'album', items, caption? }`, com os
-itens `image`, `video` ou `document` na ordem
-([ADR 0061](../../../docs/adr/0061-varios-anexos-e-albuns.md)). A fila nunca entrega menos de
+itens `image`, `video` ou `document` na ordem. A fila nunca entrega menos de
 dois itens nem mais que `limits.album`, e só entrega o álbum a quem declara a capability: sem
 ela, envia item a item.
 
@@ -438,7 +504,7 @@ nada ser emitido depois dele. O core não conhece o `media_group_id`.
 ### Objeto bruto da entrada
 
 Implemente `raw(source)` para o `ctx.unsafe.raw()` devolver o objeto de onde a mensagem saiu
-([ADR 0062](../../../docs/adr/0062-objeto-bruto-da-mensagem.md), [escape hatch](unsafe.md)): o
+([escape hatch](unsafe.md)): o
 `WAMessage` no Baileys, a `Message` do discord.js, o `Update` no Telegram. Guarde o objeto num
 `WeakMap` da instância, chaveado pela `Message` ou pela `Interaction` que você emitiu:
 
@@ -456,11 +522,37 @@ raw(source: Message | Interaction): unknown {
 
 - O `WeakMap` some com a mensagem: nada a limpar no `disconnect()`. Não ponha o objeto num campo
   da `Message`: ele apareceria em spread e em `JSON.stringify`.
-- Registre também a `Interaction` (clique ou comando nativo): o kernel monta a mensagem dela, e o
+- Registre também a `Interaction` (clique ou comando nativo): o core monta a mensagem dela, e o
   `raw()` dessa mensagem chega ao transport como a própria `Interaction`. É onde mora o token de
   interação do Discord e a `callback_query` do Telegram.
 - Sem `raw`, o `ctx.unsafe.raw()` devolve `undefined`. Se guardar o objeto custa caro na sua
   plataforma, deixe o método de fora.
+
+### Referência de mídia
+
+Com a capability `media.ref`, o plugin guarda a referência de uma mídia e a baixa depois, mesmo
+após um restart ([Mensagem](message.md#referência-de-mídia)). O transport faz duas
+coisas:
+
+- Põe no `MediaSource.ref` o JSON que basta para baixar a mídia sem a mensagem: o `file_id` no
+  Telegram, a chave e o caminho no WhatsApp. Mídia sem `ref` não tem referência.
+- Implementa `mediaFromRef(data)`, que recebe esse JSON, talvez em outro processo, e devolve o
+  loader (`{ download, stream? }`) sem baixar nada. Os metadados vêm da referência.
+
+```ts
+mediaFromRef(data: JsonValue): MediaLoader {
+  if (typeof data !== 'object' || data === null || typeof data.fileId !== 'string') {
+    throw new TypeError('telegram: referência de mídia inválida');
+  }
+  const fileId = data.fileId;
+  return { download: () => downloadFile(fileId) };
+}
+```
+
+- Dado malformado lança `TypeError`. A mídia que a plataforma não tem mais rejeita o download com
+  `MediaExpiredError`, para o plugin saber que tentar de novo não adianta.
+- O core confere a capability e recusa a referência de outro transport antes de chamar o método.
+- Não declare `media.ref` se a mídia não sobrevive ao processo (arquivos só em memória).
 
 ### Tipos sem equivalente
 
@@ -482,11 +574,29 @@ import { messageKey } from '@usebridger/core/adapter';
 await transport.react(messageKey(ctx.message), '👍');
 ```
 
+### Template e janela de atendimento
+
+Plataformas como o WhatsApp oficial só aceitam conteúdo livre por 24 h após a última mensagem do
+contato; fora da janela, só template. A regra é do transport.
+
+- **`send.template`:** o transport recebe `{ type: 'template', name, language, params? }`
+  (`params.header` com `TemplateParam`, `body` com textos, `buttons` com `index` e `payload`). A
+  fila não o divide nem formata. O core não sabe se o template existe: inexistente ou pausado é
+  erro do transport com `retryable: false`.
+- **`window?(chatId)`:** devolve `{ open, expiresAt }` (`expiresAt`: até quando a janela vale; `null` se fechada ou sem
+  inbound; a hora em que fechou fica no `closedAt` do erro), ou `null` (plataforma sem janela, sempre
+  aberta). Opcional e sem capability. Guarde o último inbound por chat no storage que a fábrica
+  recebe; o
+  `ctx.send.window` do plugin chega aqui.
+- **`ConversationWindowError(chatId, closedAt)`:** lance-o em envio livre, ação, botões e mídia
+  com a janela fechada: antes da API, se você conhece a janela, ou convertendo a recusa da
+  plataforma (erro `131047` da Cloud API). `closedAt` é `null` se o contato nunca escreveu.
+  Template nunca recebe esse erro. Tem `retryable: false`, então a fila não re-tenta.
+
 ### Erros de envio
 
 A fila de saída re-tenta o que falha ([Fila de saída](outbound-queue.md#erros-e-retry)), a não
-ser que o erro diga o contrário. Lance o erro nativo enriquecido com dois campos opcionais, sem
-classe do core ([ADR 0063](../../../docs/adr/0063-retry-after-e-ritmo-do-transport.md)):
+ser que o erro diga o contrário. Lance o erro nativo enriquecido com dois campos opcionais, sem classe do core:
 
 - **`retryable: false`**: falha permanente. A fila rejeita na hora, sem segurar o chat com
   re-tentativas que vão falhar igual.
@@ -521,15 +631,14 @@ chegar à fila. Mesmo assim, lance o `retryAfterMs` quando ele chegar.
 
 ### Ritmo
 
-`pacing` dá o ritmo padrão da fila de saída para a plataforma
-([ADR 0063](../../../docs/adr/0063-retry-after-e-ritmo-do-transport.md)). O que o app passa em
+`pacing` dá o ritmo padrão da fila de saída para a plataforma. O que o app passa em
 `createBot({ outbound })` sobrescreve cada campo, e o campo ausente cai no padrão do core (300 ms
 global, 1000 ms por chat), conservador porque nasceu da política anti-ban do WhatsApp.
 
 ```ts
 // Telegram: 30 mensagens/s no total e cerca de 1/s por chat privado.
 readonly pacing = { globalIntervalMs: 34, chatIntervalMs: 1000 };
-// Discord: o discord.js já limita a taxa, e o intervalo do kernel só somaria latência.
+// Discord: o discord.js já limita a taxa, e o intervalo do core só somaria latência.
 readonly pacing = { globalIntervalMs: 0, chatIntervalMs: 0 };
 ```
 
@@ -543,15 +652,14 @@ número finito ≥ 0 faz o `createBot` lançar `RangeError`.
 `isAdmin` (verdadeiro também para o dono) e `isSuperAdmin`; o próprio bot é `transport.self`.
 Onde a plataforma não lista membros (Telegram) ou listar custa caro (servidor grande do
 Discord), deixe `participants` ausente. Nunca entregue a lista pela metade: um plugin que
-menciona todos agiria sobre ela sem saber
-([ADR 0055](../../../docs/adr/0055-grupos-multiplataforma.md)).
+menciona todos agiria sobre ela sem saber.
 
 O papel `group-admin` pergunta ao transport se o remetente é admin:
 
 1. Com `isChatAdmin(chat, contact)` implementado, só ele responde. Use quando a plataforma decide
    admin de outro jeito (permissão de servidor e de canal no Discord, `getChatMember` no
    Telegram). Ele recebe o `Chat` inteiro, com o `parentId` do servidor.
-2. Sem ele, com a capability `groups`, o kernel procura o contato nos `participants` do
+2. Sem ele, com a capability `groups`, o core procura o contato nos `participants` do
    `getGroupMetadata`. Sem `participants`, recusa.
 3. Sem nenhum dos dois, `group-admin` recusa quem não é owner.
 
@@ -560,28 +668,26 @@ As alterações de participantes têm uma capability por ação: `groups.add`, `
 no Telegram e no Discord, bot não adiciona ninguém. `remove` tira a pessoa sem impedir que volte.
 `groupActionCapability(action)` diz qual capability cobrar.
 
-O kernel chama `getGroupMetadata` a cada comando `group-admin` de quem não é owner, e o plugin
+O core chama `getGroupMetadata` a cada comando `group-admin` de quem não é owner, e o plugin
 pode chamá-lo por `ctx.groups.metadata` quando quiser. Por isso ele precisa ser barato: o adapter
 mantém cache por grupo e o invalida em `group.participants` e `group.updated` (o
-`transport-baileys` usa o `cachedGroupMetadata` do Baileys). O core não cacheia
-([ADR 0042](../../../docs/adr/0042-ids-de-contato-e-metadata-de-grupo.md)).
+`transport-baileys` usa o `cachedGroupMetadata` do Baileys). O core não cacheia.
 
 ## Capabilities
 
-`CAPABILITIES` lista as capabilities suportadas pelo kernel (plano §6.10):
+`CAPABILITIES` lista as capabilities que o core conhece:
 
 `actions`, `groups`, `groups.add`, `groups.remove`, `groups.promote`, `mentions`, `reactions`, `typing`,
-`send.text`, `send.image`, `send.video`, `send.audio`, `send.voice`, `send.sticker`, `send.document`, `send.album`, `media.download`,
-`message.edit`, `message.delete`, `polls`, `quoted`, `pairing`.
+`send.text`, `send.image`, `send.video`, `send.audio`, `send.voice`, `send.sticker`, `send.document`, `send.album`, `send.template`, `media.download`,
+`media.ref`, `message.edit`, `message.delete`, `polls`, `quoted`, `pairing`.
 
 `pairing` não é de envio: diz que a sessão se pareia por QR ou código (`connection.qr`,
 `connection.pairing-code`). Com ela, credencial rejeitada (`auth-failed`) limpa a sessão e pareia
 de novo; sem ela (transport por token), o bot vai a `failed` ([Política de reconexão](#política-de-reconexão)).
 
 A lista é só a do core: capability nova entra numa minor do `@usebridger/core`, e `requires` com nome
-fora dela recusa o plugin. O que cada transport declara está na matriz do plano §6.10. Limites de
-tamanho não são capability: ficam em `Transport.limits`
-([ADR 0066](../../../docs/adr/0066-capabilities-multiplataforma.md)).
+fora dela recusa o plugin. O que cada transport declara está no README dele. Limites de
+tamanho não são capability: ficam em `Transport.limits`.
 
 ### Semântica comum das ações
 
@@ -605,7 +711,7 @@ o que o plugin espera em qualquer uma.
   duração são de cada plataforma e ficam no `native`. O voto chega como `poll.vote`, sempre com a
   escolha inteira de quem votou: o transport cuja plataforma manda a diferença (Discord) monta a
   escolha pelos eventos que viu, e o que só recebe voto de enquete não anônima (Telegram) envia
-  assim por padrão ([ADR 0067](../../../docs/adr/0067-voto-em-enquete.md)).
+  assim por padrão.
 
 O transport declara o subconjunto que suporta em `capabilities`. Helpers (de
 `@usebridger/core/adapter`; o plugin só vê o tipo `Capability` e o `UnsupportedError`, de
@@ -621,7 +727,7 @@ O transport declara o subconjunto que suporta em `capabilities`. Helpers (de
 | `assertCanSend(t, content, options?)` | rede de segurança antes do `send` |
 | `isCapability(str)` | valida strings vindas de manifesto em JS |
 
-`UnsupportedError` carrega `capability` e `transport`. O caminho normal é o kernel recusar no
+`UnsupportedError` carrega `capability` e `transport`. O caminho normal é o core recusar no
 boot o plugin cujo `requires` não fecha; o erro em runtime é a rede de segurança.
 
 ## Política de reconexão
@@ -633,7 +739,7 @@ quem usa o transport sem o bot. O adapter mapeia o código nativo
 para um `DisconnectReason` (`qr-timeout`, `logged-out`, `auth-failed`, `fatal`, `replaced`,
 `server-error`, `connection-lost`, `unknown`). `replaced` é a conexão derrubada por outra da
 mesma sessão (no Baileys, `DisconnectReason.connectionReplaced`). `fatal` é erro de configuração
-que reconectar não resolve ([ADR 0064](../../../docs/adr/0064-desconexao-fatal-e-transport-sem-pareamento.md)).
+que reconectar não resolve.
 
 ```ts
 import { hasCapability, ReconnectionPolicy } from '@usebridger/core/adapter';
@@ -658,13 +764,13 @@ transport.on('connection.status', async (s) => {
 
 | Motivo | Decisão |
 | --- | --- |
-| `connection-lost`, `unknown` | `reconnect` com backoff, sem limite de tentativas: queda de rede nunca limpa a sessão ([ADR 0041](../../../docs/adr/0041-queda-de-rede-nao-limpa-sessao.md)) |
+| `connection-lost`, `unknown` | `reconnect` com backoff, sem limite de tentativas: queda de rede nunca limpa a sessão |
 | `server-error` | `reconnect` com atraso fixo (`serverErrorDelayMs`), sem gastar tentativa |
 | `qr-timeout` | `reconnect` (novo QR); após `maxQrCount` QRs, `clean-session` (`qr-limit`) |
 | `logged-out` | `clean-session` |
 | `auth-failed` | com `pairing` (padrão), `clean-session`; com `pairing: false`, `stop` (causa `auth-failed`): limpar não traz token novo |
 | `fatal` | `stop` (causa `fatal`): outra tentativa repetiria o erro |
-| `replaced` | `stop`: não reconectar. Duas conexões do mesmo número se derrubariam em laço ([ADR 0032](../../../docs/adr/0032-escopo-de-sessao.md)) |
+| `replaced` | `stop`: não reconectar. Duas conexões do mesmo número se derrubariam em laço |
 
 `decide()` assume que a decisão será executada e avança o estado. Uma limpeza que viria antes
 de `minCleanIntervalMs` da anterior é adiada (o `delayMs` cresce), evitando loop de limpeza.
@@ -674,8 +780,7 @@ contadores para log. O `Bot` lê o `pairing` da capability do transport.
 ### Mapeando o motivo
 
 Reserve `logged-out` e `auth-failed` para credencial rejeitada de fato, e `fatal` para o que só
-uma pessoa corrige: uma rede instável mapeada para um deles apaga a sessão ou para o bot
-([ADR 0041](../../../docs/adr/0041-queda-de-rede-nao-limpa-sessao.md)). Na dúvida,
+uma pessoa corrige: uma rede instável mapeada para um deles apaga a sessão ou para o bot. Na dúvida,
 `connection-lost` ou `unknown`, que reconectam.
 
 | Plataforma | Nativo | Motivo |
@@ -693,7 +798,7 @@ Um transport sem `pairing` não emite `qr-timeout` nem `logged-out`: token revog
 Erro de configuração descoberto dentro do `connect()` (a porta ocupada no `listen`, o token
 recusado no login) sai como `closed` com o motivo da tabela, e não como rejeição do `connect()`.
 Um `connect()` de reconexão que rejeita conta como `connection-lost`
-([ADR 0044](../../../docs/adr/0044-connect-resolve-ao-iniciar.md)) e cai no backoff sem limite: o
+e cai no backoff sem limite: o
 bot tentaria de novo para sempre em vez de parar.
 
 ### Lib que se reconecta sozinha

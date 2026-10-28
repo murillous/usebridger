@@ -1,3 +1,4 @@
+import * as LOG from '#logger/events.ts';
 import type { Logger } from '#logger/types.ts';
 import { chatFilter } from '#middleware/chat-filter.ts';
 import { ignoreBots } from '#middleware/ignore-bots.ts';
@@ -26,7 +27,7 @@ export function createPipeline(
   // para sempre (ADR 0039).
   const pipeline = new MiddlewarePipeline<KernelMessageContext>({
     timeoutMs,
-    onLateError: (error) => log().error('middleware rejeitou depois do prazo', { err: error }),
+    onLateError: (error) => log().event(LOG.middlewareLate, { err: error }),
   });
   if (options.ignoreSelf !== false) {
     pipeline.use(ignoreSelf(), { priority: MIDDLEWARE_PRIORITY.ignoreSelf });
@@ -40,9 +41,9 @@ export function createPipeline(
   if (options.rateLimit) {
     const limit = rateLimit({
       onLimited: (ctx) =>
-        log().debug('mensagem barrada pelo rate limit', {
-          chatId: ctx.message.chat.id,
-          senderId: ctx.message.sender.id,
+        log().event(LOG.messageRateLimited, {
+          chat: ctx.message.chat.id,
+          sender: ctx.message.sender.id,
         }),
       ...options.rateLimit,
     });

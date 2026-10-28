@@ -299,10 +299,6 @@ textarea {
   background: var(--agent-soft);
   color: var(--agent);
 }
-/* Antes de `.cfg-nav .chip` e `.field label .chip`: especificidade crescente (Biome). */
-.list-head .chip {
-  flex-shrink: 0;
-}
 
 .field {
   display: flex;
@@ -463,570 +459,6 @@ td {
   width: 100%;
 }
 
-/* Config: lista de plugins ao lado no desktop; o select só abaixo de 768 px. */
-.cfg {
-  display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
-  gap: 16px;
-  align-items: start;
-}
-.cfg-select {
-  display: none;
-}
-.cfg-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.cfg-nav button {
-  min-height: var(--target);
-  padding: 0 12px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-.cfg-nav button[aria-current="true"] {
-  background: var(--raised);
-  box-shadow: var(--e1);
-  font-weight: 700;
-}
-.editor {
-  border: 0;
-  padding: 0;
-  margin: 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: stretch;
-}
-.editor .row {
-  flex-wrap: nowrap;
-}
-.editor .row .input {
-  flex: 1;
-  min-width: 0;
-}
-.editor > .btn {
-  align-self: flex-start;
-}
-/* Item de lista de objetos (ex.: cadeia de fallback): bloco rebaixado, campos em grade que quebra no celular. */
-.obj-item {
-  background: var(--sunken);
-  border-radius: 10px;
-  box-shadow: 0 0 0 1px var(--line);
-  padding: 8px 12px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.obj-n {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--muted);
-}
-.obj-fields {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 8px 12px;
-}
-.obj-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-/* Dentro do card; o `.help` (aviso da cascata) fica à esquerda e os botões à direita. */
-.savebar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 0 0;
-  border-top: 1px solid var(--line);
-}
-.savebar .help {
-  flex: 1;
-  color: var(--muted);
-  font-size: 12px;
-}
-.cfg-nav button {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.cfg-nav .chip {
-  font-size: 11px;
-  padding: 1px 8px;
-}
-.field .help.mono {
-  font-family: var(--mono);
-  font-size: 11px;
-  overflow-wrap: anywhere;
-}
-.cfg-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 4px 16px;
-  margin-bottom: 16px;
-}
-.cfg-head h2 {
-  margin: 0;
-  font-size: 16px;
-}
-.cfg-head .muted {
-  font-size: 12px;
-}
-.field label .chip {
-  margin-left: 8px;
-  font-size: 11px;
-  padding: 1px 8px;
-  font-weight: 400;
-}
-/* Campos numéricos consecutivos lado a lado (ver `render` em Config.tsx). */
-.pair {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 16px;
-  align-items: start;
-}
-.pair .field .input {
-  max-width: none;
-}
-
-@media (max-width: 767px) {
-  .shell {
-    display: block;
-    padding-bottom: calc(64px + env(safe-area-inset-bottom));
-  }
-  .side {
-    display: none;
-  }
-  .main {
-    padding: 16px;
-  }
-  .head {
-    display: none;
-  }
-  .topbar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 16px;
-  }
-  .topbar .input {
-    flex: 1;
-    min-width: 0;
-  }
-  .iconbtn .label {
-    display: none;
-  }
-  .tabbar {
-    display: flex;
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--sunken);
-    box-shadow: 0 -1px 0 var(--line);
-    padding: 4px 4px env(safe-area-inset-bottom);
-    gap: 4px;
-    z-index: 5;
-  }
-  .tabbar a {
-    flex: 1;
-    min-width: 0;
-    min-height: 56px;
-    border-radius: 12px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    color: var(--muted);
-    text-decoration: none;
-  }
-  .tabbar a svg {
-    margin-bottom: 2px;
-  }
-  .tabbar a[aria-current="page"] {
-    background: var(--raised);
-    box-shadow: var(--e1), var(--top);
-    color: var(--ink);
-    font-weight: 700;
-  }
-  .scroll.tbl table {
-    display: none;
-  }
-  .list {
-    display: block;
-  }
-  .list .muted {
-    font-size: 11px;
-  }
-  .list > div {
-    padding: 8px 0;
-    border-top: 1px solid var(--line);
-  }
-  .cfg {
-    display: block;
-  }
-  .cfg-nav {
-    display: none;
-  }
-  .cfg-select {
-    display: flex;
-  }
-  .pair {
-    display: block;
-  }
-  /* Substituir/Remover do secret ocupam a largura toda no celular. */
-  .secret-actions .btn {
-    flex: 1 1 100%;
-  }
-  /* Fixa acima da TabBar, dentro do card: só o botão primário cresce. */
-  .savebar {
-    position: sticky;
-    bottom: calc(56px + env(safe-area-inset-bottom));
-    flex-wrap: wrap;
-    margin: 0 -16px -16px;
-    padding: 12px 16px;
-    background: var(--raised);
-    border-radius: 0 0 14px 14px;
-  }
-  .savebar .help {
-    flex-basis: 100%;
-  }
-  .savebar .btn.primary {
-    flex: 1;
-  }
-}
-.kpis {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 16px;
-  margin-bottom: 16px;
-}
-.kpis.small {
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-}
-.stat {
-  background: var(--raised);
-  border-radius: 14px;
-  box-shadow: var(--e1), var(--top);
-  padding: 16px;
-}
-.kpis.small .stat {
-  box-shadow: none;
-  background: var(--sunken);
-}
-.stat-label {
-  font-size: 12px;
-  color: var(--muted);
-}
-.stat-value {
-  font: 600 28px / 1.2 var(--display);
-}
-.panels {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  margin-bottom: 16px;
-}
-.panels .card {
-  margin-bottom: 0;
-}
-.chart {
-  width: 100%;
-  height: 120px;
-  display: block;
-}
-.bar {
-  fill: var(--agent);
-}
-.bar.ink {
-  fill: var(--ink);
-}
-.axis {
-  display: flex;
-  justify-content: space-between;
-  color: var(--muted);
-  font-size: 12px;
-  margin-bottom: 12px;
-}
-@media (max-width: 1023px) {
-  .kpis {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-@media (max-width: 767px) {
-  .kpis {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .panels {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* Métricas e abas de plugins: paridade com o canvas (M5-4.8). */
-.eyebrow {
-  font-size: 12.5px;
-  margin: 0 0 4px;
-}
-.sect {
-  font-size: 14.5px;
-  margin: 24px 0 12px;
-}
-.seg {
-  border: 0;
-  margin: 0;
-  min-width: 0;
-  display: inline-flex;
-  padding: 2px;
-  border-radius: 12px;
-  background: var(--sunken);
-  box-shadow: 0 0 0 1px var(--line);
-}
-.seg button {
-  min-height: calc(var(--target) - 4px);
-  padding: 0 14px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-.seg button[aria-pressed="true"] {
-  background: var(--raised);
-  color: var(--ink);
-  font-weight: 600;
-  box-shadow: var(--e1), var(--top);
-}
-.panel {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: 12px;
-  align-content: start;
-}
-.panel .metric {
-  font-size: 11px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding-top: 2px;
-}
-.panel > :not(h3, .metric) {
-  grid-column: 1 / -1;
-}
-.panel-value {
-  font: 700 28px / 1.2 var(--display);
-}
-.panel-value .muted {
-  font: 400 12px / 1 var(--sans);
-}
-.more {
-  margin-bottom: 8px;
-}
-.more summary {
-  cursor: pointer;
-  color: var(--muted);
-  font-size: 12px;
-  min-height: var(--target);
-  display: flex;
-  align-items: center;
-}
-.num {
-  text-align: right;
-  white-space: nowrap;
-}
-th.num {
-  text-align: right;
-}
-.list-head .mono {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.list-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-.foot {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  border-top: 1px solid var(--line);
-  padding-top: 12px;
-  margin: 12px 0 0;
-  font-size: 12px;
-}
-.link {
-  border: 0;
-  background: none;
-  padding: 0;
-  color: var(--agent);
-  text-decoration: underline;
-  cursor: pointer;
-  font-size: inherit;
-}
-@media (max-width: 767px) {
-  .eyebrow-via {
-    display: none;
-  }
-  .panel .metric {
-    display: none;
-  }
-  .panel .panel-value {
-    grid-column: 2;
-    grid-row: 1;
-    font-size: 22px;
-  }
-  .seg {
-    display: flex;
-  }
-  .seg button {
-    flex: 1;
-  }
-  .row.spread > .seg {
-    width: 100%;
-  }
-}
-.stats .card {
-  margin-bottom: 0;
-}
-.stats {
-  margin-bottom: 16px;
-}
-.tab-table.has-actions th:last-child {
-  text-align: right;
-}
-.tab-table td:last-child .row {
-  justify-content: flex-end;
-}
-.tab-table .list > div:first-child {
-  border-top: 0;
-}
-.list-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.list-row > :first-child {
-  min-width: 0;
-}
-/* Sem transição nem animação no app: prefers-reduced-motion já é respeitado. */
-
-/* Abas de plugins (ADR 0104) */
-.stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
-}
-.stat-value {
-  font-family: var(--display);
-  font-size: 28px;
-  font-weight: 700;
-}
-.chart {
-  width: 100%;
-  height: 80px;
-  display: block;
-}
-.stat.ok .stat-value {
-  color: var(--ok);
-}
-.stat.warn .stat-value {
-  color: var(--warn);
-}
-.stat.danger .stat-value {
-  color: var(--danger);
-}
-.prewrap {
-  white-space: pre-wrap;
-}
-h3 {
-  font-size: 15px;
-  margin: 0 0 8px;
-}
-.back {
-  display: none;
-  align-items: center;
-  gap: 2px;
-  min-height: 44px;
-  color: var(--ink);
-  text-decoration: none;
-}
-@media (max-width: 767px) {
-  .back {
-    display: inline-flex;
-  }
-  .stats {
-    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
-  }
-  .btn {
-    min-height: 44px;
-  }
-  form.card > .btn.primary {
-    width: 100%;
-  }
-}
-
-/* Plugins (M5-4.8) */
-.pl-sub {
-  font-size: 12px;
-  margin: 0 0 4px;
-}
-.pl-head {
-  margin-bottom: 16px;
-}
-.pl-head h1 {
-  margin: 0;
-}
-.pl-search {
-  flex: 0 1 260px;
-}
-.ptable td {
-  vertical-align: middle;
-}
-.ptable .pl-name,
-.plist .pl-name {
-  font-weight: 600;
-}
-/* A tabela rola dentro do card (nos dois eixos), não a página; o cabeçalho fica visível. */
-.card:has(> .ptable) {
-  overflow: auto;
-  max-height: calc(100vh - 160px);
-  padding-top: 0;
-}
-.ptable thead th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--raised);
-  padding-top: 16px;
-}
-.ptable td:first-child {
-  min-width: 220px;
-}
-.ptable .mono {
-  overflow-wrap: anywhere;
-}
-/* Células de dados não quebram no meio da palavra; só a origem (1ª coluna) pode. Quebrar entre
-   itens da lista é o que mantém a coluna Ativo dentro do card. */
-.ptable td.mono {
-  overflow-wrap: normal;
-}
 .btn.sm {
   min-height: 32px;
   padding: 0 10px;
@@ -1064,222 +496,161 @@ h3 {
   opacity: 0.45;
   cursor: not-allowed;
 }
-.problem {
-  box-shadow:
-    0 0 0 1px var(--danger),
-    var(--e1);
-}
-.problem h2 {
-  margin: 0;
-}
-.errbox {
-  margin: 12px 0;
-  padding: 12px;
-  border-radius: 10px;
-  background: var(--sunken);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.pl-small {
-  font-size: 12.5px;
-  margin: 0;
-}
-.pl-pill {
-  min-height: var(--target);
-  padding: 0 14px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--plate);
-  cursor: pointer;
-}
-.pl-pill[aria-pressed="true"] {
-  background: var(--ink);
-  color: var(--ink-fg);
-}
-.plist {
-  display: none;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.plist li {
+
+/* Celular: a sidebar vira gaveta aberta pelo botão Menu da barra do topo. */
+.topbar .brand {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  padding: 10px 0;
-  border-top: 1px solid var(--line);
-}
-.plist li:first-child {
-  border-top: 0;
-}
-.plist .mono {
-  font-size: 11.5px;
-  overflow-wrap: anywhere;
-}
-.pl-filters,
-.pl-mob {
-  display: none;
-}
-.actions2 > * {
-  flex: 1;
-  text-align: center;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  text-decoration: none;
-  color: inherit;
+  gap: 8px;
+  font-weight: 700;
 }
 @media (max-width: 767px) {
-  .ptable,
-  .pl-desk {
-    display: none;
-  }
-  .plist {
+  .shell {
     display: block;
   }
-  /* No mobile o Recarregar fica no card de problema, como no canvas. */
-  .plist .btn {
+  .side {
     display: none;
   }
-  .pl-filters {
+  .side[data-open="true"] {
     display: flex;
-    margin-bottom: 16px;
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(300px, 85vw);
+    z-index: 10;
+    box-shadow: var(--e3);
   }
-  .pl-mob {
-    display: revert;
-  }
-  .row.pl-mob {
+  .topbar {
     display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    padding: 8px 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
   }
-  .pl-head {
-    flex-direction: column;
-    align-items: stretch;
+  .main {
+    padding: 16px;
   }
-  .pl-search {
-    flex-basis: auto;
+  .head {
+    display: none;
+  }
+  th,
+  td {
+    padding: 6px;
   }
 }
 
-/* Tela "Mais" (celular) */
-.mais .group {
-  font-size: 12px;
-  color: var(--muted);
-  padding: 12px 4px 4px;
-}
-.mais .spread-group,
-.side .spread-group {
-  display: flex;
-  justify-content: space-between;
-}
-.list-card {
-  padding: 0;
-  margin-bottom: 8px;
-}
-.list-card .item {
+.page-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 100%;
-  min-height: 52px;
-  padding: 8px 16px;
-  border: 0;
-  background: none;
-  color: var(--ink);
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
 }
-.list-card .item + .item {
-  border-top: 1px solid var(--line);
-}
-/* Dono da aba à direita; o texto alternativo vazio ("/ ''") o tira do nome acessível, e o
-   aria-description do link o expõe como descrição. A 1ª declaração é fallback p/ navegador sem suporte. */
-.nav[aria-description]::after {
-  content: attr(aria-description);
-  /* biome-ignore lint/suspicious/noDuplicateProperties: fallback intencional */
-  content: attr(aria-description) / "";
-  margin-left: auto;
-  padding-left: 8px;
-  flex: none;
-  font: 11px var(--mono);
-  color: var(--muted);
-}
-.item .sub {
-  display: block;
-  font-size: 11px;
-}
-.item .plain {
-  border: 0;
-  background: none;
-  color: var(--muted);
-  text-align: right;
-}
-.mais .note {
-  font-size: 12px;
-  padding: 0 4px;
-  margin: 0 0 8px;
-}
-.versions-line {
-  text-align: center;
-  font-size: 11px;
-  margin-top: 24px;
-}
-
-/* Visão geral: card do bot e logs recentes */
-.ov-bot h3 {
+.page-head h1 {
   margin: 0;
-  font-size: 17px;
 }
-.ov-facts {
+.facts {
   display: grid;
   grid-template-columns: max-content 1fr;
   gap: 4px 16px;
-  margin: 12px 0 0;
+  margin: 0 0 16px;
 }
-.ov-facts dt {
+.facts dt {
   color: var(--muted);
 }
-.ov-facts dd {
+.facts dd {
   margin: 0;
+  word-break: break-word;
 }
-.ov-bot .notice {
-  margin: 12px 0 0;
+.secret-once {
+  word-break: break-all;
+  user-select: all;
 }
-.ov-bot .notice p {
-  margin: 4px 0;
-}
-.bot-pair {
+.filters {
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
-  margin-top: 16px;
+  align-items: end;
+  margin-bottom: 16px;
 }
-.bot-pair-code {
-  font-size: 28px;
+.filters .field {
+  margin: 0;
+  min-width: 140px;
+  flex: 1 1 160px;
+}
+.bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--agent);
+  min-width: 2px;
+}
+.code {
+  font: 600 22px var(--mono);
   letter-spacing: 0.08em;
 }
-.ov-recent-logs {
+
+/* Formulários do @rjsf (tema padrão): só os ajustes para casar com os tokens. */
+.schema-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+.schema-form label,
+.schema-form .control-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.schema-form input:not([type="checkbox"]):not([type="radio"]),
+.schema-form select,
+.schema-form textarea {
+  min-height: var(--target);
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--sunken);
+  box-shadow: 0 0 0 1px var(--line2);
+  width: 100%;
+  max-width: 480px;
+}
+.schema-form textarea {
+  padding: 8px 12px;
+}
+.schema-form .help-block,
+.schema-form .field-description {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+}
+.schema-form .error-detail {
   list-style: none;
   margin: 0;
   padding: 0;
+  font-size: 13px;
+  color: var(--danger);
 }
-.ov-recent-logs li {
-  display: grid;
-  grid-template-columns: 5.5rem 3.5rem 5rem 1fr;
+.schema-form .has-error input,
+.schema-form .has-error select {
+  box-shadow: 0 0 0 2px var(--danger);
+}
+.schema-form .btn {
+  margin-right: 8px;
+}
+.schema-form .array-item {
+  display: flex;
   gap: 8px;
-  padding: 6px 0;
-  border-top: 1px solid var(--line);
-}
-.ov-recent-logs .msg {
-  word-break: break-word;
+  align-items: end;
+  flex-wrap: wrap;
 }
 @media (max-width: 767px) {
-  .ov-recent-logs li {
-    grid-template-columns: 5rem 1fr;
-  }
-  .ov-recent-logs .msg {
-    grid-column: 1 / -1;
+  .schema-form input:not([type="checkbox"]):not([type="radio"]),
+  .schema-form select,
+  .schema-form textarea {
+    font-size: 16px;
   }
 }

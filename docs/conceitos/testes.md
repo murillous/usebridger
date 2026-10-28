@@ -1,8 +1,9 @@
 # Testes
 
-O kit de testes faz parte do contrato público, no mesmo nível dos tipos: um plugin que só se testa
-com um WhatsApp de verdade não é um plugin que um terceiro consegue manter
-([ADR 0020](../adr/0020-kit-de-autor.md)). O como-fazer está no guia [Testes](../guias/testes.md) e
+Esta página explica como o kit de testes (`@usebridger/testing`) funciona e o que ele garante.
+
+O kit faz parte do contrato público, no mesmo nível dos tipos: um plugin que só se testa com um
+WhatsApp de verdade não é um plugin que um terceiro consegue manter. O como-fazer está no guia [Testes](../guias/testes.md) e
 na [referência do kit](../../packages/testing/docs/README.md).
 
 ## Sem rede: o bot inteiro, com um transport falso
@@ -11,12 +12,24 @@ na [referência do kit](../../packages/testing/docs/README.md).
 `FakeTransport`, que não abre conexão. `createTestBot({ plugins })` passa pelo mesmo boot, pelas
 mesmas filas, pelo mesmo roteador e pela mesma fila de saída de produção. O que muda são os
 padrões, escolhidos para o teste ser rápido e determinístico: log em silêncio, storage em memória,
-fila de saída sem intervalo, sem reconexão e sem nenhuma variável `BRIDGER_*` da máquina
-([ADR 0048](../adr/0048-kit-de-testes-sobre-o-vitest.md)).
+fila de saída sem intervalo, sem reconexão e sem nenhuma variável `BRIDGER_*` da máquina.
+
+```ts
+import { createTestBot } from '@usebridger/testing';
+import { expect, it } from 'vitest';
+import { ola } from './index.ts';
+
+it('cumprimenta', async () => {
+  const bot = await createTestBot({ plugins: [ola] });
+  await bot.receive({ text: '!ola' });
+  expect(bot.sent).toContainText('Olá');
+  await bot.stop();
+});
+```
 
 A peça que torna isso confiável é o `receive()`: ele entrega a mensagem e só resolve quando o bot
 **assentou**, isto é, quando tudo o que a mensagem causou terminou, inclusive envios feitos sem
-`await` e comandos em segundo plano ([ADR 0040](../adr/0040-espera-pelo-bot-assentar.md)). Sem
+`await` e comandos em segundo plano. Sem
 isso, todo teste precisaria de um `sleep` e seria intermitente. Depois do `receive()`, `bot.sent`
 já tem as respostas, e os matchers (`toContainText`, `toHaveReplied`) comparam o texto visível.
 
@@ -27,12 +40,17 @@ papel errado, `accepts` que recusa, comando que outro plugin já registrou, capa
 
 O kit tem perfis de plataforma: `whatsapp`, `telegram`, `discord` e `web`, cada um com as
 capabilities, os limites de tamanho e o formato de contato daquela plataforma. O do `whatsapp` é
-conferido contra o que o transport Baileys declara, num teste do próprio transport
-([ADR 0069](../adr/0069-kit-de-testes-multiplataforma.md)).
+conferido contra o que o transport Baileys declara, num teste do próprio transport. O `web`
+também. Os perfis `telegram` e `discord` seguem o que se espera dessas plataformas: o transport
+real do Telegram ainda não tem álbum nem enquete, que o perfil já inclui, então um teste verde no
+perfil `telegram` não garante o envio disso no Telegram de verdade.
 
 O plugin portátil roda o mesmo teste em todos:
 
 ```ts
+import { createTestBot, PROFILE_NAMES } from '@usebridger/testing';
+import { describe, expect, it } from 'vitest';
+
 describe.each(PROFILE_NAMES)('no %s', (profile) => {
   it('cumprimenta', async () => {
     const bot = await createTestBot({ profile, plugins: [ola] });
@@ -72,5 +90,4 @@ importado. Para usar o bot de teste num script ou num benchmark, `@usebridger/te
 o mesmo sem os matchers e sem carregar o Vitest.
 
 O próprio core não se testa com o kit: o kit depende do core, e o contrário faria um ciclo. O kit,
-por sua vez, é testado contra o core real, passando pelo pipeline inteiro
-([ADR 0049](../adr/0049-core-testa-sem-o-kit.md)).
+por sua vez, é testado contra o core real, passando pelo pipeline inteiro.

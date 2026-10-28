@@ -1,13 +1,17 @@
 # Operação
 
-O que acontece com o bot no ar e por quê. O passo a passo de processo, supervisor, logs e backup
+Esta página explica o que acontece com o bot no ar e por quê: a tabela de boot, a fila de saída, os
+sinais que um plugin pode observar para medir, as metas de performance e como migrar um bot que já
+existe. O passo a passo de processo, supervisor, logs e backup
 está em [Rodar em produção](/usebridger/comecando/producao/).
 
 ## A tabela de boot
 
 No `start()`, o bot decide quais plugins sobem, em ordem, e loga uma tabela com uma linha por
-plugin: nome, versão e situação. A situação é `carregado`, `carregado; sem ...` ou `ignorado`, com
-o motivo ([Plugins no core](../../packages/core/docs/plugins.md#boot-start)).
+plugin: nome, versão e situação. No JSON, ela vai no campo `report` do evento `plugin.boot.report`
+(ou `plugin.boot.review`, em `warn`, quando há plugin ignorado ou comando de fora), e a lista
+estruturada em `plugins`; o formato `pretty` a mostra abaixo da linha. A situação é `carregado`,
+`carregado; sem ...` ou `ignorado`, com o motivo ([Plugins no core](../../packages/core/docs/plugins.md#boot-start)).
 
 A decisão tem duas etapas, e a ordem importa:
 
@@ -21,7 +25,7 @@ A decisão tem duas etapas, e a ordem importa:
 Qualquer motivo que não seja `disabled` **para o boot**: o bot desce o que subiu, não conecta ao
 transport, e o `start()` rejeita com `PluginBootError`, que lista cada plugin com o motivo. Se o
 problema já aparece na etapa 1, nenhum `setup` roda; senão, todos os `setup`s rodam, para o erro
-listar todas as falhas de uma vez ([ADR 0098](../adr/0098-plugin-falho-derruba-o-boot.md)).
+listar todas as falhas de uma vez.
 
 Parar é a escolha do lado seguro. Um bot que sobe sem metade dos plugins parece saudável: o
 `/health` diz 200, e o problema só aparece quando alguém manda o comando que não responde.
@@ -39,8 +43,7 @@ Os motivos, e o que fazer com cada um:
 | `setup-failed` | o `setup` lançou ou estourou o prazo, ou a config é inválida; o erro original está no log |
 
 Duas situações não param o boot. `carregado; sem ...` lista os comandos que ficaram de fora porque
-exigem uma capability ou um service que falta: o plugin degrada por comando, de propósito
-([ADR 0086](../adr/0086-requires-por-comando.md), [ADR 0095](../adr/0095-comando-que-exige-servico.md)).
+exigem uma capability ou um service que falta: o plugin degrada por comando, de propósito.
 E com o bot já no ar, um `reload`, `disable` ou `enable` que falha deixa só aquele plugin fora,
 com o motivo na tabela, sem derrubar o processo.
 
@@ -67,11 +70,13 @@ pausa) sem custo no caminho da mensagem. Detalhes em [Fila de saída](../../pack
 
 Um plugin lê os mesmos contadores com `ctx.stats()`, de entrada e de saída, sempre do próprio bot.
 É um retrato do instante (gauge), não uma série: quem quer histórico amostra no próprio ritmo, num
-job do scheduler ou a cada scrape, e guarda os valores
-([ADR 0102](../adr/0102-observadores-do-core.md)).
+job do scheduler ou a cada scrape, e guarda os valores.
 
 Para medir latência e desfecho de cada unidade de trabalho, o plugin assina os sinais do core com
 `ctx.observe`:
+
+Quem precisa só do resultado pronto usa o `@usebridger/plugin-metrics`, que já assina esses sinais,
+guarda o histórico e expõe o `GET /metrics`. Para medir o que é seu, assine direto:
 
 ```ts
 ctx.observe('message.handled', (s) => {
@@ -83,7 +88,7 @@ ctx.observe('outbound.sent', (s) => {
   // s.replyTo: id da mensagem respondida, só nas respostas por ctx.reply
 });
 ctx.observe('log', (s) => {
-  // s.level, s.time (Date.now()), s.message, s.fields (campos + bindings: plugin, chatId...)
+  // s.level, s.time (Date.now()), s.message, s.fields (campos + bindings: plugin, chat...)
 });
 ```
 
@@ -104,15 +109,25 @@ ctx.observe('log', (s) => {
 - O `log` leva toda linha do logger do bot (core, transport e plugins, inclusive o `config.logger`
   do app) que passa do nível dele, com os secrets já mascarados em `message` e `fields` (um
   `Error` vira objeto simples). Log feito dentro de um observador de `log`, e o `plugin.error` dele,
-  não volta ao sinal, nem depois de um `await` ([ADR 0105](../adr/0105-sinal-de-log-nos-observadores.md)).
+  não volta ao sinal, nem depois de um `await`, para o observador não gerar log sem fim.
   O silêncio vale para o que o observador agenda (um timer, o próprio `ctx.send`), mas não passa
   aos envios de outros chats nem aos jobs do scheduler: eles rodam no contexto de quem os criou.
 - `chatId`, `senderId` e `messageId` existem só em memória. Não os persista nem exporte.
+- `audit.dropped` conta eventos de auditoria descartados (fila cheia, parada do bot), para você
+  alertar se o registro de conformidade estiver perdendo linhas.
+
+### Logs e auditoria
+
+Com a API ligada, `GET /api/logs` devolve as últimas 1000 linhas de log em memória, com filtro por
+nível, plugin e período, e o stream `GET /api/events` entrega as linhas ao vivo. O log durável
+continua sendo o do destino do logger (stdout, agregador). Para registro de quem fez o quê, o
+plugin usa `ctx.audit.record(...)`: os eventos entram numa cadeia de hash, para detectar
+adulteração, e saem por `GET /api/audit` e `/api/audit/export`
+([Auditoria](../../packages/core/docs/audit.md)).
 
 ## Métricas de performance
 
-O projeto mede, no CI e sem rede, o custo do kernel em si
-([ADR 0027](../adr/0027-metas-de-performance.md)):
+O projeto mede, no CI e sem rede, o custo do kernel em si:
 
 | Métrica | Meta |
 | --- | --- |
@@ -123,8 +138,7 @@ O projeto mede, no CI e sem rede, o custo do kernel em si
 | Boot até "pronto para conectar" com 20 plugins | < 500 ms |
 
 Um PR que piora alguma métrica em mais de 10% falha. O benchmark roda base e commit testado no
-mesmo runner, alternando a ordem, para o ruído da máquina não decidir
-([ADR 0085](../adr/0085-benchmark-intercalado.md)).
+mesmo runner, alternando a ordem, para o ruído da máquina não decidir.
 
 Os números são do kernel: a vazão roda com a taxa anti-ban zerada, porque ela dominaria a medição.
 O teto real de um bot de WhatsApp é o ritmo da fila de saída e o tempo dos plugins, não o kernel.
@@ -133,8 +147,7 @@ O teto real de um bot de WhatsApp é o ritmo da fila de saída e o tempo dos plu
 
 O Bridger nasceu de uma migração assim: o LumaBot seguiu em produção enquanto os plugins eram
 portados um a um, do mais simples ao mais complexo, e a virada aconteceu quando um checklist de
-paridade fechou. O mesmo caminho serve para
-outros bots:
+paridade fechou. O mesmo caminho serve para outros bots:
 
 1. **Liste o que o bot faz** e transforme a lista no checklist de paridade. É o critério objetivo de
    quando virar.

@@ -9,7 +9,7 @@ import type { Reply } from '#outbound/types.ts';
 export interface MessageContext {
   readonly message: Message;
   /**
-   * Texto de trabalho (M1-16.2): o texto/legenda que os estágios seguintes leem. Começa igual a
+   * Texto de trabalho: o texto/legenda que os estágios seguintes leem. Começa igual a
    * `message.text` e um middleware pode reescrevê-lo (o `sanitize` trunca) sem tocar em
    * `message`, que é imutável. Ausente fora do kernel: quem lê usa `message.text`.
    */
@@ -27,10 +27,10 @@ export interface BotMessageContext extends MessageContext {
   readonly reply: Reply;
   /**
    * Reage à mensagem pela fila de saída, com prioridade `'high'`; `null` remove a reação
-   * (capability `reactions`, ADR 0036). Sem a capability, resolve sem reagir e registra em
-   * `debug`; para saber que a reação não saiu, use `ctx.send.react` (ADR 0089).
+   * (capability `reactions`). Sem a capability, resolve sem reagir e registra em
+   * `debug`; para saber que a reação não saiu, use `ctx.send.react`.
    */
   react(emoji: string | null): Promise<void>;
-  /** Logger com `chatId` (e `plugin`, em comandos e listeners) no contexto. */
+  /** Logger com `chat` (e `plugin`, em comandos e listeners) no contexto. */
   readonly log: Logger;
 }

@@ -5,63 +5,56 @@ As regras práticas (fork, branch, commits, definição de pronto) estão no
 
 ## Propor uma mudança no core
 
-O caminho é **issue → ADR (quando há decisão) → PR**, nessa ordem.
+O caminho é **issue → registro da decisão (quando há) → PR**, nessa ordem.
 
 1. **Issue primeiro.** Bug vem com os passos para reproduzir. Feature ou mudança de API espera o
-   alinhamento antes do código, porque o escopo do core é fechado
-   ([ADR 0011](../adr/0011-escopo-do-core.md)): muita coisa cabe melhor num plugin, e a primeira
+   alinhamento antes do código, porque o escopo do core é fechado: muita coisa cabe melhor num plugin, e a primeira
    pergunta da revisão é "por que isso não é plugin?". Se a resposta é "porque falta API", a issue
    é sobre a API que falta, não sobre o recurso.
-2. **ADR quando há decisão de arquitetura.** Um ADR registra contexto, alternativas consideradas,
-   decisão e consequências ([formato](../adr/README.md#formato)). Ele existe porque o código diz o
+2. **Registro em `docs/adr/` quando há decisão de arquitetura.** Ele guarda contexto, alternativas
+   consideradas, decisão e consequências. Ele existe porque o código diz o
    que foi feito, mas não o que foi descartado e por quê; sem esse registro, a mesma discussão volta
-   a cada contribuidor novo. ADR aceito não é reescrito: mudar de ideia é um ADR novo que substitui
+   a cada contribuidor novo. Decisão aceita não é reescrita: mudar de ideia é um registro novo que substitui
    o anterior, e o antigo passa a apontar para ele.
 3. **PR contra a `develop`**, com testes para o comportamento novo, docs do como-fazer e um
    changeset se mudou um pacote publicado. Os testes existentes ficam intactos: um teste que parece
    errado é conversa com o mantenedor, não edição.
 
-Nem toda mudança precisa de ADR. Corrigir um bug, melhorar uma mensagem de erro ou acrescentar um
+Nem toda mudança precisa de registro. Corrigir um bug, melhorar uma mensagem de erro ou acrescentar um
 exemplo não decide nada; trocar o comportamento de uma fila, acrescentar um campo ao contrato do
 `Transport` ou mudar o que derruba o boot decide.
 
 ## Escrever um transport
 
 Um transport é um adapter: traduz a plataforma para o modelo neutro e o modelo neutro para a
-plataforma. O core não sabe nada dela além do que o transport declara
-([ADR 0002](../adr/0002-transport-abstrato.md)).
+plataforma. O core não sabe nada dela além do que o transport declara.
 
 O caminho curto é `defineTransport`, de `@usebridger/core/adapter`. Você descreve o nome, as
 capabilities e os métodos, e o kernel monta o resto: o emissor de eventos, o `self`, a checagem de
-capability antes de cada método e o `UnsupportedError` para o que não foi implementado
-([ADR 0076](../adr/0076-acucar-para-o-autor-de-transport.md)). O resultado é uma fábrica, que recebe
-do bot a sessão, o auth state, o logger e o HTTP ([ADR 0033](../adr/0033-transport-por-fabrica.md)).
+capability antes de cada método e o `UnsupportedError` para o que não foi implementado. O resultado é uma fábrica, que recebe
+do bot a sessão, o auth state, o logger e o HTTP.
 
 As decisões que dão trabalho num transport novo:
 
 - **Capabilities honestas.** Declare só o que a plataforma faz de verdade. O `createBot` confere se
   cada capability declarada tem o método dela. Um plugin confia na lista para escolher o caminho.
 - **Ids estáveis.** O `chat.id` e o `id` do contato viram chave de storage, de espera de conversa e
-  de limite de taxa. Eles não podem mudar entre reconexões
-  ([ADR 0042](../adr/0042-ids-de-contato-e-metadata-de-grupo.md)).
+  de limite de taxa. Eles não podem mudar entre reconexões.
 - **Tipos sem equivalente** chegam como `unknown`, com o objeto original no `raw()`. No envio, o
-  `default` do `switch` lança `UnsupportedError` ([ADR 0065](../adr/0065-unioes-de-tipo-antes-do-1-0.md)).
+  `default` do `switch` lança `UnsupportedError`.
 - **Motivo da queda.** Mapeie os erros da plataforma para os motivos de desconexão do core:
   credencial recusada, erro de configuração (`fatal`), conexão substituída, queda de rede. É disso
-  que a política de reconexão decide entre reconectar, re-parear e parar
-  ([ADR 0064](../adr/0064-desconexao-fatal-e-transport-sem-pareamento.md)).
+  que a política de reconexão decide entre reconectar, re-parear e parar.
 - **Erros de envio.** Diga se o erro é re-tentável e, num 429, quanto esperar (`retryAfterMs`). Se a
-  plataforma tem ritmo próprio, declare `pacing`
-  ([ADR 0063](../adr/0063-retry-after-e-ritmo-do-transport.md)).
+  plataforma tem ritmo próprio, declare `pacing`.
 - **Formatação e limites.** Traduza a árvore do `fmt` para a marcação da plataforma e declare os
-  limites de tamanho, para a fila dividir o texto ([ADR 0057](../adr/0057-texto-formatado-neutro.md)).
+  limites de tamanho, para a fila dividir o texto.
 
 O guia de referência é [Transport](../../packages/core/docs/transport.md); o
 [`transport-web`](../../packages/transport-web/docs/README.md) é o exemplo mais curto de um
 transport completo. Um transport novo também ganha um perfil no kit de testes, conferido contra o
-que ele declara ([ADR 0069](../adr/0069-kit-de-testes-multiplataforma.md)).
+que ele declara.
 
 Transports para plataformas públicas (Telegram, Discord) entram neste repositório, sob Apache-2.0.
 Se o seu transport precisa de algo que o contrato não tem, isso é uma mudança no core: abra a
-issue antes, porque o mesmo campo vai servir aos outros transports
-([ADR 0051](../adr/0051-plataformas-alvo-e-transport-web.md)).
+issue antes, porque o mesmo campo vai servir aos outros transports.

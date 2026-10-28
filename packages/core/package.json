@@ -1,7 +1,7 @@
 {
   "name": "@usebridger/core",
   "version": "0.9.0",
-  "description": "Kernel do Bridger: bot de mensageria extensível por plugins.",
+  "description": "Core do Bridger, framework de bots de mensageria extensível por plugins.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -36,6 +36,10 @@
       "default": "./dist/zod.mjs"
     }
   },
+  "bin": {
+    "bridger": "./dist/bridger-cli.mjs",
+    "bridger-pseudonym": "./dist/pseudonym-cli.mjs"
+  },
   "files": [
     "dist",
     "docs"
@@ -48,7 +52,8 @@
     "hono": "^4.13.13",
     "pino": "^10.4.0",
     "ws": "^8.22.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "zod-openapi": "^6.0.2"
   },
   "devDependencies": {
     "@types/ws": "^8.18.2"

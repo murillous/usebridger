@@ -4,14 +4,16 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Observers } from '#observers/observers.ts';
-import { MIN_SECRET_LENGTH } from './logger.ts';
+import { currentTrace } from '#trace/scope.ts';
+import { MIN_SECRET_LENGTH, withoutReserved } from './logger.ts';
+import { redactPersonalIds } from './personal-id.ts';
 import type { SecretSource } from './secrets.ts';
-import type { LogFields, Logger, LogLevel } from './types.ts';
+import type { EmitLevel, LogFields, Logger, LogLevel } from './types.ts';
 
 const CENSOR = '[REDACTED]';
 const MAX_DEPTH = 6;
-type EmitLevel = Exclude<LogLevel, 'silent'>;
 const LEVELS: readonly LogLevel[] = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'];
+const EMIT_LEVELS: readonly EmitLevel[] = LEVELS as readonly EmitLevel[];
 
 export interface LogSignalTap {
   /** Devolve um logger que, além de logar, alimenta o sinal `log`. */
@@ -39,7 +41,8 @@ export function createLogSignalTap(observers: Observers, secrets: SecretSource):
     }
     let out = text;
     for (const needle of needles) out = out.replaceAll(needle, CENSOR);
-    return out;
+    // Redação de reserva do ADR 0119: o sinal chega ao dashboard, fora do `createLogger`.
+    return redactPersonalIds(out);
   };
 
   // Cópia com os segredos trocados; `Error` vira objeto simples, como o `err` do log.
@@ -86,36 +89,66 @@ export function createLogSignalTap(observers: Observers, secrets: SecretSource):
     }
   };
 
+  const traceField = (): LogFields => {
+    const trace = currentTrace();
+    return trace === undefined ? {} : { trace };
+  };
+
   const wrap = (logger: Logger, bindings: LogFields): Logger => {
-    const at =
-      (level: EmitLevel) =>
-      (message: string, fields?: LogFields): void => {
-        logger[level](message, fields);
-        if (!observers.has('log') || inside.getStore()) return;
-        // O nível é lido a cada linha: o do logger do app pode mudar em runtime.
-        const min = LEVELS.indexOf(logger.level);
-        if (min < 0 || LEVELS.indexOf(level) < min) return; // `silent` não está em LEVELS
-        const time = Date.now();
-        quiet(() =>
-          observers.emit('log', {
-            level,
-            time,
-            message: censor(message),
-            fields: safeFields({ ...bindings }, fields),
-          }),
-        );
-      };
+    // Emite o sinal à parte do log: quem loga é o método do logger embrulhado (inclusive o `event`
+    // de um `config.logger` próprio). `eventName` entra nos campos só quando o sinal sai.
+    const signal = (
+      level: EmitLevel,
+      message: string,
+      fields: LogFields | undefined,
+      eventName?: string,
+    ): void => {
+      if (!observers.has('log') || inside.getStore()) return;
+      // O nível é lido a cada linha: o do logger do app pode mudar em runtime.
+      const min = LEVELS.indexOf(logger.level);
+      if (min < 0 || LEVELS.indexOf(level) < min) return; // `silent` não está em LEVELS
+      const time = Date.now();
+      quiet(() =>
+        observers.emit('log', {
+          level,
+          time,
+          message: censor(message),
+          // Mesmo filtro da linha: o sinal não mostra `level`/`time`/`msg` que a linha descartou.
+          fields: safeFields(
+            { ...bindings, ...traceField() },
+            eventName === undefined
+              ? fields && withoutReserved(fields)
+              : { ...(fields && withoutReserved(fields)), event: eventName },
+          ),
+        }),
+      );
+    };
+    // Um método por nível, montado uma vez: nada de closure nova a cada linha.
+    const at = Object.fromEntries(
+      EMIT_LEVELS.map((level) => [
+        level,
+        (message: string, fields?: LogFields): void => {
+          logger[level](message, fields);
+          signal(level, message, fields);
+        },
+      ]),
+    ) as Record<EmitLevel, Logger['info']>;
     return {
       get level(): LogLevel {
         return logger.level;
       },
-      trace: at('trace'),
-      debug: at('debug'),
-      info: at('info'),
-      warn: at('warn'),
-      error: at('error'),
-      fatal: at('fatal'),
-      child: (more) => wrap(logger.child(more), { ...bindings, ...more }),
+      trace: at.trace,
+      debug: at.debug,
+      info: at.info,
+      warn: at.warn,
+      error: at.error,
+      fatal: at.fatal,
+      // Delega ao `event` do logger embrulhado, para o de um `config.logger` próprio ser chamado.
+      event: (event, fields) => {
+        logger.event(event, fields);
+        signal(event.level, event.message, fields, event.name);
+      },
+      child: (more) => wrap(logger.child(more), { ...bindings, ...withoutReserved(more, true) }),
     };
   };
 

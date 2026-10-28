@@ -24,7 +24,7 @@ export interface TenantStorage extends PluginStorage {
 
 /**
  * `ctx.storage`: o da sessão do bot e, em `shared`, o comum a todas as sessões que dividem o
- * storage (ADR 0071). Os dois seguem o tenant corrente.
+ * storage. Os dois seguem o tenant corrente.
  */
 export interface PluginContextStorage extends TenantStorage {
   /**

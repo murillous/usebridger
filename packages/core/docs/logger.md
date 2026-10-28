@@ -1,20 +1,122 @@
 # Logger
 
-`createLogger` cria o logger estruturado do kernel: uma linha JSON por chamada, sobre pino. A
-API pública é a interface `Logger` — o pino não aparece nela, então plugins não dependem dele.
+Esta página explica como o Bridger escreve logs e como você os usa no seu bot e nos seus plugins.
+
+`createLogger` cria o logger estruturado: uma linha JSON por chamada, sobre o pino. A API pública
+é a interface `Logger`, sem o pino, então plugins não dependem dele. Cada linha tem um `event`
+(nome estável do que aconteceu) e campos com nomes padronizados, para filtrar e alertar no
+Loki, Grafana ou onde você agregar logs.
 
 ```ts
-import { createLogger } from '@usebridger/core';
+import { createLogger, defineLogEvent } from '@usebridger/core';
 
-const log = createLogger({ level: 'debug', bindings: { app: 'meu-bot' } });
+const log = createLogger({ level: 'debug', bindings: { service: 'meu-bot' } });
 
-log.info('bot iniciado');
-log.warn('fila cheia', { chatId, pending: 100 });
+const ForecastSent = defineLogEvent({
+  name: 'clima.forecast.sent',
+  level: 'info',
+  message: 'previsão enviada',
+});
+
+log.event(ForecastSent, { chat, cidade: 'Recife' });
+log.warn('fila cheia', { chat, pending: 100 });
 log.error('falha ao enviar', { err });
 ```
 
-Assinatura de todo método: `log.<nível>(mensagem, campos?)`. Os campos entram na linha ao lado
-de `level`, `time`, `pid`, `hostname` e `msg`.
+## A linha
+
+```json
+{"level":"info","time":"2026-10-23T14:03:22.418Z","bot":"principal","service":"meu-bot",
+ "plugin":"clima","chat":"1203@g.us","cidade":"Recife","event":"clima.forecast.sent",
+ "msg":"previsão enviada"}
+```
+
+- `level` em texto (`trace` … `fatal`) e `time` em ISO 8601 UTC: o Loki e o Grafana leem sem
+  pipeline extra.
+- Os bindings vêm logo depois, na ordem em que os filhos foram criados; os campos da chamada, em
+  seguida; o `msg`, por último.
+- Não há `pid` nem `hostname`. Quem identifica a origem são os bindings base
+  ([abaixo](#bindings-base)).
+
+## Eventos
+
+`log.event(evento, campos?)` é a forma de logar do kernel e a recomendada para plugins. O evento
+define o nível e a mensagem; a chamada só passa os campos.
+
+```ts
+const ReportFailed = defineLogEvent({
+  name: 'relatorio.envio.failed',
+  level: 'error',
+  message: 'falha ao enviar o relatório',
+});
+
+ctx.log.event(ReportFailed, { chat, err });
+```
+
+- **Nome:** `<área>.<coisa>.<verbo>` em kebab-case, com pelo menos dois segmentos
+  (`command.timeout`, `plugin.reload.failed`). A área de um plugin é o nome dele. Nome fora da
+  regra faz o `defineLogEvent` lançar `TypeError`, no carregamento do módulo. O mesmo vale para
+  um `level` fora de `trace`…`fatal` e para uma `message` vazia ou que não é texto.
+- **Nível fixo:** o mesmo `event` sai sempre no mesmo nível, então um alerta pode ser escrito só
+  sobre o nome.
+- **Mensagem fixa:** texto em PT para quem lê, sem valores. O valor vai em campo: `command=imagem`,
+  e não `comando "imagem" falhou`. Texto de orientação ("declare dependsOn no plugin dono do papel")
+  cabe na mensagem.
+- **`event` é reservado:** um campo `event` passado nos campos é sobrescrito pelo nome. Para o nome
+  de um evento do barramento ou do transport, use `eventName`.
+- **`level`, `time` e `msg` também:** são do pino. Se vierem nos campos (de `log.event` ou dos
+  métodos por nível), são descartados, para a linha não ter chave duplicada nem um `level`
+  trocado, que é rótulo de stream no Loki.
+- Em nível desabilitado, `log.event` volta antes de ler os campos.
+
+O nome é contrato com quem filtra e alerta: evento novo é minor, renomear ou remover quebra. Os
+eventos do core, dos transports e dos plugins oficiais estão em [Eventos de log](log-events.md).
+
+`log.<nível>(mensagem, campos?)` continua valendo, para o app e para plugins que não precisam de
+evento estável. Dentro dos pacotes do próprio Bridger essa forma é barrada pelo lint; no seu app
+e nos seus plugins ela é livre.
+
+## Campos
+
+O mesmo nome para a mesma coisa em core, transports e plugins (`StandardLogFields`):
+
+| Campo | Tipo | O que é |
+| --- | --- | --- |
+| `err` | `unknown` | O erro: sai com `type`, `message`, `stack` e `cause` |
+| `event` | `string` | Nome do evento; quem preenche é o `log.event` |
+| `service`, `version`, `env` | `string` | Bindings base do app (`logBindings`) |
+| `bot` | `string` | Sessão do bot; posto pelo bot |
+| `plugin` | `string` | Plugin que logou (binding do `ctx.log`) |
+| `transport` | `string` | Transport (binding do logger do transport) |
+| `chat` | `string` | Pseudônimo do chat (binding do `log` por mensagem; ver [Pseudônimo](#pseudônimo-do-usuário)) |
+| `sender` | `string` | Pseudônimo de quem mandou a mensagem |
+| `messageId` | `string` | Id da mensagem |
+| `command` | `string` | Nome do comando |
+| `step` | `string` | Passo de conversa |
+| `role` | `string` | Papel exigido por um comando |
+| `route` | `string` | Rota HTTP ou do transport |
+| `status` | `string \| number` | Status (HTTP, plugin, conexão) |
+| `reason` | `string` | Motivo em texto curto; o erro vai em `err` |
+| `durationMs` | `number` | Duração |
+| `trace` | `string` | Id de correlação da unidade de trabalho (ver [Trace e trilha](#trace-e-trilha)) |
+
+Outros nomes continuam livres. O dicionário tem tipo: `{ chat: 1 }` não compila.
+
+## Bindings base
+
+O bot põe `bot` (a `session`) em toda linha, também sobre o `config.logger` do app. `service`,
+`version` e `env` vêm de `createBot({ logBindings })`: o core não lê variável de ambiente nem o
+`package.json` do app.
+
+```ts
+import pkg from './package.json' with { type: 'json' };
+
+createBot({
+  transport,
+  session: 'principal',
+  logBindings: { service: 'lumabot', version: pkg.version, env: process.env.NODE_ENV },
+});
+```
 
 ## Opções
 
@@ -22,14 +124,14 @@ de `level`, `time`, `pid`, `hostname` e `msg`.
 | --- | --- | --- |
 | `level` | `'info'` | Nível mínimo: `trace`, `debug`, `info`, `warn`, `error`, `fatal` ou `silent` |
 | `format` | `'json'` | `'pretty'` escreve texto para o terminal ([Saída legível em dev](#saída-legível-em-dev)) |
-| `destination` | stdout | Qualquer `{ write(line: string): void }` — recebe cada linha JSON com `\n` |
+| `destination` | stdout | Qualquer `{ write(line: string): void }`: recebe cada linha JSON com `\n` |
 | `bindings` | — | Campos presentes em toda linha deste logger e dos filhos |
 | `redact` | — | Caminhos de campos trocados por `[REDACTED]` (sintaxe do pino) |
 | `secrets` | — | Valores trocados por `[REDACTED]` em qualquer lugar da linha: lista fixa ou `SecretSet` (fonte viva) |
 
-O core não lê variável de ambiente: o nível vem de quem cria o logger (config do bot / app).
+O core não lê variável de ambiente: o nível vem de quem cria o logger (config do bot ou app).
 
-## Contexto: `plugin` e `chatId`
+## Contexto: `plugin` e `chat`
 
 `child(bindings)` devolve um logger que acrescenta os campos a toda linha; filhos de filhos
 acumulam. O `Bot` dá a cada plugin `ctx.log = root.child({ plugin })`, e o que roda por mensagem
@@ -37,32 +139,82 @@ recebe o filho com o chat:
 
 ```ts
 const pluginLog = root.child({ plugin: 'clima' });
-pluginLog.child({ chatId: message.chat.id }).info('previsão enviada', { cidade });
-// {"level":30,...,"plugin":"clima","chatId":"grupo-1","cidade":"Recife","msg":"previsão enviada"}
+pluginLog.child({ chat: message.chat.id }).event(ForecastSent, { cidade });
+// {"level":"info",...,"plugin":"clima","chat":"grupo-1","cidade":"Recife","event":"clima.forecast.sent",...}
 ```
 
-O filho herda nível, destino e redação do pai. Repetir uma chave num filho (`child({ chatId })`
-sobre um logger que já tem `chatId`) gera a chave duas vezes na linha; leitores de JSON ficam
-com a última. Crie o filho a partir do logger do plugin, não do filho de outro chat.
+As chaves `event`, `level`, `time` e `msg` nos bindings do `child` são descartadas. O filho herda
+nível, destino e redação do pai. Repetir uma chave num filho (`child({ chat })`
+sobre um logger que já tem `chat`) gera a chave duas vezes na linha; leitores de JSON ficam com a
+última. Crie o filho a partir do logger do plugin, não do filho de outro chat.
+
+## Pseudônimo do usuário
+
+Os logs não carregam telefone nem JID. O logger do bot troca os campos `chat` e `sender`, em chamadas e em `child`, por um **pseudônimo
+estável**: `u_` (usuário) ou `g_` (grupo) + 22 caracteres base64url do HMAC-SHA256 do id. A chave
+é derivada por HKDF da `BRIDGER_SECRET_KEY` (a mesma dos [segredos](config.md)); o mesmo id dá o
+mesmo pseudônimo entre restarts, e ids diferentes dão pseudônimos diferentes.
+
+- **Trocar a `BRIDGER_SECRET_KEY` muda todos os pseudônimos**: o histórico antigo no Loki não casa
+  com os novos. Sem a chave, os pseudônimos valem só até o restart e o bot loga
+  `bot.pseudonym.ephemeral`.
+- **No plugin:** `ctx.pseudonym(id)` (o tipo vem do formato do id: `@g.us` é grupo; force com `ctx.pseudonym(id, 'group')`) devolve o mesmo valor que o
+  core põe em `chat`/`sender`. Use-o para logar ou rotular algo do usuário sem expor o id.
+- **Achar um usuário:** o comando `bridger-pseudonym <id>` (instalado com `@usebridger/core`) calcula
+  o pseudônimo com a `BRIDGER_SECRET_KEY` do ambiente; `--group` para grupo. Passe o id por inteiro,
+  como o transport o usa (`5565999998888@s.whatsapp.net`, `123@lid`):
+
+  ```sh
+  BRIDGER_SECRET_KEY=… npx bridger-pseudonym 5565999998888@s.whatsapp.net
+  # u_rUSbV8Bla-rDWdpH0FuuNw
+  ```
+
+  O comando vai só do id ao pseudônimo. A volta é pela API, abaixo.
+- **Descobrir de quem é um pseudônimo:** com a `BRIDGER_SECRET_KEY`, o bot guarda cada par
+  `pseudônimo → id` cifrado no storage da sessão.
+  `GET /api/pseudonyms/{pseudonym}` devolve `{ pseudonym, kind, id }` a quem tem
+  `pseudonyms.resolve` (owner e admin; o viewer não). Toda consulta, achando ou não, grava
+  `kernel.pseudonym.resolve` na auditoria com quem consultou e o pseudônimo, sem o id.
+
+  ```sh
+  curl http://localhost:3000/api/pseudonyms/u_rUSbV8Bla-rDWdpH0FuuNw     -H "Authorization: Bearer $BRIDGER_KEY"
+  # {"pseudonym":"u_rUSbV8Bla-rDWdpH0FuuNw","kind":"user","id":"5565999998888@s.whatsapp.net"}
+  ```
+
+  Só resolve pseudônimo que o bot calculou com a chave atual ou com a
+  `BRIDGER_SECRET_KEY_PREVIOUS`; sem chave mestra a rota responde 409. Pseudônimo desconhecido é 404.
+- **Redação de reserva:** o `createLogger` troca por `[REDACTED]` qualquer JID (`@s.whatsapp.net`,
+  `@g.us`, `@lid`) e telefone (10 a 15 dígitos, com sufixo de device `.0`/`_1.0`) que escape em campo,
+  mensagem ou `err`; o sinal `log` dos observadores recebe a mesma redação.
+  `isPersonalId(valor)` e `redactPersonalIds(texto)` expõem o reconhecedor; o `plugin-metrics` usa o
+  `isPersonalId` para recusar rótulo. É heurística de formato: um número longo que não é telefone,
+  dentro de texto, também é trocado, e um id opaco fora desses formatos passa. O `isPersonalId`
+  julga o valor inteiro (contém `@`, telefone `+5511...` ou 7+ dígitos, id negativo de 6+ dígitos):
+  - Falsos positivos: data compacta (`20261017`), CEP sem hífen, códigos e builds com 7+ dígitos,
+    versões com `@` (`pkg@1.2.3`). Use outra forma (`2026-10-17`, `build-1234567`).
+  - Falsos negativos: telefone formatado (`(11) 99999-9999`) e ids opacos fora desses formatos. Um `config.logger` próprio do app recebe `chat`/`sender` pseudonimizados, mas não
+  essa redação.
 
 ## Erros
 
 Passe o erro no campo **`err`**: ele é serializado com `type`, `message`, `stack` e a `cause`
-(recursiva, também com stack). Em outro nome de campo o `Error` vira `{}` no JSON.
+(recursiva, também com stack). Um `Error` sob outra chave do primeiro nível dos campos
+(`{ error }`, `{ falha }`) sai serializado igual, sob o próprio nome; aninhado num objeto
+(`{ ctx: { error } }`), não.
 
 ```ts
-log.error('falha ao enviar', { err: new Error('envio falhou', { cause }) });
+log.event(ReportFailed, { err: new Error('envio falhou', { cause }) });
 ```
 
 ## Segredos
 
 Duas camadas, combináveis:
 
-- **`secrets`** (por valor) — a lista de valores secretos, por exemplo os campos `secret` da
+- **`secrets`** (por valor): a lista de valores secretos, por exemplo os campos `secret` da
   config já validada. Qualquer ocorrência na linha vira `[REDACTED]`: na mensagem, em qualquer
   campo, nos bindings e em `err.message`/`err.stack`. É a proteção que não depende de saber
-  onde o segredo vai aparecer — use-a para os segredos da config.
-- **`redact`** (por caminho) — nomes de campo que nunca saem, qualquer que seja o valor:
+  onde o segredo vai aparecer; use-a para os segredos da config.
+- **`redact`** (por caminho): nomes de campo que nunca saem, qualquer que seja o valor:
   `['password', 'config.apiKey', '*.token']` (`*` casa um nível). Útil para campos sensíveis
   cujo valor não se conhece de antemão (token de sessão recebido em runtime).
 
@@ -70,9 +222,9 @@ Duas camadas, combináveis:
 createLogger({ secrets: [config.openai.apiKey], redact: ['*.token'] });
 ```
 
-Segredos descobertos depois da criação do logger — a config de plugin é resolvida no setup e
-muda no reload — entram por uma fonte viva: passe um `SecretSet` em vez da lista. O logger (e
-todos os filhos) relê os valores quando o conjunto muda; a config de plugin escreve nele
+Segredos descobertos depois da criação do logger (a config de plugin é resolvida no setup e
+muda no reload) entram por uma fonte viva: passe um `SecretSet` em vez da lista. O logger, e
+todos os filhos, relê os valores quando o conjunto muda; a config de plugin escreve nele
 ([Config](config.md#segredos)).
 
 ```ts
@@ -87,26 +239,88 @@ censura também o texto que coincidir com ele. Valores com menos de 4
 caracteres são ignorados: censurar `"1"` ou `"on"` apagaria pedaços de todo log, e um valor tão
 curto não protege nada de qualquer forma.
 
+## Trace e trilha
+
+Para juntar tudo o que uma
+mensagem causou, o core dá um `trace` (32 hex, o formato do W3C Trace Context) a cada unidade de
+trabalho: a mensagem (ou clique, ou expiração de passo), o request HTTP, a execução de um job e o
+boot dos plugins. Ele fica num `AsyncLocalStorage` e entra sozinho em toda linha de um logger do
+`createLogger` (o do bot ou o que o app passa em `config.logger`), inclusive o `ctx.log` dos
+plugins, e nos `fields` do sinal `log`. O plugin não repassa nada.
+
+- **Envio:** a fila de saída executa o envio no trace de quem o enfileirou, então o log do
+  transport e o `outbound.sent` saem no trace da mensagem que gerou a resposta.
+- **Job:** `at` e `every` guardam o trace de quem agendou como `cause`. A execução ganha um trace
+  próprio, e o `job.run` leva o `cause`: o elo entre a mensagem e o job.
+- **HTTP:** o `traceparent` válido do request é adotado (o Traefik pode gerá-lo), e a resposta
+  devolve o header com o mesmo `trace-id`. Sem header, ou com header malformado, o core gera um.
+- **`plugin.error`:** a linha do erro sai no trace do trabalho que falhou. O payload do evento do
+  barramento não muda.
+- **Logger próprio** que não vem do `createLogger`: a linha só leva o `trace` se ele o ler do
+  contexto; o sinal `log` o leva de qualquer jeito.
+
+A trilha são os eventos `info` do core, só com fatos e metadados (**nunca o texto da mensagem**,
+em nível nenhum):
+
+| `event` | Campos |
+| --- | --- |
+| `message.received` | `chat`, `sender`, `chatType`, `kind`, `messageId` |
+| `message.handled` | `route` (`command`, `step`, `message` ou `edit`), `command`, `step`, `status`, `durationMs` |
+| `outbound.sent` | `kind`, `status`, `replyTo`, `durationMs` (espera na fila até o despacho) |
+| `step.entered` / `step.expired` | `plugin`, `step` |
+| `job.run` | `job`, `plugin`, `status`, `durationMs`, `cause` |
+| `http.request` | `method`, `route`, `status`, `durationMs` (rota é o padrão, sem query string nem corpo) |
+
+São 2 a 3 linhas por mensagem. `createBot({ trail })` ajusta: `'info'` (padrão), `'debug'` (a
+trilha sai em `debug`, ligue com `logLevel: 'debug'` quando investigar) e `'off'`. Os erros e
+avisos não mudam. Uma edição (`message.edited`) gera o mesmo par, com `route: 'edit'` (só na trilha; o sinal `message.handled` dos observers não o emite). Um
+`message.received` sem `message.handled` indica que um middleware cortou a cadeia (ou que a
+mensagem foi descartada antes do tratamento). A espera de um passo com `onExpire` que vence gera `step.expired`
+também quando a fila do chat está cheia: a espera some sem rodar o `onExpire`, e a linha avisa.
+O `/health` e o WebSocket não geram `http.request`.
+
+### Investigar no Grafana
+
+1. Ache o pseudônimo do usuário com `pnpm bridger-pseudonym <telefone ou JID>` (ou `ctx.pseudonym`
+   num plugin). Partindo de um log, descubra de quem é o `chat` com `GET /api/pseudonyms/{pseudonym}`.
+2. Veja o que ele fez: `{service="lumabot"} | json | chat="u_7Hq2…"`. Cada `message.received`
+   traz um `trace`.
+3. Pegue o `trace` da mensagem com erro e abra a jornada inteira, com os logs dos plugins, os
+   envios e os erros: `{service="lumabot"} | json | trace="3f2a…"`.
+4. Um `job.run` com `cause` aponta o trace da mensagem que agendou o job: troque o filtro pelo
+   `cause` e siga de volta.
+5. No HTTP, cole o `traceparent` da linha do Traefik: o `trace-id` dele é o `trace` do bot.
+
+## Logger próprio
+
+`config.logger` aceita qualquer objeto com a interface `Logger`, que inclui o `event`. O bot chama
+o `event` do seu logger (o sinal `log` dos observadores sai à parte, depois). Quem embrulha outro
+logger repassa assim:
+
+```ts
+event: (event, fields) => inner[event.level](event.message, { ...fields, event: event.name }),
+```
+
 ## Logger silencioso
 
-`createNoopLogger()` (interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md))) descarta tudo sem ler os campos nem
-alocar — para os testes do core e como padrão quando ninguém passou logger. `child()` devolve o
+`createNoopLogger()` (interno do core, não exportado) descarta tudo sem ler os campos nem
+alocar: para os testes do core e como padrão quando ninguém passou logger. `child()` devolve o
 próprio no-op.
 
 ## Desempenho
 
-Em nível desabilitado o pino não serializa nada; os campos só são lidos quando a linha sai. A
-censura por `secrets` roda só nas linhas emitidas e só quando há segredo configurado (com
-`SecretSet`, a lista é recalculada só quando o conjunto muda).
+Em nível desabilitado o pino não serializa nada; os campos só são lidos quando a linha sai, e o
+`log.event` nem monta o objeto com o `event`. A censura por `secrets` roda só nas linhas emitidas
+e só quando há segredo configurado (com `SecretSet`, a lista é recalculada só quando o conjunto
+muda).
 
 ## Saída legível em dev
 
-`format: 'pretty'` (no bot, `logFormat: 'pretty'`) troca o JSON por uma linha de texto
-([ADR 0087](../../../docs/adr/0087-log-legivel-e-baileys-em-warn.md)):
+`format: 'pretty'` (no bot, `logFormat: 'pretty'`) troca o JSON por uma linha de texto:
 
 ```text
 14:03:22 INFO  conexão aberta
-14:03:25 WARN  [media] figurinha falhou chatId=1203@g.us
+14:03:25 WARN  [media] figurinha falhou chat=1203@g.us
     Error: ffmpeg saiu com 1
         at ...
     causa: Error: ENOENT
@@ -114,10 +328,28 @@ censura por `secrets` roda só nas linhas emitidas e só quando há segredo conf
 ```
 
 - Hora local, nível, `[plugin]` quando houver, a mensagem e os demais campos em `chave=valor`
-  (texto com espaço entre aspas, objeto em JSON compacto). `pid` e `hostname` ficam de fora.
-- O `err` sai nas linhas seguintes, recuado: a stack e, em seguida, a de cada `causa`.
+  (texto com espaço entre aspas, objeto em JSON compacto).
+- Ficam de fora o `event` e os bindings base (`bot`, `service`, `version`, `env`): no terminal são
+  ruído constante, e o `event` é para o agregador.
+- O `err` sai nas linhas seguintes, recuado: a stack e, em seguida, a de cada `causa`. Um erro
+  sob outra chave sai ali também, prefixado com o nome do campo (`error: Error: ...`). Texto de
+  várias linhas também: a tabela de boot no campo `report` sai sem rótulo; qualquer outro campo
+  com `\n` sai com `campo:` antes do bloco. Caracteres de controle (exceto `\n`) viram `\u00XX`,
+  para um valor não injetar ANSI no terminal.
 - Colorido só no stdout de um terminal; `NO_COLOR` desliga. Com `destination` próprio, texto puro.
 - A conversão roda sobre a linha JSON já censurada: `secrets` e `redact` valem igual.
 
 O padrão segue `'json'`, que é o que agregadores e arquivos de log esperam. O core não depende de
 `pino-pretty`; quem prefere o dele pode encaminhar a saída JSON (`node app.js | npx pino-pretty`).
+
+## Loki
+
+Com Grafana Alloy → Loki, os rótulos de stream ficam só com o que tem baixa cardinalidade:
+`service`, `bot`, `env`, `level` e `plugin`. `event`, `chat`, `command` e `trace` ficam no corpo e
+são filtrados com `| json` (o roteiro está em [Trace e trilha](#investigar-no-grafana)). O pipeline do Alloy está em
+[Rodar em produção](/usebridger/comecando/producao/#loki).
+
+```logql
+{service="lumabot", env="production"} | json | event="command.timeout"
+sum by (event) (count_over_time({service="lumabot", level="error"} | json [1h]))
+```

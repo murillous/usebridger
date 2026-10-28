@@ -172,11 +172,12 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 it('dispara a cada minuto', async () => {
+  const vistos: { scheduledAt: Date }[] = []; // o `on('lembrete', ...)` do plugin empurra aqui
   const t0 = Date.now();
   const bot = await createTestBot({ plugins: [lembrete] });
   await bot.receive({ text: '!lembrar ligar' }); // chama ctx.scheduler.every({ everyMs: 60_000 }, ...)
   await vi.advanceTimersByTimeAsync(3 * 60_000);
-  expect(vistos.map((v) => v.scheduledAt)).toEqual([t0 + 60_000, t0 + 120_000, t0 + 180_000]);
+  expect(vistos.map((v) => v.scheduledAt.getTime())).toEqual([t0 + 60_000, t0 + 120_000, t0 + 180_000]);
   await bot.stop();
 });
 ```

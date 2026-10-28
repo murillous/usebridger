@@ -25,6 +25,14 @@ it('as ferramentas do template são as do workspace', () => {
   }
 });
 
+it('o template tipa o Node na versão do workspace', () => {
+  // Sem os tipos do Node, o `fetch` do teste do recurso não compila no projeto gerado.
+  const root = manifest(join(repo, 'package.json'));
+  expect(template.devDependencies?.['@types/node']).toBe(root.devDependencies?.['@types/node']);
+  const tsconfig = readFileSync(join(TEMPLATE_DIR, 'tsconfig.json'), 'utf8');
+  expect(tsconfig).toContain('"types": ["node"]');
+});
+
 it('a faixa do core no template aceita a versão atual dele', () => {
   // `<1.0.0` vale enquanto o core for 0.x (D24). Na 1.0, a faixa do template (peer, dev,
   // `@usebridger/testing` e o `engine` do manifesto) passa a ser `^1.0.0`.

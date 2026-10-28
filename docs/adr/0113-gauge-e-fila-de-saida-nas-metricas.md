@@ -1,6 +1,7 @@
 # ADR 0113 — Gauge no serviço `metrics` e a fila de saída
 
-**Status:** Aceito (2026-10-17) · Detalha **D103** ([ADR 0103](0103-plugins-oficiais-de-metricas-e-dashboard.md))
+**Status:** Aceito (2026-10-17) · Gauge diário: substituído em parte pelo **D121**
+([ADR 0121](0121-plugin-metrics-sobre-o-prom-client.md)) · Detalha **D103** ([ADR 0103](0103-plugins-oficiais-de-metricas-e-dashboard.md))
 
 ## Contexto
 

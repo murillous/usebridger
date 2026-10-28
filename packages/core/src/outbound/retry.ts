@@ -20,7 +20,7 @@ export interface RetryAfter {
 }
 
 /**
- * Janela que a plataforma informou num erro do transport (ADR 0063): `retryAfterMs` finito e
+ * Janela que a plataforma informou num erro do transport: `retryAfterMs` finito e
  * >= 0, e `retryAfterScope: 'global'` quando ela vale para todos os chats. Duck typing, como o
  * `retryable`: o transport não precisa de classe do core para lançar o erro nativo enriquecido.
  */

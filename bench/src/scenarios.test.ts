@@ -2,14 +2,28 @@
 // verdade saem do `pnpm bench`, num processo por execução.
 
 import { describe, expect, it } from 'vitest';
-import { boot, evaluate, memoryGrowth, overhead, SCENARIOS, throughput } from './scenarios.ts';
+import {
+  auditOverhead,
+  boot,
+  evaluate,
+  memoryGrowth,
+  overhead,
+  SCENARIOS,
+  throughput,
+} from './scenarios.ts';
 
 describe('cenários', () => {
   it('cobrem as 5 metas do plano §7', () => {
     expect(SCENARIOS.map((scenario) => scenario.name)).toEqual([
       'overhead',
       'overhead-observed',
+      'overhead-metrics',
+      'overhead-audit',
+      'audit-record',
       'throughput',
+      'throughput-metrics',
+      'throughput-logged',
+      'throughput-logged-off',
       'idle-memory',
       'memory-growth',
       'boot',
@@ -23,6 +37,23 @@ describe('cenários', () => {
 
   it('vazão devolve msg/s', async () => {
     expect(await throughput({ warmup: 500, messages: 3_000 })).toBeGreaterThan(0);
+  });
+
+  it('vazão com logger em info devolve msg/s, com a trilha ligada ou desligada', async () => {
+    const load = { warmup: 500, messages: 3_000, logged: true };
+    expect(await throughput({ ...load, trail: 'info' })).toBeGreaterThan(0);
+    expect(await throughput({ ...load, trail: 'off' })).toBeGreaterThan(0);
+  });
+
+  it('overhead e vazão com o plugin-metrics carregado', async () => {
+    expect(await overhead({ warmup: 30, messages: 300, metrics: true })).toBeGreaterThan(0);
+    expect(await throughput({ warmup: 500, messages: 3_000, metrics: true })).toBeGreaterThan(0);
+  });
+
+  it('overhead com ctx.audit.record mede o caminho e o record', async () => {
+    const { path, record } = await auditOverhead({ warmup: 30, messages: 300 });
+    expect(path.p99).toBeGreaterThan(0);
+    expect(record.p99).toBeGreaterThan(0);
   });
 
   it('crescimento de memória devolve MB', async () => {

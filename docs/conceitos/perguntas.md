@@ -1,26 +1,27 @@
 # Perguntas frequentes
 
-Cada pergunta aponta para a página que a responde. As respostas não se repetem aqui, para não
-envelhecerem em dois lugares.
+Esta página é um índice: cada pergunta aponta para a página que a responde. As respostas não se
+repetem aqui, para não envelhecerem em dois lugares.
 
 ## Visão geral
 
-- [O Bridger é SDK, framework ou kernel? Quem chama quem?](visao-geral.md#sdk-framework-ou-kernel-quem-chama-quem)
+- [O Bridger é biblioteca ou framework? Quem chama quem?](visao-geral.md#framework-sem-runner-quem-chama-quem)
 - [Quando **não** usar o Bridger?](visao-geral.md#quando-não-usar)
 - [O que é core e o que é plugin? Por que o escopo do core é fechado?](visao-geral.md#o-que-é-core-e-o-que-é-plugin)
-- [Quais plataformas são suportadas hoje e quais estão planejadas?](visao-geral.md#plataformas)
+- [Quais plataformas são suportadas hoje (WhatsApp, Telegram, web) e quais estão planejadas?](visao-geral.md#plataformas)
 - [O que garante a estabilidade da API antes do 1.0?](visao-geral.md#estabilidade-antes-do-10)
 
 ## Montando um bot
 
 - [Qual o mínimo para subir um bot?](bot-e-sessao.md#o-mínimo-para-subir-um-bot)
 - [O que cada peça (`transport`, `storage`, `plugins`, `logger`, `http`) faz?](bot-e-sessao.md#o-que-cada-peça-faz)
-- [Como parear: QR ou código?](bot-e-sessao.md#pareamento-qr-ou-código)
+- [Como parear: QR ou código? E no Telegram?](bot-e-sessao.md#pareamento-qr-ou-código)
 - [O que acontece se a sessão cair ou for desconectada?](bot-e-sessao.md#quando-a-sessão-cai)
 - [Posso rodar vários números no mesmo processo? E vários processos com a mesma sessão?](bot-e-sessao.md#vários-bots-e-vários-processos)
 - [SQLite ou Postgres? Quando trocar?](bot-e-sessao.md#sqlite-ou-postgres)
 - [Como subir o HTTP e expor rotas?](bot-e-sessao.md#http)
-- [Por que o kernel não tem autenticação, e o que fazer a respeito?](bot-e-sessao.md#por-que-o-kernel-não-tem-autenticação)
+- [O que a API do core oferece, e como protegê-la?](bot-e-sessao.md#a-api-do-core)
+- [Como proteger as rotas dos meus plugins e webhooks?](bot-e-sessao.md#por-que-o-kernel-não-tem-autenticação)
 
 ## Escrevendo plugins
 
@@ -28,6 +29,7 @@ envelhecerem em dois lugares.
 - [Como escolher o `requires` mínimo, e quando conferir `ctx.capabilities` em vez de exigir?](plugins.md#exigir-uma-capability-ou-conferir)
 - [Como um plugin usa outro (`services`, `dependsOn`, `after`, `priority`)?](plugins.md#um-plugin-que-usa-outro)
 - [Como um plugin **estende** outro?](plugins.md#estender-outro-plugin)
+- [Como guardar uma mídia para baixar depois?](plugins.md#guardar-uma-mídia-para-depois)
 - [Como guardar dados (`ctx.storage`, coleções, tenant, `shared`)?](plugins.md#onde-guardar-dados)
 - [Como fazer uma conversa de vários passos? E se o usuário digitar um comando no meio, ou não responder?](mensagem.md#conversa-de-vários-passos)
 - [Como agendar algo? O que sobrevive a um restart?](plugins.md#agendar-e-o-que-sobrevive-a-um-restart)
@@ -48,7 +50,7 @@ envelhecerem em dois lugares.
 ## Configuração
 
 - [De onde vem a config, e qual a precedência?](configuracao.md#de-onde-vem-a-config-e-a-precedência)
-- [Como marcar segredos, e por que eles não entram por override?](configuracao.md#segredos)
+- [Como marcar segredos, e como um painel os edita sem expô-los?](configuracao.md#segredos)
 - [Como sobrescrever os textos que o plugin manda (`messages`)?](configuracao.md#os-textos-que-o-plugin-manda)
 - [O que acontece com uma config inválida, no boot e em runtime?](configuracao.md#config-inválida)
 - [Como um painel gera formulários a partir do schema?](configuracao.md#formulários-a-partir-do-schema)
@@ -63,11 +65,12 @@ envelhecerem em dois lugares.
 
 - [Como ler a tabela de boot, e por que um plugin foi ignorado?](operacao.md#a-tabela-de-boot)
 - [Como funciona a fila de saída (anti-ban, ritmo, retry)?](operacao.md#a-fila-de-saída-em-produção)
+- [Como medir o que o bot faz (`ctx.observe`, métricas, logs, auditoria)?](operacao.md#a-fila-de-saída-em-produção)
 - [Quais métricas de performance o projeto mira?](operacao.md#métricas-de-performance)
 - [Como migrar um bot existente para o Bridger aos poucos?](operacao.md#migrar-um-bot-existente-aos-poucos)
 - [Como rodar em produção (supervisor, `/health`, logs, backup)?](/usebridger/comecando/producao/)
 
 ## Contribuindo
 
-- [Como propor uma mudança no core (issue, ADR, PR)?](contribuindo.md#propor-uma-mudança-no-core)
+- [Como propor uma mudança no core?](contribuindo.md#propor-uma-mudança-no-core)
 - [Como escrever um transport novo?](contribuindo.md#escrever-um-transport)

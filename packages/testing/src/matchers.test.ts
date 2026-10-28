@@ -91,3 +91,22 @@ describe('matchers', () => {
     expect(() => expect('texto').toContainText()).toThrow(/bot\.sent/);
   });
 });
+
+describe('toContainTemplate', () => {
+  const template = sent({ type: 'template', name: 'retomar_atendimento', language: 'pt_BR' });
+
+  it('passa sem nome, com string e com RegExp; .not quando não casa', () => {
+    expect([template]).toContainTemplate();
+    expect([template]).toContainTemplate('retomar_atendimento');
+    expect([template]).toContainTemplate(/^retomar/);
+    expect([template]).not.toContainTemplate('outro');
+    expect([text('oi')]).not.toContainTemplate();
+  });
+
+  it('a falha descreve o template enviado', () => {
+    expect(() => expect([template]).not.toContainTemplate()).toThrow(
+      '<template "retomar_atendimento">',
+    );
+    expect(() => expect([text('oi')]).toContainTemplate('x')).toThrow('enviar um template "x"');
+  });
+});

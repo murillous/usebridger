@@ -5,7 +5,7 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-/** Um por bot (ADR 0003: nada global); dois bots no processo não veem o tenant um do outro. */
+/** Um por bot (nada global); dois bots no processo não veem o tenant um do outro. */
 export class TenantScope {
   readonly #store = new AsyncLocalStorage<string | undefined>();
 

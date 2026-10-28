@@ -7,6 +7,7 @@ import {
   ListenerTimeoutError,
 } from '#deadline.ts';
 import type { Message, MessageType } from '#message/types.ts';
+import { currentTrace } from '#trace/scope.ts';
 import type { Unsubscribe } from '#transport/types.ts';
 import type {
   BotEventName,
@@ -26,7 +27,7 @@ export type EmittableEventName = Exclude<BotEventName, keyof MessageTypeEvents>;
 /**
  * Extras do contexto. Opcionais para o barramento: ele só os copia, sem conferir. Nos eventos de
  * mensagem o `ListenerContext` declara `MessageListenerFields`, e quem garante que eles chegam é
- * o `Bot`, que monta o contexto de cada plugin (M1-16); quem usa o barramento solto e emite
+ * o `Bot`, que monta o contexto de cada plugin; quem usa o barramento solto e emite
  * mensagem sem extras entrega listeners sem esses campos.
  */
 export type EmitExtras<E extends BotEventName> = [extras?: ListenerExtras<E>];
@@ -221,12 +222,14 @@ export function createEventBus(options: EventBusOptions): EventBus {
   }
 
   function fail(entry: Entry, event: BotEventName, error: unknown, timedOut: boolean): void {
+    const trace = currentTrace();
     const report: PluginErrorEvent = {
       plugin: entry.plugin,
       phase: 'listener',
       event,
       error,
       timedOut,
+      ...(trace === undefined ? {} : { trace }),
     };
     onError(report);
     // Falha de um listener de `plugin.error` viraria outro `plugin.error`, em loop: fica só no
@@ -236,7 +239,7 @@ export function createEventBus(options: EventBusOptions): EventBus {
 
   /**
    * Corre a promise do listener contra o prazo; resolve `true` se ele falhou. Estourado o prazo,
-   * expira o `Deadline` do listener: o `ctx.signal` dele aborta (ADR 0029).
+   * expira o `Deadline` do listener: o `ctx.signal` dele aborta.
    */
   function watch(
     entry: Entry,

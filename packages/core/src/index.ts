@@ -4,6 +4,37 @@
 // `entries.test.ts`: export novo é decisão explícita.
 
 export type { CommandAction, MessageAction, StepAction } from '#actions/actions.ts';
+export { coreApiRoutes } from '#api/core.ts';
+export type { ApiOptions } from '#api/cors.ts';
+export { createOpenApiDocument } from '#api/openapi.ts';
+export type { AnyApiOperation, ApiOperation, ApiRoute } from '#api/operation.ts';
+export { ApiError } from '#api/problem.ts';
+export type {
+  ApiResource,
+  ResourceAction,
+  ResourceActor,
+  ResourceCall,
+} from '#api/resources.ts';
+export { defineResource } from '#api/resources.ts';
+export {
+  AuditPermissionError,
+  type VerifyAuditOptions,
+  verifyAudit,
+} from '#audit/audit.ts';
+export type {
+  AuditActor,
+  AuditEvent,
+  AuditOutcome,
+  AuditPage,
+  AuditQuery,
+  AuditRecordInput,
+  AuditSubject,
+  AuditVerifyResult,
+  PluginAudit,
+} from '#audit/types.ts';
+export type { AuthRole } from '#auth/permissions.ts';
+export { CORE_PERMISSIONS, canManageRole, rolePermissions } from '#auth/permissions.ts';
+export type { ApiActor } from '#auth/types.ts';
 export { createBot } from '#bot/bot.ts';
 export type {
   Bot,
@@ -102,10 +133,24 @@ export type {
   HttpSocket,
   HttpSocketAccept,
   HttpSocketHandlers,
+  PluginHttpRoutes,
 } from '#http/types.ts';
+export { defineLogEvent } from '#logger/define-event.ts';
 export { createLogger, type LogDestination, type LoggerOptions } from '#logger/logger.ts';
+export { isPersonalId, redactPersonalIds } from '#logger/personal-id.ts';
+export type { Pseudonym, PseudonymKind } from '#logger/pseudonym.ts';
 export { createSecretSet, type SecretSet, type SecretSource } from '#logger/secrets.ts';
-export type { LogFields, Logger, LogLevel } from '#logger/types.ts';
+export type { TrailMode } from '#logger/trail.ts';
+export type {
+  EmitLevel,
+  LogEvent,
+  LogEventName,
+  LogFields,
+  Logger,
+  LogLevel,
+  StandardLogFields,
+} from '#logger/types.ts';
+export { MediaExpiredError, type MediaRef, type MediaRefs } from '#message/media-ref.ts';
 export type {
   AudioMessage,
   Chat,
@@ -144,6 +189,7 @@ export {
   sanitize,
 } from '#middleware/sanitize.ts';
 export type {
+  AuditDroppedSignal,
   LogSignal,
   MessageHandledSignal,
   Observer,
@@ -258,11 +304,13 @@ export type {
   OutgoingAction,
   OutgoingContent,
   SendOptions,
+  TemplateParam,
   TextLimits,
   Transport,
   TransportPacing,
   TypingKind,
   Unsubscribe,
 } from '#transport/types.ts';
+export { type ConversationWindow, ConversationWindowError } from '#transport/window.ts';
 export type { Unsafe } from '#unsafe/types.ts';
 export { CORE_VERSION } from '#version.ts';

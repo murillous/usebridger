@@ -10,7 +10,7 @@ export interface SanitizedFields {
 /**
  * Contexto com o resultado de `sanitize`. `ctx.message` é imutável (contrato compartilhado),
  * então o texto limpo fica ao lado dele: em `ctx.text`, o texto de trabalho que o roteador e os
- * listeners leem (M1-16.2), e em `sanitized`, junto do nome do remetente. Sem o middleware,
+ * listeners leem, e em `sanitized`, junto do nome do remetente. Sem o middleware,
  * `sanitized` fica ausente.
  */
 export interface SanitizedContext extends MessageContext {

@@ -10,5 +10,9 @@ export default defineConfig({
     adapter: 'src/adapter.ts',
     'storage-contract': 'src/storage/contract/index.ts',
     zod: 'src/zod.ts',
+    // Binário `bridger-pseudonym` (ADR 0119); ninguém o importa como biblioteca.
+    'pseudonym-cli': 'src/cli/pseudonym.ts',
+    // Binário `bridger` (comando `openapi`, ADR 0125).
+    'bridger-cli': 'src/cli/bridger-bin.ts',
   },
 });

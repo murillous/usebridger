@@ -1,8 +1,7 @@
 # Ações e botões
 
-A resposta pode levar botões. O clique roda um comando ou um passo de conversa do plugin, e o
-transport sem botões recebe o menu em texto numerado
-([ADR 0058](../../../docs/adr/0058-acoes-e-botoes.md)).
+Esta página mostra como pôr botões numa resposta. O clique roda um comando ou um passo de
+conversa do plugin, e o transport sem botões recebe o menu em texto numerado.
 
 ## Uso
 

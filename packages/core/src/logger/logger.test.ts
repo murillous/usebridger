@@ -1,10 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import { defineLogEvent } from './define-event.ts';
 import {
   createLogger,
   createNoopLogger,
   type LogDestination,
   type LoggerOptions,
 } from './logger.ts';
+
+const TIMEOUT = defineLogEvent({
+  name: 'command.timeout',
+  level: 'error',
+  message: 'comando rejeitou depois do prazo',
+});
 
 function capture(options: Omit<LoggerOptions, 'destination'> = {}) {
   const raw: string[] = [];
@@ -18,9 +25,9 @@ function capture(options: Omit<LoggerOptions, 'destination'> = {}) {
 describe('createLogger', () => {
   it('emite uma linha JSON com nível, mensagem e campos', () => {
     const { log, lines } = capture();
-    log.info('mensagem recebida', { chatId: 'c1', size: 3 });
+    log.info('mensagem recebida', { chat: 'c1', size: 3 });
     expect(lines()).toEqual([
-      expect.objectContaining({ level: 30, msg: 'mensagem recebida', chatId: 'c1', size: 3 }),
+      expect.objectContaining({ level: 'info', msg: 'mensagem recebida', chat: 'c1', size: 3 }),
     ]);
   });
 
@@ -45,7 +52,7 @@ describe('createLogger', () => {
     const verbose = capture({ level: 'trace' });
     verbose.log.trace('t');
     verbose.log.fatal('f');
-    expect(verbose.lines().map((line) => line['level'])).toEqual([10, 60]);
+    expect(verbose.lines().map((line) => line['level'])).toEqual(['trace', 'fatal']);
 
     const silent = capture({ level: 'silent' });
     silent.log.fatal('nada');
@@ -73,7 +80,7 @@ describe('createLogger', () => {
     expect(lines()).toEqual([
       expect.objectContaining({
         plugin: 'clima',
-        chatId: '123@g.us',
+        chatId: '[REDACTED]',
         cidade: 'Recife',
         msg: 'previsão enviada',
       }),
@@ -109,6 +116,31 @@ describe('createLogger', () => {
     expect((err['cause'] as Record<string, unknown>)['stack']).toEqual(
       expect.stringContaining('timeout no socket'),
     );
+  });
+
+  it('serializa um Error sob qualquer chave como o err, sem mexer nos campos recebidos', () => {
+    const { log, lines } = capture();
+    const cause = new Error('disco cheio');
+    const fields = { error: new Error('flush falhou', { cause }), outro: new TypeError('x'), n: 1 };
+    log.error('flush de métricas falhou', fields);
+
+    const line = lines()[0] as Record<string, Record<string, unknown>>;
+    expect(line['error']).toMatchObject({ type: 'Error', message: 'flush falhou' });
+    expect(line['error']?.['stack']).toEqual(expect.stringContaining('flush falhou'));
+    expect(line['error']?.['cause']).toMatchObject({ message: 'disco cheio' });
+    expect(line['outro']).toMatchObject({ type: 'TypeError', message: 'x' });
+    expect(line['outro']?.['stack']).toEqual(expect.stringContaining('TypeError: x'));
+    expect(line).toMatchObject({ n: 1 });
+    expect(fields.error).toBeInstanceOf(Error);
+  });
+
+  it('censura segredos no Error sob qualquer chave', () => {
+    const secret = 'sk-segredo-123';
+    const { log, raw, lines } = capture({ secrets: [secret] });
+    log.error('falhou', { error: new Error(`401 para a chave ${secret}`) });
+
+    expect(raw[0]).not.toContain(secret);
+    expect(lines()[0]?.['error']).toMatchObject({ message: '401 para a chave [REDACTED]' });
   });
 
   it('redact troca os caminhos configurados por [REDACTED]', () => {
@@ -159,11 +191,110 @@ describe('createLogger', () => {
   });
 });
 
+describe('createLogger: formato e eventos (ADR 0118)', () => {
+  it('nível em texto, hora ISO UTC e sem pid/hostname', () => {
+    const { log, lines } = capture();
+    log.warn('aviso');
+    const [line] = lines();
+    expect(line?.['level']).toBe('warn');
+    expect(line?.['time']).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    expect(line).not.toHaveProperty('pid');
+    expect(line).not.toHaveProperty('hostname');
+  });
+
+  it('event emite no nível do evento, com a mensagem fixa e o nome em event', () => {
+    const { log, lines } = capture({ bindings: { bot: 'principal' } });
+    log.child({ plugin: 'ai' }).event(TIMEOUT, { command: 'imagem', durationMs: 30012 });
+    expect(lines()).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        msg: 'comando rejeitou depois do prazo',
+        event: 'command.timeout',
+        bot: 'principal',
+        plugin: 'ai',
+        command: 'imagem',
+        durationMs: 30012,
+      }),
+    ]);
+  });
+
+  it('event sem campos e com err', () => {
+    const { log, lines } = capture();
+    log.event(TIMEOUT);
+    log.event(TIMEOUT, { err: new Error('prazo') });
+    const [plain, failed] = lines();
+    expect(plain).toMatchObject({
+      event: 'command.timeout',
+      msg: 'comando rejeitou depois do prazo',
+    });
+    expect(failed?.['err']).toMatchObject({ type: 'Error', message: 'prazo' });
+  });
+
+  it('o campo event passado nos campos não substitui o nome do evento', () => {
+    const { log, lines } = capture();
+    log.event(TIMEOUT, { event: 'outro.nome' });
+    expect(lines()[0]?.['event']).toBe('command.timeout');
+  });
+
+  it('event em nível desabilitado não lê os campos', () => {
+    const { log, raw } = capture({ level: 'fatal' });
+    const fields = {
+      get caro(): never {
+        throw new Error('campo lido em nível desabilitado');
+      },
+    };
+    log.event(TIMEOUT, fields);
+    expect(raw).toEqual([]);
+  });
+
+  it('event passa pela censura de segredos', () => {
+    const { log, raw } = capture({ secrets: ['sk-segredo-123'] });
+    log.event(TIMEOUT, { command: 'sk-segredo-123' });
+    expect(raw[0]).not.toContain('sk-segredo-123');
+  });
+});
+
+describe('createLogger: chaves reservadas', () => {
+  const count = (raw: string, key: string): number => raw.split(`"${key}":`).length - 1;
+
+  it('log.event descarta level, time e msg dos campos: cada chave aparece uma vez', () => {
+    const { log, raw, lines } = capture();
+    log.event(TIMEOUT, { level: 'fake', time: 'x', msg: 'y', chat: 'c1' });
+    const line = raw[0] as string;
+    for (const key of ['level', 'time', 'msg', 'event']) expect(count(line, key)).toBe(1);
+    expect(lines()[0]).toMatchObject({ level: 'error', msg: TIMEOUT.message, chat: 'c1' });
+  });
+
+  it('os métodos por nível também descartam level, time e msg', () => {
+    const { log, raw, lines } = capture();
+    log.warn('aviso', { level: 'fake', time: 'x', msg: 'y', chat: 'c1' });
+    const line = raw[0] as string;
+    for (const key of ['level', 'time', 'msg']) expect(count(line, key)).toBe(1);
+    expect(lines()[0]).toMatchObject({ level: 'warn', msg: 'aviso', chat: 'c1' });
+  });
+
+  it('child descarta event, level, time e msg dos bindings', () => {
+    const { log, raw, lines } = capture();
+    log.child({ event: 'x', level: 'fake', time: 't', msg: 'y', chat: 'c1' }).event(TIMEOUT);
+    const line = raw[0] as string;
+    for (const key of ['level', 'time', 'msg', 'event']) expect(count(line, key)).toBe(1);
+    expect(lines()[0]).toMatchObject({ level: 'error', event: 'command.timeout', chat: 'c1' });
+  });
+
+  it('bindings do createLogger também descartam level: a chave aparece uma vez', () => {
+    const { log, raw } = capture({ bindings: { level: 'x', app: 'bot' } });
+    log.info('oi');
+    expect(count(raw[0] as string, 'level')).toBe(1);
+    expect(JSON.parse(raw[0] as string)).toMatchObject({ level: 'info', app: 'bot' });
+  });
+});
+
 describe('createNoopLogger', () => {
   it('descarta tudo e devolve a si mesmo como filho', () => {
     const log = createNoopLogger();
     expect(log.level).toBe('silent');
     expect(() => log.fatal('nada', { err: new Error('x') })).not.toThrow();
+    expect(() => log.event(TIMEOUT, { err: new Error('x') })).not.toThrow();
     expect(log.child({ plugin: 'p' })).toBe(log);
   });
 

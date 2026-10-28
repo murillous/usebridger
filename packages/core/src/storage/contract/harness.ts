@@ -18,12 +18,12 @@ export interface StorageContractOptions {
   /**
    * Opcional, para adapters persistentes: fecha `port` e abre outro sobre os mesmos dados.
    * Com ela, a suíte verifica que KV, coleções e auth state sobrevivem ao restart (o scheduler
-   * do M1-11 depende disso). Sem ela, esses testes não são registrados.
+   * depende disso). Sem ela, esses testes não são registrados.
    */
   readonly reopen?: (port: StoragePort) => Promise<StoragePort>;
   /**
    * `true` para storage que vive num processo só (memória): dispensa a trava com validade
-   * (`acquireLease`/`releaseLease`, ADR 0070), que só protege banco dividido entre processos.
+   * (`acquireLease`/`releaseLease`), que só protege banco dividido entre processos.
    * Sem ela, a suíte exige a trava.
    */
   readonly processLocal?: boolean;

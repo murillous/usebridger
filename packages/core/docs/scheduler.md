@@ -1,12 +1,14 @@
 # Scheduler
 
-Agendamento persistido (plano §6.8): o plugin agenda um job para uma data, e o kernel chama o
-handler nessa hora, mesmo que o bot tenha reiniciado no meio. Um único loop serve o bot inteiro.
+Use o scheduler quando o plugin precisa fazer algo mais tarde ou de tempos em tempos: lembretes,
+relatórios diários, limpezas. O plugin agenda um job (uma tarefa com nome) para uma data, e o
+core chama o handler nessa hora, mesmo que o bot tenha reiniciado no meio. Um único loop serve o
+bot inteiro.
 
 ## Para autores de plugin
 
 ```ts
-setup(ctx) {
+async setup(ctx) {
   ctx.scheduler.on('reminder.fire', async (payload) => {
     const { chatId, text } = payload as { chatId: string; text: string };
     await ctx.send.send(chatId, text);
@@ -21,10 +23,24 @@ setup(ctx) {
 }
 ```
 
+Para repetir, use `every`. Os dois formatos de regra:
+
+```ts
+// A cada 5 minutos (mínimo de 60 s)
+await ctx.scheduler.every({ everyMs: 5 * 60_000 }, 'sync');
+
+// Todo dia útil às 08:30, no horário de Brasília (days: 0 = domingo ... 6 = sábado)
+await ctx.scheduler.every(
+  { time: '08:30', days: [1, 2, 3, 4, 5], timeZone: 'America/Sao_Paulo' },
+  'bom-dia',
+  { chatId },
+);
+```
+
 | Método | O que faz |
 | --- | --- |
 | `at(when, job, payload?)` | Persiste o job e devolve o id. `when` é `Date` ou epoch ms |
-| `every(rule, job, payload?)` | Persiste uma série recorrente e devolve o id dela. `rule` é `{ everyMs }` (mín. 60 s) ou `{ time: 'HH:mm', days?, timeZone }` ([ADR 0100](../../../docs/adr/0100-jobs-recorrentes.md)) |
+| `every(rule, job, payload?)` | Persiste uma série recorrente e devolve o id dela. `rule` é `{ everyMs }` (mín. 60 s) ou `{ time: 'HH:mm', days?, timeZone }` |
 | `on(job, handler)` | Registra o handler do job; devolve a função que o remove. O handler recebe `(payload, { signal, scheduledAt, seriesId? })` |
 | `next(id)` | Próxima ocorrência pendente do job ou da série; `undefined` se não existe |
 | `cancel(id)` | `true` se o job existia e ainda não tinha disparado; numa série, encerra as próximas mesmo com o handler rodando |
@@ -40,7 +56,7 @@ setup(ctx) {
   `Infinity`) ou se o nome do job é vazio. Data no passado é válida: o job dispara logo.
 - **Tenant de origem.** O job agendado numa mensagem ou num evento de chat com `tenantId` guarda
   o tenant, e o handler roda no escopo dele: o `ctx.storage` lê os dados daquele tenant
-  ([ADR 0068](../../../docs/adr/0068-isolamento-por-tenant.md)). O job agendado fora dele (no
+  (veja [Tenants](storage.md#tenants)). O job agendado fora dele (no
   `setup`) roda sem tenant, mesmo que o loop do scheduler tenha sido acordado num handler.
 - **Registre o `on` no `setup`.** Os jobs são do plugin, não do `setup`: continuam no storage
   quando o plugin é desabilitado ou recarregado e disparam quando ele registrar o handler.
@@ -64,6 +80,13 @@ retentativa trata o erro no handler e chama `at` de novo com o atraso que quiser
 
 Jobs vencidos disparam em ordem de horário e sem esperar um pelo outro.
 
+### Trace e `cause`
+
+Cada execução de handler ganha um `trace` próprio, e o `job.run` registra `job`, `plugin`, `status`
+(`ok`, `failed`, `timeout`), `durationMs` e `cause`: o `trace` de quem chamou `at` ou `every`
+(ausente se foi fora de um trace). Assim a mensagem que agendou o job e a execução dele se ligam
+(veja [Trace e trilha](logger.md#trace-e-trilha)).
+
 ### Prazo e `signal`
 
 O segundo argumento do handler (`JobContext`) traz `signal: AbortSignal`, que aborta quando o
@@ -72,7 +95,7 @@ handler estoura o prazo (`timeouts.jobMs`, padrão 30 s), com `reason` = `JobTim
 do descarte.
 Handlers de um parâmetro só continuam valendo. Repasse o `signal` a `fetch`/SDKs e confira
 `signal.aborted` antes de efeitos que não o recebem: o `ctx.send`/`ctx.storage` do `setup` são do
-plugin e não sabem do prazo do job ([ADR 0029](../../../docs/adr/0029-cancelamento-cooperativo.md)).
+plugin e não sabem do prazo do job.
 
 ```ts
 ctx.scheduler.on('relatorio', async (payload, { signal }) => {
@@ -87,7 +110,8 @@ Depois do descarte do plugin (teardown, reload), `ctx.scheduler.at`/`cancel` rej
 
 ## Para o kernel
 
-Peça interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md)).
+Esta seção é para quem mexe no core. O serviço é interno e não é exportado; autor de plugin só usa
+o `ctx.scheduler` acima.
 
 ```ts
 import { createSchedulerService } from '#scheduler/service.ts';
@@ -97,7 +121,7 @@ const scheduler = createSchedulerService({
   onError: (event) => { /* plugin.error: log + barramento */ },
   onLateError: (event) => { /* opcional: rejeição depois do prazo, só log */ },
   onStorageError: (error) => { /* log */ },
-  tenants, // opcional: TenantScope do bot (ADR 0068)
+  tenants, // opcional: TenantScope do bot
   jobTimeoutMs: 30_000, // opcional
   storageRetryMs: 5000, // opcional
   maxConcurrentJobs: 10, // opcional

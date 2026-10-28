@@ -1,0 +1,77 @@
+language js
+
+// O kernel loga só por `log.event` (ADR 0118): o nível e a mensagem fixa vêm do evento, e o valor
+// vai em campo. Chamada direta de nível sobre um logger perde o `event` e abre espaço para valor
+// interpolado na mensagem. A regex do Grit casa o texto inteiro do callee e não aceita grupo (o
+// parêntese vira captura): por isso uma regex por forma, só com classes de caractere. O receptor
+// vale só se terminar em `log`, `logger`, `*Log` ou `*Logger` (com `()` e `?.` opcionais): assim
+// `auth.login.error(...)` e `errorLogs.info(...)` não são barrados.
+//
+// Fora do alcance, de propósito (a revisão cobre): alias (`const l = log; l.warn(...)`),
+// destructuring (`const { warn } = log`), logger guardado em objeto por variável
+// (`loggers[nome].warn(...)`) e chave entre aspas (`{ 'warn': ... }`). A mensagem do
+// `defineLogEvent` só passa se for literal de string ou template sem substituição.
+or {
+  // Chamada direta: `log.warn(...)`, `ctx.log.warn(...)`, `deps.log().warn(...)`, `pluginLog?.warn(...)`.
+  `$callee($...)` as $call where {
+    $callee <: or {
+      r".*[.]trace",
+      r".*[.]debug",
+      r".*[.]info",
+      r".*[.]warn",
+      r".*[.]error",
+      r".*[.]fatal"
+    },
+    $callee <: or {
+      r"#?log[(]?[)]?[?]?[.][a-z]+",
+      r".*[^A-Za-z0-9_$]#?log[(]?[)]?[?]?[.][a-z]+",
+      r"#?logger[(]?[)]?[?]?[.][a-z]+",
+      r".*[^A-Za-z0-9_$]#?logger[(]?[)]?[?]?[.][a-z]+",
+      r".*Log[(]?[)]?[?]?[.][a-z]+",
+      r".*Logger[(]?[)]?[?]?[.][a-z]+"
+    },
+    register_diagnostic(span=$call, message="log sem event no kernel: defina o evento com defineLogEvent e chame log.event(evento, campos) (ADR 0118).", severity="error")
+  },
+  // Logger filho: `log.child({ ... }).warn(...)`.
+  `$recv.child($...).$method($...)` as $call where {
+    $method <: or {
+      `trace`,
+      `debug`,
+      `info`,
+      `warn`,
+      `error`,
+      `fatal`
+    },
+    $recv <: or {
+      r"#?log[(]?[)]?[?]?",
+      r".*[^A-Za-z0-9_$]#?log[(]?[)]?[?]?",
+      r"#?logger[(]?[)]?[?]?",
+      r".*[^A-Za-z0-9_$]#?logger[(]?[)]?[?]?",
+      r".*Log[(]?[)]?[?]?",
+      r".*Logger[(]?[)]?[?]?"
+    },
+    register_diagnostic(span=$call, message="log sem event no kernel: defina o evento com defineLogEvent e chame log.event(evento, campos) (ADR 0118).", severity="error")
+  },
+  // Membro computado: `log['warn'](...)`, `log[method](...)`.
+  `$recv[$key]($...)` as $call where {
+    $recv <: or {
+      r"#?log[(]?[)]?[?]?",
+      r".*[^A-Za-z0-9_$]#?log[(]?[)]?[?]?",
+      r"#?logger[(]?[)]?[?]?",
+      r".*[^A-Za-z0-9_$]#?logger[(]?[)]?[?]?",
+      r".*Log[(]?[)]?[?]?",
+      r".*Logger[(]?[)]?[?]?"
+    },
+    register_diagnostic(span=$call, message="log sem event no kernel: defina o evento com defineLogEvent e chame log.event(evento, campos) (ADR 0118).", severity="error")
+  },
+  // A mensagem do evento é texto fixo: só literal de string ou template sem substituição.
+  `defineLogEvent($arg)` where {
+    $arg <: contains `message: $message`,
+    $message <: not or {
+      JsStringLiteralExpression(),
+      JsTemplateExpression(elements=[JsTemplateChunkElement()]),
+      JsTemplateExpression(elements=[])
+    },
+    register_diagnostic(span=$message, message="mensagem de evento de log com valor: use texto fixo e passe o valor em campo (ADR 0118).", severity="error")
+  }
+}

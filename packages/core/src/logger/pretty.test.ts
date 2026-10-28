@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { defineLogEvent } from './define-event.ts';
 import { createLogger, type LogDestination } from './logger.ts';
 
 function capture(level: 'info' | 'trace' = 'info', secrets?: readonly string[]) {
@@ -39,6 +40,50 @@ describe("createLogger({ format: 'pretty' })", () => {
     expect(rest[0]).toBe('    Error: envio falhou');
     expect(rest.some((line) => line === '    causa: Error: ECONNRESET')).toBe(true);
     expect(rest.every((line) => line.startsWith('    '))).toBe(true);
+  });
+
+  it('põe o Error sob outra chave nas linhas seguintes, com o nome do campo', () => {
+    const { log, raw } = capture();
+    log.error('aba falhou', { error: new Error('manifesto inválido'), aba: 'grupos' });
+    const [head, ...rest] = (raw[0] as string).trimEnd().split('\n');
+    expect(head?.slice(9)).toBe('ERROR aba falhou aba=grupos');
+    expect(rest[0]).toBe('    error: Error: manifesto inválido');
+    expect(rest.length).toBeGreaterThan(1);
+    expect(rest.every((line) => line.startsWith('    '))).toBe(true);
+  });
+
+  it('esconde o event e os bindings base, que são para o agregador (ADR 0118)', () => {
+    const { log, raw } = capture();
+    const sent = defineLogEvent({ name: 'clima.forecast.sent', level: 'info', message: 'enviada' });
+    log
+      .child({ bot: 'principal', service: 'lumabot', version: '1.0.0', env: 'production' })
+      .child({ plugin: 'clima' })
+      .event(sent, { cidade: 'Recife' });
+    expect(raw[0]?.slice(9)).toBe('INFO  [clima] enviada cidade=Recife\n');
+  });
+
+  it('põe texto de várias linhas nas linhas seguintes, recuado', () => {
+    const { log, raw } = capture();
+    log.info('plugins carregados', { report: 'Plugins: 1 carregado(s)\n  ping  1.0.0  carregado' });
+    expect(raw[0]?.slice(9)).toBe(
+      'INFO  plugins carregados\n    Plugins: 1 carregado(s)\n      ping  1.0.0  carregado\n',
+    );
+  });
+
+  it('põe o nome do campo antes do texto de várias linhas que não é o report', () => {
+    const { log, raw } = capture();
+    log.info('resposta', { body: 'linha 1\nlinha 2' });
+    expect(raw[0]?.slice(9)).toBe('INFO  resposta\n    body:\n    linha 1\n    linha 2\n');
+  });
+
+  it('escapa controles no texto de várias linhas, menos o \\n', () => {
+    const { log, raw } = capture();
+    log.info('resposta', { body: 'a\u001b[31mb\r\nc\u007f' });
+    expect(raw[0]).not.toContain('\u001b');
+    expect(raw[0]).not.toContain('\r');
+    expect(raw[0]?.slice(9)).toBe(
+      'INFO  resposta\n    body:\n    a\\u001b[31mb\\u000d\n    c\\u007f\n',
+    );
   });
 
   it('censura os segredos igual ao JSON', () => {

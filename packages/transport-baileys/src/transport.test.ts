@@ -33,6 +33,7 @@ function recordingLogger(lines: LogLine[] = []): Logger & { lines: LogLine[] } {
     warn: at('warn'),
     error: at('error'),
     fatal: at('fatal'),
+    event: (event) => at(event.level)(event.message),
     child: () => recordingLogger(lines),
   };
 }
@@ -168,6 +169,24 @@ describe('BaileysTransport: pareamento', () => {
 
     expect(driver.last.pairingRequests).toEqual([]);
     expect(codes).toEqual([]);
+  });
+
+  it('código sob demanda: devolve e emite o código da tentativa atual (ADR 0129)', async () => {
+    const { driver, transport, codes } = setup('qr');
+    await transport.connect();
+    driver.last.emit('connection.update', { qr: 'QR-1' });
+    expect(await transport.requestPairingCode('5511999999999')).toBe('ABCD1234');
+    expect(driver.last.pairingRequests).toEqual(['5511999999999']);
+    expect(codes).toEqual(['ABCD1234']);
+  });
+
+  it('logout fecha com logged-out (ADR 0129)', async () => {
+    const { driver, transport, statuses } = setup('qr');
+    await transport.connect();
+    await transport.logout();
+    expect(driver.last.loggedOut).toBe(true);
+    expect(statuses.at(-1)).toMatchObject({ status: 'closed', reason: 'logged-out' });
+    await expect(transport.logout()).rejects.toThrow('sem conexão');
   });
 
   it('falha ao pedir o código vai para o log, sem derrubar nada', async () => {
@@ -729,10 +748,22 @@ describe('BaileysTransport: eventos (M2-1.6)', () => {
 describe('BaileysTransport: capabilities', () => {
   it('declara as capabilities do Baileys: todas as do core, menos botões e álbum (ADR 0058, 0061)', () => {
     const { transport } = setup();
-    const missing = new Set(['actions', 'send.album']);
+    const missing = new Set(['actions', 'send.album', 'send.template']);
     expect([...transport.capabilities].sort()).toEqual(
       CAPABILITIES.filter((capability) => !missing.has(capability)).sort(),
     );
+  });
+
+  it('mediaFromRef recusa dado malformado e, sem conexão, falha sem dizer que expirou', async () => {
+    const { transport } = setup();
+    expect(() => transport.mediaFromRef('lixo')).toThrow(TypeError);
+    const media = transport.mediaFromRef({
+      key: { remoteJid: '5511911110000@s.whatsapp.net', id: 'MSG1', fromMe: false },
+      type: 'audioMessage',
+      mediaKey: 'AQID',
+      directPath: '/v/t62/abc',
+    });
+    await expect(media.download()).rejects.toThrow('baileys: sem conexão');
   });
 });
 

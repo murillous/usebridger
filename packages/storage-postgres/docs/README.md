@@ -2,8 +2,9 @@
 
 Adapter de storage do Bridger para vários processos (ou máquinas) dividindo o mesmo banco. Ele
 implementa o `StoragePort` do core ([Storage](../../core/docs/storage.md)) e passa na mesma suíte
-de contrato do [`@usebridger/storage-sqlite`](../../storage-sqlite/docs/README.md). O porquê do
-driver e do schema está no [ADR 0074](../../../docs/adr/0074-postgres-via-pg.md).
+de contrato do [`@usebridger/storage-sqlite`](../../storage-sqlite/docs/README.md). Use-o quando
+mais de um processo ou máquina precisa dividir os dados e a trava de sessão. O driver é o
+[`pg`](https://node-postgres.com).
 
 ## Uso
 
@@ -49,7 +50,7 @@ próxima operação abre outra.
 
 ## Schema
 
-O schema pertence ao adapter, e nenhum plugin cria tabela (ADR 0013). O desenho é o mesmo do
+O schema pertence ao adapter, e nenhum plugin cria tabela. O desenho é o mesmo do
 SQLite:
 
 | Tabela | Conteúdo |
@@ -58,7 +59,7 @@ SQLite:
 | `documents` | Documentos de todas as coleções: `namespace`, `collection`, `id` e `doc` em `jsonb`. O `seq` é a ordem de inserção |
 | `auth_creds` | Credenciais de cada sessão do transport, o JSON em texto |
 | `auth_keys` | Chaves do auth state: `(session, type, id) → value`, o JSON em texto |
-| `leases` | Trava de cada sessão entre processos: `name → (owner, expires_at)` ([ADR 0070](../../../docs/adr/0070-trava-de-sessao-entre-processos.md)) |
+| `leases` | Trava de cada sessão entre processos: `name → (owner, expires_at)` |
 | `schema_version` | Versão do schema (uma linha) |
 
 Os filtros comparam `COALESCE(doc->'campo', 'null'::jsonb)`: a igualdade do `jsonb` mantém `1`,

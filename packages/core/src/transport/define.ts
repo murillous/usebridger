@@ -2,7 +2,9 @@
 // enviar, os métodos das capabilities que declara), e `defineTransport` monta o `Transport`
 // completo: emissor, `on()`, `self`, a checagem de capability e o `UnsupportedError` do resto.
 
+import * as LOG from '#logger/events.ts';
 import type { Chat, Contact, Message } from '#message/types.ts';
+import type { JsonValue } from '#storage/types.ts';
 import {
   assertCanSend,
   assertCapability,
@@ -36,7 +38,7 @@ export interface TransportKit {
  */
 export interface TransportSpec
   extends Pick<Transport, 'connect' | 'disconnect' | 'send'>,
-    Partial<Pick<Transport, CapabilityMethod | 'raw' | 'isChatAdmin'>> {
+    Partial<Pick<Transport, CapabilityMethod | 'raw' | 'isChatAdmin' | 'window'>> {
   readonly name: string;
   readonly capabilities: readonly Capability[];
   readonly native?: unknown;
@@ -66,7 +68,7 @@ export function transportSpecIssues(value: unknown): string[] {
 }
 
 /**
- * Monta a fábrica do transport (ADR 0033) a partir da descrição que `build` devolve. A descrição
+ * Monta a fábrica do transport a partir da descrição que `build` devolve. A descrição
  * inválida lança `TypeError` com todos os problemas, e o `createBot` a converte em
  * `BotConfigError`. Cada método confere a capability antes de chamar o do adapter; o que ele não
  * implementa rejeita com `UnsupportedError`.
@@ -76,7 +78,7 @@ export function defineTransport(
 ): (deps: TransportDeps) => Transport {
   return (deps) => {
     const events = new TypedEmitter<TransportEvents>((error, event) =>
-      deps.log.error('handler de evento do transport falhou', { err: error, event }),
+      deps.log.event(LOG.transportHandlerFailed, { err: error, eventName: event }),
     );
     let self: Contact | null = null;
     const spec = build(deps, {
@@ -111,8 +113,17 @@ function assemble(
     if (call === undefined) throw new UnsupportedError(capability, spec.name);
     return call(spec);
   };
-  const { react, edit, getGroupMetadata, updateGroupParticipants, sendTyping, raw, isChatAdmin } =
-    spec;
+  const {
+    react,
+    edit,
+    getGroupMetadata,
+    updateGroupParticipants,
+    sendTyping,
+    raw,
+    isChatAdmin,
+    window,
+    mediaFromRef,
+  } = spec;
   const remove = spec.delete;
   return {
     name: spec.name,
@@ -128,6 +139,13 @@ function assemble(
     }),
     ...(isChatAdmin !== undefined && {
       isChatAdmin: (chat: Chat, contact: Contact) => isChatAdmin.call(spec, chat, contact),
+    }),
+    ...(window !== undefined && { window: (chatId: string) => window.call(spec, chatId) }),
+    ...(mediaFromRef !== undefined && {
+      mediaFromRef: (data: JsonValue) => {
+        assertCapability(holder, 'media.ref');
+        return mediaFromRef.call(spec, data);
+      },
     }),
     connect: () => spec.connect(),
     disconnect: () => spec.disconnect(),

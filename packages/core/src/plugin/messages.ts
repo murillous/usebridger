@@ -16,7 +16,7 @@ export type MessageText<TKey extends string = string> = {
   bivarianceHack(key: TKey, values?: MessageValues): string;
 }['bivarianceHack'];
 
-/** Placeholder que o kernel preenche: o prefixo de comando do chat (ADR 0059). */
+/** Placeholder que o kernel preenche: o prefixo de comando do chat. */
 export const PREFIX_PLACEHOLDER = 'prefix';
 
 // Só `{identificador}`: chaves com espaço ou pontuação (`{ ok }`, JSON) ficam como texto.

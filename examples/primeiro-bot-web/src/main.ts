@@ -10,7 +10,7 @@ const secret = randomBytes(32).toString('hex');
 
 const bot = createBot({
   // O transport web recebe as conexões pelo servidor HTTP do bot.
-  http: createHttp({ port: 3000 }),
+  http: createHttp({ port: 3000, hostname: '127.0.0.1' }),
   transport: web({ auth: { secret } }),
   plugins: [ping, pagina(secret)],
 });

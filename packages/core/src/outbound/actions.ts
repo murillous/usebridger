@@ -11,7 +11,7 @@ import type { ActionOptions, Outbound } from './types.ts';
 /** O que as ações usam do transport. */
 export type ActionTransport = Pick<
   Transport,
-  'name' | 'capabilities' | 'react' | 'edit' | 'delete' | 'sendTyping' | 'limits'
+  'name' | 'capabilities' | 'react' | 'edit' | 'delete' | 'sendTyping' | 'limits' | 'window'
 >;
 
 /** Enfileira `run` no chat se o transport tem a capability; sem ela, rejeita já. */
@@ -64,5 +64,7 @@ export function createOutbound(
       action('message.delete', key.chatId, () => transport.delete(key), options),
     typing: (chatId, kind, options) =>
       action('typing', chatId, () => transport.sendTyping(chatId, kind), options),
+    // Leitura, fora da fila (como `groups.metadata`); sem o método, a plataforma não tem janela.
+    window: async (chatId) => (await transport.window?.(chatId)) ?? null,
   };
 }

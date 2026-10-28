@@ -30,11 +30,11 @@ export interface RoleContext {
   readonly text: string | null;
   /** Nome canônico do comando que exige o papel. */
   readonly command: string;
-  /** Logger do plugin dono do papel, com `chatId`. */
+  /** Logger do plugin dono do papel, com `chat`. */
   readonly log: Logger;
   /**
    * Aborta quando a checagem estoura o prazo (`timeouts.commandMs`), com `reason` =
-   * `RoleTimeoutError`. Repasse a consultas externas (ADR 0029).
+   * `RoleTimeoutError`. Repasse a consultas externas.
    */
   readonly signal: AbortSignal;
 }

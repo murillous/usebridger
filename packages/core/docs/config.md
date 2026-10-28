@@ -1,10 +1,9 @@
 # Config de plugin: schema, camadas, segredos e reload
 
 Cada plugin declara a config com um schema **Zod 4**; o core junta as camadas, valida, mascara
-os segredos e recarrega o plugin quando a config muda
-([ADR 0015](../../../docs/adr/0015-config-por-plugin-zod.md),
-[ADR 0022](../../../docs/adr/0022-sem-i18n-objeto-messages.md),
-[ADR 0028](../../../docs/adr/0028-camadas-da-config-de-plugin.md)).
+os segredos e recarrega o plugin quando a config muda. Esta página mostra como declarar a config, de onde
+vêm os valores (variável de ambiente, arquivo, dashboard), como guardar segredos e como trocar a
+config sem reiniciar o bot.
 
 ## Declarar
 
@@ -30,8 +29,7 @@ export const ai = definePlugin({
 ```
 
 O `z` vem de `@usebridger/core/zod`, que reexporta o Zod do próprio core: o schema sai da mesma
-cópia que o `definePlugin` tipa, sem o app instalar o `zod` nem acompanhar a faixa dele
-([ADR 0091](../../../docs/adr/0091-zod-no-subpath-do-core.md)). O subpath é separado do
+cópia que o `definePlugin` tipa, sem o app instalar o `zod` nem acompanhar a faixa dele. O subpath é separado do
 `@usebridger/core` porque carregar o Zod cria um global, e importar o core não tem side effect.
 Instalar o `zod` direto ainda funciona, mas uma faixa diferente da do core pode trazer uma
 segunda cópia, com erros de tipo confusos.
@@ -87,7 +85,7 @@ O ambiente é injetável (`env`); sem ele, vale `process.env`, lido só em `src/
 ## `createPluginConfigs`
 
 O `Bot` faz isto no `start()` com `pluginConfig`, `storage`, `env` e `secrets` da config dele, e
-expõe `setOverrides`/`describe`/`jsonSchema` em `bot.config`. Por dentro (interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md))):
+expõe `setOverrides`/`describe`/`jsonSchema`/`setSecret`/`clearSecret` em `bot.config`. Por dentro (interno do kernel, não exportado; o app só usa `bot.config`):
 
 ```ts
 import { createLogger, createSecretSet } from '@usebridger/core';
@@ -169,7 +167,7 @@ em texto puro), `'shadowed'` quando o `setSecret` esbarrou em env ou arquivo que
 valor) e `'invalid'` em qualquer outro problema, para o consumidor distinguir sem ler o texto.
 
 - **No boot**: a fábrica que lança **derruba o boot** com `PluginBootError` (`setup-failed`, fase
-  `context`), com o plugin e o motivo ([ADR 0098](../../../docs/adr/0098-plugin-falho-derruba-o-boot.md)).
+  `context`), com o plugin e o motivo.
 - **No reload**: o plugin fica ignorado (`setup-failed`) com o motivo na tabela, e o bot segue.
 - **Em runtime**: `setOverrides` inválido rejeita, nada é salvo e o plugin segue com a config
   anterior.
@@ -197,7 +195,7 @@ censura, sem máscara e aceito por override. Para uma lista secreta, marque o ca
 ### Segredo não entra por override
 
 O override fica em texto puro no storage (banco, backups), então segredo vem **de env, do
-arquivo ou do `setSecret`** ([ADR 0028](../../../docs/adr/0028-camadas-da-config-de-plugin.md)):
+arquivo ou do `setSecret`**:
 
 ```ts
 await configs.setOverrides('ai', { model: 'pro', openai: { token: 'x' } });
@@ -216,7 +214,7 @@ uma vez por campo; o resto do override vale. Para limpar, grave o override de no
 ### Segredos cifrados no storage
 
 Para o dashboard editar segredos, o core guarda-os **cifrados** em
-`kernelStorage(storage, 'secrets').kv` ([ADR 0117](../../../docs/adr/0117-segredos-cifrados-editaveis-pelo-dashboard.md)):
+`kernelStorage(storage, 'secrets').kv`:
 chave = plugin, valor = `{ [caminho]: envelope }`. O envelope é AES-256-GCM
 (`{ v: 1, kid, iv, tag, data }` em base64), com `<plugin>:<caminho>` como AAD, então um envelope
 copiado para outro campo não decifra. A precedência é `env > arquivo > secret > override > default`:
@@ -233,7 +231,7 @@ openssl rand -base64 32
 Formato inválido falha o boot. Sem a variável, `secretsWritable` é `false` e `setSecret` rejeita;
 o resto segue como antes. Segredo salvo que não decifra (chave trocada ou perdida, dado adulterado)
 vira `PluginConfigError` `undecryptable`, com plugin e caminho. **No boot isso aborta o `start()`
-com `PluginBootError`**, como qualquer config inválida ([ADR 0098](../../../docs/adr/0098-plugin-falho-derruba-o-boot.md));
+com `PluginBootError`**, como qualquer config inválida;
 num reload, o plugin fica `setup-failed` e o bot segue. Recuperação:
 
 1. Restaure a chave certa em `BRIDGER_SECRET_KEY` (e a antiga em `BRIDGER_SECRET_KEY_PREVIOUS`, se
@@ -272,8 +270,7 @@ sobrescreve textos do manifesto, com a mesma precedência dos campos. O resultad
 ### Placeholders
 
 O texto pode ter placeholders `{nome}`, preenchidos na hora de usar pelo `t` do contexto de
-comando, de passo ou de listener de mensagem
-([ADR 0088](../../../docs/adr/0088-placeholders-nas-messages.md)):
+comando, de passo ou de listener de mensagem:
 
 ```ts
 messages: {
@@ -317,8 +314,7 @@ próximo boot.
 ## `owners`
 
 Donos do bot (`createBot({ owners })`). Cada entrada é um telefone ou um `{ id }`
-([Comandos](commands.md#role),
-[ADR 0052](../../../docs/adr/0052-owners-por-telefone-ou-id.md)):
+([Comandos](commands.md#role)):
 
 - **Telefone** (string): só dígitos com DDI, como `Contact.phone`, comparado com `sender.phone`.
   Aceita espaço, `+`, `-`, `.`, `(` e `)`; o resto (letras, `@`) é `BotConfigError`, assim

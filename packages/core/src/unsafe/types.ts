@@ -10,7 +10,7 @@ export interface Unsafe {
    * Objeto bruto de onde a mensagem saiu (ex.: o `WAMessage` do Baileys), ou `undefined` se o
    * transport não o expõe ou a mensagem não veio dele (montada em teste ou pelo próprio plugin).
    * Na mensagem de um clique ou de um comando nativo, é o objeto bruto da interação. Chamar loga
-   * um aviso, uma vez por plugin, como o `native` (ADR 0062).
+   * um aviso, uma vez por plugin, como o `native`.
    */
   raw(message: Message): unknown;
 }

@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PluginErrorEvent } from '#events/types.ts';
+import { defineLogEvent } from '#logger/define-event.ts';
 import { createNoopLogger } from '#logger/logger.ts';
 import { createSecretSet } from '#logger/secrets.ts';
 import type { Logger, LogLevel } from '#logger/types.ts';
@@ -9,7 +10,7 @@ import type { LogSignal } from '#observers/observers.ts';
 import { definePlugin } from '#plugin/define.ts';
 import type { PluginContext } from '#plugin/types.ts';
 import { type Bot, type BotConfig, createBot } from './bot.ts';
-import { RecordingTransport, recordingLogger } from './harness.test-support.ts';
+import { message, RecordingTransport, recordingLogger } from './harness.test-support.ts';
 
 const bots: Bot[] = [];
 
@@ -76,6 +77,38 @@ describe('ctx.observe("log") (ADR 0105)', () => {
       { logger },
     );
     expect(lines.map((l) => l.message)).toEqual(['acima']);
+  });
+
+  it('log.event chega ao sinal no nível do evento, com o nome em fields.event (ADR 0118)', async () => {
+    const lines: LogSignal[] = [];
+    const sent = defineLogEvent({ name: 'clima.forecast.sent', level: 'warn', message: 'enviada' });
+    await startBot((ctx) => {
+      ctx.observe('log', (signal) => lines.push(signal));
+      ctx.log.event(sent, { cidade: 'Recife' });
+    });
+    expect(lines.find((l) => l.fields['event'] === 'clima.forecast.sent')).toMatchObject({
+      level: 'warn',
+      message: 'enviada',
+      fields: { plugin: 'p', cidade: 'Recife', event: 'clima.forecast.sent' },
+    });
+  });
+
+  it('log.event abaixo do nível do logger não vira sinal', async () => {
+    const lines: LogSignal[] = [];
+    const quiet = defineLogEvent({ name: 'clima.cache.hit', level: 'debug', message: 'cache' });
+    const withLevel = (inner: Logger): Logger => ({
+      ...inner,
+      level: 'info' as LogLevel,
+      child: (bindings) => withLevel(inner.child(bindings)),
+    });
+    await startBot(
+      (ctx) => {
+        ctx.observe('log', (signal) => lines.push(signal));
+        ctx.log.event(quiet);
+      },
+      { logger: withLevel(recordingLogger()) },
+    );
+    expect(lines.filter((l) => l.fields['event'] === 'clima.cache.hit')).toEqual([]);
   });
 
   it('mascara secrets na mensagem, nos campos e no erro', async () => {
@@ -329,5 +362,24 @@ describe('ctx.observe("log") (ADR 0105)', () => {
     // O `eco` vence antes: o loop que o dispara rearma o timer do `aviso`.
     ctx.log.info('gatilho');
     await vi.waitFor(() => expect(lines.map((l) => l.message)).toContain('aviso disparou'));
+  });
+
+  it('o log de um listener de mensagem leva `chat` e não `chatId`', async () => {
+    const lines: LogSignal[] = [];
+    const transport = new RecordingTransport();
+    await startBot(
+      (ctx) => {
+        ctx.observe('log', (signal) => lines.push(signal));
+        ctx.events.on('message', (c) => {
+          c.log.warn('x');
+        });
+      },
+      { transport },
+    );
+    transport.emit('message', message('oi'));
+    await vi.waitFor(() => expect(lines.some((l) => l.message === 'x')).toBe(true));
+    const line = lines.find((l) => l.message === 'x');
+    expect(line?.fields['chat']).toMatch(/^u_[\w-]{22}$/);
+    expect(line?.fields).not.toHaveProperty('chatId');
   });
 });

@@ -1,4 +1,5 @@
 import type { Media } from '#message/types.ts';
+import type { JsonValue } from '#storage/types.ts';
 
 /**
  * O que o transport fornece para cada mídia: metadados e o loader nativo. O core cuida de
@@ -17,7 +18,26 @@ export interface MediaSource {
    * `stream()` cai no `download()` cacheado.
    */
   stream?(): Promise<ReadableStream<Uint8Array>>;
+  /**
+   * O que o transport precisa para baixar a mídia de novo sem esta mensagem (capability
+   * `media.ref`): vai no `data` do `MediaRef`. Ausente: a mídia não tem referência.
+   */
+  readonly ref?: JsonValue;
 }
+
+/**
+ * Dado de referência de cada `Media`, para o `ctx.media.ref()`. Fora do objeto, como o `raw` do
+ * transport: não aparece em spread nem em `JSON.stringify` da mensagem, e pode conter segredo.
+ */
+const refs = new WeakMap<Media, JsonValue>();
+
+/** O `ref` que o transport deu à mídia, se deu. */
+export function mediaRefData(media: Media): JsonValue | undefined {
+  return refs.get(media);
+}
+
+/** O loader de uma mídia que volta por referência (`Transport.mediaFromRef`). */
+export type MediaLoader = Pick<MediaSource, 'download' | 'stream'>;
 
 /**
  * Embrulha o loader do transport numa `Media` lazy: nada é baixado até a primeira chamada,
@@ -42,7 +62,7 @@ export function createMedia(source: MediaSource): Media {
     return pending;
   };
 
-  return {
+  const media: Media = {
     mimetype: source.mimetype,
     size: source.size ?? null,
     // Só quando informado: `fileName` ausente diz que a plataforma não deu nome.
@@ -56,6 +76,8 @@ export function createMedia(source: MediaSource): Media {
       return source.stream();
     },
   };
+  if (source.ref !== undefined) refs.set(media, source.ref);
+  return media;
 }
 
 function bufferToStream(buffer: Buffer): ReadableStream<Uint8Array> {

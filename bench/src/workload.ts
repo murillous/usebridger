@@ -3,7 +3,13 @@
 // por todo o caminho da mensagem (middlewares → roteador → barramento → fila de saída).
 
 import { setImmediate as nextTick } from 'node:timers/promises';
-import { command, definePlugin, type Message, type PluginDefinition } from '@usebridger/core';
+import {
+  command,
+  createLogger,
+  definePlugin,
+  type Message,
+  type PluginDefinition,
+} from '@usebridger/core';
 import { createMessage } from '@usebridger/core/adapter';
 import { createTestBot, type TestBot } from '@usebridger/testing/bot';
 import { z } from 'zod';
@@ -19,17 +25,36 @@ export interface Workload {
   readonly bot: TestBot;
   /** `plugin.error` vistos. Um cenário com erro mede o caminho de erro, não o normal. */
   readonly pluginErrors: () => number;
+  /** Duração (ms) de cada `ctx.audit.record` do cenário `audit`, na ordem das mensagens. */
+  readonly auditCosts: number[];
 }
 
 export interface WorkloadOptions {
   /** Um observador vazio em cada sinal do core, para medir o custo deles (ADR 0102). */
   readonly observed?: boolean;
+  /** Logger em `info` com destino nulo, para medir o custo de montar as linhas (ADR 0120). */
+  readonly logged?: boolean;
+  /** Modo da trilha (ADR 0120); só aparece no custo com `logged`. */
+  readonly trail?: 'info' | 'off';
+  /** O `plugin-metrics` carregado, com storage em memória e os observadores dele ativos. */
+  readonly metrics?: boolean;
+  /** O `bench-0` chama `ctx.audit.record` em toda mensagem, com `details` pequeno (ADR 0122). */
+  readonly audit?: boolean;
 }
+
+/**
+ * Flush do `plugin-metrics` longe da janela medida: a medida não pode depender de o timer
+ * disparar no meio dela. Abaixo de 2^31 ms, senão o `setInterval` vira 1 ms.
+ */
+const METRICS_FLUSH_MS = 24 * 60 * 60 * 1000;
 
 /** Sobe o bot de referência sobre o `FakeTransport`, com a fila de saída sem intervalo (D43). */
 export async function createWorkload(options: WorkloadOptions = {}): Promise<Workload> {
   let pluginErrors = 0;
-  const plugins = Array.from({ length: PLUGIN_COUNT }, (_, i) => benchPlugin(i));
+  const auditCosts: number[] = [];
+  const plugins = Array.from({ length: PLUGIN_COUNT }, (_, i) =>
+    benchPlugin(i, options.audit === true ? auditCosts : undefined),
+  );
   const observer = definePlugin({
     name: 'bench-observer',
     version: '1.0.0',
@@ -38,14 +63,31 @@ export async function createWorkload(options: WorkloadOptions = {}): Promise<Wor
       ctx.events.on('plugin.error', () => {
         pluginErrors++;
       });
+      // Evento de auditoria descartado (fila cheia) deixaria o `record` mais barato que o real.
+      if (options.audit === true) {
+        ctx.observe('audit.dropped', ({ count }) => {
+          pluginErrors += count;
+        });
+      }
       if (options.observed === true) {
         ctx.observe('message.handled', () => undefined);
         ctx.observe('outbound.sent', () => undefined);
       }
     },
   });
+  // Import sob demanda: o `prom-client` do plugin soma ~4 MB de RSS a todo processo de cenário,
+  // inclusive ao `idle-memory`, que mede o kernel sem ele (#267).
+  const metrics =
+    options.metrics === true ? [(await import('@usebridger/plugin-metrics')).metrics] : [];
   const bot = await createTestBot({
-    plugins: [observer, ...plugins],
+    ...(options.logged === true && {
+      logger: createLogger({ level: 'info', destination: { write: () => undefined } }),
+    }),
+    ...(options.trail !== undefined && { trail: options.trail }),
+    plugins: [observer, ...metrics, ...plugins],
+    ...(options.metrics === true && {
+      pluginConfig: { metrics: { flushIntervalMs: METRICS_FLUSH_MS } },
+    }),
     middlewares: {
       // `rateLimit` por remetente com teto alto: entra no caminho sem barrar mensagem, e o
       // cenário de memória pega um `Map` por remetente que nunca se limpa (o vazamento do
@@ -62,7 +104,7 @@ export async function createWorkload(options: WorkloadOptions = {}): Promise<Wor
     const names = skipped.map((entry) => entry.name).join(', ');
     throw new Error(`plugins do benchmark ignorados no boot: ${names}`);
   }
-  return { bot, pluginErrors: () => pluginErrors };
+  return { bot, pluginErrors: () => pluginErrors, auditCosts };
 }
 
 /**
@@ -70,7 +112,7 @@ export async function createWorkload(options: WorkloadOptions = {}): Promise<Wor
  * `!ping` e `oi` geram uma resposta cada, e um listener espera um ciclo do event loop, como um
  * plugin que faz I/O (ADR 0038). Os demais `dependsOn` dele, para o boot ordenar o grafo.
  */
-function benchPlugin(index: number): PluginDefinition {
+function benchPlugin(index: number, auditCosts?: number[]): PluginDefinition {
   const name = `bench-${index}`;
   return definePlugin({
     name,
@@ -99,6 +141,17 @@ function benchPlugin(index: number): PluginDefinition {
         if (index === 0 && e.text === 'oi') await e.reply(ctx.config.greeting);
       });
       ctx.events.on('message:image', () => undefined);
+      if (index === 0 && auditCosts !== undefined) {
+        ctx.events.on('message', (e) => {
+          const start = performance.now();
+          ctx.audit.record({
+            action: 'bench-0.message.handle',
+            target: { type: 'chat', id: e.message.chat.id },
+            details: { kind: 'message', length: e.text?.length ?? 0 },
+          });
+          auditCosts.push(performance.now() - start);
+        });
+      }
       if (index === 0) {
         ctx.events.on('message', async () => {
           await nextTick();

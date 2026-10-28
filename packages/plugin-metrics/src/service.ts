@@ -1,469 +1,365 @@
-// Núcleo do serviço: agregação em memória, flush em baldes diários e consulta. Separado do
-// plugin para não depender do contexto além do que `createMetrics` recebe.
+// Núcleo do serviço: camada fina sobre o `prom-client` (ADR 0121). Valida a declaração, guarda o
+// dono e aplica as guardas do handle; a contagem fica com o `prom-client`, na registry do bot.
 
-import type { Collection, Logger } from '@usebridger/core';
+import { isPersonalId, type Logger } from '@usebridger/core';
 import {
-  HISTOGRAM_BUCKETS,
-  type MetricLabels,
-  type MetricRow,
-  type MetricsExporter,
-  type MetricsRange,
-  type MetricsService,
+  Counter as PromCounter,
+  Gauge as PromGauge,
+  Histogram as PromHistogram,
+  type Registry,
+} from 'prom-client';
+import type {
+  Counter,
+  Gauge,
+  Histogram,
+  HistogramSpec,
+  MetricSpec,
+  MetricsService,
 } from '#types.ts';
+import * as LOG from './log-events.ts';
 
-/** Um documento por (métrica, dia, série, campo): o `increment` atômico mexe num campo só. */
-export interface MetricDoc {
-  readonly [key: string]: string | number | MetricLabels;
-  readonly metric: string;
-  readonly day: string;
-  readonly key: string;
-  readonly field: string;
-  readonly labels: MetricLabels;
-  readonly value: number;
-}
-
-interface Cell {
-  readonly day: string;
-  readonly key: string;
-  readonly labels: MetricLabels;
-  readonly fields: Map<string, number>;
+export interface MetricsRuntimeOptions {
+  readonly registry: Registry;
+  readonly log: Logger;
+  readonly maxSeriesPerMetric: number;
+  /** Chamado na primeira declaração de uma métrica e quando o dono dela muda. */
+  readonly onDescribe?: (descriptor: Declaration) => void;
 }
 
 type Kind = 'counter' | 'histogram' | 'gauge';
+type Labels = Readonly<Record<string, string>>;
 
-interface Metric {
-  readonly kind: Kind;
-  readonly series: Set<string>;
-  cells: Map<string, Cell>;
-  // Acumulado desde o início do processo, sem dia e sem zerar no flush: é o que o /metrics lê,
-  // porque contador Prometheus que volta a zero a cada flush quebraria o `rate()`.
-  readonly totals: Map<string, Cell>;
-  overflowWarned: boolean;
+/** Descritor de uma métrica, como vai para a coleção `catalog`. */
+export interface Declaration {
+  readonly name: string;
+  readonly type: Kind;
+  readonly help: string;
+  readonly labelNames: readonly string[];
+  readonly buckets: readonly number[] | null;
+  readonly owner: string;
 }
 
-export interface MetricsRuntimeOptions {
-  readonly collection: Collection<MetricDoc>;
-  readonly log: Logger;
-  readonly exporters: () => readonly MetricsExporter[];
-  readonly maxSeriesPerMetric: number;
-  readonly retentionDays: number;
-  readonly now?: () => number;
+/** Uma série lida da registry no flush. */
+export interface Sample {
+  readonly metric: string;
+  readonly type: Kind;
+  readonly labels: Labels;
+  /**
+   * Contador e histograma: o que somou desde a leitura anterior (`value`, ou `le:<limite>` por
+   * balde não cumulativo, `sum` e `count`). Gauge: `last` e `max` desde a leitura anterior.
+   */
+  readonly fields: Readonly<Record<string, number>>;
 }
 
-/** Dono das métricas que o próprio plugin-metrics grava (kernel). */
+/** A parte de escrita do serviço; a leitura (`query`, `catalog`) vem do histórico. */
+export type MetricsWriter = Omit<MetricsService, 'query' | 'catalog'>;
+
+/** Dono das métricas que o próprio plugin-metrics declara (kernel). */
 export const CORE_OWNER = 'core';
 
-/** Gauge amostrado do `ctx.stats()` que o scrape já expõe ao vivo (`bridger_outbound_pending`). */
-export const LIVE_GAUGE = 'bridger.outbound.pending';
-
 export interface MetricsRuntime {
-  /** Serviço do próprio plugin-metrics: as métricas que ele grava têm o dono `core`. */
-  readonly service: MetricsService;
-  /** Serviço de um plugin consumidor: a primeira escrita de uma métrica grava `caller` como dono. */
-  scoped(caller: string): MetricsService;
-  /** O caller saiu: as métricas dele ficam sem dono. */
+  /** Serviço do próprio plugin-metrics: o que ele declara tem o dono `core`. */
+  readonly service: MetricsWriter;
+  /** Serviço de um plugin consumidor: a primeira declaração de uma métrica grava `caller` como dono. */
+  scoped(caller: string): MetricsWriter;
+  /** O caller saiu: sai das métricas que declarou, e a que fica sem ninguém sai da registry. */
   release(caller: string): void;
-  /** Soma ao contador de um dia específico (o dia anterior, na virada); fora dos totais. */
-  counterAt(name: string, labels: MetricLabels, value: number, day: string): void;
-  /** Acumulado desde o início do processo (campo `day` vazio), para o /metrics. */
-  totals(): MetricRow[];
-  flush(): Promise<void>;
+  /** Quem declarou primeiro, entre os que ainda estão; `undefined` se a métrica não existe. */
+  ownerOf(name: string): string | undefined;
+  /** Lê a registry e devolve, por série, o que mudou desde a leitura anterior. */
+  collect(): Promise<Sample[]>;
+  /** O que o próximo `collect` devolveria, sem avançar a leitura (o `query` soma ao gravado). */
+  peek(): Promise<Sample[]>;
+  /** Declarações vivas, com o dono atual. */
+  declarations(): Declaration[];
 }
 
-const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
-const BUCKET_FIELDS = [...HISTOGRAM_BUCKETS.map((b) => `le${b}`), 'leInf'];
-const MAX_BOUND = HISTOGRAM_BUCKETS.at(-1) ?? 0;
-
-// Ids de chat/usuário reconhecidos pelo formato, porque o core não expõe um reconhecedor:
-// JID/handle com `@` (`...@s.whatsapp.net`, `...@g.us`, `...@lid`), telefone ou id numérico
-// longo (Telegram etc.). shortcut: heurística de formato, um id opaco fora desses formatos
-// passa; quem usa o serviço responde por não pôr id como rótulo.
-const PERSONAL_ID_RE = /@|^\+?\d{7,}$|^-\d{5,}$/;
-
-function dayOf(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 10);
+interface Series {
+  readonly labels: Labels;
+  readonly fields: Record<string, number>;
 }
 
-function labelKey(labels: MetricLabels): string {
+interface Entry {
+  readonly kind: Kind;
+  /** Especificação serializada: a redeclaração só devolve o handle se for igual. */
+  readonly spec: string;
+  readonly descriptor: Omit<Declaration, 'owner'>;
+  readonly handle: Counter<string> | Histogram<string> | Gauge<string>;
+  readonly metric: PromCounter | PromHistogram | PromGauge;
+  /** Plugins que declararam, em ordem; o primeiro é o dono. */
+  readonly declarers: string[];
+  /** Contador e histograma: o total por série já entregue pelo `collect`, de onde sai o delta. */
+  readonly baseline: Map<string, Record<string, number>>;
+  /** Gauge: `last` e `max` por série desde o `collect` anterior, mantidos pelo `set`. */
+  readonly gauges: Map<string, Series>;
+}
+
+/** Chave da série independente da ordem dos rótulos. */
+export function seriesKey(labels: Labels): string {
   return JSON.stringify(Object.entries(labels).sort(([a], [b]) => (a < b ? -1 : 1)));
 }
 
-function assertLabels(name: string, labels: MetricLabels): void {
-  for (const [k, v] of Object.entries(labels)) {
-    if (typeof v !== 'string') {
-      throw new TypeError(`métrica "${name}": o rótulo "${k}" precisa ser texto`);
-    }
-    if (PERSONAL_ID_RE.test(v)) {
-      throw new TypeError(
-        `métrica "${name}": o rótulo "${k}" parece id de chat ou de usuário; dado pessoal não vira rótulo`,
-      );
-    }
-  }
-}
+const NAME_RE = /^[a-zA-Z_:][a-zA-Z0-9_:]*$/;
+const LABEL_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+// Do runtime do Node (#239): o `collectDefaultMetrics` preenche `process_`/`nodejs_` e o plugin
+// grava `bridger_runtime_*` no histórico; um plugin com o mesmo nome gravaria a série duas vezes.
+const RESERVED_PREFIXES = ['process_', 'nodejs_', 'bridger_runtime_'];
 
-function assertValue(name: string, value: number): void {
-  if (!Number.isFinite(value) || value < 0) {
-    throw new TypeError(`métrica "${name}": o valor precisa ser número finito >= 0`);
-  }
-}
-
-// Limite superior do balde onde cai o posto `p`; o balde `+Inf` devolve o maior limite.
-function percentile(buckets: readonly number[], count: number, p: number): number {
-  const rank = Math.ceil(count * p);
-  let acc = 0;
-  for (let i = 0; i < buckets.length; i++) {
-    acc += buckets[i] ?? 0;
-    if (acc >= rank) return HISTOGRAM_BUCKETS[i] ?? MAX_BOUND;
-  }
-  return MAX_BOUND;
-}
-
-function toRow(metric: string, kind: Kind, c: Cell): MetricRow | undefined {
-  if (kind === 'gauge') {
-    const max = c.fields.get('max');
-    return max === undefined
-      ? undefined
-      : {
-          metric,
-          type: kind,
-          day: c.day,
-          labels: c.labels,
-          last: c.fields.get('last') ?? max,
-          max,
-        };
-  }
-  if (kind === 'counter') {
-    const value = c.fields.get('value') ?? 0;
-    return value > 0 ? { metric, type: kind, day: c.day, labels: c.labels, value } : undefined;
-  }
-  const count = c.fields.get('count') ?? 0;
-  if (count === 0) return undefined;
-  const buckets = BUCKET_FIELDS.map((f) => c.fields.get(f) ?? 0);
-  return {
-    metric,
-    type: kind,
-    day: c.day,
-    labels: c.labels,
-    count,
-    sum: c.fields.get('sum') ?? 0,
-    p50: percentile(buckets, count, 0.5),
-    p95: percentile(buckets, count, 0.95),
-    p99: percentile(buckets, count, 0.99),
-    buckets,
+function assertSpec(kind: Kind, spec: HistogramSpec<string>): void {
+  const { name, help, labelNames, buckets } = spec;
+  const fail = (why: string): never => {
+    throw new TypeError(`métrica "${String(name)}": ${why}`);
   };
-}
-
-// Amostra nova: o último vale o mais recente e o máximo só sobe.
-function sample(cell: Cell, last: number, max = last): void {
-  cell.fields.set('last', last);
-  cell.fields.set('max', Math.max(cell.fields.get('max') ?? 0, max));
-}
-
-function addTo(cell: Cell, field: string, by: number): void {
-  cell.fields.set(field, (cell.fields.get(field) ?? 0) + by);
+  if (typeof name !== 'string' || !NAME_RE.test(name))
+    fail('nome fora de ^[a-zA-Z_:][a-zA-Z0-9_:]*$');
+  if (RESERVED_PREFIXES.some((p) => name.startsWith(p)))
+    fail('prefixo reservado ao runtime do Node');
+  if (kind === 'counter' && !name.endsWith('_total')) fail('contador precisa terminar em _total');
+  if (typeof help !== 'string' || help === '') fail('help precisa ser texto não vazio');
+  if (!Array.isArray(labelNames)) fail('labelNames precisa ser lista');
+  const seen = new Set<string>();
+  for (const label of labelNames) {
+    if (typeof label !== 'string' || !LABEL_RE.test(label)) {
+      fail(`rótulo "${String(label)}" fora de ^[a-zA-Z_][a-zA-Z0-9_]*$`);
+    }
+    if (seen.has(label)) fail(`rótulo "${label}" repetido`);
+    // `le` é o rótulo dos baldes no formato do Prometheus.
+    if (kind === 'histogram' && label === 'le') fail('histograma não aceita o rótulo "le"');
+    seen.add(label);
+  }
+  if (buckets === undefined) return;
+  if (!Array.isArray(buckets)) fail('buckets precisa ser lista');
+  buckets.forEach((b, i) => {
+    if (!Number.isFinite(b)) fail('buckets precisam ser números finitos');
+    if (i > 0 && b <= (buckets[i - 1] ?? b)) fail('buckets precisam ser crescentes');
+  });
 }
 
 export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
-  const { collection, log, maxSeriesPerMetric, retentionDays } = options;
-  const now = options.now ?? Date.now;
-  const metrics = new Map<string, Metric>();
-  const owners = new Map<string, string>();
-  let flushing: Promise<void> = Promise.resolve();
-  let purgedDay = '';
-  let generation = 0;
+  const { registry, log, maxSeriesPerMetric, onDescribe } = options;
+  const entries = new Map<string, Entry>();
+  // Métricas que saíram da registry com delta ainda não lido: o próximo `collect` as lê uma vez.
+  const retired: [string, Entry][] = [];
 
-  // Devolve a célula do dia e a do acumulado; vazio se a série estourou o limite.
-  function cellFor(name: string, kind: Kind, labels: MetricLabels, dayAt?: string): Cell[] {
-    assertLabels(name, labels);
-    let metric = metrics.get(name);
-    if (!metric) {
-      metric = {
-        kind,
-        series: new Set(),
-        cells: new Map(),
-        totals: new Map(),
-        overflowWarned: false,
-      };
-      metrics.set(name, metric);
-    } else if (metric.kind !== kind) {
-      throw new TypeError(`métrica "${name}" já existe como ${metric.kind}`);
-    }
-    const key = labelKey(labels);
-    if (!metric.series.has(key)) {
-      if (metric.series.size >= maxSeriesPerMetric) {
+  function create(
+    kind: Kind,
+    spec: HistogramSpec<string>,
+    gauges: Entry['gauges'],
+  ): Pick<Entry, 'handle' | 'metric'> {
+    const { name } = spec;
+    const labelNames = [...spec.labelNames];
+    const allowed = new Set(labelNames);
+    const series = new Set<string>();
+    let overflowWarned = false;
+
+    // Guardas do caminho quente; `false` descarta a amostra sem lançar.
+    const admit = (labels: Labels, value: number): boolean => {
+      if (!Number.isFinite(value) || value < 0) {
+        throw new TypeError(`métrica "${name}": o valor precisa ser número finito >= 0`);
+      }
+      for (const [k, v] of Object.entries(labels)) {
+        if (!allowed.has(k)) {
+          throw new TypeError(`métrica "${name}": o rótulo "${k}" não está em labelNames`);
+        }
+        if (typeof v !== 'string') {
+          throw new TypeError(`métrica "${name}": o rótulo "${k}" precisa ser texto`);
+        }
+        // Reconhecedor do core (ADR 0119): uma regra só de id pessoal entre o log e as métricas.
+        if (isPersonalId(v)) {
+          throw new TypeError(
+            `métrica "${name}": o rótulo "${k}" parece id de chat ou de usuário; dado pessoal não vira rótulo`,
+          );
+        }
+      }
+      // Na ordem de `labelNames`, para a ordem das chaves da chamada não criar série nova.
+      const key = JSON.stringify(labelNames.map((l) => labels[l] ?? null));
+      if (series.has(key)) return true;
+      if (series.size >= maxSeriesPerMetric) {
         // Destino explícito: descarta a amostra e avisa uma vez, em vez de lançar no caminho quente.
-        if (!metric.overflowWarned) {
-          metric.overflowWarned = true;
-          log.warn('métrica passou do limite de séries; amostras de séries novas descartadas', {
-            metric: name,
-            maxSeriesPerMetric,
-          });
+        if (!overflowWarned) {
+          overflowWarned = true;
+          log.event(LOG.seriesOverflow, { metric: name, maxSeriesPerMetric });
         }
-        return [];
+        return false;
       }
-      metric.series.add(key);
-    }
-    const day = dayAt ?? dayOf(now());
-    const id = `${day}|${key}`;
-    let cell = metric.cells.get(id);
-    if (!cell) {
-      cell = { day, key, labels: { ...labels }, fields: new Map() };
-      metric.cells.set(id, cell);
-    }
-    if (dayAt !== undefined) return [cell];
-    let total = metric.totals.get(key);
-    if (!total) {
-      total = { day: '', key, labels: { ...labels }, fields: new Map() };
-      metric.totals.set(key, total);
-    }
-    return [cell, total];
-  }
-
-  function counter(name: string, labels: MetricLabels, value = 1): void {
-    assertValue(name, value);
-    for (const cell of cellFor(name, 'counter', labels)) addTo(cell, 'value', value);
-  }
-
-  function gauge(name: string, labels: MetricLabels, value: number): void {
-    assertValue(name, value);
-    for (const cell of cellFor(name, 'gauge', labels)) sample(cell, value);
-  }
-
-  function counterAt(name: string, labels: MetricLabels, value: number, day: string): void {
-    assertValue(name, value);
-    for (const cell of cellFor(name, 'counter', labels, day)) addTo(cell, 'value', value);
-    if (!owners.has(name)) owners.set(name, CORE_OWNER);
-  }
-
-  function totals(): MetricRow[] {
-    const rows: MetricRow[] = [];
-    for (const [name, metric] of metrics) {
-      if (name === LIVE_GAUGE) continue;
-      for (const cell of metric.totals.values()) {
-        const row = toRow(name, metric.kind, cell);
-        if (row) rows.push(row);
-      }
-    }
-    return rows;
-  }
-
-  function observe(name: string, labels: MetricLabels, value: number): void {
-    assertValue(name, value);
-    const i = HISTOGRAM_BUCKETS.findIndex((b) => value <= b);
-    const bucket = BUCKET_FIELDS[i === -1 ? BUCKET_FIELDS.length - 1 : i] ?? 'leInf';
-    for (const cell of cellFor(name, 'histogram', labels)) {
-      addTo(cell, 'count', 1);
-      addTo(cell, 'sum', value);
-      addTo(cell, bucket, 1);
-    }
-  }
-
-  async function purge(): Promise<void> {
-    const today = dayOf(now());
-    if (purgedDay === today) return;
-    await collection.delete({ day: { lt: dayOf(now() - retentionDays * 86_400_000) } });
-    purgedDay = today;
-  }
-
-  async function doFlush(): Promise<void> {
-    const rows: MetricRow[] = [];
-    for (const [name, metric] of metrics) {
-      const cells = metric.cells;
-      // Troca o mapa antes dos awaits: amostras novas durante a gravação vão para o próximo flush.
-      metric.cells = new Map();
-      for (const cell of cells.values()) {
-        // Só entra no snapshot o que foi gravado: o que falhar volta ao agregado e sai no próximo flush.
-        const written: Cell = { ...cell, fields: new Map() };
-        if (metric.kind === 'gauge') {
-          const last = cell.fields.get('last') ?? 0;
-          const max = cell.fields.get('max') ?? last;
-          const where = { metric: name, day: cell.day, key: cell.key, field: 'gauge' };
-          try {
-            const [stored] = await collection.find({ where });
-            if (stored) {
-              await collection.update(
-                { id: stored.id },
-                { value: Math.max(stored.value, max), last },
-              );
-            } else {
-              await collection.insert({ ...where, labels: cell.labels, value: max, last });
-            }
-            sample(written, last, max);
-          } catch (error) {
-            // Não perde a amostra: volta ao agregado para o próximo flush tentar de novo.
-            log.error('falha ao gravar métrica; mantida em memória', { metric: name, error });
-            const id = `${cell.day}|${cell.key}`;
-            let target = metric.cells.get(id);
-            if (!target) {
-              target = { ...cell, fields: new Map() };
-              metric.cells.set(id, target);
-            }
-            // O que chegou durante a gravação (`last` do `target`) é mais novo que o devolvido.
-            sample(target, target.fields.get('last') ?? last, max);
-          }
-          const row = toRow(name, metric.kind, written);
-          // A fila de saída já sai ao vivo no scrape e em exportador seria só ruído de amostra.
-          if (row && name !== LIVE_GAUGE) rows.push(row);
-          continue;
-        }
-        for (const [field, value] of cell.fields) {
-          if (value <= 0) continue;
-          const where = { metric: name, day: cell.day, key: cell.key, field };
-          try {
-            await collection.increment(where, 'value', value, {
-              insert: { ...where, labels: cell.labels, value: 0 }, // o core soma `by` ao insert
-            });
-            written.fields.set(field, value);
-          } catch (error) {
-            // Não perde o dado: devolve ao agregado para o próximo flush tentar de novo.
-            log.error('falha ao gravar métrica; mantida em memória', { metric: name, error });
-            const id = `${cell.day}|${cell.key}`;
-            let target = metric.cells.get(id);
-            if (!target) {
-              target = { ...cell, fields: new Map() };
-              metric.cells.set(id, target);
-            }
-            addTo(target, field, value);
-          }
-        }
-        const row = toRow(name, metric.kind, written);
-        if (row) rows.push(row);
-      }
-    }
-    try {
-      await purge();
-    } catch (error) {
-      log.error('falha ao apagar métricas antigas', { error });
-    }
-    if (rows.length === 0) return;
-    const snapshot = { at: new Date(now()).toISOString(), rows };
-    try {
-      for (const exporter of options.exporters()) {
-        try {
-          await exporter(snapshot);
-        } catch (error) {
-          log.error('exportador de métricas falhou', { error });
-        }
-      }
-    } catch (error) {
-      log.error('falha ao listar exportadores de métricas', { error });
-    }
-  }
-
-  // Marca início e fim de cada flush: o `query` detecta que um flush mexeu no agregado durante o `find`.
-  async function tracked(): Promise<void> {
-    generation++;
-    try {
-      await doFlush();
-    } finally {
-      generation++;
-    }
-  }
-
-  // Serializa: dois flushes em paralelo gravariam o mesmo agregado duas vezes. O erro de um flush
-  // vai a quem chamou; o `catch` impede que a fila inteira fique rejeitada para sempre.
-  function flush(): Promise<void> {
-    const run = flushing.catch(() => undefined).then(tracked);
-    flushing = run;
-    return run;
-  }
-
-  async function query(name: string, range: MetricsRange): Promise<MetricRow[]> {
-    if (!DAY_RE.test(range.from) || !DAY_RE.test(range.to)) {
-      throw new TypeError('query: from e to precisam ser YYYY-MM-DD');
-    }
-    // Espera o flush em andamento: sem isso o que está sendo gravado sumiria da soma.
-    // Refaz se um flush começou ou terminou durante o `find`: ele esvaziaria a memória e a soma
-    // contaria o dado em dobro ou o perderia.
-    let docs: Awaited<ReturnType<typeof collection.find>>;
-    for (;;) {
-      await flushing.catch(() => undefined);
-      const before = generation;
-      docs = await collection.find({
-        where: { metric: name, day: { gte: range.from, lte: range.to } },
-      });
-      if (before === generation) break;
-    }
-    const merged = new Map<string, Cell>();
-    const take = (day: string, key: string, labels: MetricLabels): Cell => {
-      const id = `${day}|${key}`;
-      let cell = merged.get(id);
-      if (!cell) {
-        cell = { day, key, labels, fields: new Map() };
-        merged.set(id, cell);
-      }
-      return cell;
+      series.add(key);
+      return true;
     };
-    let kind: Kind | undefined;
-    for (const d of docs) {
-      kind ??= d.field === 'value' ? 'counter' : d.field === 'gauge' ? 'gauge' : 'histogram';
-      if (d.field === 'gauge') {
-        sample(
-          take(d.day, d.key, d.labels),
-          typeof d['last'] === 'number' ? d['last'] : d.value,
-          d.value,
+
+    const base = { name, help: spec.help, labelNames, registers: [registry] };
+    if (kind === 'counter') {
+      const metric = new PromCounter(base);
+      return {
+        metric,
+        handle: {
+          inc(labels: Labels, value = 1) {
+            if (admit(labels, value)) metric.inc(labels, value);
+          },
+        },
+      };
+    }
+    if (kind === 'gauge') {
+      const metric = new PromGauge(base);
+      return {
+        metric,
+        handle: {
+          set(labels: Labels, value: number) {
+            if (!admit(labels, value)) return;
+            metric.set(labels, value);
+            // O `prom-client` só guarda o último valor; o histórico também quer o pico do período.
+            const key = seriesKey(labels);
+            const seen = gauges.get(key);
+            gauges.set(key, {
+              labels: { ...labels },
+              fields: { last: value, max: Math.max(seen?.fields['max'] ?? value, value) },
+            });
+          },
+        },
+      };
+    }
+    const metric = new PromHistogram(
+      spec.buckets === undefined ? base : { ...base, buckets: [...spec.buckets] },
+    );
+    return {
+      metric,
+      handle: {
+        observe(labels: Labels, value: number) {
+          if (admit(labels, value)) metric.observe(labels, value);
+        },
+      },
+    };
+  }
+
+  function declare(kind: Kind, spec: HistogramSpec<string>, caller: string): Entry['handle'] {
+    assertSpec(kind, spec);
+    const key = JSON.stringify([kind, spec.help, spec.labelNames, spec.buckets ?? null]);
+    const existing = entries.get(spec.name);
+    if (existing) {
+      if (existing.spec !== key) {
+        throw new TypeError(
+          `métrica "${spec.name}" já declarada com outra especificação por "${existing.declarers[0]}"`,
         );
+      }
+      if (!existing.declarers.includes(caller)) existing.declarers.push(caller);
+      return existing.handle;
+    }
+    // Os gauges ao vivo do kernel vão direto na registry, fora do serviço.
+    if (registry.getSingleMetric(spec.name)) {
+      throw new TypeError(`métrica "${spec.name}" é do plugin-metrics`);
+    }
+    const gauges = new Map<string, Series>();
+    const { handle, metric } = create(kind, spec, gauges);
+    const descriptor = {
+      name: spec.name,
+      type: kind,
+      help: spec.help,
+      labelNames: [...spec.labelNames],
+      buckets: spec.buckets === undefined ? null : [...spec.buckets],
+    };
+    entries.set(spec.name, {
+      kind,
+      spec: key,
+      descriptor,
+      handle,
+      metric,
+      declarers: [caller],
+      baseline: new Map(),
+      gauges,
+    });
+    onDescribe?.({ ...descriptor, owner: caller });
+    return handle;
+  }
+
+  // Delta de uma métrica contra o que o `collect` anterior já entregou; `commit` avança a base.
+  async function read(name: string, entry: Entry, out: Sample[], commit: boolean): Promise<void> {
+    if (entry.kind === 'gauge') {
+      for (const g of entry.gauges.values()) {
+        out.push({ metric: name, type: 'gauge', labels: g.labels, fields: g.fields });
+      }
+      if (commit) entry.gauges.clear();
+      return;
+    }
+    const { values } = await entry.metric.get();
+    const current = new Map<string, Series>();
+    const cumulative = new Map<string, number>();
+    for (const v of values) {
+      let labels = v.labels as Labels;
+      let field = 'value';
+      if (entry.kind === 'histogram') {
+        // `_bucket` (cumulativo, com o rótulo `le`), `_sum` ou `_count`.
+        field = 'metricName' in v ? String(v.metricName).slice(name.length + 1) : '';
+        if (field === 'bucket') {
+          const { le, ...rest } = labels;
+          field = `le:${le}`;
+          labels = rest;
+        }
+      }
+      const key = seriesKey(labels);
+      let s = current.get(key);
+      if (!s) {
+        s = { labels, fields: {} };
+        current.set(key, s);
+      }
+      if (field.startsWith('le:')) {
+        // O `prom-client` entrega os baldes cumulativos e em ordem; o histórico grava cada balde.
+        s.fields[field] = v.value - (cumulative.get(key) ?? 0);
+        cumulative.set(key, v.value);
       } else {
-        addTo(take(d.day, d.key, d.labels), d.field, d.value);
+        s.fields[field] = v.value;
       }
     }
-    const mem = metrics.get(name);
-    if (mem) {
-      kind = mem.kind;
-      for (const c of mem.cells.values()) {
-        if (c.day < range.from || c.day > range.to) continue;
-        const cell = take(c.day, c.key, c.labels);
-        if (mem.kind === 'gauge') sample(cell, c.fields.get('last') ?? 0, c.fields.get('max'));
-        else for (const [f, v] of c.fields) addTo(cell, f, v);
+    for (const [key, s] of current) {
+      const base = entry.baseline.get(key);
+      if (commit) entry.baseline.set(key, s.fields);
+      const fields: Record<string, number> = {};
+      for (const [field, total] of Object.entries(s.fields)) {
+        const delta = total - (base?.[field] ?? 0);
+        if (delta > 0) fields[field] = delta;
+      }
+      if (Object.keys(fields).length > 0) {
+        out.push({ metric: name, type: entry.kind, labels: s.labels, fields });
       }
     }
-    const k = kind;
-    if (!k) return [];
-    return [...merged.values()]
-      .map((c) => toRow(name, k, c))
-      .filter((r): r is MetricRow => r !== undefined)
-      .sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
   }
 
-  // Mesma espera e mesmo intervalo do `query`; só o nome interessa, então não agrega nada.
-  async function names(range: MetricsRange): Promise<string[]> {
-    if (!DAY_RE.test(range.from) || !DAY_RE.test(range.to)) {
-      throw new TypeError('names: from e to precisam ser YYYY-MM-DD');
+  async function collect(): Promise<Sample[]> {
+    const out: Sample[] = [];
+    for (const [name, entry] of [...entries, ...retired.splice(0)]) {
+      await read(name, entry, out, true);
     }
-    await flushing.catch(() => undefined);
-    const found = new Set<string>();
-    const docs = await collection.find({ where: { day: { gte: range.from, lte: range.to } } });
-    for (const d of docs) found.add(d.metric);
-    for (const [name, metric] of metrics) {
-      for (const c of metric.cells.values()) {
-        if (c.day >= range.from && c.day <= range.to) found.add(name);
-      }
-    }
-    return [...found].sort();
+    return out;
   }
 
-  // Cada serviço grava o dono na primeira escrita que dá certo; as seguintes não o trocam.
-  const serviceFor = (owner: string): MetricsService => ({
-    counter(name, labels, value) {
-      counter(name, labels, value);
-      if (!owners.has(name)) owners.set(name, owner);
-    },
-    observe(name, labels, value) {
-      observe(name, labels, value);
-      if (!owners.has(name)) owners.set(name, owner);
-    },
-    gauge(name, labels, value) {
-      gauge(name, labels, value);
-      if (!owners.has(name)) owners.set(name, owner);
-    },
-    query,
-    names,
-    ownerOf: (name) => owners.get(name),
+  async function peek(): Promise<Sample[]> {
+    const out: Sample[] = [];
+    for (const [name, entry] of [...entries, ...retired]) await read(name, entry, out, false);
+    return out;
+  }
+
+  // Os casts ligam o handle genérico ao `L` da chamada; o `admit` faz a checagem em runtime.
+  const serviceFor = (caller: string): MetricsWriter => ({
+    counter: <L extends string>(spec: MetricSpec<L>) =>
+      declare('counter', spec, caller) as Counter<L>,
+    histogram: <L extends string>(spec: HistogramSpec<L>) =>
+      declare('histogram', spec, caller) as Histogram<L>,
+    gauge: <L extends string>(spec: MetricSpec<L>) => declare('gauge', spec, caller) as Gauge<L>,
   });
 
   function release(caller: string): void {
-    for (const [name, owner] of owners) {
-      if (owner === caller) owners.delete(name);
+    for (const [name, entry] of entries) {
+      const i = entry.declarers.indexOf(caller);
+      if (i === -1) continue;
+      entry.declarers.splice(i, 1);
+      // Outro plugin que declarou a mesma métrica segue escrevendo nela e vira o dono; sem
+      // ninguém, ela sai do /metrics e volta zerada na próxima declaração.
+      const [owner] = entry.declarers;
+      if (owner === undefined) {
+        registry.removeSingleMetric(name);
+        entries.delete(name);
+        retired.push([name, entry]);
+      } else if (i === 0) {
+        onDescribe?.({ ...entry.descriptor, owner });
+      }
     }
   }
 
@@ -471,8 +367,10 @@ export function createMetrics(options: MetricsRuntimeOptions): MetricsRuntime {
     service: serviceFor(CORE_OWNER),
     scoped: serviceFor,
     release,
-    counterAt,
-    totals,
-    flush,
+    ownerOf: (name) => entries.get(name)?.declarers[0],
+    collect,
+    peek,
+    declarations: () =>
+      [...entries.values()].map((e) => ({ ...e.descriptor, owner: e.declarers[0] ?? CORE_OWNER })),
   };
 }

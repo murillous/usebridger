@@ -1,3 +1,4 @@
+import type { ApiOptions } from '#api/cors.ts';
 import type { PrefixConfig } from '#commands/prefixes.ts';
 import type { ConfigEnv } from '#config/env.ts';
 import type { BotOwner } from '#config/owners.ts';
@@ -6,7 +7,8 @@ import type { BotMessageContext } from '#context.ts';
 import type { HttpServer } from '#http/types.ts';
 import type { LoggerOptions } from '#logger/logger.ts';
 import type { SecretSet } from '#logger/secrets.ts';
-import type { Logger, LogLevel } from '#logger/types.ts';
+import type { TrailMode } from '#logger/trail.ts';
+import type { LogFields, Logger, LogLevel } from '#logger/types.ts';
 import type { ChatFilterOptions } from '#middleware/chat-filter.ts';
 import type { Middleware } from '#middleware/pipeline.ts';
 import type { RateLimitOptions } from '#middleware/rate-limit.ts';
@@ -25,7 +27,7 @@ import type { ShutdownOptions, StopHook, StopHookOptions } from './stop-hooks.ts
  * Ciclo de vida: `idle → starting → running → stopping → stopped`. `stopped` é terminal —
  * uma instância não reinicia; para subir de novo, crie outro `Bot`.
  *
- * `failed` (ADR 0116): a reconexão desistiu (erro `fatal`, credencial rejeitada, `replaced`,
+ * `failed`: a reconexão desistiu (erro `fatal`, credencial rejeitada, `replaced`,
  * sessão a parear sem `clearSession`). Transport e filas estão parados; plugins e HTTP seguem no
  * ar para o painel mostrar o erro. `start()` rejeita (não reinicia) e `stop()` chega a `stopped`.
  */
@@ -82,19 +84,19 @@ export interface BotTimeouts {
 
 export interface BotConfig {
   /**
-   * O transport, ou a fábrica que o monta com o que o bot fornece (`session`, `auth`, `log`;
-   * ADR 0033). O `createBot` chama a fábrica uma vez; ela só monta o objeto, sem I/O.
+   * O transport, ou a fábrica que o monta com o que o bot fornece (`session`, `auth`, `log`).
+   * O `createBot` chama a fábrica uma vez; ela só monta o objeto, sem I/O.
    */
   readonly transport: Transport | ((deps: TransportDeps) => Transport);
   /**
    * Sessão (o número) que este bot opera; kebab-case, como nome de plugin. Tudo o que o bot
-   * persiste fica no escopo dela (ADR 0032), então trocar o nome "esquece" os dados da anterior.
+   * persiste fica no escopo dela, então trocar o nome "esquece" os dados da anterior.
    * Dois bots vivos no mesmo storage não podem usar a mesma. Padrão: `'default'`.
    */
   readonly session?: string;
   /**
    * Nome de exibição do bot (ex.: `luma`), mostrado pelo dashboard. Só rótulo: não entra em
-   * storage nem em chave. Padrão: o `Transport.name` (ADR 0111).
+   * storage nem em chave. Padrão: o `Transport.name`.
    */
   readonly name?: string;
   /**
@@ -104,10 +106,12 @@ export interface BotConfig {
    */
   readonly storage?: StoragePort;
   /**
-   * Servidor HTTP do processo (`createHttp`), o mesmo para todos os bots (ADR 0072). Dá
+   * Servidor HTTP do processo (`createHttp`), o mesmo para todos os bots. Dá
    * `ctx.http` aos plugins e `TransportDeps.http` ao transport; a porta só abre se houver rota.
    */
   readonly http?: HttpServer;
+  /** API HTTP do core. Sem `http`, não tem efeito. */
+  readonly api?: ApiOptions;
   /** Plugins da config (pacotes npm que o app importa). */
   readonly plugins?: readonly PluginDefinition[];
   /** Pastas de plugins locais (ver `collectPlugins`), relativas a `cwd`. */
@@ -117,11 +121,11 @@ export interface BotConfig {
   /** Nomes de plugin que não carregam. */
   readonly disabledPlugins?: readonly string[];
   /**
-   * Nomes de plugin que recebem `ctx.admin` (ADR 0107). Lista no `createBot`, e não no manifesto:
+   * Nomes de plugin que recebem `ctx.admin`. Lista no `createBot`, e não no manifesto:
    * quem decide é o dono do app, não o plugin que ganharia o poder.
    */
   readonly adminPlugins?: readonly string[];
-  /** Config por plugin (a camada "arquivo"; ver ADR 0028). */
+  /** Config por plugin (a camada "arquivo";). */
   readonly pluginConfig?: PluginConfigFile;
   /** Ambiente da config de plugin (`BRIDGER_*`). Padrão: `process.env`. */
   readonly env?: ConfigEnv;
@@ -133,7 +137,7 @@ export interface BotConfig {
   /**
    * Prefixo de comando: um para todo chat (`'!'`) ou um por tipo (`{ dm: '', group: '!' }`,
    * `group` vale para todo chat que não é `dm`). Vazio é permitido. Padrão: `'!'`. Um plugin
-   * troca o de um chat com `ctx.prefixes.set` (ADR 0059).
+   * troca o de um chat com `ctx.prefixes.set`.
    */
   readonly prefix?: PrefixConfig;
   /**
@@ -141,6 +145,18 @@ export interface BotConfig {
    * logger próprio só censura os segredos da config se for criado com o mesmo `secrets`.
    */
   readonly logger?: Logger;
+  /**
+   * Campos em toda linha de log do bot, além do `bot` (a `session`), que o bot põe
+   * sozinho. Para o agregador saber de onde veio a linha: `{ service: 'lumabot', version, env }`.
+   * `bot`, `event`, `level`, `time` e `msg` são reservados: o `createBot` lança `BotConfigError`.
+   * O core não lê variável de ambiente nem o `package.json` do app: quem sabe é o app.
+   */
+  readonly logBindings?: LogFields;
+  /**
+   * Auditoria. `retentionDays`: eventos mais velhos que isto são expurgados, no máximo uma vez a cada 24 h, a partir
+   * da gravação, da renovação da trava e do boot; inteiro positivo, padrão 1825 (5 anos). Valor inválido lança `BotConfigError`.
+   */
+  readonly audit?: { readonly retentionDays?: number };
   /** Nível do logger criado pelo bot. Padrão: `'info'`. */
   readonly logLevel?: LogLevel;
   /**
@@ -148,13 +164,18 @@ export interface BotConfig {
    * (ver `LoggerOptions.format`).
    */
   readonly logFormat?: LoggerOptions['format'];
+  /**
+   * Trilha de eventos `info` por mensagem, envio, passo, job e request. `'debug'` a
+   * emite em `debug`; `'off'` a desliga. Os erros e avisos não mudam. Padrão: `'info'`.
+   */
+  readonly trail?: TrailMode;
   /** Fonte de segredos compartilhada entre a config de plugin e o logger. Padrão: uma nova. */
   readonly secrets?: SecretSet;
   readonly middlewares?: BotMiddlewaresConfig;
   /** Fila de entrada por chat. */
   readonly inbound?: Pick<InboundQueueOptions, 'maxPendingPerChat'>;
   /** Fila de saída (taxa, prioridade, retry, humanização). */
-  readonly outbound?: Omit<OutboundQueueOptions, 'transport' | 'observers'>;
+  readonly outbound?: Omit<OutboundQueueOptions, 'transport' | 'observers' | 'trail'>;
   /** Reconexão automática. Padrão: ligada com os padrões da `ReconnectionPolicy`. */
   readonly reconnection?: BotReconnectionOptions | false;
   readonly timeouts?: BotTimeouts;
@@ -168,11 +189,11 @@ export type BotPluginConfigs = Pick<
 >;
 
 /**
- * Controle dos plugins que `ctx.admin` dá aos listados em `adminPlugins` (ADR 0107): delega às
+ * Controle dos plugins que `ctx.admin` dá aos listados em `adminPlugins`: delega às
  * instâncias de `bot.plugins` e `bot.config`. Só duas diferenças: sobre o próprio plugin,
  * `plugins.reload`/`disable` e `config.setOverrides` rejeitam (o plugin desceria no meio da
  * própria chamada); e as ações que mudam estado rejeitam com `ContextExpiredError` depois do
- * `dispose` do plugin (ADR 0029).
+ * `dispose` do plugin.
  */
 export interface PluginAdmin {
   readonly plugins: BotPlugins;
@@ -209,8 +230,8 @@ export interface Bot {
   stats(): BotStats;
   /**
    * Resolve quando o bot terminou de processar o que recebeu: fila de entrada vazia, nenhum
-   * comando em segundo plano (ADR 0083) nem listener em andamento (inclusive de eventos diretos e
-   * `plugin.error`) e fila de saída vazia, tudo ao mesmo tempo (ADR 0040). Chamado durante o boot, espera o boot assentar. Não
+   * comando em segundo plano nem listener em andamento (inclusive de eventos diretos e
+   * `plugin.error`) e fila de saída vazia, tudo ao mesmo tempo. Chamado durante o boot, espera o boot assentar. Não
    * espera jobs do scheduler; com a fila de saída pausada (conexão caída), espera a reconexão ou
    * o `maxPauseMs`. Resolve na hora antes do `start()` e depois do `stop()`; nunca rejeita.
    */
@@ -228,7 +249,7 @@ export interface BotPlugins {
   (): PluginReportEntry[];
   /** Epoch ms em que o boot dos plugins terminou; `undefined` antes do `start()`. Reload não o muda. */
   readonly bootedAt: number | undefined;
-  /** Derruba e sobe de novo o plugin e os dependentes (ADR 0037). */
+  /** Derruba e sobe de novo o plugin e os dependentes. */
   reload(name: string): Promise<PluginChangeResult>;
   /** Desliga o plugin e os dependentes, que viram `dependency-skipped`; até `enable`. */
   disable(name: string): Promise<PluginChangeResult>;

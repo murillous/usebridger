@@ -10,6 +10,8 @@ import type {
 } from '#conversations/conversations.ts';
 import { ContextExpiredError, DEADLINE, type Deadline, deadlineOf } from '#deadline.ts';
 import type { MessageListenerFields } from '#events/types.ts';
+import * as LOG from '#logger/events.ts';
+import type { Pseudonym } from '#logger/pseudonym.ts';
 import type { LogFields, Logger } from '#logger/types.ts';
 import type { Message } from '#message/types.ts';
 import type { SanitizedContext, SanitizedFields } from '#middleware/sanitize.ts';
@@ -24,12 +26,14 @@ export interface MessageContextDeps {
   readonly sender: Outbound;
   /** Responder citando: só se o transport tem a capability `quoted`. */
   readonly quote: boolean;
-  /** O transport tem a capability `reactions`; sem ela, `react` vira no-op (ADR 0089). */
+  /** O transport tem a capability `reactions`; sem ela, `react` vira no-op. */
   readonly reactions: boolean;
-  /** Logger raiz; o contexto cria o filho com `chatId` sob demanda. */
+  /** Logger raiz; o contexto cria o filho com `chat` sob demanda. */
   readonly log: () => Logger;
+  /** Pseudônimo dos ids no `chat`/`sender` do log da mensagem; sem ele, ids crus. */
+  readonly pseudonym?: Pseudonym;
   /**
-   * Resolve as ações do `reply` (ADR 0058) em nome do plugin dono do contexto, ou de ninguém
+   * Resolve as ações do `reply` em nome do plugin dono do contexto, ou de ninguém
    * (`null`) no contexto do kernel, que os middlewares veem.
    */
   readonly actions?: (owner: string | null, origin: ReplyOrigin) => PrepareActions;
@@ -48,6 +52,19 @@ interface State {
 /** O contexto concreto: o de mensagem do bot com o resultado do `sanitize`. */
 export interface KernelMessageContext extends BotMessageContext, SanitizedContext {
   text: string | null;
+}
+
+/** Bindings `chat` e `sender` do log da mensagem: pseudônimos, com o tipo vindo do `isGroup`. */
+export function messageBindings(
+  pseudonym: Pseudonym | undefined,
+  chat: Message['chat'],
+  sender: Message['sender'],
+): LogFields {
+  if (pseudonym === undefined) return { chat: chat.id, sender: sender.id };
+  return {
+    chat: pseudonym(chat.id, chat.isGroup ? 'group' : 'user'),
+    sender: pseudonym(sender.id),
+  };
 }
 
 /** Cria o contexto de uma mensagem; `reply` e `log` só existem quando lidos. */
@@ -79,7 +96,9 @@ class MessageContextImpl implements KernelMessageContext {
 
   get log(): Logger {
     const state = this[STATE];
-    state.log ??= state.deps.log().child({ chatId: this.message.chat.id });
+    state.log ??= state.deps
+      .log()
+      .child(messageBindings(state.deps.pseudonym, this.message.chat, this.message.sender));
     return state.log;
   }
 
@@ -88,7 +107,7 @@ class MessageContextImpl implements KernelMessageContext {
     // Reação aqui é enfeite de andamento: sem a capability, não falha. Quem precisa saber que
     // não saiu usa o `ctx.send.react`, que continua estrito (ADR 0089).
     if (!deps.reactions) {
-      this.log.debug('react ignorado: o transport não tem a capability "reactions"', { emoji });
+      this.log.event(LOG.reactSkipped, { emoji });
       return Promise.resolve();
     }
     // Prioridade do `reply`: a reação responde a quem escreveu, como ele.
@@ -135,14 +154,16 @@ export function messageExtras(ctx: KernelMessageContext): WithKernelContext {
 }
 
 /**
- * Descritores do `log` de um plugin: filho do logger do plugin com o `chatId` da mensagem, criado
+ * Descritores do `log` de um plugin: filho do logger do plugin com o `chat` da mensagem, criado
  * no primeiro acesso e fixado no próprio objeto. Calculados uma vez por plugin.
  */
-function pluginLogDescriptor(pluginLog: Logger): PropertyDescriptor {
+function pluginLogDescriptor(pluginLog: Logger, pseudonym?: Pseudonym): PropertyDescriptor {
   return {
     configurable: true,
     get(this: { readonly message: Message }): Logger {
-      const log = pluginLog.child({ chatId: this.message.chat.id });
+      const log = pluginLog.child(
+        messageBindings(pseudonym, this.message.chat, this.message.sender),
+      );
       Object.defineProperty(this, 'log', { value: log });
       return log;
     },
@@ -167,7 +188,7 @@ type Refuse = (operation: string) => Promise<never>;
 /**
  * `reply` que confere o prazo a cada chamada — não só na leitura de `ctx.reply`: quem guardou a
  * função antes do prazo (`const r = ctx.reply`) também é recusado depois dele. No prazo, o envio
- * pausa o relógio até assentar (ADR 0043).
+ * pausa o relógio até assentar.
  */
 function expiringReply(reply: Reply, deadline: Deadline, refuse: Refuse): Reply {
   const guard =
@@ -198,7 +219,7 @@ function refuser<V extends ExpiringView>(
   return (operation) => {
     const { label, fields } = scope(view);
     const error = new ContextExpiredError(plugin, operation, label, deadline.reason);
-    view.log.warn(`${operation} recusado: ${label} já expirou`, {
+    view.log.event(LOG.contextExpired, {
       ...fields,
       operation,
       err: error,
@@ -257,7 +278,7 @@ function expiringReactDescriptor<V extends ExpiringView>(
   };
 }
 
-/** Registra uma espera em nome do plugin; o bot a liga ao registro de conversas (ADR 0056). */
+/** Registra uma espera em nome do plugin; o bot a liga ao registro de conversas. */
 export type PluginExpect = (
   origin: ReplyOrigin,
   step: string,
@@ -282,7 +303,7 @@ function expectReplyDescriptor<V extends ExpiringView & { readonly message: Mess
         if (deadline?.expired) {
           const { label, fields } = scope(this);
           const error = new ContextExpiredError(plugin, 'expectReply', label, deadline.reason);
-          this.log.warn(`expectReply recusado: ${label} já expirou`, {
+          this.log.event(LOG.contextExpired, {
             ...fields,
             operation: 'expectReply',
             err: error,
@@ -311,7 +332,7 @@ export interface CommandViews {
   run<C extends object>(ctx: C, deadline: Deadline): C;
 }
 
-/** Texto das `messages` do plugin para o chat de uma mensagem (ADR 0088). */
+/** Texto das `messages` do plugin para o chat de uma mensagem. */
 export type PluginText = (
   origin: Pick<Message, 'chat'>,
   key: string,
@@ -344,9 +365,10 @@ function executionDescriptors<V extends ExpiringView & { readonly message: Messa
   expect: PluginExpect,
   text: PluginText,
   scope: Scope<V>,
+  pseudonym?: Pseudonym,
 ): PropertyDescriptorMap {
   return {
-    log: pluginLogDescriptor(pluginLog),
+    log: pluginLogDescriptor(pluginLog, pseudonym),
     t: textDescriptor(text),
     signal: signalDescriptor,
     reply: expiringReplyDescriptor<V>(
@@ -375,13 +397,21 @@ export function commandViewFactory(
   pluginLog: Logger,
   expect: PluginExpect,
   text: PluginText,
+  pseudonym?: Pseudonym,
 ): CommandViews {
   type View = ExpiringView & { readonly command: string; readonly message: Message };
   const scope: Scope<View> = (view) => ({
     label: `comando "${view.command}"`,
-    fields: { command: view.command },
+    fields: { command: view.command, context: 'command' },
   });
-  const runDescriptors = executionDescriptors<View>(plugin, pluginLog, expect, text, scope);
+  const runDescriptors = executionDescriptors<View>(
+    plugin,
+    pluginLog,
+    expect,
+    text,
+    scope,
+    pseudonym,
+  );
   return {
     run(ctx, deadline) {
       const view = Object.create(ctx, runDescriptors) as { [DEADLINE]?: Deadline };
@@ -400,13 +430,14 @@ export function stepViewFactory(
   pluginLog: Logger,
   expect: PluginExpect,
   text: PluginText,
+  pseudonym?: Pseudonym,
 ): <C extends object>(ctx: C, deadline: Deadline, step: string, data: JsonValue) => C {
   type View = ExpiringView & { readonly step: string; readonly message: Message };
   const scope: Scope<View> = (view) => ({
     label: `passo "${view.step}"`,
-    fields: { step: view.step },
+    fields: { step: view.step, context: 'step' },
   });
-  const descriptors = executionDescriptors<View>(plugin, pluginLog, expect, text, scope);
+  const descriptors = executionDescriptors<View>(plugin, pluginLog, expect, text, scope, pseudonym);
   return (ctx, deadline, step, data) => {
     const view = Object.create(ctx, descriptors) as { [DEADLINE]?: Deadline };
     Object.assign(view, { step, data });
@@ -421,9 +452,10 @@ export function stepViewFactory(
  */
 export function roleViewFactory(
   pluginLog: Logger,
+  pseudonym?: Pseudonym,
 ): <C extends object>(ctx: C, deadline: Deadline) => C {
   const descriptors: PropertyDescriptorMap = {
-    log: pluginLogDescriptor(pluginLog),
+    log: pluginLogDescriptor(pluginLog, pseudonym),
     signal: signalDescriptor,
   };
   return (ctx, deadline) => {
@@ -444,6 +476,7 @@ export function listenerViewFactory(
   pluginLog: Logger,
   expect: PluginExpect,
   text: PluginText,
+  pseudonym?: Pseudonym,
 ): <C extends object>(ctx: C) => C {
   type View = Partial<WithKernelContext> &
     ExpiringView & {
@@ -454,7 +487,7 @@ export function listenerViewFactory(
   const kernel = (view: View): KernelMessageContext | undefined => view[KERNEL_CONTEXT];
   const scope: Scope<View> = (view) => ({
     label: `listener de "${view.event}"`,
-    fields: { event: view.event },
+    fields: { eventName: view.event, context: 'listener' },
   });
   const descriptors: PropertyDescriptorMap = {
     message: {
@@ -478,14 +511,14 @@ export function listenerViewFactory(
     ),
     react: expiringReactDescriptor<View>(plugin, kernel, scope),
     expectReply: expectReplyDescriptor<View>(plugin, expect, scope),
-    log: pluginLogDescriptor(pluginLog),
+    log: pluginLogDescriptor(pluginLog, pseudonym),
     t: textDescriptor(text),
   } satisfies Record<keyof MessageListenerFields, PropertyDescriptor>;
   return (ctx) => Object.create(ctx, descriptors);
 }
 
 /**
- * Origem do `onExpire` (ADR 0093): chat e remetente da espera vencida, com o `reply` montado
+ * Origem do `onExpire`: chat e remetente da espera vencida, com o `reply` montado
  * sobre as dependências do contexto do bot, para sair pela fila de saída e resolver as ações em
  * nome do plugin. Não há mensagem: o `reply` não cita.
  */
@@ -518,12 +551,13 @@ export function expireViewFactory(
   pluginLog: Logger,
   expect: PluginExpect,
   text: PluginText,
+  pseudonym?: Pseudonym,
 ): (origin: ExpireOrigin, deadline: Deadline, step: string, data: JsonValue) => ExpireContext {
   return (origin, deadline, step, data) => {
     const { chat, sender } = origin;
-    const log = pluginLog.child({ chatId: chat.id });
+    const log = pluginLog.child(messageBindings(pseudonym, chat, sender));
     const label = `onExpire do passo "${step}"`;
-    const fields: LogFields = { step };
+    const fields: LogFields = { step, context: 'expire' };
     const refuse = refuser(plugin, { log }, deadline, () => ({ label, fields }));
     return {
       chat,
@@ -539,7 +573,7 @@ export function expireViewFactory(
         // Como no passo: um `onExpire` que estourou o prazo não abre conversa que ninguém pediu.
         if (deadline.expired) {
           const error = new ContextExpiredError(plugin, 'expectReply', label, deadline.reason);
-          log.warn(`expectReply recusado: ${label} já expirou`, {
+          log.event(LOG.contextExpired, {
             ...fields,
             operation: 'expectReply',
             err: error,

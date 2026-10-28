@@ -1,7 +1,7 @@
 {
   "name": "@usebridger/plugin-metrics",
   "version": "0.2.0",
-  "description": "Plugin oficial do Bridger: serviço de métricas (contadores e histogramas) agregado em memória e persistido por dia.",
+  "description": "Plugin oficial do Bridger: serviço de métricas declarativo sobre o prom-client, histórico por hora e dia e GET /metrics do bot.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -29,7 +29,8 @@
     "build": "tsdown"
   },
   "dependencies": {
-    "@usebridger/core": "workspace:^"
+    "@usebridger/core": "workspace:^",
+    "prom-client": "^15.1.3"
   },
   "devDependencies": {
     "@usebridger/testing": "workspace:*"

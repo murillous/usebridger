@@ -13,6 +13,7 @@ function fakeLogger() {
     warn: vi.fn(),
     error: vi.fn(),
     fatal: vi.fn(),
+    event: vi.fn(),
     child: (): Logger => log,
   };
   return log;
@@ -36,7 +37,7 @@ describe('createUnsafeAccess', () => {
     createUnsafeAccess({ transport: { name: 'baileys', native: {} }, log }).forPlugin({
       name: 'p',
     });
-    expect(log.warn).not.toHaveBeenCalled();
+    expect(log.event).not.toHaveBeenCalled();
   });
 
   it('avisa uma única vez por plugin, mesmo com vários Unsafe do mesmo plugin', () => {
@@ -48,10 +49,10 @@ describe('createUnsafeAccess', () => {
     void first.native;
     void first.native;
     void second.native;
-    expect(log.warn).toHaveBeenCalledTimes(1);
+    expect(log.event).toHaveBeenCalledTimes(1);
 
     void access.forPlugin({ name: 'b', transports: ['baileys'] }).native;
-    expect(log.warn).toHaveBeenCalledTimes(2);
+    expect(log.event).toHaveBeenCalledTimes(2);
   });
 
   it('o registro de avisos é por bot: outra instância avisa de novo', () => {
@@ -59,20 +60,22 @@ describe('createUnsafeAccess', () => {
     const transport = { name: 'baileys', native: {} };
     void createUnsafeAccess({ transport, log }).forPlugin({ name: 'a' }).native;
     void createUnsafeAccess({ transport, log }).forPlugin({ name: 'a' }).native;
-    expect(log.warn).toHaveBeenCalledTimes(2);
+    expect(log.event).toHaveBeenCalledTimes(2);
   });
 
-  it('o aviso é warn e traz plugin e transport, na mensagem e nos campos', () => {
+  it('o aviso é warn e traz plugin, transport e o acesso nos campos', () => {
     const log = fakeLogger();
     const access = createUnsafeAccess({ transport: { name: 'baileys', native: {} }, log });
     void access.forPlugin({ name: 'stickers', transports: ['baileys'] }).native;
 
-    expect(log.warn).toHaveBeenCalledTimes(1);
-    const [message, fields] = log.warn.mock.calls[0] ?? [];
-    expect(message).toContain('stickers');
-    expect(message).toContain('baileys');
-    expect(message).not.toContain('sem declarar transports');
-    expect(fields).toEqual({ plugin: 'stickers', transport: 'baileys' });
+    expect(log.event).toHaveBeenCalledTimes(1);
+    const [event, fields] = log.event.mock.calls[0] ?? [];
+    expect(event).toMatchObject({ name: 'transport.unsafe.accessed', level: 'warn' });
+    expect(fields).toEqual({
+      plugin: 'stickers',
+      transport: 'baileys',
+      access: 'ctx.unsafe.native',
+    });
   });
 
   it('sem transports no manifesto, o aviso diz que o plugin fica preso ao transport', () => {
@@ -82,9 +85,10 @@ describe('createUnsafeAccess', () => {
 
     // O acesso não é bloqueado.
     expect(unsafe.native).toEqual({});
-    const [message] = log.warn.mock.calls[0] ?? [];
-    expect(message).toContain('sem declarar transports');
-    expect(message).toContain("transports: ['baileys']");
+    const [event, fields] = log.event.mock.calls[0] ?? [];
+    expect(event).toMatchObject({ name: 'transport.unsafe.undeclared', level: 'warn' });
+    expect(event?.message).toContain('declare transports');
+    expect(fields).toMatchObject({ plugin: 'stickers', transport: 'baileys' });
   });
 });
 
@@ -111,7 +115,7 @@ describe('createUnsafeAccess: raw (ADR 0062)', () => {
     });
 
     expect(unsafe.raw(message)).toBeUndefined();
-    expect(log.warn).toHaveBeenCalledTimes(1);
+    expect(log.event).toHaveBeenCalledTimes(1);
   });
 
   it('mensagem montada de uma interação pergunta ao transport pela interação', () => {
@@ -139,14 +143,13 @@ describe('createUnsafeAccess: raw (ADR 0062)', () => {
 
     first.raw(message);
     second.raw(message);
-    expect(log.warn).toHaveBeenCalledTimes(1);
-    const [text, fields] = log.warn.mock.calls[0] ?? [];
-    expect(text).toContain('ctx.unsafe.raw()');
-    expect(fields).toEqual({ plugin: 'a', transport: 'baileys' });
+    expect(log.event).toHaveBeenCalledTimes(1);
+    const [, fields] = log.event.mock.calls[0] ?? [];
+    expect(fields).toEqual({ plugin: 'a', transport: 'baileys', access: 'ctx.unsafe.raw()' });
 
     void first.native;
-    expect(log.warn).toHaveBeenCalledTimes(2);
-    expect(log.warn.mock.calls[1]?.[0]).toContain('ctx.unsafe.native');
+    expect(log.event).toHaveBeenCalledTimes(2);
+    expect(log.event.mock.calls[1]?.[1]).toMatchObject({ access: 'ctx.unsafe.native' });
   });
 
   it('sem transports no manifesto, o aviso de raw diz que o plugin fica preso ao transport', () => {
@@ -155,8 +158,8 @@ describe('createUnsafeAccess: raw (ADR 0062)', () => {
       .forPlugin({ name: 'p' })
       .raw(message);
 
-    const [text] = log.warn.mock.calls[0] ?? [];
-    expect(text).toContain('ctx.unsafe.raw() sem declarar transports');
-    expect(text).toContain("transports: ['telegram']");
+    const [event, fields] = log.event.mock.calls[0] ?? [];
+    expect(event).toMatchObject({ name: 'transport.unsafe.undeclared' });
+    expect(fields).toMatchObject({ transport: 'telegram', access: 'ctx.unsafe.raw()' });
   });
 });

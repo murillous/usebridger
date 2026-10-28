@@ -1,12 +1,16 @@
 // Contrato do HTTP do core (ADR 0018, 0072): Request/Response da Web API, sem tipo do Hono, que
 // fica como detalhe interno do servidor.
 
+import type { AnyApiOperation } from '#api/operation.ts';
+
 /** Métodos aceitos numa rota. `HEAD` sai do `GET`. */
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS';
 
 export interface HttpRequestInfo {
   /** Parâmetros do caminho (`/users/:id` → `{ id }`). */
   readonly params: Readonly<Record<string, string>>;
+  /** Endereço do par TCP (não confia em `X-Forwarded-For`); ausente fora do servidor Node. */
+  readonly ip?: string;
 }
 
 /**
@@ -58,10 +62,20 @@ export interface HttpRoutes {
   ws(path: string, accept: HttpSocketAccept): void;
 }
 
+/** `ctx.http` do plugin: as rotas e mais as operações da API. */
+export interface PluginHttpRoutes extends HttpRoutes {
+  /**
+   * Operação da API, em `/api` + o segmento do dono (`/plugins/<nome>`) + `operation.path`.
+   * Valida a entrada com os schemas Zod, responde erro em problem+json e entra na spec
+   * `GET /openapi.json`. Mesmo método e caminho duas vezes lança `HttpRouteConflictError`.
+   */
+  api(operation: AnyApiOperation): void;
+}
+
 export interface HttpOptions {
   /** Porta. `0` escolhe uma livre (leia em `HttpServer.port`). */
   readonly port: number;
-  /** Interface de escuta. Padrão: todas. */
+  /** Interface de escuta. Padrão: todas; sem `api.auth`, use loopback. */
   readonly hostname?: string;
 }
 

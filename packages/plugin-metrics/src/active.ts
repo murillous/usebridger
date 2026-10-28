@@ -2,57 +2,55 @@
 // com chave aleatória do dia que nunca é gravada nem logada. Na virada a chave e o conjunto são
 // trocados, então o mesmo usuário não é ligável entre dias. Só a contagem sai daqui.
 
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHmac, createSecretKey, type KeyObject, randomBytes } from 'node:crypto';
 
 export interface ActiveTracker {
   record(userId: string, groupId: string | undefined): void;
-  /** Entrega ao agregado o que cresceu desde a última chamada (idempotente entre flushes). */
-  sync(): void;
   /** Tamanho dos conjuntos do dia corrente. */
   sizes(): { users: number; groups: number };
 }
 
 interface Day {
   readonly day: string;
-  readonly key: Buffer;
+  readonly key: KeyObject;
   readonly users: Set<string>;
   readonly groups: Set<string>;
-  flushedUsers: number;
-  flushedGroups: number;
 }
 
 export function createActiveTracker(options: {
   now: () => number;
-  /** Soma `value` ao contador do `day`. */
-  add: (metric: 'users' | 'groups', value: number, day: string) => void;
+  /** Dia (`YYYY-MM-DD`) de um instante; padrão UTC. A virada segue o fuso do histórico. */
+  dayOf?: (ms: number) => string;
 }): ActiveTracker {
-  const dayOf = (): string => new Date(options.now()).toISOString().slice(0, 10);
+  const { now, dayOf: day = (ms) => new Date(ms).toISOString().slice(0, 10) } = options;
+  // O dia só muda na virada de um minuto (todo fuso IANA atual tem deslocamento em minutos):
+  // guardar por minuto tira o `Intl` do caminho de cada mensagem.
+  let minute = Number.NaN;
+  let today = '';
+  const dayOf = (): string => {
+    const ms = now();
+    const m = Math.floor(ms / 60_000);
+    if (m !== minute) {
+      minute = m;
+      today = day(ms);
+    }
+    return today;
+  };
   const fresh = (day: string): Day => ({
     day,
-    key: randomBytes(32),
+    // `KeyObject` uma vez por dia: com `Buffer`, o `createHmac` converte a chave a cada mensagem,
+    // o que custava ~13 µs por chamada contra ~2 µs (bench `throughput-metrics`).
+    key: createSecretKey(randomBytes(32)),
     users: new Set(),
     groups: new Set(),
-    flushedUsers: 0,
-    flushedGroups: 0,
   });
   let current = fresh(dayOf());
 
-  // Soma só o delta: `sync` repetido não conta duas vezes. O restart zera o conjunto e o mesmo
-  // usuário volta a contar, então restart no meio do dia superestima.
-  function flushDelta(d: Day): void {
-    if (d.users.size > d.flushedUsers) options.add('users', d.users.size - d.flushedUsers, d.day);
-    if (d.groups.size > d.flushedGroups) {
-      options.add('groups', d.groups.size - d.flushedGroups, d.day);
-    }
-    d.flushedUsers = d.users.size;
-    d.flushedGroups = d.groups.size;
-  }
-
+  // O restart zera o conjunto e o mesmo usuário volta a contar, então restart no meio do dia
+  // superestima.
   function roll(): void {
     const day = dayOf();
-    if (day === current.day) return;
-    flushDelta(current); // a contagem do dia que acabou vai para o dia dele
-    current = fresh(day);
+    if (day !== current.day) current = fresh(day);
   }
 
   const hash = (id: string): string =>
@@ -63,10 +61,6 @@ export function createActiveTracker(options: {
       roll();
       current.users.add(hash(userId));
       if (groupId !== undefined) current.groups.add(hash(groupId));
-    },
-    sync() {
-      roll();
-      flushDelta(current);
     },
     sizes() {
       roll();

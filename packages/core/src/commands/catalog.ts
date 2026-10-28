@@ -20,7 +20,7 @@ export interface CommandCatalogOptions {
   readonly onError: (error: unknown) => void;
 }
 
-/** A lista de comandos que o transport lê e assina (ADR 0060), com os avisos em lote. */
+/** A lista de comandos que o transport lê e assina, com os avisos em lote. */
 export interface CommandCatalog {
   readonly commands: TransportCommands;
   /** O registro mudou. O aviso sai no fim do tick ou, dentro de um `batch`, no fim dele. */

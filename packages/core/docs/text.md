@@ -1,7 +1,7 @@
 # Texto formatado
 
 O plugin escreve negrito, itálico, código, link e menção uma vez só, e cada transport traduz para
-a marcação da plataforma ([ADR 0057](../../../docs/adr/0057-texto-formatado-neutro.md)).
+a marcação da plataforma.
 
 ```ts
 import { bold, code, fmt, italic, link, mention } from '@usebridger/core';
@@ -79,4 +79,4 @@ const prompt = textWithMentionNames(ctx.message) ?? '';
 ```
 
 O nome vem do cache do transport: contato que ele nunca viu fica sem `name`, e o `@número`
-permanece ([ADR 0096](../../../docs/adr/0096-mencao-com-tag-no-texto.md)).
+permanece.

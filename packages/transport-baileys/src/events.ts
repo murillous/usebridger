@@ -16,6 +16,7 @@ import {
   jidNormalizedUser,
   type WAMessageUpdate,
 } from 'baileys';
+import * as LOG from './log-events.ts';
 import {
   authorJid,
   authorOf,
@@ -37,16 +38,16 @@ const FLUSH_DELAY_MS = 2000;
 export interface ContactBookOptions {
   /** Onde os nomes persistem; sem ele o livro vive só em memória. */
   readonly store?: Pick<AuthStateStore, 'getKeys' | 'setKeys'>;
-  readonly log?: Pick<Logger, 'warn'>;
+  readonly log?: Pick<Logger, 'event'>;
 }
 
 /**
  * Nome e telefone já vistos de cada contato. Decide quando sai o `contact.updated` e dá nome a
  * quem aparece sem `pushName` (reação, edição, apagamento, grupo). Vive enquanto o transport
  * vive; os nomes também persistem no auth state da sessão, mas o `contact.updated` não: depois de
- * reiniciar o processo, cada contato conta de novo como visto pela primeira vez (ADR 0045).
+ * reiniciar o processo, cada contato conta de novo como visto pela primeira vez.
  *
- * Persistência sem storage no caminho quente (ADR 0097): a leitura é lazy e com cache negativo,
+ * Persistência sem storage no caminho quente: a leitura é lazy e com cache negativo,
  * só quando a memória não sabe o nome; a escrita é em lote, com debounce.
  */
 export class ContactBook {
@@ -88,7 +89,7 @@ export class ContactBook {
 
   /**
    * Registra um remetente. Devolve o `contact.updated` quando há o que contar: na primeira vez
-   * que o contato aparece (ADR 0045) ou quando o nome ou o telefone mudou. Campo desconhecido
+   * que o contato aparece ou quando o nome ou o telefone mudou. Campo desconhecido
    * (`null`) não apaga o que já se sabia.
    */
   observe(
@@ -225,7 +226,7 @@ export class ContactBook {
     try {
       await store.setKeys({ [NAME_KEY]: Object.fromEntries(batch) });
     } catch (error) {
-      this.#log?.warn('falha ao gravar os nomes de contatos; tenta de novo na próxima gravação', {
+      this.#log?.event(LOG.contactNamesSaveFailed, {
         err: error,
         count: batch.size,
       });
@@ -270,7 +271,7 @@ export class ContactBook {
       }
     } catch (error) {
       // Sem marcar como consultado: a próxima menção deste id tenta de novo.
-      this.#log?.warn('falha ao ler os nomes de contatos do auth state; segue sem nome', {
+      this.#log?.event(LOG.contactNamesReadFailed, {
         err: error,
       });
     } finally {
@@ -308,7 +309,7 @@ export function learnContacts(
   return updates;
 }
 
-/** O `Chat` de um JID; os eventos de grupo também o usam (ADR 0055). */
+/** O `Chat` de um JID; os eventos de grupo também o usam. */
 export function chatOf(id: string): Chat {
   return { id, isGroup: isJidGroup(id) === true };
 }

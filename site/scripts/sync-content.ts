@@ -45,7 +45,6 @@ export function collectEntries(root: string): Entry[] {
   };
   add('docs/guias', 'guias');
   add('docs/conceitos', 'conceitos');
-  add('docs/adr', 'decisoes');
   for (const pkg of readdirSync(join(root, 'packages'))) {
     add(`packages/${pkg}/docs`, `pacotes/${pkg}`);
   }
@@ -126,6 +125,7 @@ export function syncContent(root: string, contentDir: string): void {
   };
 
   // Limpa só o que é gerado: páginas escritas à mão (index.mdx, comecando/...) ficam.
+  // `decisoes` saiu do site; continua na lista para apagar a cópia de builds antigos.
   for (const dir of ['guias', 'conceitos', 'pacotes', 'decisoes']) {
     rmSync(join(contentDir, dir), { recursive: true, force: true });
   }

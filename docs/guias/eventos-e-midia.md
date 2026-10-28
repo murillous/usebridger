@@ -41,7 +41,7 @@ Os eventos mais usados:
 | `group.joined` / `group.left` | O bot entrou ou saiu de um grupo | `{ chat }` |
 | `group.participants` | Entrou, saiu, virou admin | `{ chat, action, participants, actor }` |
 | `command` | Um comando rodou (só observação, sem `reply`) | `{ plugin, name, invokedAs, status, message }` |
-| `plugin.error` | Um handler de algum plugin falhou | `{ plugin, phase, event, error, timedOut }` |
+| `plugin.error` | Um handler de algum plugin falhou | `{ plugin, phase, event, error, timedOut, trace? }` |
 
 A lista completa está em [Eventos](../../packages/core/docs/events.md#eventos).
 
@@ -127,6 +127,50 @@ on: {
   `message.attachments`. O `type` e o `media` são os do primeiro.
 - **Tipos novos** chegam como `unknown`. Num `switch` sobre `type`, tenha um `default`: a lista de
   tipos pode crescer numa minor.
+
+### Guardar a mídia para depois
+
+Para baixar uma mídia mais tarde (até depois de reiniciar o bot), guarde a **referência** dela, um
+JSON pequeno, em vez dos bytes. Exige a capability `media.ref` (WhatsApp e Telegram têm); declare-a
+em `requires`:
+
+```ts
+import { definePlugin, MediaExpiredError, type MediaRef } from '@usebridger/core';
+
+type Recado = { ref: MediaRef };
+
+export const recados = definePlugin({
+  name: 'recados',
+  version: '0.1.0',
+  engine: '<1.0.0',
+  requires: ['send.text', 'media.ref'],
+  on: {
+    'message:voice': async (e, { media, storage }) => {
+      // Sem os bytes: cabe em qualquer storage
+      await storage.collection<Recado>('recados').insert({ ref: media.ref(e.payload.media) });
+    },
+  },
+  commands: {
+    ouvir: {
+      run: async (c, { media, storage }) => {
+        const doc = (await storage.collection<Recado>('recados').find())[0];
+        if (!doc) return 'Nenhum recado guardado.';
+        try {
+          const buffer = await media.fromRef(doc.ref).download();
+          return `Recado de ${buffer.length} bytes.`;
+        } catch (error) {
+          if (error instanceof MediaExpiredError) return 'A plataforma já apagou esse arquivo.';
+          throw error;
+        }
+      },
+    },
+  },
+});
+```
+
+Trate a referência como segredo: no WhatsApp ela traz a chave que decifra o arquivo, então fique
+com ela fora de logs e de respostas de API. Detalhes em
+[Modelo de mensagem](../../packages/core/docs/message.md#referência-de-mídia).
 
 Num comando, o `accepts` já resolve a mídia da mensagem ou da citada em `c.media`
 ([Comandos](comandos.md#exigir-mídia-accepts)).
