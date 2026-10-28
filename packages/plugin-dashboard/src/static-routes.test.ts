@@ -8,27 +8,17 @@ afterEach(async () => {
   for (const bot of bots.splice(0)) await bot.stop();
 });
 
-// O `/*` do app convive com as rotas `/api/*`: as registradas antes ganham, o resto é do SPA.
+// O plugin só serve o app (ADR 0125): sem config, sem rota de dados nem auth própria.
 // (O conteúdo dos estáticos depende do build do Vite; o handler é coberto em static.test.ts.)
-it('o app em /* não atropela /api/*', async () => {
+it('sobe sem config e não tem rota de dados: /api do plugin é 404', async () => {
   const http = createHttp({ port: 0, hostname: '127.0.0.1' });
-  bots.push(
-    await createTestBot({
-      plugins: [dashboard],
-      http,
-      pluginConfig: { dashboard: { token: 'segredo-do-painel' } },
-    }),
-  );
-  const base = `http://127.0.0.1:${http.port}/plugins/dashboard`;
+  bots.push(await createTestBot({ plugins: [dashboard], http }));
+  const base = `http://127.0.0.1:${http.port}`;
 
-  expect((await fetch(`${base}/api/status`)).status).toBe(401);
-  expect((await fetch(`${base}/api/ws`)).status).toBe(426);
-  expect((await fetch(`${base}/api/inexistente`)).status).toBe(404);
-  const login = await fetch(`${base}/api/login`, {
-    method: 'POST',
-    body: JSON.stringify({ token: 'segredo-do-painel' }),
-  });
-  expect(login.status).toBe(204);
-  const res = await fetch(`${base}/`);
-  expect(res.headers.get('content-type')).not.toContain('application/json');
+  expect((await fetch(`${base}/plugins/dashboard/api/status`)).status).toBe(404);
+  expect((await fetch(`${base}/plugins/dashboard/api/login`, { method: 'POST' })).status).toBe(404);
+  const app = await fetch(`${base}/plugins/dashboard/`);
+  expect(app.headers.get('content-type')).not.toContain('application/json');
+  // Os dados vêm da API do core, na mesma origem.
+  expect((await fetch(`${base}/api/connection`)).status).toBe(200);
 });
