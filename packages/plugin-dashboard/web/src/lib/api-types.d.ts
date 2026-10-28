@@ -1213,7 +1213,7 @@ export interface paths {
           level?: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
           /** @description Campo `plugin` da linha */
           plugin?: string;
-          /** @description Campo `event` da linha (ADR 0118) */
+          /** @description Campo `event` da linha */
           event?: string;
           /** @description Início (inclusivo) */
           from?: string;
@@ -1709,7 +1709,7 @@ export interface components {
       title: string;
       status: number;
       detail?: string;
-      /** @description Trace da requisição (ADR 0120) */
+      /** @description Trace da requisição */
       traceId?: string;
       /** @description Issues de validação (só no 400) */
       errors?: {

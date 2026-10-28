@@ -62,7 +62,7 @@ const runtimes = new WeakMap<
   { flush: () => Promise<void>; timer: NodeJS.Timeout; stop: () => void }
 >();
 
-/** Plugin oficial `metrics` (ADR 0103, ADR 0121): provê o serviço `metrics`. */
+/** Plugin oficial `metrics`: provê o serviço `metrics`. */
 export const metrics: PluginDefinition = definePlugin({
   name: 'metrics',
   version: '0.1.0',

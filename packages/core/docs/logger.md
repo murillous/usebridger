@@ -1,9 +1,11 @@
 # Logger
 
-`createLogger` cria o logger estruturado do kernel: uma linha JSON por chamada, sobre pino. A
-API pública é a interface `Logger`, sem o pino, então plugins não dependem dele. O formato da
-linha, o `event` e os nomes de campo seguem o contrato do
-[ADR 0118](../../../docs/adr/0118-contrato-de-log-estruturado.md).
+Esta página explica como o Bridger escreve logs e como você os usa no seu bot e nos seus plugins.
+
+`createLogger` cria o logger estruturado: uma linha JSON por chamada, sobre o pino. A API pública
+é a interface `Logger`, sem o pino, então plugins não dependem dele. Cada linha tem um `event`
+(nome estável do que aconteceu) e campos com nomes padronizados, para filtrar e alertar no
+Loki, Grafana ou onde você agregar logs.
 
 ```ts
 import { createLogger, defineLogEvent } from '@usebridger/core';
@@ -71,8 +73,8 @@ O nome é contrato com quem filtra e alerta: evento novo é minor, renomear ou r
 eventos do core, dos transports e dos plugins oficiais estão em [Eventos de log](log-events.md).
 
 `log.<nível>(mensagem, campos?)` continua valendo, para o app e para plugins que não precisam de
-evento estável. No `src` dos pacotes do kernel, o Biome barra essa forma
-([`log-event.grit`](../../../tooling/biome/log-event.grit)).
+evento estável. Dentro dos pacotes do próprio Bridger essa forma é barrada pelo lint; no seu app
+e nos seus plugins ela é livre.
 
 ## Campos
 
@@ -148,8 +150,7 @@ sobre um logger que já tem `chat`) gera a chave duas vezes na linha; leitores d
 
 ## Pseudônimo do usuário
 
-Os logs não carregam telefone nem JID ([ADR 0119](../../../docs/adr/0119-pseudonimo-estavel-nos-logs.md)).
-O logger do bot troca os campos `chat` e `sender`, em chamadas e em `child`, por um **pseudônimo
+Os logs não carregam telefone nem JID. O logger do bot troca os campos `chat` e `sender`, em chamadas e em `child`, por um **pseudônimo
 estável**: `u_` (usuário) ou `g_` (grupo) + 22 caracteres base64url do HMAC-SHA256 do id. A chave
 é derivada por HKDF da `BRIDGER_SECRET_KEY` (a mesma dos [segredos](config.md)); o mesmo id dá o
 mesmo pseudônimo entre restarts, e ids diferentes dão pseudônimos diferentes.
@@ -170,8 +171,7 @@ mesmo pseudônimo entre restarts, e ids diferentes dão pseudônimos diferentes.
 
   O comando vai só do id ao pseudônimo. A volta é pela API, abaixo.
 - **Descobrir de quem é um pseudônimo:** com a `BRIDGER_SECRET_KEY`, o bot guarda cada par
-  `pseudônimo → id` cifrado no storage da sessão
-  ([ADR 0132](../../../docs/adr/0132-pseudonimo-de-volta-ao-id-pela-api.md)).
+  `pseudônimo → id` cifrado no storage da sessão.
   `GET /api/pseudonyms/{pseudonym}` devolve `{ pseudonym, kind, id }` a quem tem
   `pseudonyms.resolve` (owner e admin; o viewer não). Toda consulta, achando ou não, grava
   `kernel.pseudonym.resolve` na auditoria com quem consultou e o pseudônimo, sem o id.
@@ -241,7 +241,7 @@ curto não protege nada de qualquer forma.
 
 ## Trace e trilha
 
-[ADR 0120](../../../docs/adr/0120-trace-e-trilha-de-eventos.md). Para juntar tudo o que uma
+Para juntar tudo o que uma
 mensagem causou, o core dá um `trace` (32 hex, o formato do W3C Trace Context) a cada unidade de
 trabalho: a mensagem (ou clique, ou expiração de passo), o request HTTP, a execução de um job e o
 boot dos plugins. Ele fica num `AsyncLocalStorage` e entra sozinho em toda linha de um logger do
@@ -303,7 +303,7 @@ event: (event, fields) => inner[event.level](event.message, { ...fields, event: 
 
 ## Logger silencioso
 
-`createNoopLogger()` (interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md))) descarta tudo sem ler os campos nem
+`createNoopLogger()` (interno do core, não exportado) descarta tudo sem ler os campos nem
 alocar: para os testes do core e como padrão quando ninguém passou logger. `child()` devolve o
 próprio no-op.
 
@@ -316,8 +316,7 @@ muda).
 
 ## Saída legível em dev
 
-`format: 'pretty'` (no bot, `logFormat: 'pretty'`) troca o JSON por uma linha de texto
-([ADR 0087](../../../docs/adr/0087-log-legivel-e-baileys-em-warn.md)):
+`format: 'pretty'` (no bot, `logFormat: 'pretty'`) troca o JSON por uma linha de texto:
 
 ```text
 14:03:22 INFO  conexão aberta

@@ -27,6 +27,7 @@ O nome do plugin é o do pacote sem o prefixo `bridger-plugin-`: aqui, `ola`. O 
 - A chave `ola` em `commands` vira o comando `!ola`. O que o `run` devolve é a resposta, citando a mensagem.
 - Reação é opcional: `capabilities.has('reactions')` confere se a plataforma tem. Onde não tem, o plugin responde só o texto.
 - `fmt` e `bold` viram o negrito de cada plataforma, em vez de um `*negrito*` que só vale no WhatsApp.
+- O `storage` conta quantas vezes cada pessoa foi cumprimentada, e o `defineResource` no `setup` expõe essa contagem na API do core (`GET /api/resources/ola/saudacoes`). Se só quer o comando, apague essas partes.
 
 ## 3. O teste
 

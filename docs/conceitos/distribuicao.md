@@ -1,14 +1,16 @@
 # Distribuindo plugins
 
-O kernel não publica plugins ([ADR 0082](../adr/0082-plugins-da-luma-no-lumabot.md)): todo plugin,
-inclusive os do LumaBot, é código de quem o escreve, num repositório próprio ou dentro do app. Há
-dois caminhos para um plugin chegar ao bot, e os dois produzem o mesmo objeto
-([ADR 0005](../adr/0005-plugins-via-npm-e-pasta.md)).
+Esta página mostra como levar um plugin até um bot: publicar no npm, instalar durante o
+desenvolvimento ou carregar de uma pasta do app.
+
+O Bridger só publica dois plugins oficiais, `@usebridger/plugin-metrics` e
+`@usebridger/plugin-dashboard`. Todo o resto é código de quem o escreve, num repositório próprio
+ou dentro do app. Há dois caminhos para um plugin chegar ao bot, e os dois produzem o mesmo
+objeto.
 
 ## Num repositório próprio, publicado no npm
 
-O scaffold cria o projeto pronto para publicar
-([ADR 0077](../adr/0077-create-bridger-plugin.md)):
+O scaffold cria o projeto pronto para publicar:
 
 ```sh
 npm create bridger-plugin@latest bridger-plugin-ola
@@ -24,14 +26,18 @@ Para publicar:
 - **público:** `npm publish` (com escopo, `npm publish --access public` na primeira vez);
 - **privado:** um pacote com escopo numa organização paga do npm, ou num registry privado
   (GitHub Packages, Verdaccio). O bot instala com o `.npmrc` apontando o escopo para o registry.
-  É assim que os plugins e transports comerciais do projeto são distribuídos
-  ([ADR 0026](../adr/0026-open-core-repo-privado.md)).
+  É assim que os plugins e transports comerciais do projeto são distribuídos.
 
 ## Plugar no bot
 
 Um plugin publicado é uma dependência comum: o app instala, importa e põe na lista.
 
+```sh
+npm install bridger-plugin-ola
+```
+
 ```ts
+import { createBot } from '@usebridger/core';
 import { ola } from 'bridger-plugin-ola';
 
 const bot = createBot({ transport, storage, plugins: [ola] });
@@ -54,7 +60,7 @@ npm install ../bridger-plugin-ola
 
 O npm cria um link para a pasta, e o pnpm faz o mesmo com `"bridger-plugin-ola": "link:../bridger-plugin-ola"`
 no `package.json`. Depois de mudar o plugin, rode o `build` de novo e reinicie o bot: não há
-hot-reload de código ([ADR 0006](../adr/0006-sem-hot-reload.md)).
+hot-reload de código.
 
 Num link, o plugin importa o `@usebridger/core` da pasta **dele** (a dev dependency), e o bot, o da
 pasta do bot. Quase tudo funciona assim, porque o plugin é um objeto comum. O que compara
@@ -69,8 +75,15 @@ O plugin declara o core em dois lugares, e cada um protege um momento diferente:
 - **`peerDependencies` no `package.json`**: avisa na **instalação**. O core é peer, e não
   dependência, porque o bot precisa de uma cópia só do kernel, a que ele mesmo instalou.
 - **`engine` no manifesto**: confere na **execução**, contra a versão do core que de fato carregou.
-  Fora da faixa, o boot para e diz qual plugin e por quê
-  ([ADR 0014](../adr/0014-manifesto-do-plugin.md)).
+  Fora da faixa, o boot para e diz qual plugin e por quê.
+
+```json
+{ "peerDependencies": { "@usebridger/core": "<1.0.0" } }
+```
+
+```ts
+definePlugin({ name: 'ola', version: '1.0.0', engine: '<1.0.0' /* ... */ });
+```
 
 Mantenha as duas faixas iguais. No `0.x`, a regra do `^` do npm trava no minor: `^0.3.0` aceita só
 `0.3.x`. O template começa com `<1.0.0`, que aceita qualquer `0.x`; um plugin que quer se proteger
@@ -86,7 +99,13 @@ minor, no `0.x`).
 ## Plugins de pasta
 
 `pluginDirs: ['./plugins']` carrega todo arquivo `.ts`/`.js` (ou subpasta com `index.*`) da pasta.
-É o caminho para plugins que vivem dentro do app e não vão ao npm. As diferenças para os de npm:
+É o caminho para plugins que vivem dentro do app e não vão ao npm.
+
+```ts
+createBot({ transport, pluginDirs: ['./plugins'] }); // relativo a `cwd`, que por padrão é o diretório do processo
+```
+
+As diferenças para os de npm:
 
 | | npm (`plugins`) | pasta (`pluginDirs`) |
 | --- | --- | --- |

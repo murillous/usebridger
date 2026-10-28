@@ -13,7 +13,7 @@ const WEB_DIR = fileURLToPath(
 );
 
 /**
- * Plugin oficial `dashboard` (ADR 0103, 0125): só serve o app web, cliente genérico da API do core.
+ * Plugin oficial `dashboard` (0125): só serve o app web, cliente genérico da API do core.
  * Sem rota de dados, auth ou config próprias: tudo passa pela API, com a auth e as permissões dela.
  */
 export const dashboard: PluginDefinition = definePlugin({

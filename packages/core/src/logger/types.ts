@@ -7,7 +7,7 @@ export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal' |
 export type EmitLevel = Exclude<LogLevel, 'silent'>;
 
 /**
- * Dicionário de campos do kernel (ADR 0118): o mesmo nome para a mesma coisa em core, transports e
+ * Dicionário de campos do kernel: o mesmo nome para a mesma coisa em core, transports e
  * plugins, para filtrar no agregador sem conhecer quem logou. Outros nomes continuam livres.
  */
 export interface StandardLogFields {
@@ -25,9 +25,9 @@ export interface StandardLogFields {
   readonly env?: string;
   readonly plugin?: string;
   readonly transport?: string;
-  /** Pseudônimo do chat (o logger do bot troca o id; ADR 0119). */
+  /** Pseudônimo do chat (o logger do bot troca o id). */
   readonly chat?: string;
-  /** Pseudônimo de quem enviou a mensagem (ADR 0119). */
+  /** Pseudônimo de quem enviou a mensagem. */
   readonly sender?: string;
   readonly messageId?: string;
   readonly command?: string;
@@ -42,7 +42,7 @@ export interface StandardLogFields {
   /** Motivo em texto curto; o erro vai em `err`. */
   readonly reason?: string;
   readonly durationMs?: number;
-  /** Id de correlação; reservado para a #232. */
+  /** Id de correlação; reservado para uso futuro. */
   readonly trace?: string;
 }
 

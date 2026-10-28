@@ -16,7 +16,7 @@ export interface CommandAction {
   readonly args?: readonly string[];
 }
 
-/** Botão que roda um passo de conversa do próprio plugin (ADR 0056), com o `data` da ação. */
+/** Botão que roda um passo de conversa do próprio plugin, com o `data` da ação. */
 export interface StepAction {
   /** Texto do botão. */
   readonly label: string;
@@ -61,7 +61,7 @@ interface StoredAction {
 }
 
 /**
- * Alvos dos botões de um bot (estado no closure do bot, ADR 0003). Sem timer: o vencido sai ao
+ * Alvos dos botões de um bot (estado no closure do bot). Sem timer: o vencido sai ao
  * ser consultado e quando entram IDs novos, e nada sobrevive ao `stop()`.
  */
 export class ActionRegistry {

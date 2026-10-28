@@ -1,30 +1,29 @@
 # @usebridger/core — documentação
 
-Como usar o kernel. O porquê das decisões está nos [ADRs](../../../docs/adr/README.md).
+Como usar o `@usebridger/core`: o que cada parte faz, com exemplos. Esta página é o índice.
 
 Comece pela [visão geral](overview.md): as peças, como se ligam, os escopos e o mapa de módulos.
 Os formatos que o core valida (manifesto, config, `BotConfig`) estão em [Schemas](schemas.md).
 
 ## Pontos de entrada
 
-A API pública se divide por público ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md)):
+A API pública se divide por público:
 
 | Import | Para quem | O que traz |
 | --- | --- | --- |
 | `@usebridger/core` | Autor de plugin e app | `definePlugin`, `command`, `secret`, tipos dos contextos, eventos, mensagem, storage do plugin e os erros que o plugin trata; `createBot` e sua config, `createHttp`, middlewares oficiais, `createLogger`, `createSecretSet`, `createMemoryStorage` |
 | `@usebridger/core/adapter` | Autor de transport ou storage | Contratos `Transport`/`StoragePort`, `defineTransport`, `TypedEmitter`, `createMessage`, `createMedia`, `messageKey`, `ReconnectionPolicy`, helpers de capability, normalização de consultas, `StorageClosedError` |
 | `@usebridger/core/storage-contract` | Autor de storage | Suíte de contrato (`defineStorageContract`) |
-| `@usebridger/core/zod` | Autor de plugin | O `z` do Zod que o core usa, para o schema da config ([ADR 0091](../../../docs/adr/0091-zod-no-subpath-do-core.md)) |
+| `@usebridger/core/zod` | Autor de plugin | O `z` do Zod que o core usa, para o schema da config |
 
 O adapter usa também o modelo compartilhado de `@usebridger/core` (`Message`, `MessageKey`,
 `OutgoingContent`, tipos de storage). Host de plugins, barramento, filas, scheduler e roteador
 são internos: os guias abaixo mostram como funcionam, mas os exemplos com import `#…` só valem
-dentro do core. A lista de cada entrada é fixada em `src/entries.test.ts`; export novo é decisão
-explícita.
+dentro do core. A lista de cada entrada é fixada em `src/entries.test.ts`.
 
 | Guia | Assunto |
 | --- | --- |
-| [Visão geral](overview.md) | Peças do kernel, escopos, regras gerais, mapa de `src/` e campos do `PluginContext` |
+| [Visão geral](overview.md) | Peças do core, escopos, regras gerais, mapa de `src/` e campos do `PluginContext` |
 | [Schemas](schemas.md) | O que o core valida (manifesto, compatibilidade, config de plugin e do bot, comando, mensagem, storage, capabilities), quando e com que erro |
 | [Transport](transport.md) | Contrato `Transport`, `defineTransport`, eventos, capabilities e política de reconexão |
 | [API HTTP](api.md) | `ctx.http.api`: operações com schema Zod, problem+json, `/openapi.json`, CORS e snapshot da spec |
@@ -42,7 +41,7 @@ explícita.
 | [Plugins](plugins.md) | `definePlugin`, manifesto, forma curta (`commands`/`on`, plugin em JS), fontes (config + `pluginDirs`), ordem, tabela de boot, `setup`/`teardown`/`reload` |
 | [Texto formatado](text.md) | `fmt`, `bold`, `italic`, `code`, `link`, `mention`, `plainText`; texto cru; divisão do texto longo |
 | [Fila de saída](outbound-queue.md) | `OutboundQueue`: taxa global/por chat, prioridade, retry, humanização; `createReply` |
-| [Eventos](events.md) | Barramento: eventos do §6.4, filtros, prioridade, `claim()`, isolamento |
+| [Eventos](events.md) | Barramento: eventos do bot, filtros, prioridade, `claim()`, isolamento |
 | [Services](services.md) | `ctx.services`: `provide`/`get` tipados por declaration merging, erros, registry |
 | [Logger](logger.md) | `createLogger`, formato da linha, `log.event` e `defineLogEvent`, dicionário de campos, bindings base, `err`, redação de segredos, Loki |
 | [Eventos de log](log-events.md) | Os `event`s do core, dos transports e dos plugins oficiais |

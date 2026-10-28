@@ -1,9 +1,11 @@
 # HTTP e WebSocket
 
+Esta página mostra como ligar o servidor HTTP do Bridger e registrar rotas e WebSockets nos seus
+plugins (webhooks, painéis, APIs).
+
 O core tem **um** servidor HTTP por processo, dividido por todos os bots, para webhooks, o
-dashboard e o chat web ([ADR 0018](../../../docs/adr/0018-http-unico-hono.md),
-[ADR 0072](../../../docs/adr/0072-http-do-core.md)). Plugins registram rotas em `ctx.http`, o
-transport em `deps.http`. A porta só abre se houver rota. A API do core (`/api`, `/openapi.json`) fica em [API HTTP](api.md).
+dashboard e o chat web. Plugins registram rotas em `ctx.http`, o transport em `deps.http`. A
+porta só abre se houver rota. A API do core (`/api`, `/openapi.json`) fica em [API HTTP](api.md).
 
 ## Ligar o servidor
 
@@ -21,7 +23,7 @@ await Promise.all([zap.start(), erp.start()]);
 | Opção de `createHttp` | Padrão | O que faz |
 | --- | --- | --- |
 | `port` | — | Porta; `0` escolhe uma livre (leia em `http.port`) |
-| `hostname` | todas as interfaces | Interface de escuta (`'127.0.0.1'` atrás de proxy reverso). Sem `api.auth`, use loopback (ADR 0128) |
+| `hostname` | todas as interfaces | Interface de escuta (`'127.0.0.1'` atrás de proxy reverso). Sem `api.auth`, use loopback: o `createBot` recusa outro endereço ([API](api.md#auth-obrigatória-fora-de-loopback)) |
 
 - Passe a **mesma** instância a todos os bots, como o storage. Dois bots com a mesma `session` no
   mesmo servidor: o segundo `start()` rejeita com `BotConfigError`.
@@ -57,13 +59,13 @@ para montar uma URL pública.
 503 { "status": "degraded", "sessions": { "default": "running", "erp": "starting" } }
 ```
 
-200 só com todas as sessões em `running`. Uma sessão em `failed` (a reconexão desistiu, [ADR 0116](../../../docs/adr/0116-giveup-da-reconexao-leva-ao-estado-failed.md)) mantém o HTTP no ar, mas faz o `/health` responder 503. Serve de liveness e readiness para Docker e PM2, mas em `failed` o 503 indica só que a sessão não está pronta (readiness): para manter o painel de pé, não reinicie o processo por esse sinal ([ADR 0116](../../../docs/adr/0116-giveup-da-reconexao-leva-ao-estado-failed.md)). O
+200 só com todas as sessões em `running`. Uma sessão em `failed` (a reconexão desistiu) mantém o HTTP no ar, mas faz o `/health` responder 503. Serve de liveness e readiness para Docker e PM2, mas em `failed` o 503 indica só que a sessão não está pronta (readiness): para manter o painel de pé, não reinicie o processo por esse sinal. O
 corpo mostra os nomes das sessões: se isso não pode ser público, não exponha o `/health` no
 proxy.
 
 ## `traceparent`
 
-Cada request de rota (plugin ou transport) roda num `trace` ([ADR 0120](../../../docs/adr/0120-trace-e-trilha-de-eventos.md)).
+Cada request de rota (plugin ou transport) roda num `trace` (veja [Trace e trilha](logger.md#trace-e-trilha)).
 Um `traceparent` válido no pedido (W3C, versão 00) dá o `trace-id` ao request; sem ele, o core
 gera um. A resposta devolve `traceparent` com o mesmo `trace-id`; as `trace-flags` da entrada voltam
 iguais e, sem entrada, saem `01`. Erro fora do `mount` (o `app.onError`) não devolve `traceparent`. O `trace` entra nos logs que o
@@ -95,8 +97,9 @@ setup(ctx) {
 - O handler não tem prazo do kernel nem roda na fila de um chat: o cliente HTTP decide quanto
   espera. Também não tem tenant corrente: use `ctx.storage.forTenant(id)` com o tenant que vier
   da requisição ([Storage](storage.md)).
-- **Autenticação é do plugin.** O core não confere nada: valide token, assinatura do webhook ou
-  JWT no handler.
+- **Autenticação é do plugin.** O core não confere nada nas rotas de `ctx.http.route`: valide
+  token, assinatura do webhook ou JWT no handler. Para endpoints com login, permissões e entrada
+  validada, use `ctx.http.api` ([API HTTP](api.md#registrar-uma-operação)), que usa a auth do core.
 - As rotas vivem com o contexto: o `teardown` e o reload as tiram, e o `setup` novo as registra
   de novo. Registrar depois do `teardown` lança, como os outros registros do `ctx`.
 

@@ -25,18 +25,18 @@ export interface PluginControlDeps {
   readonly catalog: Pick<CommandCatalog, 'batch'>;
   readonly conversations: Pick<ConversationRegistry<KernelMessageContext, ExpireOrigin>, 'sweep'>;
   readonly lifecycleError: (error: PluginLifecycleError) => void;
-  /** Auditoria das ações do kernel (ADR 0122); sem ela nada é gravado. */
+  /** Auditoria das ações do kernel; sem ela nada é gravado. */
   readonly audit?: Pick<Audit, 'record'>;
   /** Para registrar a falha de leitura do diff de config. */
   readonly log?: () => Logger;
-  /** Plugins que mudaram num reload/disable/enable, com os dependentes (stream da API, ADR 0129). */
+  /** Plugins que mudaram num reload/disable/enable, com os dependentes (stream da API). */
   readonly onChange?: (entries: readonly PluginReportEntry[]) => void;
 }
 
 export interface PluginControl {
   readonly plugins: BotPlugins;
   readonly config: BotPluginConfigs;
-  /** Situação do plugin na tabela do host, para a varredura das esperas persistidas (ADR 0094). */
+  /** Situação do plugin na tabela do host, para a varredura das esperas persistidas. */
   presence(plugin: string): PluginPresence;
   /** Mesmo controle com as ações auditadas em nome de `actor` (o plugin admin do `ctx.admin`). */
   as(actor: AuditActor): { readonly plugins: BotPlugins; readonly config: BotPluginConfigs };

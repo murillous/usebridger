@@ -96,7 +96,7 @@ export function envCollisions(
   return byName;
 }
 
-/** Chaves mestras dos segredos salvos no storage (ADR 0117). */
+/** Chaves mestras dos segredos salvos no storage. */
 export interface SecretKeys {
   readonly current?: SecretKey;
   /** Chave anterior, só para migrar envelopes no boot (rotação). */

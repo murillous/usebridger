@@ -59,7 +59,7 @@ function checkNames(value: unknown, label: string, self: unknown, issues: string
   }
 }
 
-/** `dependsOn` e `optionalDependsOn` (ADR 0095): objeto nome de plugin → faixa semver. */
+/** `dependsOn` e `optionalDependsOn`: objeto nome de plugin → faixa semver. */
 function checkDependencies(value: unknown, label: string, self: unknown, issues: string[]): void {
   if (value === undefined) return;
   if (!isRecord(value)) {
@@ -76,7 +76,7 @@ function checkDependencies(value: unknown, label: string, self: unknown, issues:
 }
 
 /**
- * `commands` do manifesto (ADR 0075). Confere aqui o que o `ctx.commands.add` só descobriria no
+ * `commands` do manifesto. Confere aqui o que o `ctx.commands.add` só descobriria no
  * boot, para o erro sair no `definePlugin`, que aponta a linha do plugin.
  */
 function checkCommands(value: unknown, issues: string[]): void {

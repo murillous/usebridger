@@ -28,7 +28,7 @@ const actorName = (actor: AuditEvent['actor']): string => {
   }
 };
 
-/** Auditoria (ADR 0133): eventos com filtros, verificação da cadeia e exportação. */
+/** Auditoria: eventos com filtros, verificação da cadeia e exportação. */
 export function Audit() {
   const [draft, setDraft] = useState<Filters>({});
   const [filters, setFilters] = useState<Filters>({});

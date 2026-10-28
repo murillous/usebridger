@@ -17,7 +17,7 @@ export interface BotReconnectionOptions extends Omit<ReconnectionPolicyOptions, 
   /**
    * Apaga as credenciais salvas, para a decisão `clean-session` (sessão encerrada no aparelho,
    * credenciais rejeitadas num transport com `pairing`, QRs sem pareamento; queda de rede
-   * nunca, ADR 0041; erro `fatal` nunca, ADR 0064). Com transport
+   * e erro `fatal` nunca). Com transport
    * por fábrica, o padrão limpa o `auth` que a fábrica recebeu; isto o substitui. Com instância
    * pronta e sem ela, o bot não tem como parear de novo sozinho: loga e para.
    */
@@ -27,10 +27,10 @@ export interface BotReconnectionOptions extends Omit<ReconnectionPolicyOptions, 
 export interface Reconnector {
   /**
    * Trata `connection.status`. Antes de `activate()`, ou com um `connect()` de reconexão em
-   * andamento, guarda o último `closed` e decide sobre ele quando puder (ADR 0044).
+   * andamento, guarda o último `closed` e decide sobre ele quando puder.
    */
   onStatus(status: ConnectionStatus): void;
-  /** Trata `connection.qr` e `connection.pairing-code` (ADR 0046). */
+  /** Trata `connection.qr` e `connection.pairing-code`. */
   onQr(): void;
   /** O `connect()` inicial terminou: a partir daqui, uma queda é reconectada. */
   activate(): void;
@@ -42,7 +42,7 @@ export interface ReconnectorOptions {
   readonly transport: Pick<Transport, 'connect'>;
   readonly log: () => Logger;
   readonly options: BotReconnectionOptions;
-  /** O transport declara a capability `pairing`; sem ela, `auth-failed` para (ADR 0064). */
+  /** O transport declara a capability `pairing`; sem ela, `auth-failed` para. */
   readonly pairing: boolean;
   /** Chamado quando não há como seguir (`stop`, ou `clean-session` sem `clearSession`). */
   readonly giveUp: (decision: ReconnectionDecision) => void;

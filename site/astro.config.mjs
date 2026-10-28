@@ -24,23 +24,18 @@ export default defineConfig({
       // Link quebrado (rota ou âncora) falha o build.
       plugins: [
         starlightLinksValidator(),
-        // Gera /llms.txt, /llms-full.txt e /llms-small.txt. As ADRs (registro histórico) e a API
-        // gerada (que inflaria o full) saem do full/small e ficam só como conjuntos à parte listados no índice.
+        // Gera /llms.txt, /llms-full.txt e /llms-small.txt. A API gerada (que inflaria o full) sai
+        // do full/small e fica só como conjunto à parte listado no índice.
         // O `exclude` valer também para o full depende de patches/ (o plugin só o aplica ao small).
         starlightLlmsTxt({
           projectName: 'Bridger',
           description:
             'Framework de bots de mensageria em TypeScript: core, transports, storages e plugins.',
-          exclude: ['decisoes/**', 'api/**'],
+          exclude: ['api/**'],
           // O link de âncora dos títulos viraria "[Seção intitulada …](#…)" sob cada título, aqui
           // e no `.md` de cada página (src/pages/[...slug].md.ts), que usa a mesma conversão.
           customSelectors: { all: ['.sl-anchor-link'] },
           customSets: [
-            {
-              label: 'Decisões (ADRs)',
-              paths: ['decisoes/**'],
-              description: 'registro histórico das decisões de arquitetura',
-            },
             {
               label: 'Referência da API',
               paths: ['api/**'],
@@ -119,11 +114,6 @@ export default defineConfig({
             { autogenerate: { directory: 'pacotes', collapsed: true } },
             { ...typeDocSidebarGroup, label: 'API', collapsed: true },
           ],
-        },
-        {
-          label: 'Decisões',
-          collapsed: true,
-          items: [{ autogenerate: { directory: 'decisoes' } }],
         },
         { label: 'Contribuindo', items: [{ autogenerate: { directory: 'contribuindo' } }] },
       ],

@@ -27,7 +27,7 @@ export interface StoredAuthState {
  * cada leitura iria ao storage e repetiria a conversão do `BufferJSON`. O cache vive só nesta
  * tentativa: depois de um `clear()` do bot, a próxima começa vazia e não ressuscita chave
  * apagada. Ele não vê gravações de outro processo, o que não acontece porque a mesma sessão
- * não roda em dois (ADR 0032).
+ * não roda em dois.
  */
 export async function loadAuthState(
   store: AuthStateStore,

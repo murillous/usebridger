@@ -183,7 +183,7 @@ type MediaOf = (
   },
 ) => MediaSource;
 
-/** O `ref` do `MediaSource`, só quando a mídia tem o que baixá-la de novo (ADR 0136). */
+/** O `ref` do `MediaSource`, só quando a mídia tem o que baixá-la de novo. */
 function refOf(key: WAMessageKey, type: string, node: MediaNode): { ref?: JsonValue } {
   const ref = mediaRefData(key, type, node);
   return ref === undefined ? {} : { ref };

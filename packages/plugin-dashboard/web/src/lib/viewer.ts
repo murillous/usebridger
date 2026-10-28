@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react';
 import { ApiProblem, api, unwrap } from './client.ts';
 
-/** Quem usa o painel: o `GET /auth/me`, ou `open` com a auth desligada (API em loopback, ADR 0128). */
+/** Quem usa o painel: o `GET /auth/me`, ou `open` com a auth desligada (API em loopback). */
 export interface Viewer {
   readonly kind: 'user' | 'key' | 'open';
   readonly name: string;

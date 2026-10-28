@@ -1,13 +1,12 @@
 # Services entre plugins
 
 Um plugin publica um serviço com `ctx.services.provide(name, impl)` e outro o consome com
-`ctx.services.get(name)`, sem importar um ao outro. É assim que a IA fica fora do core
-([ADR 0016](../../../docs/adr/0016-service-registry.md)).
+`ctx.services.get(name)`, sem importar um ao outro. É assim que recursos como IA ficam fora do core: um plugin oferece, outros usam.
 
 ## Prover
 
 O plugin que provê declara o tipo por declaration merging na interface `Services` do
-`@usebridger/core` e publica a implementação no `setup` (`definePlugin` chega no M1-8):
+`@usebridger/core` e publica a implementação no `setup`:
 
 ```ts
 import { definePlugin } from '@usebridger/core';
@@ -27,7 +26,7 @@ export const ai = definePlugin({
   version: '1.0.0',
   engine: '^1.0.0',
   setup(ctx) {
-    ctx.services.provide('ai', { complete: async (prompt) => /* ... */ prompt });
+    ctx.services.provide('ai', { complete: async (prompt) => `resposta para: ${prompt}` });
   },
 });
 ```
@@ -43,7 +42,7 @@ provedor usa `ctx.services.provideScoped(name, factory, release?)` no lugar de `
 `factory(caller)` roda no primeiro `get` de cada plugin e a instância fica guardada por
 `(name, caller)`; quem consome continua com `get(name)` e o mesmo tipo. `release(caller)` roda,
 quando o caller sai (teardown, reload ou disable) e para cada instância quando o
-provedor sai; se lançar, a limpeza termina e o erro sobe como `AggregateError`. Detalhes no [ADR 0112](../../../docs/adr/0112-servico-com-escopo-por-chamador.md).
+provedor sai; se lançar, a limpeza termina e o erro sobe como `AggregateError`.
 
 ## Consumir
 
@@ -76,8 +75,7 @@ O tipo vem de importar o pacote do provedor (ou só o tipo dele): é esse import
 ## Serviço opcional
 
 Quando o plugin funciona sem o provedor e só parte dele usa o serviço, `dependsOn` derrubaria o
-plugin inteiro. Declare o provedor em `optionalDependsOn`
-([ADR 0095](../../../docs/adr/0095-comando-que-exige-servico.md)):
+plugin inteiro. Declare o provedor em `optionalDependsOn`:
 
 - o formato é o do `dependsOn` (nome do plugin → faixa semver, faixa inválida é erro de
   manifesto);
@@ -107,27 +105,23 @@ export const download = definePlugin({
 
 - **Um provedor por nome.** Se outro plugin já provê o nome, `provide` lança
   `ServiceConflictError` citando os dois plugins (campos `service`, `existing`, `incoming`).
-  No `Bot`, esse erro no `setup` derruba o boot, como conflito de comando
-  ([ADR 0031](../../../docs/adr/0031-papeis-nomeados-por-plugin.md)); num reload, o plugin
+  No `Bot`, esse erro no `setup` derruba o boot, como conflito de comando; num reload, o plugin
   recarregado fica ignorado e o primeiro continua valendo.
 - **Sem re-prover.** O mesmo plugin chamar `provide` duas vezes para o mesmo nome também é
   `ServiceConflictError`: quem já fez `get` ficaria com a instância antiga sem saber. Trocar a
   implementação é recarregar o plugin.
 - **Teardown e reload** removem o que o plugin proveu; no novo `setup` ele provê de novo. O
-  reload do provedor recarrega em cascata quem declara `dependsOn` nele
-  ([ADR 0037](../../../docs/adr/0037-reload-em-cascata.md)), então guardar a instância no `setup`
+  reload do provedor recarrega em cascata quem declara `dependsOn` nele, então guardar a instância no `setup`
   é seguro; `optionalDependsOn` também entra na cascata. Quem usa o serviço sem nenhum dos dois não
   recarrega junto e fica com a instância antiga.
 - **Tenant.** Chamado no handler de uma mensagem com `chat.tenantId`, o serviço roda no escopo
-  daquele tenant: o `ctx.storage` do provedor grava no tenant certo sem receber nada
-  ([ADR 0068](../../../docs/adr/0068-isolamento-por-tenant.md)). Estado em memória (um `Map` no
+  daquele tenant: o `ctx.storage` do provedor grava no tenant certo sem receber nada. Estado em memória (um `Map` no
   plugin) não ganha escopo. Guarde no `ctx.storage` o que é de um cliente.
 
 ## Pontos de extensão
 
 Um serviço que outros plugins estendem (o `sticker` que aceita etapas, como a legenda do
-`sticker-text`) não guarda as contribuições nem cuida de tirá-las: o registry faz isso
-([ADR 0092](../../../docs/adr/0092-pontos-de-extensao-em-servicos.md)). Quem oferece declara o
+`sticker-text`) não guarda as contribuições nem cuida de tirá-las: o registry faz isso. Quem oferece declara o
 tipo da contribuição em `ExtensionPoints` e lê com `extensionPoint`; quem estende chama
 `contribute`:
 
@@ -180,7 +174,7 @@ setup(ctx) {
 
 O `Bot` cria um registry por instância (sem estado global) e entrega a cada plugin o acesso
 atribuído a ele (`ctx.services`); no teardown/reload remove o que o plugin proveu. Por dentro
-(interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md))):
+(interno do kernel, não exportado; você só usa `ctx.services`):
 
 ```ts
 import { createServiceRegistry } from '#services/registry.ts';

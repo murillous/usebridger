@@ -9,7 +9,7 @@ import { ApiError, problemResponse } from './problem.ts';
 
 export interface ApiOptions {
   readonly cors?: { readonly origins: readonly string[] };
-  /** Liga a autenticação da API (ADR 0127). Desligada, a API fica aberta como antes. */
+  /** Liga a autenticação da API. Desligada, a API fica aberta como antes. */
   readonly auth?: {
     /** Inatividade que encerra a sessão; padrão 8 h. */
     readonly sessionIdleMs?: number;

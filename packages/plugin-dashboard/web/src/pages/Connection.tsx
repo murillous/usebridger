@@ -34,7 +34,7 @@ function Qr({ value }: { value: string }) {
   return src === undefined ? null : <img className="qr" src={src} alt="QR de pareamento" />;
 }
 
-/** Conexão: status, conta, QR ao vivo, código de pareamento e logout (ADR 0129). */
+/** Conexão: status, conta, QR ao vivo, código de pareamento e logout. */
 export function Connection({ pairing }: { pairing: PairingState }) {
   const can = useCan();
   const manage = can('connection.manage');

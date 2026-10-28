@@ -1,8 +1,11 @@
 # Eventos
 
-O barramento é o 3º estágio do pipeline ([ADR 0010](../../../docs/adr/0010-pipeline-de-3-estagios.md)):
-a mensagem que nenhum comando consumiu chega aos listeners, que rodam em paralelo, cada um
-isolado por try/catch + timeout ([ADR 0004](../../../docs/adr/0004-plugins-no-mesmo-processo.md)).
+Eventos são como o plugin reage ao que acontece no bot: mensagem recebida, reação, entrada em
+grupo, mudança de conexão, erro de outro plugin. Esta página mostra como assinar e o que cada
+listener recebe.
+
+O barramento é o 3º estágio do pipeline: a mensagem que nenhum comando consumiu chega aos listeners, que rodam em paralelo, cada um
+isolado por try/catch + timeout.
 Os demais eventos do transport (grupos, reações, conexão) passam só por aqui, depois do
 `chatFilter` e do `ignoreSelf` do bot ([Bot](bot.md#eventos-que-não-são-mensagem)).
 
@@ -16,7 +19,7 @@ setup(ctx) {
     await e.payload.media.download(); // payload já estreitado para ImageMessage
   });
 
-  // opções no meio (como no plano) ou no fim
+  // opções no meio ou no fim
   ctx.events.on('message', { quoted: 'audio' }, (e) => { /* respondeu a um áudio */ });
   ctx.events.on('group.joined', (e) => { /* e.payload.chat.id */ }, { priority: 5 });
 }
@@ -59,8 +62,7 @@ O tipo é condicional: `ListenerContext<'reaction'>` não tem esses campos.
 Todo listener recebe `e.signal: AbortSignal`, que aborta quando **o prazo dele** estoura
 (`reason` = `ListenerTimeoutError`, com `plugin`, `event` e `timeoutMs`). É por listener, não por emissão: o contexto da emissão é
 compartilhado (`claim()`), mas cada listener recebe uma visão própria com o próprio prazo, e um
-listener lento expirar não afeta o `signal` nem o `reply` de outro do mesmo evento
-([ADR 0029](../../../docs/adr/0029-cancelamento-cooperativo.md)). O descarte do plugin (teardown,
+listener lento expirar não afeta o `signal` nem o `reply` de outro do mesmo evento. O descarte do plugin (teardown,
 reload) também aborta o `signal` dos listeners dele ainda em andamento, com o motivo do descarte
 (`forPlugin(plugin, { lifetime })` recebe o `Deadline` de vida do plugin).
 
@@ -84,15 +86,15 @@ nenhum prazo resolve isso.
 | `message.edited` | nova versão da `Message`, com `isEdited: true` |
 | `message.deleted` | `{ chat, messageId, deletedBy, fromMe }` |
 | `reaction` | `{ chat, messageId, sender, emoji, fromMe }` (`emoji: null` = removida) |
-| `poll.vote` | `{ chat, messageId, sender, options, fromMe }`: a escolha inteira de quem votou, por índice a partir de 0 (`options: []` = voto retirado; ADR 0067) |
+| `poll.vote` | `{ chat, messageId, sender, options, fromMe }`: a escolha inteira de quem votou, por índice a partir de 0 (`options: []` = voto retirado) |
 | `group.joined` / `group.left` | `{ chat }` (no Discord, `chat` é o servidor) |
 | `group.participants` | `{ chat, action, participants, actor }` |
 | `group.updated` | `{ chat }` + só os campos alterados (`title?`, `description?`, `announce?`, `restrict?`) |
 | `contact.updated` | `{ id }` + só os campos alterados (`name?`, `phone?`) |
 | `connection.status` / `connection.qr` | `ConnectionStatus` / `{ qr }` |
-| `connection.pairing-code` | `{ code }` (pareamento por código, ADR 0046) |
+| `connection.pairing-code` | `{ code }` (pareamento por código) |
 | `command` | `CommandEvent`: `{ plugin, name, invokedAs, status, message }` ([abaixo](#comandos-command)) |
-| `plugin.error` | `PluginErrorEvent`: `{ plugin, phase, event, error, timedOut, trace? }` (`trace`: o da mensagem, request ou job em que o erro ocorreu, ausente sem trace ativo); `phase` é `listener`, `command`, `step` (passo de conversa), `role`, `setup`, `teardown`, `scheduler` ou `http` (rota ou WebSocket do plugin; `event` é a rota, como `'POST /webhook'`) |
+| `plugin.error` | `PluginErrorEvent`: `{ plugin, phase, event, error, timedOut, trace? }` (`trace`: o da mensagem, request ou job em que o erro ocorreu, ausente sem trace ativo); `phase` é `listener`, `command`, `step` (passo de conversa), `step-expire` (o `onExpire` de um passo), `role`, `setup`, `teardown`, `scheduler`, `observer` (observador de `ctx.observe`) ou `http` (rota ou WebSocket do plugin; `event` é a rota, como `'POST /webhook'`) |
 
 O `interaction` do transport (clique num botão) não chega aos plugins como evento: o kernel roda
 o comando ou o passo do botão ([Ações e botões](actions.md)).
@@ -111,8 +113,7 @@ Prioridade não finita ou prazo que não seja um número finito > 0 lançam `Ran
 
 O comando que casa consome a mensagem: ela não chega a `message`. O evento `command` diz que ele
 rodou, e sai depois que ele termina, com `status` `ran`, `rejected` (papel ou `accepts`) ou
-`failed` (o erro vai em `plugin.error`)
-([ADR 0045](../../../docs/adr/0045-evento-de-comando.md)). É só observação: o contexto não tem
+`failed` (o erro vai em `plugin.error`). É só observação: o contexto não tem
 `reply`; para falar no chat, use o `ctx.send` do plugin.
 
 Toda mensagem que passa pelos middlewares cai em exatamente um dos dois eventos. Para ver todas,
@@ -152,7 +153,7 @@ menor provavelmente já começaram sem vê-lo. Cada emissão tem o próprio `cla
 ## Trabalho longo: solte o chat
 
 O bot só passa à próxima mensagem do chat quando todos os listeners da atual terminam ou estouram
-o prazo ([ADR 0038](../../../docs/adr/0038-handler-lento-segura-o-chat.md)). Um listener que
+o prazo. Um listener que
 espera um LLM por 15 s segura o chat por 15 s, inclusive os comandos. Se o trabalho não precisa de
 ordem com as mensagens seguintes, reivindique e responda sem `await`:
 
@@ -188,7 +189,7 @@ do bus e emite `plugin.error` para quem quiser assinar (ex.: dashboard).
 
 O `Bot` monta um único bus e entrega a cada plugin uma assinatura em nome dele. As mensagens que
 nenhum comando consumiu, as edições e os demais eventos do transport chegam por `emit`; falha de
-listener vai para o log do bot. Por dentro (interno do kernel, não exportado ([ADR 0030](../../../docs/adr/0030-biblioteca-sem-runner.md))):
+listener vai para o log do bot. Por dentro (interno do kernel, não exportado):
 
 ```ts
 import { createEventBus } from '#events/bus.ts';

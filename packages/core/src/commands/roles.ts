@@ -34,7 +34,7 @@ export interface RoleContext {
   readonly log: Logger;
   /**
    * Aborta quando a checagem estoura o prazo (`timeouts.commandMs`), com `reason` =
-   * `RoleTimeoutError`. Repasse a consultas externas (ADR 0029).
+   * `RoleTimeoutError`. Repasse a consultas externas.
    */
   readonly signal: AbortSignal;
 }

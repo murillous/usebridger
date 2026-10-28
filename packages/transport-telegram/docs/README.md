@@ -1,8 +1,17 @@
 # @usebridger/transport-telegram
 
-Transport do Bridger para o Telegram, sobre a Bot API pelo [grammY](https://grammy.dev). Recebe
-por long polling e não precisa de URL pública nem de `http` no `createBot`. As decisões estão no
-[ADR 0137](../../../docs/adr/0137-transport-telegram.md).
+Esta página mostra como ligar o bot ao Telegram. O transport usa a Bot API pelo
+[grammY](https://grammy.dev). Recebe por long polling (o bot pergunta ao Telegram pelas mensagens
+novas), então não precisa de URL pública nem de `http` no `createBot`.
+
+## Criar o bot no BotFather
+
+1. No Telegram, abra o [@BotFather](https://t.me/BotFather) e envie `/newbot`.
+2. Escolha um nome de exibição e um usuário (tem de terminar em `bot`, como `meu_bridger_bot`).
+3. O BotFather responde com o **token**, no formato `123456789:ABC-DEF...`. Ele é a senha do bot:
+   não o coloque no git. Guarde numa variável de ambiente (`TELEGRAM_TOKEN`).
+4. Se o token vazar, use `/revoke` no BotFather para gerar outro.
+5. Para o bot ler toda mensagem de um grupo, veja [Privacy mode](#privacy-mode).
 
 ## Uso
 
@@ -19,9 +28,9 @@ const bot = createBot({
 await bot.start();
 ```
 
-O token é validado na fábrica. Um formato inválido vira `BotConfigError` no `createBot`, sem o
-token na mensagem. A sessão não guarda nada no `auth state`: tudo de que o bot precisa está no
-token.
+A única opção do transport é `token` (obrigatória). Ele é validado na fábrica: um formato
+inválido vira `BotConfigError` no `createBot`, sem o token na mensagem. Não há pareamento nem
+credencial no storage: tudo de que o bot precisa está no token.
 
 ## Conexão
 
@@ -32,7 +41,7 @@ quando a queda é terminal:
 
 | Causa | `reason` | O que o bot faz |
 | --- | --- | --- |
-| 401 (token revogado ou errado) | `auth-failed` | para, sem limpar a sessão (sem pareamento, ADR 0064) |
+| 401 (token revogado ou errado) | `auth-failed` | para, sem limpar nada (não há pareamento) |
 | 409 (outro processo com o mesmo token) | `replaced` | para: duas instâncias se derrubariam em laço |
 | Falha de rede no `getMe` do boot | `connection-lost` | reconecta pela política |
 
@@ -57,7 +66,7 @@ O comando chega como texto comum. O `/cmd@NomeDoBot` funciona sem configuração
 `send.text`, `send.image`, `send.video`, `send.audio`, `send.voice`, `send.sticker`,
 `send.document`, `media.download`, `media.ref`, `quoted`, `mentions`, `reactions`,
 `message.edit`, `message.delete`, `typing`, `actions`, `groups`, `groups.remove` e
-`groups.promote`. O álbum (#308) e as enquetes (#309) ainda não estão; bot do Telegram não
+`groups.promote`. O álbum e as enquetes ainda não estão; bot do Telegram não
 adiciona ninguém a grupo, então `groups.add` nunca vai estar.
 
 Limites: 4096 caracteres de texto e 1024 de legenda (a fila de saída divide acima deles). Ritmo
@@ -149,3 +158,14 @@ Só o `name` aparece, com a `description` (ou o próprio nome, se não houver). 
 
 Os eventos de log do pacote estão no
 [catálogo do core](../../core/docs/log-events.md#usebridgertransport-telegram).
+
+## Problemas comuns
+
+- **`BotConfigError` ao subir:** o token está vazio ou fora do formato `123456:ABC-DEF`. Confira
+  se a variável de ambiente existe.
+- **O bot para com `auth-failed`:** o BotFather revogou o token ou ele está errado.
+- **O bot para com `replaced`:** outro processo usa o mesmo token. Só uma instância pode fazer
+  long polling por bot.
+- **No grupo, o bot só responde a comandos:** é o [privacy mode](#privacy-mode).
+- **Sem reações nem entrada/saída de membros:** esses eventos só chegam com o bot admin do grupo.
+- **Arquivo grande não baixa:** a Bot API não entrega arquivo acima de 20 MB.

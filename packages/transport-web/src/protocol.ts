@@ -86,7 +86,7 @@ export interface ServerMessageFrame {
   readonly kind: 'text' | 'image' | 'video' | 'audio' | 'document';
   /** Texto, ou legenda da mídia (o texto visível, quando há `formatted`). */
   readonly text?: string;
-  /** Árvore do texto formatado (ADR 0057), para o front renderizar. */
+  /** Árvore do texto formatado, para o front renderizar. */
   readonly formatted?: FormattedText;
   readonly media?: MediaRef;
   /** ID da mensagem citada. */

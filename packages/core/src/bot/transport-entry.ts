@@ -34,26 +34,26 @@ export interface TransportEntryDeps {
   readonly tenants: TenantScope;
   readonly flow: InboundFlow;
   readonly bus: EventBus;
-  /** O `queuedMs` do `message.handled` só é medido com observador (ADR 0102). */
+  /** O `queuedMs` do `message.handled` só é medido com observador. */
   readonly observers?: Pick<Observers, 'has'>;
   readonly conversations: Pick<ConversationRegistry<KernelMessageContext, ExpireOrigin>, 'expire'>;
   readonly reconnector: Reconnector | undefined;
   readonly gate: ReadyGate;
-  /** Os filtros do pipeline, para os eventos que não passam por ele (ADR 0034). */
+  /** Os filtros do pipeline, para os eventos que não passam por ele. */
   readonly chatIsAllowed: (chat: Pick<Chat, 'id' | 'parentId'>) => boolean;
   readonly dropsSelf: boolean;
   readonly dropsBots: boolean;
   /** `true` em `stopping`/`stopped`/`failed`: a espera vencida some em silêncio. */
   readonly stopping: () => boolean;
-  /** Guarda o último `connection.status`, antes de reemitir no barramento (ADR 0106). */
+  /** Guarda o último `connection.status`, antes de reemitir no barramento. */
   readonly recordStatus?: (status: ConnectionStatus) => void;
-  /** Guarda o QR (expiração, ADR 0111; stream da API, ADR 0129), antes de reemitir no barramento. */
+  /** Guarda o QR (expiração; stream da API), antes de reemitir no barramento. */
   readonly recordQr?: (payload: TransportEvents['connection.qr']) => void;
-  /** Leva o código de pareamento ao stream da API (ADR 0129), antes de reemitir no barramento. */
+  /** Leva o código de pareamento ao stream da API, antes de reemitir no barramento. */
   readonly recordPairingCode?: (payload: TransportEvents['connection.pairing-code']) => void;
-  /** O giveUp da reconexão já levou o bot a `failed` (ADR 0116). */
+  /** O giveUp da reconexão já levou o bot a `failed`. */
   readonly failed?: () => boolean;
-  /** Trilha de eventos (ADR 0120). Padrão: desligada. */
+  /** Trilha de eventos. Padrão: desligada. */
   readonly trail?: Trail;
   /** Getter: o logger nasce no `start()`. */
   readonly log: () => Logger;
@@ -62,7 +62,7 @@ export interface TransportEntryDeps {
 export interface TransportEntry {
   /** Assina todos os eventos do transport; devolve a função que desfaz. */
   subscribe(): () => void;
-  /** Ponto único da expiração de uma espera (ADR 0093). */
+  /** Ponto único da expiração de uma espera. */
   expireWait(chat: Chat, sender: Contact): void;
 }
 
@@ -73,8 +73,8 @@ export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
 
   /**
    * Põe a mensagem (nova ou editada) ou o clique na fila do chat dele: o mesmo chat anda em
-   * série. A tarefa roda no escopo do tenant do chat (ADR 0068). Com observador de
-   * `message.handled`, mede a espera na fila e a passa ao fluxo (ADR 0102).
+   * série. A tarefa roda no escopo do tenant do chat. Com observador de
+   * `message.handled`, mede a espera na fila e a passa ao fluxo.
    */
   function enqueue<T extends Message | Interaction>(
     item: T,
@@ -96,7 +96,7 @@ export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
   }
 
   /**
-   * Ponto único da expiração de uma espera (ADR 0093): põe na fila do chat a tarefa que retira a
+   * Ponto único da expiração de uma espera: põe na fila do chat a tarefa que retira a
    * espera vencida e roda o `onExpire` do passo, para não correr junto com uma mensagem do mesmo
    * chat. Chamado pelo timer da espera; uma espera restaurada que venceu durante o restart passa
    * por aqui no boot. No `stop()`, ou com a fila do chat cheia ou fechada, a espera vencida some
@@ -129,7 +129,7 @@ export function createTransportEntry(deps: TransportEntryDeps): TransportEntry {
 
   /**
    * Repassa um evento que não é mensagem ao barramento, depois do `chatFilter`, do `ignoreSelf` e
-   * do `ignoreBots` (ADR 0034). Durante o boot, espera os plugins subirem; sem fila do chat.
+   * do `ignoreBots`. Durante o boot, espera os plugins subirem; sem fila do chat.
    */
   function forward<E extends DirectEvent>(event: E): () => void {
     const origin = DIRECT_EVENTS[event];

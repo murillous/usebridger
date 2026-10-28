@@ -6,8 +6,8 @@ import type { MessageKey } from '#transport/types.ts';
 
 /**
  * Discriminante da union `Message`. `voice` (PTT, mensagem de voz) é separado de `audio`. O que a
- * plataforma tem sem equivalente aqui chega como `unknown`. A lista pode crescer numa minor (ADR
- * 0065): trate `unknown` e use `default` no `switch`, nunca o `never` exaustivo.
+ * plataforma tem sem equivalente aqui chega como `unknown`. A lista pode crescer numa minor:
+ * trate `unknown` e use `default` no `switch`, nunca o `never` exaustivo.
  */
 export type MessageType =
   | 'text'
@@ -36,7 +36,7 @@ export interface Contact {
    * É com ele que o roteador reconhece os `owners` telefone.
    */
   readonly phone: string | null;
-  /** `@usuario` sem o `@` (Telegram, Discord); ausente se a plataforma não tiver (ADR 0053). */
+  /** `@usuario` sem o `@` (Telegram, Discord); ausente se a plataforma não tiver. */
   readonly username?: string;
   /** Conta automatizada, como outros bots num chat do Discord ou do Telegram. Ausente: pessoa. */
   readonly isBot?: boolean;
@@ -47,7 +47,7 @@ export interface Contact {
   readonly claims?: Readonly<Record<string, JsonValue>>;
 }
 
-/** Contato mencionado numa mensagem (ADR 0096). */
+/** Contato mencionado numa mensagem. */
 export interface Mention extends Contact {
   /**
    * Trecho literal que a menção ocupa em `text` (no WhatsApp, `@<usuário do JID>`). É por ele que
@@ -58,7 +58,7 @@ export interface Mention extends Contact {
 }
 
 /**
- * Tipo de chat (ADR 0054). `group` é a conversa de várias pessoas solta (grupo do WhatsApp ou do
+ * Tipo de chat. `group` é a conversa de várias pessoas solta (grupo do WhatsApp ou do
  * Telegram, DM em grupo do Discord, sala do web); `channel`, o canal de servidor do Discord ou o
  * canal de transmissão do Telegram; `thread`, a thread do Discord ou o tópico de fórum do Telegram.
  */
@@ -83,7 +83,7 @@ export interface Chat {
   readonly title?: string;
   /**
    * Cliente do dono a que a conversa pertence, que o transport **verificou** (o claim do JWT no
-   * web, por exemplo; ADR 0068). Com ele, o `ctx.storage` dos plugins fica no escopo do tenant.
+   * web, por exemplo). Com ele, o `ctx.storage` dos plugins fica no escopo do tenant.
    * Ausente no transport que atende um cliente só. O transport compõe o tenant no `id` do chat e
    * dos contatos: dois tenants nunca dividem um ID.
    */
@@ -106,7 +106,7 @@ interface BaseMessage<T extends MessageType> {
   readonly id: string;
   /**
    * Chave para reagir, editar ou apagar esta mensagem (`ctx.send.react(message.key, …)`).
-   * Derivada por `createMessage` de `chat`, `id`, `fromMe` e `sender` (ADR 0036).
+   * Derivada por `createMessage` de `chat`, `id`, `fromMe` e `sender`.
    */
   readonly key: MessageKey;
   readonly chat: Chat;
@@ -120,7 +120,7 @@ interface BaseMessage<T extends MessageType> {
   readonly quoted: Message | null;
   readonly mentions: readonly Mention[];
   /**
-   * Todas as mídias da mensagem, na ordem da plataforma (ADR 0061); vazio sem mídia. Nos tipos de
+   * Todas as mídias da mensagem, na ordem da plataforma; vazio sem mídia. Nos tipos de
    * mídia, o primeiro é o próprio `media`, e o `type` é o dele: imagem seguida de PDF é `image`.
    */
   readonly attachments: readonly Media[];
@@ -150,7 +150,7 @@ export interface LocationMessage extends BaseMessage<'location'> {
     readonly latitude: number;
     readonly longitude: number;
     readonly name: string | null;
-    /** Endereço, quando a plataforma informa (`venue` do Telegram, por exemplo; ADR 0065). */
+    /** Endereço, quando a plataforma informa (`venue` do Telegram, por exemplo). */
     readonly address?: string;
   };
 }

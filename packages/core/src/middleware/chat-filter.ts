@@ -15,7 +15,7 @@ export interface ChatFilterOptions {
   readonly block?: Iterable<string>;
 }
 
-/** Allow/blocklist de chats (ADR 0021). As listas são copiadas na criação. */
+/** Allow/blocklist de chats. As listas são copiadas na criação. */
 export function chatFilter(options: ChatFilterOptions): Middleware<MessageContext> {
   const allowed = chatAllowed(options);
   return (ctx, next) => (allowed(ctx.message.chat) ? next() : undefined);
@@ -23,7 +23,7 @@ export function chatFilter(options: ChatFilterOptions): Middleware<MessageContex
 
 /**
  * A regra do `chatFilter` sem o middleware: o bot a aplica também aos eventos que não são
- * mensagem (ADR 0034). As listas são copiadas na criação.
+ * mensagem. As listas são copiadas na criação.
  */
 export function chatAllowed(
   options: ChatFilterOptions,

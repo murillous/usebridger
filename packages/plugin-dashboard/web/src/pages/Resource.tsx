@@ -42,7 +42,7 @@ function pick(item: Item | undefined, input: JsonSchema | undefined): Item | und
 const errorsOf = (error: unknown) =>
   error instanceof ApiProblem ? fieldErrors(error.errors) : undefined;
 
-/** Tela genérica de um `api.resources` (ADR 0134): lista, detalhe, formulários e ações. */
+/** Tela genérica de um `api.resources`: lista, detalhe, formulários e ações. */
 export function Resource({ view, itemId }: { view: ResourceView; itemId?: string }) {
   return itemId === undefined ? (
     <ResourceList key={view.key} view={view} />

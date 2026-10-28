@@ -149,7 +149,7 @@ export type AuthKeyData = {
 };
 
 /**
- * Auth state de uma sessão do transport (ADR 0012; substitui o `useMultiFileAuthState`).
+ * Auth state de uma sessão do transport (substitui o `useMultiFileAuthState`).
  * Genérico: credenciais são um valor JSON e as chaves ficam agrupadas por tipo e id. Quem
  * converte `Buffer`/`Uint8Array` para JSON e de volta é o transport (ex.: `BufferJSON`).
  */
@@ -174,11 +174,11 @@ export interface StoragePort {
   forNamespace(namespace: string): PluginStorage;
   /**
    * Auth state de uma sessão do transport, isolado das outras sessões e dos namespaces. Só monta
-   * o objeto, sem I/O: o `createBot` o chama para entregar à fábrica do transport (ADR 0033).
+   * o objeto, sem I/O: o `createBot` o chama para entregar à fábrica do transport.
    */
   authState(session: string): AuthStateStore;
   /**
-   * Trava com validade entre processos (ADR 0070): o bot a usa para que a mesma sessão não rode
+   * Trava com validade entre processos: o bot a usa para que a mesma sessão não rode
    * em dois processos que dividem o banco. Grava `owner` como dono de `name` por `ttlMs` e
    * devolve `true` se a trava estava livre, vencida ou já era de `owner` (é assim que se renova);
    * `false` se outro dono a tem dentro da validade. Atômica entre processos; a validade é medida

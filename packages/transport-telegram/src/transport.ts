@@ -69,7 +69,7 @@ const ALLOWED_UPDATES = [
 
 /**
  * Prefixo do ID da interação: o `callback_query.id` não é ID de mensagem, e o envio que a cita
- * não pode virar `reply_parameters` (ADR 0137).
+ * não pode virar `reply_parameters`.
  */
 const INTERACTION_PREFIX = 'cb:';
 
@@ -86,7 +86,7 @@ export class TelegramTransport implements Transport {
   readonly name = 'telegram';
   /**
    * O núcleo da Bot API. `send.album` e `polls` entram com as issues de álbum e de enquete
-   * (ADR 0137); `groups.add` não existe para bot no Telegram (ADR 0055).
+   *; `groups.add` não existe para bot no Telegram.
    */
   readonly capabilities: ReadonlySet<Capability> = new Set<Capability>([
     'actions',
@@ -111,7 +111,7 @@ export class TelegramTransport implements Transport {
     'quoted',
   ]);
   readonly limits = { text: 4096, caption: 1024 };
-  /** 30 mensagens/s no total e cerca de 1/s por chat (ADR 0063). */
+  /** 30 mensagens/s no total e cerca de 1/s por chat. */
   readonly pacing = { globalIntervalMs: 34, chatIntervalMs: 1000 };
 
   readonly #driver: TelegramDriver;
@@ -119,7 +119,7 @@ export class TelegramTransport implements Transport {
   readonly #events: TypedEmitter<TransportEvents>;
   #bot: Bot | null = null;
   #self: Contact | null = null;
-  /** Update de onde cada mensagem ou interação saiu, para o `raw()` (ADR 0062). */
+  /** Update de onde cada mensagem ou interação saiu, para o `raw()`. */
   readonly #raws = new WeakMap<Message | Interaction, unknown>();
   /** O último menu enviado ao Telegram, para só chamar a API quando ele muda. */
   #menu: string | undefined;
@@ -407,7 +407,7 @@ export class TelegramTransport implements Transport {
     );
   }
 
-  /** Sem `participants`: o Telegram não lista membros, só admins (ADR 0055). */
+  /** Sem `participants`: o Telegram não lista membros, só admins. */
   async getGroupMetadata(groupId: string): Promise<GroupMetadata> {
     const api = this.#connected().api;
     const { chat_id } = parseChatId(groupId);
@@ -461,7 +461,7 @@ export class TelegramTransport implements Transport {
     }
   }
 
-  /** Mídia de uma referência guardada (ADR 0136): o `file_id`, baixado pela conexão do momento. */
+  /** Mídia de uma referência guardada: o `file_id`, baixado pela conexão do momento. */
   mediaFromRef(data: JsonValue): MediaLoader {
     const fileId =
       typeof data === 'object' && data !== null && !Array.isArray(data)

@@ -20,7 +20,7 @@ export interface MediaSource {
   stream?(): Promise<ReadableStream<Uint8Array>>;
   /**
    * O que o transport precisa para baixar a mídia de novo sem esta mensagem (capability
-   * `media.ref`, ADR 0136): vai no `data` do `MediaRef`. Ausente: a mídia não tem referência.
+   * `media.ref`): vai no `data` do `MediaRef`. Ausente: a mídia não tem referência.
    */
   readonly ref?: JsonValue;
 }
@@ -36,7 +36,7 @@ export function mediaRefData(media: Media): JsonValue | undefined {
   return refs.get(media);
 }
 
-/** O loader de uma mídia que volta por referência (`Transport.mediaFromRef`, ADR 0136). */
+/** O loader de uma mídia que volta por referência (`Transport.mediaFromRef`). */
 export type MediaLoader = Pick<MediaSource, 'download' | 'stream'>;
 
 /**

@@ -44,7 +44,7 @@ const HKDF_INFO = 'bridger-audit-v1';
 const UNKEYED = Buffer.from('bridger-audit-unkeyed-v1');
 const OUTCOMES: ReadonlySet<string> = new Set(['success', 'denied', 'error']);
 
-/** Chave da cadeia, derivada da chave mestra (ADR 0119); sem ela, uma chave fixa e pública. */
+/** Chave da cadeia, derivada da chave mestra; sem ela, uma chave fixa e pública. */
 export function auditKey(master: Buffer | undefined): Buffer {
   return master === undefined ? UNKEYED : deriveSubkey(master, HKDF_INFO);
 }
@@ -56,7 +56,7 @@ export const AUDIT_MAX_REJECTS = 10;
 /** Janela do log de fila cheia: um `error` por janela, com a soma; o sinal segue exato. */
 const FULL_LOG_WINDOW_MS = 10_000;
 
-/** `query`/`verify` chamados por plugin que não está em `adminPlugins` (ADR 0107). */
+/** `query`/`verify` chamados por plugin que não está em `adminPlugins`. */
 export class AuditPermissionError extends Error {
   override readonly name: string = 'AuditPermissionError';
 
@@ -487,7 +487,7 @@ export interface VerifyAuditOptions {
 }
 
 /**
- * Verifica a cadeia de uma sessão sem subir o bot: para o script do app (ADR 0122), que cria o
+ * Verifica a cadeia de uma sessão sem subir o bot: para o script do app, que cria o
  * `StoragePort` e chama isto. Lança o que o storage lançar e `BotConfigError` com chave malformada.
  */
 export function verifyAudit(options: VerifyAuditOptions): Promise<AuditVerifyResult> {

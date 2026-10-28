@@ -26,14 +26,14 @@ export interface MessageContextDeps {
   readonly sender: Outbound;
   /** Responder citando: só se o transport tem a capability `quoted`. */
   readonly quote: boolean;
-  /** O transport tem a capability `reactions`; sem ela, `react` vira no-op (ADR 0089). */
+  /** O transport tem a capability `reactions`; sem ela, `react` vira no-op. */
   readonly reactions: boolean;
   /** Logger raiz; o contexto cria o filho com `chat` sob demanda. */
   readonly log: () => Logger;
-  /** Pseudônimo dos ids no `chat`/`sender` do log da mensagem (ADR 0119); sem ele, ids crus. */
+  /** Pseudônimo dos ids no `chat`/`sender` do log da mensagem; sem ele, ids crus. */
   readonly pseudonym?: Pseudonym;
   /**
-   * Resolve as ações do `reply` (ADR 0058) em nome do plugin dono do contexto, ou de ninguém
+   * Resolve as ações do `reply` em nome do plugin dono do contexto, ou de ninguém
    * (`null`) no contexto do kernel, que os middlewares veem.
    */
   readonly actions?: (owner: string | null, origin: ReplyOrigin) => PrepareActions;
@@ -188,7 +188,7 @@ type Refuse = (operation: string) => Promise<never>;
 /**
  * `reply` que confere o prazo a cada chamada — não só na leitura de `ctx.reply`: quem guardou a
  * função antes do prazo (`const r = ctx.reply`) também é recusado depois dele. No prazo, o envio
- * pausa o relógio até assentar (ADR 0043).
+ * pausa o relógio até assentar.
  */
 function expiringReply(reply: Reply, deadline: Deadline, refuse: Refuse): Reply {
   const guard =
@@ -278,7 +278,7 @@ function expiringReactDescriptor<V extends ExpiringView>(
   };
 }
 
-/** Registra uma espera em nome do plugin; o bot a liga ao registro de conversas (ADR 0056). */
+/** Registra uma espera em nome do plugin; o bot a liga ao registro de conversas. */
 export type PluginExpect = (
   origin: ReplyOrigin,
   step: string,
@@ -332,7 +332,7 @@ export interface CommandViews {
   run<C extends object>(ctx: C, deadline: Deadline): C;
 }
 
-/** Texto das `messages` do plugin para o chat de uma mensagem (ADR 0088). */
+/** Texto das `messages` do plugin para o chat de uma mensagem. */
 export type PluginText = (
   origin: Pick<Message, 'chat'>,
   key: string,
@@ -518,7 +518,7 @@ export function listenerViewFactory(
 }
 
 /**
- * Origem do `onExpire` (ADR 0093): chat e remetente da espera vencida, com o `reply` montado
+ * Origem do `onExpire`: chat e remetente da espera vencida, com o `reply` montado
  * sobre as dependências do contexto do bot, para sair pela fila de saída e resolver as ações em
  * nome do plugin. Não há mensagem: o `reply` não cita.
  */

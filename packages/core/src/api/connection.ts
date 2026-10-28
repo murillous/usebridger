@@ -12,7 +12,7 @@ import { ApiError } from './problem.ts';
 
 export interface ConnectionApiDeps {
   readonly transport: Transport;
-  /** Último `connection.status` (ADR 0106); `undefined` antes do primeiro. */
+  /** Último `connection.status`; `undefined` antes do primeiro. */
   readonly status: () => ConnectionStatus | undefined;
   readonly info: () => ConnectionInfo;
   /** Getter: a auditoria nasce depois do servidor HTTP no `createBot`. */

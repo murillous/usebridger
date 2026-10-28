@@ -41,7 +41,7 @@ export function coreApiOperations(
   states: () => Record<string, string> = () => ({}),
   /** Com a auth ligada (`api.auth`), monta as rotas `/auth` e `/users`. */
   auth?: AuthRoutesDeps,
-  /** Do bot da sessão: monta `/connection`, `/events` (ADR 0129), `/logs`, `/plugins`, `/pseudonyms` e `/audit`. */
+  /** Do bot da sessão: monta `/connection`, `/events`, `/logs`, `/plugins`, `/pseudonyms` e `/audit`. */
   realtime?: BotApiDeps,
 ): readonly AnyApiOperation[] {
   return [

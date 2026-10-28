@@ -9,6 +9,7 @@ npm install @usebridger/plugin-metrics
 ```
 
 ```ts
+import { createBot } from '@usebridger/core';
 import { metrics } from '@usebridger/plugin-metrics';
 
 const bot = createBot({ transport, storage, plugins: [metrics, meuPlugin] });

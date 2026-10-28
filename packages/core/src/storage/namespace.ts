@@ -22,8 +22,8 @@ export function isReservedNamespace(namespace: string): boolean {
 }
 
 /**
- * Storage de um plugin, no namespace do nome dele, ou no de um tenant dele (`'<plugin>@<tenant>'`,
- * ADR 0068). Lança se o nome cai no espaço do kernel ou de outra sessão, ou se o tenant é vazio.
+ * Storage de um plugin, no namespace do nome dele, ou no de um tenant dele (`'<plugin>@<tenant>'`).
+ * Lança se o nome cai no espaço do kernel ou de outra sessão, ou se o tenant é vazio.
  *
  * O tenant vem do transport e pode ter qualquer caractere, então fica no fim: nem a sessão nem o
  * plugin têm "@" ou ":", e o primeiro dos dois no namespace diz de quem ele é. Por isso
@@ -64,7 +64,7 @@ export function kernelStorage(port: StoragePort, component: string): PluginStora
 }
 
 /**
- * Visão do storage no escopo de uma sessão (ADR 0032): `forNamespace('x')` vira
+ * Visão do storage no escopo de uma sessão: `forNamespace('x')` vira
  * `'<sessão>:x'`, e a sessão `'default'` fica sem prefixo. O nome da sessão não tem ":"
  * (kebab-case) e `pluginStorage` recusa ":", então nenhum namespace de uma sessão coincide
  * com o de outra. `authState` e `close` passam direto: o auth state já é por sessão.
@@ -79,7 +79,7 @@ export function sessionStorage(port: StoragePort, session: string): StoragePort 
 }
 
 /**
- * Visão do storage comum a todas as sessões (ADR 0071): `forNamespace('x')` vira `'$shared:x'`, sem
+ * Visão do storage comum a todas as sessões: `forNamespace('x')` vira `'$shared:x'`, sem
  * o prefixo de sessão. Começa com "$", então o namespace de plugin de nenhuma sessão coincide com
  * ele; os componentes do kernel não usam ":" no nome. `authState` e `close` passam direto.
  */

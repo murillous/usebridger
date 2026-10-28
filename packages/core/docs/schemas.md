@@ -1,6 +1,6 @@
 # Schemas: o que o core valida
 
-Os formatos de dados que entram no core, quem os confere, quando, e o erro de cada um. O detalhe
+Esta página lista os formatos de dados que entram no core (manifesto de plugin, config, comando, mensagem...), quem os confere, quando, e o erro de cada um. O detalhe
 de cada campo fica no guia do módulo; aqui fica o mapa.
 
 | Formato | Tipo | Conferido por | Quando | Erro |
@@ -91,7 +91,7 @@ Camadas, variáveis de ambiente, segredos e reload: [Config](config.md).
 | `session` fora de kebab-case | `BotConfigError` |
 | `owners` com telefone malformado | `BotConfigError` |
 | Fábrica de transport que lança | `BotConfigError` |
-| Transport sem `name`, sem os métodos obrigatórios, ou com capability desconhecida ou sem o método dela ([ADR 0076](../../../docs/adr/0076-acucar-para-o-autor-de-transport.md)) | `BotConfigError` |
+| Transport sem `name`, sem os métodos obrigatórios, ou com capability desconhecida ou sem o método dela | `BotConfigError` |
 | Opção fora do domínio (prefixo começado por espaço, `maxPendingPerChat` negativo, prioridade `NaN`...) | `TypeError` / `RangeError` |
 
 As opções e seus padrões: [Bot → `createBot(config)`](bot.md#createbotconfig).
@@ -129,7 +129,7 @@ declarou lança `UnsupportedError`.
 
 `actions`, `groups`, `groups.add`, `groups.remove`, `groups.promote`, `mentions`, `reactions`,
 `typing`, `send.text`, `send.image`, `send.video`, `send.audio`, `send.voice`, `send.sticker`,
-`send.document`, `send.album`, `media.download`, `message.edit`, `message.delete`, `polls`,
+`send.document`, `send.album`, `send.template`, `media.download`, `media.ref`, `message.edit`, `message.delete`, `polls`,
 `quoted`, `pairing`.
 
 O que cada uma significa: [Transport → Capabilities](transport.md#capabilities).

@@ -1,13 +1,9 @@
 # Design do `plugin-dashboard`
 
 Guia de design do app web do `@usebridger/plugin-dashboard`. Quem mexer na interface segue este
-documento. Decisões de base: [ADR 0019](../../../docs/adr/0019-dashboard-vira-plugin.md),
-[ADR 0103](../../../docs/adr/0103-plugins-oficiais-de-metricas-e-dashboard.md) e
-[ADR 0125](../../../docs/adr/0125-api-http-do-core-e-dashboard-cliente.md).
+documento.
 
-O canvas da M5 (**https://claude.ai/artifact/9mHnZZqd33jPZ1Mn7vERy7**) segue valendo para tokens e
-componentes. As telas dele descrevem o app antigo (abas por `dashboard.tabs`, Visão geral); o app
-da M7-10 tem as telas listadas na [documentação](README.md#telas).
+As telas do app estão listadas na [documentação](README.md#telas).
 
 ## Princípios
 

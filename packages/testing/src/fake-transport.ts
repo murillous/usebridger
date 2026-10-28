@@ -53,7 +53,7 @@ export interface SentMessage {
   /** IDs mencionados. */
   readonly mentions: readonly string[];
   /**
-   * Botões enviados (capability `actions`, ADR 0058); ausente sem botões. O `click()` do
+   * Botões enviados (capability `actions`); ausente sem botões. O `click()` do
    * `TestBot` clica num deles pelo rótulo.
    */
   readonly actions?: readonly OutgoingAction[];
@@ -63,7 +63,7 @@ export interface SentMessage {
 
 export interface FakeTransportOptions {
   /**
-   * Perfil da plataforma (ADR 0069): capabilities, limites e contatos como o transport dela
+   * Perfil da plataforma: capabilities, limites e contatos como o transport dela
    * declararia. As opções abaixo substituem o campo do perfil. Ausente: todas as capabilities,
    * sem limites, contatos com telefone.
    */
@@ -75,12 +75,12 @@ export interface FakeTransportOptions {
   /** Grupos que `getGroupMetadata` conhece; dá para incluir depois com `setGroup`. */
   readonly groups?: readonly GroupMetadata[];
   /**
-   * Limites de tamanho, para testar a divisão de texto longo (ADR 0057). Padrão: os do perfil ou,
+   * Limites de tamanho, para testar a divisão de texto longo. Padrão: os do perfil ou,
    * sem perfil, nenhum, e o texto vai inteiro.
    */
   readonly limits?: TextLimits;
   /**
-   * Janela de atendimento (ADR 0124), como a do WhatsApp oficial: conteúdo que não é template só
+   * Janela de atendimento, como a do WhatsApp oficial: conteúdo que não é template só
    * passa até `ttlMs` depois da última mensagem recebida (`fromMe: false`) do chat; fora dela, o
    * envio rejeita com `ConversationWindowError`. Ausente ou `enabled: false`: sem janela.
    */
@@ -104,7 +104,7 @@ export class FakeTransport implements Transport {
   }[] = [];
   readonly deletions: MessageKey[] = [];
   readonly typing: { readonly chatId: string; readonly kind: TypingKind }[] = [];
-  /** Telefones de cada `requestPairingCode`, na ordem (ADR 0129). */
+  /** Telefones de cada `requestPairingCode`, na ordem. */
   readonly pairingRequests: string[] = [];
   /** Quantas vezes o `logout()` foi chamado. */
   logouts = 0;
@@ -274,7 +274,7 @@ export class FakeTransport implements Transport {
     this.participantUpdates.push({ groupId, participantIds, action });
   }
 
-  /** Os bytes da referência que o `receive()` deu à mídia (ADR 0136). */
+  /** Os bytes da referência que o `receive()` deu à mídia. */
   mediaFromRef(data: JsonValue): MediaLoader {
     assertCapability(this, 'media.ref');
     if (typeof data !== 'string')
@@ -285,7 +285,7 @@ export class FakeTransport implements Transport {
 
   /**
    * Objeto bruto registrado com `setRaw` para a mensagem ou interação, que o `ctx.unsafe.raw()`
-   * devolve (ADR 0062); `undefined` sem registro.
+   * devolve; `undefined` sem registro.
    */
   raw(source: Message | Interaction): unknown {
     return this.#raws.get(source);

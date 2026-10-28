@@ -134,7 +134,7 @@ export class BaileysTransport implements Transport {
   readonly name = 'baileys';
   /**
    * Todas as capabilities do core, menos `actions`: o WhatsApp pelo Baileys não tem botões
-   * confiáveis, e o kernel envia o menu em texto numerado (ADR 0058).
+   * confiáveis, e o kernel envia o menu em texto numerado.
    */
   readonly capabilities: ReadonlySet<Capability> = new Set<Capability>([
     'groups',
@@ -176,13 +176,13 @@ export class BaileysTransport implements Transport {
   /** Sobe a cada `connect()`/`disconnect()`: invalida a tentativa que ainda estava começando. */
   #attempt = 0;
   /**
-   * Metadados por grupo (ADR 0042): o kernel os pede a cada comando `group-admin`. Invalidado
+   * Metadados por grupo: o kernel os pede a cada comando `group-admin`. Invalidado
    * pelos eventos de grupo do Baileys e a cada conexão, porque a queda pode ter perdido algum.
    */
   readonly #groups = new Map<string, Promise<BaileysGroupMetadata>>();
   /** Contatos já vistos, entre conexões: o `contact.updated` sai só no que é novo. */
   readonly #contacts: ContactBook;
-  /** Enquetes vistas, para decifrar os votos (ADR 0067); o `disconnect()` as esquece. */
+  /** Enquetes vistas, para decifrar os votos; o `disconnect()` as esquece. */
   readonly #polls = new PollBook();
 
   constructor(options: BaileysTransportOptions, deps: TransportDeps) {
@@ -207,7 +207,7 @@ export class BaileysTransport implements Transport {
   }
 
   /**
-   * O `WAMessage` de onde a mensagem saiu (ADR 0062), o mesmo que o envio usa para citar. A citada
+   * O `WAMessage` de onde a mensagem saiu, o mesmo que o envio usa para citar. A citada
    * devolve o proto montado do `contextInfo`, sem `pushName` nem horário. O Baileys não emite
    * `interaction`: para ela, e para mensagem que não veio daqui, `undefined`.
    */
@@ -482,7 +482,7 @@ export class BaileysTransport implements Transport {
   }
 
   /**
-   * Código sob demanda (`POST /connection/pairing-code`, ADR 0129), para o app que pede pela API
+   * Código sob demanda (`POST /connection/pairing-code`), para o app que pede pela API
    * em vez de fixar `pairing.phone`. Vale na tentativa atual, enquanto ela mostra QR.
    */
   async requestPairingCode(phone: string): Promise<string> {
@@ -598,7 +598,7 @@ export class BaileysTransport implements Transport {
   }
 
   /**
-   * Mídia de uma referência guardada (ADR 0136). Baixa pela conexão do momento do download, que
+   * Mídia de uma referência guardada. Baixa pela conexão do momento do download, que
    * pede o reenvio ao aparelho se a mídia saiu do CDN; sem conexão, falha sem dizer que expirou.
    */
   mediaFromRef(data: JsonValue): MediaLoader {

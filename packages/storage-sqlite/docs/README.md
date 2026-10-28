@@ -2,8 +2,8 @@
 
 Adapter de storage padrão do Bridger, sobre o SQLite que vem no próprio Node (`node:sqlite`). Ele
 implementa o `StoragePort` do core ([Storage](../../core/docs/storage.md)) e passa na suíte de
-contrato. O porquê do driver e do schema está no
-[ADR 0047](../../../docs/adr/0047-sqlite-via-node-sqlite.md).
+contrato. Use-o para guardar os dados dos plugins e as credenciais do transport em um arquivo
+local, sem instalar banco. O driver é o do próprio Node: nada de módulo nativo para compilar.
 
 ## Uso
 
@@ -43,7 +43,7 @@ até 5 s antes de falhar (`busy_timeout`). Para vários processos escrevendo, us
 
 ## Schema
 
-O schema pertence ao adapter, e nenhum plugin cria tabela (ADR 0013).
+O schema pertence ao adapter, e nenhum plugin cria tabela.
 
 | Tabela | Conteúdo |
 | --- | --- |
@@ -51,7 +51,7 @@ O schema pertence ao adapter, e nenhum plugin cria tabela (ADR 0013).
 | `documents` | Documentos de todas as coleções: `namespace`, `collection`, `id` e `doc` em JSON. O `seq` é a ordem de inserção |
 | `auth_creds` | Credenciais de cada sessão do transport |
 | `auth_keys` | Chaves do auth state: `(session, type, id) → value` |
-| `leases` | Trava de cada sessão entre processos: `name → (owner, expires_at)`, com `expires_at` em ms pelo relógio da máquina ([ADR 0070](../../../docs/adr/0070-trava-de-sessao-entre-processos.md)) |
+| `leases` | Trava de cada sessão entre processos: `name → (owner, expires_at)`, com `expires_at` em ms pelo relógio da máquina |
 
 Os filtros viram condições sobre `json_extract(doc, '$.campo')` e conferem o `json_type`, para
 que `1`, `'1'` e `true` continuem diferentes. Um campo declarado em `indexes` ganha um índice de

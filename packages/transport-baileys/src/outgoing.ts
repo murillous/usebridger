@@ -23,7 +23,7 @@ import { type NormalizeEnv, nativeOf, resolveContact } from './normalize.ts';
 /**
  * Conteúdo do `sendMessage`, com as menções que o Baileys põe no `contextInfo` de qualquer tipo.
  * A árvore neutra (`formatted`, `formattedCaption`) vira a marcação do WhatsApp, e as menções
- * dela se juntam às de `options.mentions` (ADR 0057).
+ * dela se juntam às de `options.mentions`.
  */
 export function toContent(content: OutgoingContent, options?: SendOptions): AnyMessageContent {
   const ids = new Set(options?.mentions);

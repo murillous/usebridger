@@ -8,14 +8,14 @@ import type { Reply } from '#outbound/types.ts';
 import type { MessageText } from '#plugin/messages.ts';
 import type { TransportEvents, Unsubscribe } from '#transport/types.ts';
 
-/** Falha isolada de um plugin; o kernel emite e segue rodando os demais (ADR 0004). */
+/** Falha isolada de um plugin; o kernel emite e segue rodando os demais. */
 export interface PluginErrorEvent {
   readonly plugin: string;
   /**
    * Onde a falha aconteceu. `role`: a checagem de um papel custom que o plugin define. `step`: um
-   * passo de conversa (ADR 0056). `step-expire`: o `onExpire` de um passo (ADR 0093). `http`:
-   * uma rota ou WebSocket do plugin (ADR 0072). `observer`: um observador de `ctx.observe`
-   * (ADR 0102).
+   * passo de conversa. `step-expire`: o `onExpire` de um passo. `http`:
+   * uma rota ou WebSocket do plugin. `observer`: um observador de `ctx.observe`
+   *.
    */
   readonly phase:
     | 'listener'
@@ -32,12 +32,12 @@ export interface PluginErrorEvent {
   readonly event: string | null;
   readonly error: unknown;
   readonly timedOut: boolean;
-  /** Trace (ADR 0120) em que o erro ocorreu, o mesmo da linha de log. Ausente sem trace ativo. */
+  /** Trace em que o erro ocorreu, o mesmo da linha de log. Ausente sem trace ativo. */
   readonly trace?: string;
 }
 
 /**
- * Comando que casou e consumiu a mensagem (ADR 0045). Só observação: a mensagem não vai a
+ * Comando que casou e consumiu a mensagem. Só observação: a mensagem não vai a
  * `message`, então quem precisa ver toda mensagem (atividade, métricas) assina os dois.
  */
 export interface CommandEvent {
@@ -55,7 +55,7 @@ export type MessageTypeEvents = { readonly [K in MessageType as `message:${K}`]:
 
 /**
  * Todos os eventos que plugins podem assinar. O `interaction` fica de fora: o kernel o resolve e
- * roda o comando ou o passo do botão, e o plugin nunca vê o ID cru (ADR 0058).
+ * roda o comando ou o passo do botão, e o plugin nunca vê o ID cru.
  */
 export interface BotEvents extends Omit<TransportEvents, 'interaction'>, MessageTypeEvents {
   command: CommandEvent;
@@ -99,7 +99,7 @@ export interface BaseListenerContext<E extends BotEventName> {
   /**
    * Aborta quando **este** listener estoura o prazo (`reason` = o erro de timeout). É por
    * listener: o de outro listener da mesma emissão não muda. Repasse a `fetch`/SDKs para parar
-   * o trabalho a tempo (ADR 0029); depois do prazo, o `reply` deste contexto é recusado com
+   * o trabalho a tempo; depois do prazo, o `reply` deste contexto é recusado com
    * `ContextExpiredError`.
    */
   readonly signal: AbortSignal;
@@ -118,7 +118,7 @@ export interface MessageListenerFields<M extends Message = Message> {
   readonly reply: Reply;
   /** Reage à mensagem (ver `BotMessageContext.react`). */
   react(emoji: string | null): Promise<void>;
-  /** Registra a espera da próxima mensagem do remetente neste chat (ADR 0056). */
+  /** Registra a espera da próxima mensagem do remetente neste chat. */
   readonly expectReply: ExpectReply;
   /** Logger com `plugin` e `chatId` no contexto. */
   readonly log: Logger;

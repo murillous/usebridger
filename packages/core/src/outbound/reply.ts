@@ -6,7 +6,7 @@ import { type QueueSendOptions, REPLY_ORIGIN, type ReplyOriginInfo } from './que
 import { captionFields, textContent } from './text.ts';
 import type { Reply, ReplyOptions, ReplyTextOptions, Sender } from './types.ts';
 
-/** Texto e botões que vão ao transport, depois de o kernel resolver as ações (ADR 0058). */
+/** Texto e botões que vão ao transport, depois de o kernel resolver as ações. */
 export interface PreparedActions {
   /** O texto, com o menu numerado no fim quando o transport não leva os botões. */
   readonly text: MessageText;
@@ -31,7 +31,7 @@ export interface CreateReplyOptions {
 
 /**
  * Chat e remetente de uma resposta sem mensagem a citar: o `onExpire` de um passo responde a
- * quem não respondeu (ADR 0093).
+ * quem não respondeu.
  */
 export type ReplyOrigin = Pick<Message, 'chat' | 'sender'>;
 
