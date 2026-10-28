@@ -114,16 +114,22 @@ export class EventStream {
   }
 }
 
+const can = (actor: ApiActor | undefined, permission: string): boolean =>
+  actor === undefined || actor.permissions.includes(permission);
+
+/** O ator vê a linha de log? Vale para o SSE e para o `GET /logs`. */
+export function logVisible(signal: LogSignal, actor: ApiActor | undefined): boolean {
+  if (!can(actor, 'logs.read')) return false;
+  const name = signal.fields['event'];
+  return (
+    !(typeof name === 'string' && PAIRING_LOG_EVENTS.has(name)) || can(actor, 'connection.manage')
+  );
+}
+
 /** O ator vê o evento? Sem ator (auth desligada, só em loopback) vê tudo. */
 function visible(event: StreamEvent, actor: ApiActor | undefined): boolean {
-  const can = (permission: string): boolean =>
-    actor === undefined || actor.permissions.includes(permission);
-  if (PAIRING_TYPES.has(event.type)) return can('connection.manage');
-  if (event.type === 'log') {
-    if (!can('logs.read')) return false;
-    const name = (event.data as LogSignal).fields['event'];
-    return !(typeof name === 'string' && PAIRING_LOG_EVENTS.has(name)) || can('connection.manage');
-  }
+  if (PAIRING_TYPES.has(event.type)) return can(actor, 'connection.manage');
+  if (event.type === 'log') return logVisible(event.data as LogSignal, actor);
   return true;
 }
 

@@ -1,5 +1,6 @@
 import { ActionRegistry } from '#actions/actions.ts';
 import { EventStream } from '#api/events.ts';
+import { LogHistory } from '#api/logs.ts';
 import { AUDIT_COLLECTION, AUDIT_INDEXES, createAudit } from '#audit/audit.ts';
 import { createAuditRetention, validateRetentionDays } from '#audit/retention.ts';
 import { createAccounts } from '#auth/accounts.ts';
@@ -391,8 +392,13 @@ export function createBot(config: BotConfig): Bot {
   const connectionTracker = createConnectionTracker();
   // Tempo real da API (ADR 0129): só com servidor HTTP, para o bot sem ele não montar sinal de log.
   const stream = http === undefined ? undefined : new EventStream();
+  // Histórico do `GET /logs` (ADR 0135), alimentado pelo mesmo sinal do stream.
+  const logHistory = new LogHistory();
   if (stream !== undefined) {
-    observers.add(KERNEL_OBSERVER, 'log', (signal) => stream.publish('log', signal));
+    observers.add(KERNEL_OBSERVER, 'log', (signal) => {
+      stream.publish('log', signal);
+      logHistory.push(signal);
+    });
   }
   const entry = createTransportEntry({
     recordStatus: (status) => {
@@ -667,6 +673,7 @@ export function createBot(config: BotConfig): Bot {
             audit: () => audit,
           },
           stream,
+          logs: logHistory,
           plugins: {
             plugins: control.plugins,
             config: control.config,
