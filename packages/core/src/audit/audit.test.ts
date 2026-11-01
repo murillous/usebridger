@@ -523,6 +523,26 @@ describe('query', () => {
     expect(empty).toEqual({ events: [] });
   });
 
+  it('order desc devolve os mais recentes e pagina por before', async () => {
+    const { audit } = await populated();
+    const first = await audit.query({ order: 'desc', limit: 2 });
+    expect(seqs(first)).toEqual([4, 3]);
+    expect(first.next).toBe(3);
+    const second = await audit.query({ order: 'desc', limit: 2, before: first.next });
+    expect(seqs(second)).toEqual([2, 1]);
+    expect(await audit.query({ order: 'desc', before: 1 })).toEqual({ events: [] });
+  });
+
+  it('after e before juntos delimitam um intervalo de seq', async () => {
+    const { audit } = await populated();
+    expect(seqs(await audit.query({ after: 1, before: 4 }))).toEqual([2, 3]);
+  });
+
+  it('recusa order desconhecido', async () => {
+    const { audit } = await populated();
+    await expect(audit.query({ order: 'DESC' as 'desc' })).rejects.toThrow(TypeError);
+  });
+
   it('dentro de um tenant o filtro é imposto pelo core', async () => {
     const { audit, tenants } = await populated();
     const result = await tenants.run('t1', () => audit.query({ tenant: 't2' }));

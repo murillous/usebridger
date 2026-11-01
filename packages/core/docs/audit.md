@@ -71,11 +71,13 @@ rejeitam com `AuditPermissionError`.
 ```ts
 const page = await ctx.audit.query({ action: 'inbox.ticket.transfer', limit: 50 });
 const next = await ctx.audit.query({ after: page.next }); // cursor por seq
+const recent = await ctx.audit.query({ order: 'desc', limit: 5 }); // do mais recente
+const older = await ctx.audit.query({ order: 'desc', limit: 5, before: recent.next });
 const result = await ctx.audit.verify(); // { ok, checked, brokenAt? }
 ```
 
 Filtros: `from`/`to` (por `at`), `actor`, `action`, `target`, `outcome`, `tenant`, `after`,
-`limit` (padrão 100, máximo 1000). Num request de tenant o core impõe o tenant do escopo,
+`before`, `order` (`asc`, o padrão, ou `desc`), `limit` (padrão 100, máximo 1000). Num request de tenant o core impõe o tenant do escopo,
 ignorando o `tenant` do filtro. Não há `update` nem `delete`.
 
 Fora de plugin, a mesma consulta, a exportação em CSV/JSON e o `verify` estão na API do core

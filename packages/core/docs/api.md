@@ -561,7 +561,7 @@ viewer.
 
 | Rota | O que faz |
 | --- | --- |
-| `GET /audit` | Página de eventos por `seq`: `{ events, next? }` |
+| `GET /audit` | Página de eventos por `seq`, nas duas direções: `{ events, next? }` |
 | `GET /audit/export?format=json\|csv` | Todos os eventos dos filtros, em stream, como anexo |
 | `POST /audit/verify` | Confere a cadeia de hash: `{ ok, checked, brokenAt? }` |
 
@@ -577,6 +577,15 @@ curl "http://localhost:3000/api/audit?action=kernel.config.update&limit=50"   -H
 # próxima página: o `next` da resposta
 curl "http://localhost:3000/api/audit?action=kernel.config.update&limit=50&after=1234"   -H "Authorization: Bearer $BRIDGER_KEY"
 # sem `next`, acabou
+```
+
+Os dois `GET` aceitam `order`: `asc` (padrão) começa pelo evento mais antigo e `desc`, pelo mais
+recente. Em `desc` o cursor é `before` (`seq` menor que ele), e o `next` da resposta vai nele:
+
+```sh
+curl "http://localhost:3000/api/audit?order=desc&limit=5"   -H "Authorization: Bearer $BRIDGER_KEY"
+# próxima página, mais antiga: o `next` da resposta
+curl "http://localhost:3000/api/audit?order=desc&limit=5&before=1230"   -H "Authorization: Bearer $BRIDGER_KEY"
 ```
 
 Conferir a cadeia de hash (veja [Auditoria](audit.md)):
