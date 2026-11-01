@@ -54,6 +54,8 @@ export interface PluginConfigView {
    * Mostra ao dashboard quando um override não vale porque o arquivo ou o env decide o campo.
    */
   readonly sources: Readonly<Record<string, ConfigSource>>;
+  /** Variável de cada campo cuja fonte é `env`, nas mesmas chaves de `sources`. */
+  readonly env: Readonly<Record<string, string>>;
 }
 
 /**
@@ -332,6 +334,7 @@ type Computed =
       resolved: ResolvedPluginConfig;
       secrets: string[];
       sources: Record<string, ConfigSource>;
+      envNames: Record<string, string>;
     }
   | { ok: false; error: PluginConfigError };
 
@@ -487,6 +490,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
     const messageSources: Record<string, ConfigSource> = Object.fromEntries(
       Object.keys(base).map((key) => [`${MESSAGES_KEY}.${key}`, 'default' as const]),
     );
+    const envNames: Record<string, string> = {};
     const messageLayers = [
       ...layers.map((layer) => ({
         entries: Object.entries(layer.messages),
@@ -528,6 +532,7 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
           } else {
             messages[key] = text;
             messageSources[at.path] = at.source;
+            if (at.env !== undefined) envNames[at.path] = at.env;
           }
         }
       }
@@ -544,13 +549,19 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
     // Pelos caminhos da saída: é o que o plugin recebe, defaults inclusive.
     const sources: Record<string, ConfigSource> = {};
     if (isPlainObject(config)) {
-      for (const path of leafPaths(config)) sources[path.join('.')] = sourceOf(path).source;
+      for (const path of leafPaths(config)) {
+        const { source, env: variable } = sourceOf(path);
+        const label = path.join('.');
+        sources[label] = source;
+        if (variable !== undefined) envNames[label] = variable;
+      }
     }
     return {
       ok: true,
       resolved: { config, messages: Object.freeze(messages) },
       secrets,
       sources: { ...sources, ...messageSources },
+      envNames,
     };
   }
 
@@ -897,12 +908,12 @@ export function createPluginConfigs(options: PluginConfigsOptions): PluginConfig
 
     async describe(name: string): Promise<PluginConfigView> {
       const definition = definitionOf(name);
-      const { resolved, sources } = await current(name);
+      const { resolved, sources, envNames } = await current(name);
       const { config, messages } = resolved;
       const masked = definition.config
         ? mapSecrets(definition.config, config, () => SECRET_MASK)
         : config;
-      return { config: masked, messages, sources };
+      return { config: masked, messages, sources, env: envNames };
     },
 
     jsonSchema(name: string): PluginConfigJsonSchema | undefined {

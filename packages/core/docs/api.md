@@ -509,7 +509,7 @@ Listar, ligar e desligar plugins e editar a config deles, com os segredos cifrad
 | `GET /plugins` | `plugins.read` | `bootedAt` e cada plugin: `name`, `version`, `status` (`loaded`/`skipped`), `dependsOn`, `services`, `contributions`, `setupMs` e, se `skipped`, `reason: { kind, message }` |
 | `POST /plugins/{name}/enable` | `plugins.manage` | Liga o plugin; sobem os dependentes que ele libera. Devolve `{ plugin, dependents }` |
 | `POST /plugins/{name}/disable` | `plugins.manage` | Desliga o plugin e os dependentes, até o `enable` |
-| `GET /plugins/{name}/config` | `config.read` | `view` (config com segredos em `********`, `messages`, `sources`), `schema` (JSON Schema da entrada) e `secretsWritable` |
+| `GET /plugins/{name}/config` | `config.read` | `view` (config com segredos em `********`, `messages`, `sources` e `env`, o nome da variável de cada campo que vem do ambiente), `schema` (JSON Schema da entrada) e `secretsWritable` |
 | `PUT /plugins/{name}/config` | `config.write` | Grava a config (abaixo) e devolve o mesmo que o `GET` |
 
 ```sh
@@ -561,12 +561,15 @@ viewer.
 
 | Rota | O que faz |
 | --- | --- |
-| `GET /audit` | Página de eventos por `seq`: `{ events, next? }` |
+| `GET /audit` | Página de eventos por `seq`, nas duas direções: `{ events, next? }` |
 | `GET /audit/export?format=json\|csv` | Todos os eventos dos filtros, em stream, como anexo |
 | `POST /audit/verify` | Confere a cadeia de hash: `{ ok, checked, brokenAt? }` |
 
 Filtros (query string, nos dois `GET`): `from` e `to` (ISO 8601, inclusivos, por `at`), `actor`
-(`actorId`), `action`, `target` (`targetId`) e `outcome` (`success`, `denied`, `error`). O
+(`actorId`), `actorKind` (`user`, `contact`, `system`, `plugin`; repita o parâmetro para vários:
+`actorKind=system&actorKind=plugin`), `action`, `target` (`targetId`) e `outcome` (`success`,
+`denied`, `error`). Evento gravado antes de existir o campo `actorKind` não casa com esse filtro.
+O
 `GET /audit` aceita ainda `limit` (1 a 1000, padrão 100) e `after`, o cursor:
 
 ```sh
@@ -577,6 +580,15 @@ curl "http://localhost:3000/api/audit?action=kernel.config.update&limit=50"   -H
 # próxima página: o `next` da resposta
 curl "http://localhost:3000/api/audit?action=kernel.config.update&limit=50&after=1234"   -H "Authorization: Bearer $BRIDGER_KEY"
 # sem `next`, acabou
+```
+
+Os dois `GET` aceitam `order`: `asc` (padrão) começa pelo evento mais antigo e `desc`, pelo mais
+recente. Em `desc` o cursor é `before` (`seq` menor que ele), e o `next` da resposta vai nele:
+
+```sh
+curl "http://localhost:3000/api/audit?order=desc&limit=5"   -H "Authorization: Bearer $BRIDGER_KEY"
+# próxima página, mais antiga: o `next` da resposta
+curl "http://localhost:3000/api/audit?order=desc&limit=5&before=1230"   -H "Authorization: Bearer $BRIDGER_KEY"
 ```
 
 Conferir a cadeia de hash (veja [Auditoria](audit.md)):

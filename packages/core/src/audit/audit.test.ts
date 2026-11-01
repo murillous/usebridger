@@ -15,9 +15,11 @@ import {
   AUDIT_MAX_QUEUE,
   type Audit,
   AuditPermissionError,
+  auditKey,
   createAudit,
   verifyAudit,
 } from './audit.ts';
+import { chainHash, GENESIS_HASH } from './chain.ts';
 import { runAsAuditSubject } from './scope.ts';
 import type { AuditEvent } from './types.ts';
 
@@ -512,6 +514,42 @@ describe('query', () => {
     expect(seqs(await q({ tenant: 't2' }))).toEqual([3]);
   });
 
+  it('grava actorKind no topo do evento e filtra por um ou vários tipos', async () => {
+    const s = await populated();
+    const q = s.audit.forPlugin('dash', true).query;
+    expect((await stored(s.col)).map((e) => e.actorKind)).toEqual([
+      'plugin',
+      'plugin',
+      'plugin',
+      'system',
+    ]);
+    expect(seqs(await q({ actorKind: 'system' }))).toEqual([4]);
+    expect(seqs(await q({ actorKind: ['plugin', 'system'] }))).toEqual([1, 2, 3, 4]);
+    expect(seqs(await q({ actorKind: 'contact' }))).toEqual([]);
+    expect(seqs(await q({ actorKind: [] }))).toEqual([]);
+    expect(await s.audit.verify()).toMatchObject({ ok: true, checked: 4 });
+  });
+
+  it('evento gravado sem actorKind segue válido na cadeia e não casa com o filtro', async () => {
+    const s = setup();
+    const body = {
+      v: 1,
+      eventId: 'antigo',
+      at: '2026-10-25T12:00:00.000Z',
+      actor: { kind: 'system' },
+      action: 'kernel.boot',
+      outcome: 'success',
+      session: 'default',
+      actorId: 'system',
+      seq: 1,
+      prevHash: GENESIS_HASH,
+    };
+    await s.col.insert({ ...body, hash: chainHash(auditKey(KEY), GENESIS_HASH, body) });
+    expect(await s.audit.verify()).toMatchObject({ ok: true, checked: 1 });
+    expect((await s.audit.query()).events).toHaveLength(1);
+    expect((await s.audit.query({ actorKind: 'system' })).events).toEqual([]);
+  });
+
   it('pagina por cursor seq', async () => {
     const { audit } = await populated();
     const first = await audit.query({ limit: 2 });
@@ -521,6 +559,26 @@ describe('query', () => {
     expect(seqs(second)).toEqual([3, 4]);
     const empty = await audit.query({ after: 4 });
     expect(empty).toEqual({ events: [] });
+  });
+
+  it('order desc devolve os mais recentes e pagina por before', async () => {
+    const { audit } = await populated();
+    const first = await audit.query({ order: 'desc', limit: 2 });
+    expect(seqs(first)).toEqual([4, 3]);
+    expect(first.next).toBe(3);
+    const second = await audit.query({ order: 'desc', limit: 2, before: first.next });
+    expect(seqs(second)).toEqual([2, 1]);
+    expect(await audit.query({ order: 'desc', before: 1 })).toEqual({ events: [] });
+  });
+
+  it('after e before juntos delimitam um intervalo de seq', async () => {
+    const { audit } = await populated();
+    expect(seqs(await audit.query({ after: 1, before: 4 }))).toEqual([2, 3]);
+  });
+
+  it('recusa order desconhecido', async () => {
+    const { audit } = await populated();
+    await expect(audit.query({ order: 'DESC' as 'desc' })).rejects.toThrow(TypeError);
   });
 
   it('dentro de um tenant o filtro é imposto pelo core', async () => {

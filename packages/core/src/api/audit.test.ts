@@ -160,6 +160,72 @@ describe('GET /audit', () => {
   });
 });
 
+describe('GET /audit com order=desc', () => {
+  it('traz os mais recentes e pagina pelo before', async () => {
+    const { base, key, seed } = await start();
+    await seed(['a', 'b', 'c'].map((id) => ({ action: 'p.x', target: { type: 't', id } })));
+    const headers = await key(['audit.read']);
+    const get = async (query: string) =>
+      (await (await fetch(`${base}/audit?action=p.x&${query}`, { headers })).json()) as {
+        events: AuditEvent[];
+        next?: number;
+      };
+
+    const first = await get('order=desc&limit=2');
+    expect(first.events.map((e) => e.targetId)).toEqual(['c', 'b']);
+    const second = await get(`order=desc&limit=2&before=${first.next}`);
+    expect(second.events.map((e) => e.targetId)).toEqual(['a']);
+  });
+
+  it('order inválido é 400', async () => {
+    const { base, key } = await start();
+    const res = await fetch(`${base}/audit?order=x`, { headers: await key(['audit.read']) });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('filtro actorKind', () => {
+  it('filtra GET /audit e a exportação, com um valor ou vários', async () => {
+    const { base, key, seed } = await start();
+    await seed([{ action: 'p.x' }]);
+    const headers = await key(['audit.read']);
+    const kinds = async (path: string, query: string) => {
+      const body = (await (await fetch(`${base}/${path}?${query}`, { headers })).json()) as
+        | AuditEvent[]
+        | { events: AuditEvent[] };
+      return new Set((Array.isArray(body) ? body : body.events).map((e) => e.actor.kind));
+    };
+
+    for (const path of ['audit', 'audit/export']) {
+      expect(await kinds(path, 'actorKind=plugin')).toEqual(new Set(['plugin']));
+      expect(await kinds(path, 'actorKind=plugin&actorKind=system')).toEqual(
+        new Set(['plugin', 'system']),
+      );
+    }
+    expect(await kinds('audit', 'actorKind=contact')).toEqual(new Set());
+  });
+
+  it('tipo desconhecido é 400', async () => {
+    const { base, key } = await start();
+    const res = await fetch(`${base}/audit?actorKind=robo`, {
+      headers: await key(['audit.read']),
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /audit/export com order=desc', () => {
+  it('atravessa as páginas do mais recente ao mais antigo', async () => {
+    const { base, key, seed } = await start();
+    const ids = Array.from({ length: 1001 }, (_, i) => String(i));
+    await seed(ids.map((id) => ({ action: 'p.x', target: { type: 't', id } })));
+    const headers = await key(['audit.read']);
+    const res = await fetch(`${base}/audit/export?action=p.x&order=desc`, { headers });
+    const events = (await res.json()) as AuditEvent[];
+    expect(events.map((e) => e.targetId)).toEqual(ids.toReversed());
+  });
+});
+
 describe('GET /audit/export', () => {
   it('JSON: array com os eventos filtrados, e a exportação entra na auditoria', async () => {
     const { base, key, seed, rows } = await start();

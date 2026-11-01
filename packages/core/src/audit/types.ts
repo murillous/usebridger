@@ -16,6 +16,8 @@ export type AuditActor =
 
 export type AuditOutcome = 'success' | 'denied' | 'error';
 
+export type AuditOrder = 'asc' | 'desc';
+
 export interface AuditEvent {
   /** Versão do formato (e do JSON canônico) que entra no hash. */
   readonly v: 1;
@@ -39,6 +41,8 @@ export interface AuditEvent {
   readonly details?: { readonly [key: string]: JsonValue };
   /** Achatados de `actor`/`target` para o índice (campos de primeiro nível). */
   readonly actorId: string;
+  /** Ausente nos eventos gravados antes do campo: entra no hash, então não há como preencher. */
+  readonly actorKind?: AuditActor['kind'];
   readonly targetId?: string;
   readonly prevHash: string;
   readonly hash: string;
@@ -61,21 +65,30 @@ export interface AuditQuery {
   readonly to?: string;
   /** Id do ator (`actorId`). */
   readonly actor?: string;
+  /** Tipo do ator, um ou vários; evento sem `actorKind` não casa. */
+  readonly actorKind?: AuditActor['kind'] | readonly AuditActor['kind'][];
   readonly action?: string;
   /** Id do alvo (`targetId`). */
   readonly target?: string;
   readonly outcome?: AuditOutcome;
   /** Ignorado dentro de um request de tenant: o core impõe o do escopo. */
   readonly tenant?: string;
-  /** Devolve só eventos com `seq` maior que isto. */
+  /** Devolve só eventos com `seq` maior que isto: o cursor de `order: 'asc'`. */
   readonly after?: number;
+  /** Devolve só eventos com `seq` menor que isto: o cursor de `order: 'desc'`. */
+  readonly before?: number;
+  /** Ordem por `seq`: `asc` (padrão) do mais antigo, `desc` do mais recente. */
+  readonly order?: AuditOrder;
   /** Padrão 100, máximo 1000. */
   readonly limit?: number;
 }
 
 export interface AuditPage {
   readonly events: readonly AuditEvent[];
-  /** `seq` do último evento, cursor da próxima página; ausente com a página vazia. */
+  /**
+   * `seq` do último evento, cursor da próxima página (`after` em `asc`, `before` em `desc`);
+   * ausente com a página vazia.
+   */
   readonly next?: number;
 }
 

@@ -28,7 +28,15 @@ import type {
 import { strip, verifyChain } from './verify.ts';
 
 export const AUDIT_COLLECTION = 'audit';
-export const AUDIT_INDEXES = ['seq', 'at', 'actorId', 'targetId', 'tenant', 'action'] as const;
+export const AUDIT_INDEXES = [
+  'seq',
+  'at',
+  'actorId',
+  'actorKind',
+  'targetId',
+  'tenant',
+  'action',
+] as const;
 /** Fila em memória: passou disto, o evento novo é descartado. */
 export const AUDIT_MAX_QUEUE = 10_000;
 export const AUDIT_FLUSH_MS = 1000;
@@ -359,6 +367,7 @@ export function createAudit(deps: AuditDeps): Audit {
       trace: currentTrace(),
       details,
       actorId: actor.kind === 'system' ? 'system' : actor.kind === 'plugin' ? actor.name : actor.id,
+      actorKind: actor.kind,
       targetId: target?.id,
     };
   }
@@ -383,7 +392,12 @@ export function createAudit(deps: AuditDeps): Audit {
 
   async function query(filter: AuditQuery = {}): Promise<AuditPage> {
     const where: Record<string, FieldCondition> = {};
-    if (filter.after !== undefined) where['seq'] = { gt: filter.after };
+    if (filter.after !== undefined || filter.before !== undefined) {
+      where['seq'] = {
+        ...(filter.after !== undefined && { gt: filter.after }),
+        ...(filter.before !== undefined && { lt: filter.before }),
+      };
+    }
     if (filter.from !== undefined || filter.to !== undefined) {
       where['at'] = {
         ...(filter.from !== undefined && { gte: filter.from }),
@@ -391,6 +405,10 @@ export function createAudit(deps: AuditDeps): Audit {
       };
     }
     if (filter.actor !== undefined) where['actorId'] = filter.actor;
+    if (filter.actorKind !== undefined) {
+      where['actorKind'] =
+        typeof filter.actorKind === 'string' ? filter.actorKind : { in: [...filter.actorKind] };
+    }
     if (filter.action !== undefined) where['action'] = filter.action;
     if (filter.target !== undefined) where['targetId'] = filter.target;
     if (filter.outcome !== undefined) where['outcome'] = filter.outcome;
@@ -402,7 +420,11 @@ export function createAudit(deps: AuditDeps): Audit {
       throw new TypeError(`audit: limit deve ser inteiro positivo, recebido ${String(requested)}`);
     }
     const limit = Math.min(requested, MAX_QUERY_LIMIT);
-    const rows = await col().find({ where, orderBy: 'seq', limit });
+    const direction = filter.order ?? 'asc';
+    if (direction !== 'asc' && direction !== 'desc') {
+      throw new TypeError(`audit: order inválido "${String(direction)}"`);
+    }
+    const rows = await col().find({ where, orderBy: { field: 'seq', direction }, limit });
     const events = rows.map(strip);
     const last = events.at(-1);
     return last === undefined ? { events } : { events, next: last.seq };

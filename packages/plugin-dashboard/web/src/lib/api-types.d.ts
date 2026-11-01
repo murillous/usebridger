@@ -1213,7 +1213,7 @@ export interface paths {
           level?: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
           /** @description Campo `plugin` da linha */
           plugin?: string;
-          /** @description Campo `event` da linha */
+          /** @description Campo `event` da linha (ADR 0118) */
           event?: string;
           /** @description Início (inclusivo) */
           from?: string;
@@ -1534,7 +1534,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Eventos da auditoria, por `seq`, com cursor */
+    /** Eventos da auditoria, por `seq` nas duas direções, com cursor */
     get: {
       parameters: {
         query?: {
@@ -1544,12 +1544,20 @@ export interface paths {
           to?: string;
           /** @description Id do ator (`actorId`) */
           actor?: string;
+          /** @description Tipo do ator; repita o parâmetro para vários. Evento sem `actorKind` não casa */
+          actorKind?:
+            | ('user' | 'system' | 'plugin' | 'contact')
+            | ('user' | 'system' | 'plugin' | 'contact')[];
           action?: string;
           /** @description Id do alvo (`targetId`) */
           target?: string;
           outcome?: 'success' | 'denied' | 'error';
-          /** @description Cursor: o `next` da página anterior */
+          /** @description Cursor de `order=asc`: o `next` da página anterior */
           after?: number;
+          /** @description Cursor de `order=desc`: o `next` da página anterior */
+          before?: number;
+          /** @description Ordem por `seq`: `asc` do mais antigo, `desc` do mais recente */
+          order?: 'asc' | 'desc';
           limit?: number;
         };
         header?: never;
@@ -1603,10 +1611,16 @@ export interface paths {
           to?: string;
           /** @description Id do ator (`actorId`) */
           actor?: string;
+          /** @description Tipo do ator; repita o parâmetro para vários. Evento sem `actorKind` não casa */
+          actorKind?:
+            | ('user' | 'system' | 'plugin' | 'contact')
+            | ('user' | 'system' | 'plugin' | 'contact')[];
           action?: string;
           /** @description Id do alvo (`targetId`) */
           target?: string;
           outcome?: 'success' | 'denied' | 'error';
+          /** @description Ordem por `seq`: `asc` do mais antigo, `desc` do mais recente */
+          order?: 'asc' | 'desc';
           format?: 'csv' | 'json';
         };
         header?: never;
@@ -1709,7 +1723,7 @@ export interface components {
       title: string;
       status: number;
       detail?: string;
-      /** @description Trace da requisição */
+      /** @description Trace da requisição (ADR 0120) */
       traceId?: string;
       /** @description Issues de validação (só no 400) */
       errors?: {
@@ -1888,6 +1902,10 @@ export interface components {
         sources: {
           [key: string]: string;
         };
+        /** @description Variável de ambiente de cada campo cuja fonte é `env` */
+        env: {
+          [key: string]: string;
+        };
       } | null;
       /** @description JSON Schema da entrada; null se o plugin não tem config */
       schema: {
@@ -1959,6 +1977,8 @@ export interface components {
         [key: string]: unknown;
       };
       actorId: string;
+      /** @enum {string} */
+      actorKind?: 'user' | 'system' | 'plugin' | 'contact';
       targetId?: string;
       prevHash: string;
       hash: string;

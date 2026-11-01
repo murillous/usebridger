@@ -382,6 +382,29 @@ describe('createPluginConfigs: setOverrides', () => {
     });
   });
 
+  it('describe nomeia a variável de cada campo e mensagem vindos do env', async () => {
+    const { configs } = await setup({
+      overrides: { sticker: { c: 'override' } },
+      env: { BRIDGER_STICKER__A: 'env', BRIDGER_STICKER__MESSAGES__DONE: 'Feito' },
+    });
+    expect((await configs.describe('sticker')).env).toEqual({
+      a: 'BRIDGER_STICKER__A',
+      'messages.done': 'BRIDGER_STICKER__MESSAGES__DONE',
+    });
+  });
+
+  it('describe nomeia a variável de campo aninhado e fica vazio sem env', async () => {
+    const { configs } = await setup({
+      env: { BRIDGER_AI__API_KEY: 'sk-secreta-123', BRIDGER_AI__OPENAI__TOKEN: 'tok-abc' },
+    });
+    expect((await configs.describe('ai')).env).toEqual({
+      apiKey: 'BRIDGER_AI__API_KEY',
+      'openai.token': 'BRIDGER_AI__OPENAI__TOKEN',
+    });
+    const { configs: semEnv } = await setup({});
+    expect((await semEnv.describe('sticker')).env).toEqual({});
+  });
+
   it('avisa dos campos do override sombreados por arquivo ou env, sem o valor', async () => {
     const logger = recordingLogger();
     const configs = createPluginConfigs({

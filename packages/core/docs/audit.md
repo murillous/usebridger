@@ -71,12 +71,19 @@ rejeitam com `AuditPermissionError`.
 ```ts
 const page = await ctx.audit.query({ action: 'inbox.ticket.transfer', limit: 50 });
 const next = await ctx.audit.query({ after: page.next }); // cursor por seq
+const recent = await ctx.audit.query({ order: 'desc', limit: 5 }); // do mais recente
+const older = await ctx.audit.query({ order: 'desc', limit: 5, before: recent.next });
 const result = await ctx.audit.verify(); // { ok, checked, brokenAt? }
 ```
 
-Filtros: `from`/`to` (por `at`), `actor`, `action`, `target`, `outcome`, `tenant`, `after`,
-`limit` (padrão 100, máximo 1000). Num request de tenant o core impõe o tenant do escopo,
-ignorando o `tenant` do filtro. Não há `update` nem `delete`.
+Filtros: `from`/`to` (por `at`), `actor`, `actorKind` (um tipo ou uma lista), `action`, `target`,
+`outcome`, `tenant`, `after`, `before`, `order` (`asc`, o padrão, ou `desc`), `limit` (padrão 100,
+máximo 1000). Num request de tenant o core impõe o tenant do escopo, ignorando o `tenant` do filtro.
+Não há `update` nem `delete`.
+
+`actorKind` é gravado no topo do evento e entra no hash, então os eventos anteriores ao campo não o
+têm e não podem recebê-lo sem quebrar a cadeia: eles continuam válidos no `verify` e nas outras
+consultas, mas não casam com esse filtro.
 
 Fora de plugin, a mesma consulta, a exportação em CSV/JSON e o `verify` estão na API do core
 (`GET /api/audit`, `GET /api/audit/export`, `POST /api/audit/verify`), com a permissão
