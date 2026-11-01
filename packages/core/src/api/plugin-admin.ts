@@ -78,6 +78,9 @@ function pluginSchemas(): NonNullable<typeof schemas> {
             config: z.unknown(),
             messages: z.record(z.string(), z.string()),
             sources: z.record(z.string(), z.string()),
+            env: z.record(z.string(), z.string()).meta({
+              description: 'Variável de ambiente de cada campo cuja fonte é `env`',
+            }),
           })
           .nullable()
           .meta({ description: `Config atual, segredos como "${SECRET_MASK}"; null se inválida` }),
@@ -206,8 +209,8 @@ export function pluginAdminOperations(deps?: PluginsApiDeps): readonly AnyApiOpe
     const schema = current.config.jsonSchema(plugin) ?? null;
     const { secretsWritable } = current.config;
     try {
-      const { config: values, messages, sources } = await current.config.describe(plugin);
-      return { view: { config: values, messages, sources }, schema, secretsWritable };
+      const { config: values, messages, sources, env } = await current.config.describe(plugin);
+      return { view: { config: values, messages, sources, env }, schema, secretsWritable };
     } catch (error) {
       // Config atual inválida: é quando mais se precisa do formulário para corrigir.
       if (!(error instanceof PluginConfigError)) throw error;

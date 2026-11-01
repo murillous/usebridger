@@ -3297,12 +3297,23 @@
                     "additionalProperties": {
                       "type": "string"
                     }
+                  },
+                  "env": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Variável de ambiente de cada campo cuja fonte é `env`"
                   }
                 },
                 "required": [
                   "config",
                   "messages",
-                  "sources"
+                  "sources",
+                  "env"
                 ],
                 "additionalProperties": false
               },

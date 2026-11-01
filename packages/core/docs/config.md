@@ -111,7 +111,7 @@ const configs = createPluginConfigs({
 | `setSecret(name, path, value)` | Salva o segredo `path` (pontilhado) cifrado no storage e chama `reload`. Rejeita sem chave mestra, fora de campo `secret()`, com `kind: 'shadowed'` se env/arquivo definem o campo, ou com config inválida |
 | `clearSecret(name, path)` | Remove o segredo salvo, valida e chama `reload`. Funciona sem chave mestra (limpa envelope ilegível) |
 | `secretsWritable` | `true` se há `BRIDGER_SECRET_KEY` |
-| `describe(name)` | `{ config, messages, sources }`: config atual com segredos trocados por `'********'` e a fonte de cada campo |
+| `describe(name)` | `{ config, messages, sources, env }`: config atual com segredos trocados por `'********'`, a fonte de cada campo e a variável dos que vêm do ambiente |
 | `jsonSchema(name)` | JSON Schema (entrada) para gerar formulário; segredos com `x-bridger-override: false` (e `x-bridger-set-secret: true` se `secretsWritable`); `undefined` sem `config` |
 
 `pluginConfig` citando plugin que não existe gera `warn` (provável erro de digitação).

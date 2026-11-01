@@ -509,7 +509,7 @@ Listar, ligar e desligar plugins e editar a config deles, com os segredos cifrad
 | `GET /plugins` | `plugins.read` | `bootedAt` e cada plugin: `name`, `version`, `status` (`loaded`/`skipped`), `dependsOn`, `services`, `contributions`, `setupMs` e, se `skipped`, `reason: { kind, message }` |
 | `POST /plugins/{name}/enable` | `plugins.manage` | Liga o plugin; sobem os dependentes que ele libera. Devolve `{ plugin, dependents }` |
 | `POST /plugins/{name}/disable` | `plugins.manage` | Desliga o plugin e os dependentes, até o `enable` |
-| `GET /plugins/{name}/config` | `config.read` | `view` (config com segredos em `********`, `messages`, `sources`), `schema` (JSON Schema da entrada) e `secretsWritable` |
+| `GET /plugins/{name}/config` | `config.read` | `view` (config com segredos em `********`, `messages`, `sources` e `env`, o nome da variável de cada campo que vem do ambiente), `schema` (JSON Schema da entrada) e `secretsWritable` |
 | `PUT /plugins/{name}/config` | `config.write` | Grava a config (abaixo) e devolve o mesmo que o `GET` |
 
 ```sh

@@ -138,6 +138,18 @@ describe('GET /plugins/{name}/config', () => {
   });
 });
 
+describe('GET /plugins/{name}/config com env', () => {
+  it('devolve o nome da variável junto da fonte, sem o valor', async () => {
+    const { base } = await start({ env: { BRIDGER_P__OPENAI__API_KEY: VALUE } });
+    const res = await fetch(`${base}/plugins/p/config`);
+    const text = await res.text();
+    expect(text).not.toContain(VALUE);
+    const { view } = JSON.parse(text);
+    expect(view.sources['openai.apiKey']).toBe('env');
+    expect(view.env).toEqual({ 'openai.apiKey': 'BRIDGER_P__OPENAI__API_KEY' });
+  });
+});
+
 describe('PUT /plugins/{name}/config', () => {
   it('grava override e segredo novo; o segredo só volta mascarado', async () => {
     const { base, seen } = await start();
