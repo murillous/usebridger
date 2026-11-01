@@ -1902,6 +1902,10 @@ export interface components {
         sources: {
           [key: string]: string;
         };
+        /** @description Variável de ambiente de cada campo cuja fonte é `env` */
+        env: {
+          [key: string]: string;
+        };
       } | null;
       /** @description JSON Schema da entrada; null se o plugin não tem config */
       schema: {
