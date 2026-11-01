@@ -43,7 +43,10 @@ const CSV_COLUMNS = [
   'hash',
 ] as const;
 
-type Filters = Pick<AuditQuery, 'from' | 'to' | 'actor' | 'action' | 'target' | 'outcome'>;
+type Filters = Pick<
+  AuditQuery,
+  'from' | 'to' | 'actor' | 'actorKind' | 'action' | 'target' | 'outcome'
+>;
 
 let schemas:
   | {
@@ -58,10 +61,18 @@ let schemas:
 function auditSchemas(): NonNullable<typeof schemas> {
   if (schemas !== undefined) return schemas;
   const { z } = apiLibs();
+  const actorKind = z.enum(['user', 'system', 'plugin', 'contact']);
   const filters = {
     from: z.iso.datetime().optional().meta({ description: 'Início (inclusivo) por `at`' }),
     to: z.iso.datetime().optional().meta({ description: 'Fim (inclusivo) por `at`' }),
     actor: z.string().optional().meta({ description: 'Id do ator (`actorId`)' }),
+    actorKind: z
+      .union([actorKind, z.array(actorKind)])
+      .optional()
+      .meta({
+        description:
+          'Tipo do ator; repita o parâmetro para vários. Evento sem `actorKind` não casa',
+      }),
     action: z.string().optional(),
     target: z.string().optional().meta({ description: 'Id do alvo (`targetId`)' }),
     outcome: z.enum(['success', 'denied', 'error']).optional(),
@@ -98,6 +109,7 @@ function auditSchemas(): NonNullable<typeof schemas> {
       trace: z.string().optional(),
       details: z.record(z.string(), z.unknown()).optional(),
       actorId: z.string(),
+      actorKind: actorKind.optional(),
       targetId: z.string().optional(),
       prevHash: z.string(),
       hash: z.string(),
@@ -142,8 +154,8 @@ function auditSchemas(): NonNullable<typeof schemas> {
 
 /** Só os filtros informados: `undefined` não vai para o `query` nem para o evento da exportação. */
 function pickFilters(input: Filters): Filters {
-  const out: Record<string, string> = {};
-  for (const key of ['from', 'to', 'actor', 'action', 'target', 'outcome'] as const) {
+  const out: Record<string, unknown> = {};
+  for (const key of ['from', 'to', 'actor', 'actorKind', 'action', 'target', 'outcome'] as const) {
     const value = input[key];
     if (value !== undefined) out[key] = value;
   }

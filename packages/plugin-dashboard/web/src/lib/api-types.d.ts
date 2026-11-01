@@ -1544,6 +1544,10 @@ export interface paths {
           to?: string;
           /** @description Id do ator (`actorId`) */
           actor?: string;
+          /** @description Tipo do ator; repita o parâmetro para vários. Evento sem `actorKind` não casa */
+          actorKind?:
+            | ('user' | 'system' | 'plugin' | 'contact')
+            | ('user' | 'system' | 'plugin' | 'contact')[];
           action?: string;
           /** @description Id do alvo (`targetId`) */
           target?: string;
@@ -1607,6 +1611,10 @@ export interface paths {
           to?: string;
           /** @description Id do ator (`actorId`) */
           actor?: string;
+          /** @description Tipo do ator; repita o parâmetro para vários. Evento sem `actorKind` não casa */
+          actorKind?:
+            | ('user' | 'system' | 'plugin' | 'contact')
+            | ('user' | 'system' | 'plugin' | 'contact')[];
           action?: string;
           /** @description Id do alvo (`targetId`) */
           target?: string;
@@ -1965,6 +1973,8 @@ export interface components {
         [key: string]: unknown;
       };
       actorId: string;
+      /** @enum {string} */
+      actorKind?: 'user' | 'system' | 'plugin' | 'contact';
       targetId?: string;
       prevHash: string;
       hash: string;
