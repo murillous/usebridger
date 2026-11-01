@@ -1,5 +1,14 @@
 # @usebridger/storage-sqlite
 
+## 0.3.4
+
+### Patch Changes
+
+- Updated dependencies [649f774]
+- Updated dependencies [817c473]
+- Updated dependencies [38d3cbe]
+  - @usebridger/core@0.11.0
+
 ## 0.3.3
 
 ### Patch Changes

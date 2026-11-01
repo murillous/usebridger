@@ -1,5 +1,17 @@
 # @usebridger/core
 
+## 0.11.0
+
+### Minor Changes
+
+- 649f774: Filtro de auditoria por tipo de ator: `actorKind` (um ou vários) em `GET /api/audit`,
+  `GET /api/audit/export` e `ctx.audit.query`. Os eventos novos gravam `actorKind` no topo; os
+  anteriores continuam válidos na cadeia, mas não casam com o filtro.
+- 817c473: Auditoria do mais recente para o mais antigo: `order=desc` em `GET /api/audit`,
+  `GET /api/audit/export` e `ctx.audit.query`, com cursor `before`. O padrão continua `asc`.
+- 38d3cbe: `bot.config.describe` e `GET /api/plugins/{name}/config` devolvem em `env` o nome da variável de
+  cada campo e mensagem cuja fonte é `env`, nas mesmas chaves de `sources`.
+
 ## 0.10.0
 
 ### Minor Changes
