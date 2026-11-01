@@ -1,5 +1,14 @@
 # @usebridger/transport-web
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [649f774]
+- Updated dependencies [817c473]
+- Updated dependencies [38d3cbe]
+  - @usebridger/core@0.11.0
+
 ## 0.3.0
 
 ### Minor Changes

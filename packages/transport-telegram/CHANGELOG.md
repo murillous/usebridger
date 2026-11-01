@@ -1,5 +1,14 @@
 # @usebridger/transport-telegram
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [649f774]
+- Updated dependencies [817c473]
+- Updated dependencies [38d3cbe]
+  - @usebridger/core@0.11.0
+
 ## 0.1.0
 
 ### Minor Changes

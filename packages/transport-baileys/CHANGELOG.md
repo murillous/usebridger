@@ -1,5 +1,14 @@
 # @usebridger/transport-baileys
 
+## 0.6.1
+
+### Patch Changes
+
+- Updated dependencies [649f774]
+- Updated dependencies [817c473]
+- Updated dependencies [38d3cbe]
+  - @usebridger/core@0.11.0
+
 ## 0.6.0
 
 ### Minor Changes
