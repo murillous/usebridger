@@ -184,6 +184,36 @@ describe('GET /audit com order=desc', () => {
   });
 });
 
+describe('filtro actorKind', () => {
+  it('filtra GET /audit e a exportação, com um valor ou vários', async () => {
+    const { base, key, seed } = await start();
+    await seed([{ action: 'p.x' }]);
+    const headers = await key(['audit.read']);
+    const kinds = async (path: string, query: string) => {
+      const body = (await (await fetch(`${base}/${path}?${query}`, { headers })).json()) as
+        | AuditEvent[]
+        | { events: AuditEvent[] };
+      return new Set((Array.isArray(body) ? body : body.events).map((e) => e.actor.kind));
+    };
+
+    for (const path of ['audit', 'audit/export']) {
+      expect(await kinds(path, 'actorKind=plugin')).toEqual(new Set(['plugin']));
+      expect(await kinds(path, 'actorKind=plugin&actorKind=system')).toEqual(
+        new Set(['plugin', 'system']),
+      );
+    }
+    expect(await kinds('audit', 'actorKind=contact')).toEqual(new Set());
+  });
+
+  it('tipo desconhecido é 400', async () => {
+    const { base, key } = await start();
+    const res = await fetch(`${base}/audit?actorKind=robo`, {
+      headers: await key(['audit.read']),
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
 describe('GET /audit/export com order=desc', () => {
   it('atravessa as páginas do mais recente ao mais antigo', async () => {
     const { base, key, seed } = await start();

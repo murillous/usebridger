@@ -41,6 +41,8 @@ export interface AuditEvent {
   readonly details?: { readonly [key: string]: JsonValue };
   /** Achatados de `actor`/`target` para o índice (campos de primeiro nível). */
   readonly actorId: string;
+  /** Ausente nos eventos gravados antes do campo: entra no hash, então não há como preencher. */
+  readonly actorKind?: AuditActor['kind'];
   readonly targetId?: string;
   readonly prevHash: string;
   readonly hash: string;
@@ -63,6 +65,8 @@ export interface AuditQuery {
   readonly to?: string;
   /** Id do ator (`actorId`). */
   readonly actor?: string;
+  /** Tipo do ator, um ou vários; evento sem `actorKind` não casa. */
+  readonly actorKind?: AuditActor['kind'] | readonly AuditActor['kind'][];
   readonly action?: string;
   /** Id do alvo (`targetId`). */
   readonly target?: string;

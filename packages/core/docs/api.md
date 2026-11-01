@@ -566,7 +566,10 @@ viewer.
 | `POST /audit/verify` | Confere a cadeia de hash: `{ ok, checked, brokenAt? }` |
 
 Filtros (query string, nos dois `GET`): `from` e `to` (ISO 8601, inclusivos, por `at`), `actor`
-(`actorId`), `action`, `target` (`targetId`) e `outcome` (`success`, `denied`, `error`). O
+(`actorId`), `actorKind` (`user`, `contact`, `system`, `plugin`; repita o parâmetro para vários:
+`actorKind=system&actorKind=plugin`), `action`, `target` (`targetId`) e `outcome` (`success`,
+`denied`, `error`). Evento gravado antes de existir o campo `actorKind` não casa com esse filtro.
+O
 `GET /audit` aceita ainda `limit` (1 a 1000, padrão 100) e `after`, o cursor:
 
 ```sh
