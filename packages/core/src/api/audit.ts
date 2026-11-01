@@ -3,7 +3,7 @@
 
 import type { z } from 'zod';
 import type { Audit } from '#audit/audit.ts';
-import type { AuditEvent, AuditPage, AuditQuery } from '#audit/types.ts';
+import type { AuditEvent, AuditOrder, AuditPage, AuditQuery } from '#audit/types.ts';
 import * as LOG from '#logger/events.ts';
 import type { Logger } from '#logger/types.ts';
 import { apiLibs } from './libs.ts';
@@ -66,6 +66,10 @@ function auditSchemas(): NonNullable<typeof schemas> {
     target: z.string().optional().meta({ description: 'Id do alvo (`targetId`)' }),
     outcome: z.enum(['success', 'denied', 'error']).optional(),
   };
+  const order = z
+    .enum(['asc', 'desc'])
+    .default('asc')
+    .meta({ description: 'Ordem por `seq`: `asc` do mais antigo, `desc` do mais recente' });
   const event = z
     .object({
       v: z.literal(1),
@@ -107,10 +111,17 @@ function auditSchemas(): NonNullable<typeof schemas> {
         .int()
         .nonnegative()
         .optional()
-        .meta({ description: 'Cursor: o `next` da página anterior' }),
+        .meta({ description: 'Cursor de `order=asc`: o `next` da página anterior' }),
+      before: z.coerce
+        .number()
+        .int()
+        .nonnegative()
+        .optional()
+        .meta({ description: 'Cursor de `order=desc`: o `next` da página anterior' }),
+      order,
       limit: z.coerce.number().int().min(1).max(1000).optional(),
     }),
-    exportQuery: z.object({ ...filters, format: z.enum(['csv', 'json']).default('json') }),
+    exportQuery: z.object({ ...filters, order, format: z.enum(['csv', 'json']).default('json') }),
     page: z
       .object({
         events: z.array(event),
@@ -181,6 +192,7 @@ function csvRow(event: AuditEvent): string {
 function exportBody(
   deps: AuditApiDeps,
   filters: Filters,
+  order: AuditOrder,
   first: AuditPage,
   format: 'csv' | 'json',
 ): ReadableStream<Uint8Array> {
@@ -208,7 +220,12 @@ function exportBody(
         // Página cheia pode ter sucessora; a menor é a última e poupa uma ida ao storage.
         page =
           page.next !== undefined && page.events.length === EXPORT_PAGE
-            ? await deps.audit().query({ ...filters, after: page.next, limit: EXPORT_PAGE })
+            ? await deps.audit().query({
+                ...filters,
+                order,
+                ...(order === 'desc' ? { before: page.next } : { after: page.next }),
+                limit: EXPORT_PAGE,
+              })
             : undefined;
       } catch (error) {
         // O status 200 já saiu: o cliente só vê o corpo cortado, e a causa fica no log.
@@ -226,17 +243,24 @@ export function auditOperations(deps?: AuditApiDeps): readonly AnyApiOperation[]
     {
       method: 'GET',
       path: '/audit',
-      summary: 'Eventos da auditoria, por `seq`, com cursor',
+      summary: 'Eventos da auditoria, por `seq` nas duas direções, com cursor',
       tags: ['audit'],
       permission: 'audit.read',
       query: list,
       response: page,
       handler: ({ query }) => {
         if (deps === undefined) throw new ApiError(404);
-        const { after, limit, ...rest } = query as Filters & { after?: number; limit?: number };
+        const { after, before, order, limit, ...rest } = query as Filters & {
+          after?: number;
+          before?: number;
+          order: AuditOrder;
+          limit?: number;
+        };
         return deps.audit().query({
           ...pickFilters(rest),
+          order,
           ...(after !== undefined && { after }),
+          ...(before !== undefined && { before }),
           ...(limit !== undefined && { limit }),
         });
       },
@@ -252,19 +276,22 @@ export function auditOperations(deps?: AuditApiDeps): readonly AnyApiOperation[]
       response: events,
       handler: async ({ query }) => {
         if (deps === undefined) throw new ApiError(404);
-        const { format, ...rest } = query as Filters & { format: 'csv' | 'json' };
+        const { format, order, ...rest } = query as Filters & {
+          format: 'csv' | 'json';
+          order: AuditOrder;
+        };
         const filters = pickFilters(rest);
         const audit = deps.audit();
-        const details = { format, filters };
+        const details = { format, order, filters };
         let first: AuditPage;
         try {
-          first = await audit.query({ ...filters, limit: EXPORT_PAGE });
+          first = await audit.query({ ...filters, order, limit: EXPORT_PAGE });
         } catch (error) {
           audit.record({ action: 'kernel.audit.export', outcome: 'error', details });
           throw error;
         }
         audit.record({ action: 'kernel.audit.export', details });
-        return new Response(exportBody(deps, filters, first, format), {
+        return new Response(exportBody(deps, filters, order, first, format), {
           headers: {
             'content-type': format === 'csv' ? 'text/csv; charset=utf-8' : 'application/json',
             'content-disposition': `attachment; filename="audit.${format}"`,
