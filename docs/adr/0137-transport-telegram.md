@@ -62,6 +62,14 @@ Alternativas consideradas:
   serviço não viram `message`.
 - **Ritmo e limites:** `pacing` de 34 ms global (30 mensagens/s) e 1000 ms por chat; `limits` de
   4096 de texto, 1024 de legenda e 10 itens por álbum.
+- **Álbum (#308).** O transport declara `send.album` com `limits.album: 10`. Entrada: os updates
+  com o mesmo `media_group_id` viram uma `message` com `attachments`, depois de 500 ms sem novo
+  update do grupo (a janela é contada desde o último); o `disconnect()` e a queda terminal
+  descartam o álbum pendente. Envio: documento não se mistura com foto ou vídeo no
+  `sendMediaGroup`, então o álbum misto sai em dois envios, o do primeiro item na frente (a ordem
+  original não vale entre eles), com a legenda e a citação, e a chave devolvida é a do primeiro. Se
+  o segundo falhar, a nova tentativa da fila (mesmo `content`) pula o primeiro, sem duplicá-lo.
+  `actions` num álbum rejeita com `retryable: false`, porque o `sendMediaGroup` não tem botões.
 
 ## Consequências
 
@@ -75,13 +83,5 @@ Alternativas consideradas:
 - O perfil `telegram` do kit de testes (ADR 0069) continua com `polls`, que é o alvo. O
   transport passa a declará-lo quando a issue de enquete fechar. O `send.album` já bate com o
   perfil desde a #308.
-- **Álbum (#308).** O transport declara `send.album` com `limits.album: 10`. Entrada: os updates
-  com o mesmo `media_group_id` viram uma `message` com `attachments`, depois de 500 ms sem novo
-  update do grupo (a janela é contada desde o último); o `disconnect()` e a queda terminal
-  descartam o álbum pendente. Envio: documento não se mistura com foto ou vídeo no
-  `sendMediaGroup`, então o álbum misto sai em dois envios, o do primeiro item na frente (a ordem
-  original não vale entre eles), com a legenda e a citação, e a chave devolvida é a do primeiro. Se
-  o segundo falhar, a nova tentativa da fila (mesmo `content`) pula o primeiro, sem duplicá-lo.
-  `actions` num álbum rejeita com `retryable: false`, porque o `sendMediaGroup` não tem botões.
 - Depois de um `stop()` durante uma falha de rede, o `sleep` de 3 s do `handlePollingError` do
   grammY ainda termina sozinho. Ele não emite nada, porque a tentativa já foi invalidada.

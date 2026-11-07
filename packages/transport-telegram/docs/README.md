@@ -70,8 +70,9 @@ O comando chega como texto comum. O `/cmd@NomeDoBot` funciona sem configuração
 então `groups.add` nunca vai estar.
 
 Limites: 4096 caracteres de texto, 1024 de legenda e 10 itens por álbum (a fila de saída divide
-acima deles). Ritmo padrão da fila: 34 ms entre envios quaisquer (30 por segundo) e 1 s por chat. O limite de 20
-mensagens por minuto num grupo chega como 429 com `retry_after`, que a fila respeita.
+acima deles). Ritmo padrão da fila: 34 ms entre envios quaisquer (30 por segundo) e 1 s por
+chat. O limite de 20 mensagens por minuto num grupo chega como 429 com `retry_after`, que a fila
+respeita.
 
 ## Entrada
 
@@ -106,7 +107,8 @@ mensagens por minuto num grupo chega como 429 com `retry_after`, que a fila resp
   em `attachments` (o `type` é o do primeiro). Só a primeira legenda do álbum vira `text`; as
   outras são ignoradas. O transport espera 500 ms desde o último update do grupo antes de emitir,
   então a mensagem de um álbum chega com esse atraso. O `id` e o `raw()` são os do primeiro
-  update. O `disconnect()` e a queda terminal descartam o álbum que ainda esperava. A edição de um item do álbum chega à parte, como `message.edited`.
+  update. O `disconnect()` e a queda terminal descartam o álbum que ainda esperava. A edição de
+  um item do álbum chega à parte, como `message.edited`.
 - **Mídia:** baixa pelo `getFile` e pela URL de arquivos da Bot API, que não entrega arquivo
   acima de 20 MB. O `ctx.media.ref()` guarda o `file_id`, que vale entre restarts para o mesmo
   bot. Um `file_id` que o Telegram não reconhece rejeita com `MediaExpiredError`.

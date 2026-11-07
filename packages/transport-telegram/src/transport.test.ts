@@ -925,6 +925,28 @@ describe('álbum na entrada', () => {
     expect((await got).isEdited).toBe(true);
   });
 
+  it('queda terminal com álbum pendente descarta o álbum e nada é emitido', async () => {
+    const { fake, transport, statuses } = await connected();
+    const messages: Message[] = [];
+    transport.on('message', (m) => {
+      messages.push(m);
+    });
+    const polls = fake.callsTo('getUpdates').length;
+    fake.push(photoUpdate('g', 'a'));
+    await vi.waitFor(() => expect(fake.callsTo('getUpdates').length).toBeGreaterThan(polls), {
+      timeout: 2000,
+    });
+    // O poll pendurado já passou pelo handler: o texto o solta, e o próximo getUpdates leva o 409.
+    fake.handlers.set('getUpdates', () => failure(409, 'Conflict: terminated by other getUpdates'));
+    fake.push({ message: tgMessage({ text: 'solta o poll' }) });
+    await vi.waitFor(
+      () => expect(statuses.at(-1)).toMatchObject({ status: 'closed', reason: 'replaced' }),
+      { timeout: 2000 },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(messages.filter((m) => m.attachments.length > 0)).toEqual([]);
+  });
+
   it('disconnect com álbum pendente cancela o timer e nada é emitido', async () => {
     const { fake, transport } = await connected();
     const emitted = vi.fn();

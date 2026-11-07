@@ -463,6 +463,8 @@ export class TelegramTransport implements Transport {
    * primeiro. Um grupo de um item só sai como mensagem comum, porque o álbum pede de 2 a 10. Se o
    * segundo falhar depois do primeiro enviado, o erro sobe e a fila re-tenta com o mesmo objeto
    * `content`: a chave do primeiro fica em `#albumKeys` e a nova tentativa só envia o que falta.
+   * Limite conhecido: a chave só é gravada quando o primeiro envio termina. Se a fila desistir
+   * (timeout) enquanto ele ainda está no ar e re-tentar, o primeiro pode sair duas vezes.
    */
   async #sendAlbum(
     chatId: string,
