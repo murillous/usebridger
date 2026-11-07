@@ -779,7 +779,7 @@ describe('enquetes', () => {
   });
 });
 
-describe('enquetes: limite, canal e voto de chat', () => {
+describe('enquetes: limite e voto de chat', () => {
   it('guarda no máximo 1000 enquetes: a mais antiga sai primeiro', async () => {
     const { fake, transport, log } = await connected();
     let n = 0;
