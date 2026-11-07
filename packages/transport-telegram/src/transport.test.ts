@@ -685,3 +685,190 @@ describe('menu de comandos', () => {
     expect(fake.callsTo('setMyCommands')).toHaveLength(2);
   });
 });
+
+describe('álbum no envio', () => {
+  const photo = (url: string) => ({ type: 'image' as const, media: { url } });
+  const doc = (url: string, fileName: string) => ({
+    type: 'document' as const,
+    media: { url },
+    fileName,
+    mimetype: 'application/pdf',
+  });
+
+  it('declara send.album e o limite de dez itens', () => {
+    const { transport } = setup();
+    expect(transport.capabilities.has('send.album')).toBe(true);
+    expect(transport.limits.album).toBe(10);
+  });
+
+  it('foto e vídeo vão num sendMediaGroup, com a legenda no primeiro item', async () => {
+    const { fake, transport } = await connected();
+    const key = await transport.send(
+      '-100123/5',
+      {
+        type: 'album',
+        items: [photo('https://x/a.jpg'), { type: 'video', media: { url: 'https://x/b.mp4' } }],
+        caption: 'c',
+        formattedCaption: fmt`${bold('c')}`,
+      },
+      { quoted: { id: '9' } as Message },
+    );
+    expect(fake.callsTo('sendMediaGroup')).toEqual([
+      {
+        chat_id: -100123,
+        message_thread_id: 5,
+        reply_parameters: { message_id: 9, allow_sending_without_reply: true },
+        media: [
+          { type: 'photo', media: 'https://x/a.jpg', caption: '<b>c</b>', parse_mode: 'HTML' },
+          { type: 'video', media: 'https://x/b.mp4' },
+        ],
+      },
+    ]);
+    expect(key).toEqual({ chatId: '-100123/5', id: '1000', fromMe: true, senderId: null });
+  });
+
+  it('documento e foto viram dois álbuns: legenda e citação no primeiro, chave do primeiro', async () => {
+    const { fake, transport } = await connected();
+    const key = await transport.send(
+      '7',
+      {
+        type: 'album',
+        items: [
+          photo('https://x/1.jpg'),
+          doc('https://x/a.pdf', 'a.pdf'),
+          photo('https://x/2.jpg'),
+        ],
+        caption: 'c',
+      },
+      { quoted: { id: '9' } as Message },
+    );
+    const sends = fake.calls.filter((c) => c.method.startsWith('send'));
+    expect(sends.map((c) => c.method)).toEqual(['sendMediaGroup', 'sendDocument']);
+    expect(sends[0]?.payload).toEqual({
+      chat_id: 7,
+      reply_parameters: { message_id: 9, allow_sending_without_reply: true },
+      media: [
+        { type: 'photo', media: 'https://x/1.jpg', caption: 'c' },
+        { type: 'photo', media: 'https://x/2.jpg' },
+      ],
+    });
+    // O documento sozinho sai como mensagem comum, sem legenda nem citação.
+    expect(sends[1]?.payload).toMatchObject({ chat_id: 7 });
+    expect(sends[1]?.payload).not.toHaveProperty('caption');
+    expect(sends[1]?.payload).not.toHaveProperty('reply_parameters');
+    expect(key.id).toBe('1000');
+  });
+
+  it('começando por documento, o álbum de documentos vai primeiro e leva a legenda', async () => {
+    const { fake, transport } = await connected();
+    await transport.send('7', {
+      type: 'album',
+      items: [
+        doc('https://x/a.pdf', 'a.pdf'),
+        photo('https://x/1.jpg'),
+        doc('https://x/b.pdf', 'b.pdf'),
+      ],
+      caption: 'c',
+    });
+    const [group] = fake.callsTo('sendMediaGroup');
+    expect(group?.['media']).toMatchObject([
+      { type: 'document', caption: 'c' },
+      { type: 'document' },
+    ]);
+    expect(fake.callsTo('sendPhoto')).toHaveLength(1);
+    expect(fake.callsTo('sendPhoto')[0]).not.toHaveProperty('caption');
+  });
+
+  it('o erro do segundo álbum sobe com a classificação da API', async () => {
+    const { fake, transport } = await connected();
+    fake.handlers.set('sendDocument', () => failure(400, 'Bad Request: wrong file'));
+    await expect(
+      transport.send('7', {
+        type: 'album',
+        items: [
+          photo('https://x/1.jpg'),
+          photo('https://x/2.jpg'),
+          doc('https://x/a.pdf', 'a.pdf'),
+        ],
+      }),
+    ).rejects.toMatchObject({ retryable: false });
+  });
+});
+
+describe('álbum na entrada', () => {
+  const photoUpdate = (groupId: string, fileId: string, fields: Record<string, unknown> = {}) => ({
+    message: tgMessage({
+      media_group_id: groupId,
+      photo: [{ file_id: fileId, file_unique_id: fileId, width: 9, height: 9 }],
+      ...fields,
+    }),
+  });
+
+  it('junta os updates do mesmo media_group_id numa message só, com a legenda e os anexos', async () => {
+    const { fake, transport } = await connected();
+    const messages: Message[] = [];
+    transport.on('message', (m) => {
+      messages.push(m);
+    });
+    const first = photoUpdate('g1', 'a');
+    fake.push(first);
+    fake.push({
+      message: tgMessage({
+        media_group_id: 'g1',
+        document: {
+          file_id: 'd',
+          file_unique_id: 'd',
+          file_name: 'n.pdf',
+          mime_type: 'application/pdf',
+        },
+      }),
+    });
+    fake.push(photoUpdate('g1', 'c', { caption: 'legenda' }));
+    // Outro grupo não se mistura.
+    fake.push(photoUpdate('g2', 'x'));
+    await vi.waitFor(() => expect(messages).toHaveLength(2));
+    const message = messages.find((m) => m.attachments.length === 3);
+    if (message === undefined) throw new Error('esperava o álbum de três anexos');
+    expect(message.type).toBe('image');
+    expect(message.id).toBe(String(first.message.message_id));
+    expect(message.text).toBe('legenda');
+    expect(message.attachments.map((m) => m.mimetype)).toEqual([
+      'image/jpeg',
+      'application/pdf',
+      'image/jpeg',
+    ]);
+    expect(message.attachments[0]).toBe(message.is('image') ? message.media : undefined);
+    expect(message.attachments[1]?.fileName).toBe('n.pdf');
+    expect(transport.raw(message)).toMatchObject({ update_id: 1 });
+    expect(messages.find((m) => m !== message)?.attachments).toHaveLength(1);
+  });
+
+  it('a janela conta desde o último update: um update tardio ainda entra no álbum', async () => {
+    const { fake, transport } = await connected();
+    const got = next(transport, 'message');
+    fake.push(photoUpdate('g', 'a'));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    fake.push(photoUpdate('g', 'b'));
+    expect((await got).attachments).toHaveLength(2);
+  });
+
+  it('edição de item do álbum não é juntada: sai como message.edited', async () => {
+    const { fake, transport } = await connected();
+    const got = next(transport, 'message.edited');
+    fake.push({ edited_message: photoUpdate('g', 'a').message });
+    expect((await got).isEdited).toBe(true);
+  });
+
+  it('disconnect com álbum pendente cancela o timer e nada é emitido', async () => {
+    const { fake, transport } = await connected();
+    const emitted = vi.fn();
+    transport.on('message', emitted);
+    const polls = fake.callsTo('getUpdates').length;
+    fake.push(photoUpdate('g', 'a'));
+    // O grammY só pede o próximo lote depois de tratar o update: ele já está no buffer.
+    await vi.waitFor(() => expect(fake.callsTo('getUpdates').length).toBeGreaterThan(polls));
+    await transport.disconnect();
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(emitted).not.toHaveBeenCalled();
+  });
+});

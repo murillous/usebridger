@@ -159,6 +159,7 @@ diz qual foi.
 | `telegram.commands.sync-failed` | `warn` | falha ao registrar o menu de comandos no Telegram; tenta de novo na próxima mudança |
 | `telegram.commands.skipped` | `debug` | comando fora do menu do Telegram: nome fora de [a-z0-9_]{1,32} |
 | `telegram.stop.failed` | `warn` | falha ao parar o polling do Telegram |
+| `telegram.album.failed` | `error` | falha ao juntar o álbum do Telegram; descartado |
 
 ## Plugins oficiais
 

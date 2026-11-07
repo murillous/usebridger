@@ -127,12 +127,15 @@ export class FakeTelegram {
   #default(method: string, payload: Record<string, unknown>): unknown {
     if (method === 'getMe') return BOT_USER;
     if (method.startsWith('send')) {
-      return {
+      const sent = (): Record<string, unknown> => ({
         message_id: this.#nextMessage++,
         date: 1_760_000_000,
         chat: { id: payload['chat_id'], type: 'private', first_name: 'X' },
         text: '',
-      };
+      });
+      // O `sendMediaGroup` devolve uma mensagem por item.
+      if (method === 'sendMediaGroup') return (payload['media'] as unknown[]).map(sent);
+      return sent();
     }
     return true;
   }

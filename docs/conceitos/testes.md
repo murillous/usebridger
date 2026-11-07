@@ -42,7 +42,7 @@ O kit tem perfis de plataforma: `whatsapp`, `telegram`, `discord` e `web`, cada 
 capabilities, os limites de tamanho e o formato de contato daquela plataforma. O do `whatsapp` é
 conferido contra o que o transport Baileys declara, num teste do próprio transport. O `web`
 também. Os perfis `telegram` e `discord` seguem o que se espera dessas plataformas: o transport
-real do Telegram ainda não tem álbum nem enquete, que o perfil já inclui, então um teste verde no
+real do Telegram ainda não tem enquete, que o perfil já inclui, então um teste verde no
 perfil `telegram` não garante o envio disso no Telegram de verdade.
 
 O plugin portátil roda o mesmo teste em todos:
