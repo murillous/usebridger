@@ -33,8 +33,10 @@ Alternativas consideradas:
 - **Long polling pelo `bot.start()` do grammY** é o modo padrão. Ele não exige URL pública nem a
   opção `http` no `createBot`. O grammY re-tenta sozinho as falhas transitórias do `getUpdates` e
   só para em 401 e 409. Por isso o transport emite `closed` só quando a queda é terminal, como o
-  ADR 0064 prevê para quem se reconecta sozinho. O webhook, por `TransportDeps.http`, fica como
-  opção para depois (#310).
+  ADR 0064 prevê para quem se reconecta sozinho. O webhook, por `TransportDeps.http`, é opção
+  (#310): `webhook: { url, secretToken }`, rota `POST /webhook` sob o `basePath` do transport, o
+  `webhookCallback` do grammY e o `setWebhook` no `connect()`. O `disconnect()` não o apaga, e o
+  401 vem do `getMe` ou do `setWebhook`.
 - **Mapeamento da queda:** 401 → `auth-failed`, 409 → `replaced`, qualquer outra rejeição do
   `start()` (rede no `getMe` do boot) → `connection-lost`. O `start()` apaga o webhook antes de
   começar, então o 409 que chega é sempre de outro `getUpdates`.
@@ -42,9 +44,8 @@ Alternativas consideradas:
   legenda, citação, menções, botões com `callback_query`, menu de comandos (`setMyCommands`),
   "digitando", reações, edição, apagamento, download e referência de mídia (`file_id`), grupos
   com consulta de admin, remoção e promoção de participantes, e tópicos de fórum no `chat.id`. O
-  álbum (envio e agrupamento na entrada, #308), as enquetes (#309) e o webhook (#310) ficam para
-  issues próprias. O
-  transport não declara `send.album` nem `polls` até lá.
+  álbum (envio e agrupamento na entrada, #308) e as enquetes (#309) ficam para issues próprias,
+  e o transport não declara `send.album` nem `polls` até lá. O webhook entrou depois (#310).
 - **Texto cru vai sem `parse_mode`.** A Bot API devolve 400 numa marcação mal escapada, e um `<`
   ou `_` solto num texto comum derrubaria o envio. Quem quer formatação usa a árvore neutra, que o
   transport renderiza em HTML com escape. A menção da árvore vira um link `tg://user?id=`, que
