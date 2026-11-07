@@ -1,5 +1,18 @@
 # create-bridger-plugin
 
+## 0.4.0
+
+### Minor Changes
+
+- 87041b4: O template conta as saudações do `!ola` e as expõe na API do core pelo `api.resources`
+  (`GET /api/resources/<plugin>/saudacoes`), com teste.
+
+### Patch Changes
+
+- a36bc23: Documentação revisada contra o código: páginas e comentários da API sem referências internas de decisão, mais exemplos e as lacunas preenchidas (Telegram, referência de mídia, rotas da API, eventos de log).
+- a0beb63: O projeto gerado traz `@types/node` e `"types": ["node"]` no `tsconfig`: o teste do recurso de
+  exemplo usa `fetch`, e o `pnpm typecheck` do projeto novo falhava com `Cannot find name 'fetch'`.
+
 ## 0.3.2
 
 ### Patch Changes
