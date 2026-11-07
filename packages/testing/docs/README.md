@@ -182,8 +182,8 @@ const bot = await createTestBot({ profile: 'telegram', plugins: [meuPlugin()] })
 
 A lista completa de cada um está em `PROFILES`. O `whatsapp` e o `web` são o que o Baileys e o
 `transport-web` declaram, e um teste em cada transport garante isso. O `telegram` e o `discord`
-são previsões e podem mudar numa minor do kit: o `telegram` ainda declara `send.album` e `polls`,
-que o `@usebridger/transport-telegram` não tem.
+são previsões e podem mudar numa minor do kit: o `telegram` ainda declara `polls`, que o
+`@usebridger/transport-telegram` não tem.
 
 O `receive()` e o `click()` usam o remetente do perfil, inclusive com o perfil passado no
 `FakeTransport` à mão. As opções `capabilities`, `limits` e `self` do `FakeTransport` substituem o

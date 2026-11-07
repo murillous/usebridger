@@ -160,6 +160,7 @@ diz qual foi.
 | `telegram.commands.skipped` | `debug` | comando fora do menu do Telegram: nome fora de [a-z0-9_]{1,32} |
 | `telegram.poll.vote-unknown` | `debug` | voto de enquete desconhecida (anterior ao restart); descartado |
 | `telegram.stop.failed` | `warn` | falha ao parar o polling do Telegram |
+| `telegram.album.failed` | `error` | falha ao juntar o álbum do Telegram; descartado |
 
 ## Plugins oficiais
 

@@ -78,7 +78,7 @@ contrato roda em qualquer transport.
 | Plataforma | Transport | Situação |
 | --- | --- | --- |
 | WhatsApp (pelo Baileys) | `@usebridger/transport-baileys` | disponível |
-| Telegram (Bot API, pelo grammY) | `@usebridger/transport-telegram` | disponível; ainda sem álbum e enquete |
+| Telegram (Bot API, pelo grammY) | `@usebridger/transport-telegram` | disponível |
 | Sistema web próprio (chat num ERP, num site) | `@usebridger/transport-web` | disponível |
 | Discord | `transport-discord` | planejado para depois do 1.0 |
 | WhatsApp Cloud API, Twilio, Zenvia | repositório privado | planejados, comerciais |

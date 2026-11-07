@@ -4,6 +4,7 @@
 // updates fica em `normalize.ts`; a formatação, em `format.ts`.
 
 import type {
+  AlbumItem,
   Capability,
   Chat,
   Contact,
@@ -32,7 +33,14 @@ import {
   TypedEmitter,
 } from '@usebridger/core/adapter';
 import { type Bot, BotError, GrammyError, InputFile, webhookCallback } from 'grammy';
-import type { ChatMember, ReactionTypeEmoji, Message as TgMessage, Update } from 'grammy/types';
+import type {
+  ChatMember,
+  InputMedia,
+  ReactionTypeEmoji,
+  ReplyParameters,
+  Message as TgMessage,
+  Update,
+} from 'grammy/types';
 import { commandMenus } from './commands.ts';
 import { call, expiredOr, toDisconnectReason } from './errors.ts';
 import { renderHtml } from './format.ts';
@@ -97,6 +105,19 @@ const MAX_POLLS = 1000;
  */
 const INTERACTION_PREFIX = 'cb:';
 
+/**
+ * Espera pelo resto do álbum, contada desde o último update do grupo. Os updates de um álbum
+ * chegam quase juntos (em geral no mesmo `getUpdates`); meio segundo cobre a folga da rede sem
+ * atrasar muito a resposta.
+ */
+const ALBUM_WINDOW_MS = 500;
+
+/** Updates de um álbum à espera do resto do grupo. */
+interface PendingAlbum {
+  readonly updates: Update[];
+  readonly timer: ReturnType<typeof setTimeout>;
+}
+
 /** Direitos dados no `promote`: os de moderação comuns de um admin de grupo. */
 const ADMIN_RIGHTS = {
   can_manage_chat: true,
@@ -109,8 +130,8 @@ const ADMIN_RIGHTS = {
 export class TelegramTransport implements Transport {
   readonly name = 'telegram';
   /**
-   * O núcleo da Bot API e as enquetes. `send.album` entra com a issue do álbum; `groups.add` não
-   * existe para bot no Telegram.
+   * O núcleo da Bot API, o álbum e as enquetes; `groups.add` não existe para bot no
+   * Telegram.
    */
   readonly capabilities: ReadonlySet<Capability> = new Set<Capability>([
     'actions',
@@ -127,6 +148,7 @@ export class TelegramTransport implements Transport {
     'send.voice',
     'send.sticker',
     'send.document',
+    'send.album',
     'media.download',
     // O `file_id` vale entre restarts para o mesmo bot (ADR 0136).
     'media.ref',
@@ -135,7 +157,7 @@ export class TelegramTransport implements Transport {
     'polls',
     'quoted',
   ]);
-  readonly limits = { text: 4096, caption: 1024 };
+  readonly limits = { text: 4096, caption: 1024, album: 10 };
   /** 30 mensagens/s no total e cerca de 1/s por chat. */
   readonly pacing = { globalIntervalMs: 34, chatIntervalMs: 1000 };
 
@@ -148,6 +170,13 @@ export class TelegramTransport implements Transport {
   readonly #raws = new WeakMap<Message | Interaction, unknown>();
   /** O último menu enviado ao Telegram, para só chamar a API quando ele muda. */
   #menu: string | undefined;
+  /** Álbuns de entrada incompletos, por `chat.id:media_group_id`. */
+  readonly #albums = new Map<string, PendingAlbum>();
+  /**
+   * Chave do primeiro álbum de um envio dividido, por `content`. A fila re-tenta com o mesmo
+   * objeto, e a chave evita reenviar o que já saiu. Fraco: o objeto some com o envio.
+   */
+  readonly #albumKeys = new WeakMap<OutgoingContent, MessageKey>();
   /**
    * `poll_id` → onde a enquete foi enviada. Só em memória: o voto de enquete anterior ao restart
    * é descartado (ADR 0067 aceita o mesmo limite no Baileys), e o plugin que apura por muito tempo
@@ -241,6 +270,7 @@ export class TelegramTransport implements Transport {
         if (!current()) return;
         this.#bot = null;
         this.#onWebhook = null;
+        this.#dropAlbums();
         const reason = toDisconnectReason(error);
         this.#events.emit('connection.status', { status: 'closed', reason, error });
       },
@@ -297,7 +327,14 @@ export class TelegramTransport implements Transport {
     onOpen(bot.botInfo);
   }
 
+  /** Descarta os álbuns de entrada pendentes: o timer não pode disparar sem conexão. */
+  #dropAlbums(): void {
+    for (const pending of this.#albums.values()) clearTimeout(pending.timer);
+    this.#albums.clear();
+  }
+
   async disconnect(): Promise<void> {
+    this.#dropAlbums();
     const bot = this.#bot;
     if (bot === null) return;
     this.#bot = null;
@@ -342,7 +379,46 @@ export class TelegramTransport implements Transport {
   }
 
   #onMessage(update: Update, raw: TgMessage, edited: boolean): void {
-    const message = toMessage(raw, this.#env(), { edited });
+    // A edição de um item do álbum chega sozinha, como edição comum.
+    if (!edited && raw.media_group_id !== undefined) {
+      this.#bufferAlbum(update, raw.chat.id, raw.media_group_id);
+      return;
+    }
+    this.#emitMessage(update, raw, edited, undefined);
+  }
+
+  /** Guarda o update e reinicia a janela: o álbum sai quando o grupo fica quieto. */
+  #bufferAlbum(update: Update, chatId: number, groupId: string): void {
+    const key = `${chatId}:${groupId}`;
+    const pending = this.#albums.get(key);
+    if (pending !== undefined) clearTimeout(pending.timer);
+    const updates = pending?.updates ?? [];
+    updates.push(update);
+    const timer = setTimeout(() => {
+      this.#albums.delete(key);
+      const album = updates.flatMap((u) => (u.message === undefined ? [] : [u.message]));
+      const [first] = album;
+      // O primeiro update do grupo dá o `raw()` e o ID da mensagem juntada.
+      const [head] = updates;
+      if (first === undefined || head === undefined) return;
+      // Fora do `bot.catch`: o erro daqui só tem o log como destino.
+      try {
+        this.#emitMessage(head, first, false, album);
+      } catch (error) {
+        this.#log.event(LOG.albumFailed, { err: error, updateId: head.update_id });
+      }
+    }, ALBUM_WINDOW_MS);
+    this.#albums.set(key, { updates, timer });
+  }
+
+  /** Converte e emite. No álbum, o primeiro update dá o `raw()`. */
+  #emitMessage(
+    update: Update,
+    raw: TgMessage,
+    edited: boolean,
+    album: readonly TgMessage[] | undefined,
+  ): void {
+    const message = toMessage(raw, this.#env(), { edited, ...(album && { album }) });
     if (message === null) {
       // Mensagem de serviço: só a troca de título tem evento no core.
       if (raw.new_chat_title !== undefined) {
@@ -459,6 +535,19 @@ export class TelegramTransport implements Transport {
           },
         }),
     };
+    if (content.type === 'album') {
+      if (options?.actions !== undefined && options.actions.length > 0) {
+        // `retryable: false`: sem isso a fila re-tentaria um erro que nunca passa.
+        throw Object.assign(new TypeError('telegram: o álbum não aceita botões (actions)'), {
+          retryable: false,
+        });
+      }
+      const { message_thread_id: thread, reply_parameters: reply } = other;
+      return this.#sendAlbum(chatId, chat_id, content, {
+        ...(thread !== undefined && { message_thread_id: thread }),
+        ...(reply !== undefined && { reply_parameters: reply }),
+      });
+    }
     const sent = await call((): Promise<TgMessage> => {
       switch (content.type) {
         case 'text':
@@ -483,8 +572,6 @@ export class TelegramTransport implements Transport {
             ...other,
             ...caption(content),
           });
-        case 'album':
-          throw new UnsupportedError('send.album', this.name);
         case 'poll':
           // Não anônima: só assim o Telegram manda o `poll_answer` (ADR 0067).
           return api.sendPoll(
@@ -509,6 +596,61 @@ export class TelegramTransport implements Transport {
       this.#rememberPoll(sent.poll.id, toChat(sent.chat, sent), String(sent.message_id));
     }
     return { chatId, id: String(sent.message_id), fromMe: true, senderId: null };
+  }
+
+  /**
+   * O `sendMediaGroup` não mistura documento com foto ou vídeo (ADR 0061): vira um álbum de cada,
+   * o do primeiro item na frente, com a legenda e a citação. A chave é a da primeira mensagem do
+   * primeiro. Um grupo de um item só sai como mensagem comum, porque o álbum pede de 2 a 10. Se o
+   * segundo falhar depois do primeiro enviado, o erro sobe e a fila re-tenta com o mesmo objeto
+   * `content`: a chave do primeiro fica em `#albumKeys` e a nova tentativa só envia o que falta.
+   * Limite conhecido: a chave só é gravada quando o primeiro envio termina. Se a fila desistir
+   * (timeout) enquanto ele ainda está no ar e re-tentar, o primeiro pode sair duas vezes.
+   */
+  async #sendAlbum(
+    chatId: string,
+    target: number,
+    content: Extract<OutgoingContent, { readonly type: 'album' }>,
+    extra: AlbumExtra,
+  ): Promise<MessageKey> {
+    const api = this.#connected().api;
+    const [head] = content.items;
+    if (head === undefined) throw new TypeError('telegram: álbum sem itens');
+    const sameKind = (item: AlbumItem): boolean =>
+      (item.type === 'document') === (head.type === 'document');
+    const lots = [content.items.filter(sameKind), content.items.filter((i) => !sameKind(i))];
+    const filled = lots.filter((l) => l.length > 0);
+    // Tentativa repetida: o primeiro álbum já saiu, e reenviá-lo duplicaria a mensagem.
+    let key = this.#albumKeys.get(content);
+    for (const [index, lot] of filled.entries()) {
+      if (index === 0 && key !== undefined) continue;
+      // A legenda e a citação ficam no primeiro álbum; o segundo sai solto.
+      const { reply_parameters: _quoted, ...unquoted } = extra;
+      const options = index === 0 ? extra : unquoted;
+      const text = index === 0 ? caption(content) : {};
+      const sent = await call(async (): Promise<TgMessage[]> => {
+        const [only] = lot;
+        if (lot.length === 1 && only !== undefined) {
+          return [await sendSingle(api, target, only, { ...options, ...text })];
+        }
+        // O tipo do grammY separa documentos de fotos e vídeos, e o lote já é de um lado só.
+        const media = lot.map((item, i) => inputMedia(item, i === 0 ? text : {}));
+        return api.sendMediaGroup(
+          target,
+          media as Parameters<Bot['api']['sendMediaGroup']>[1],
+          options,
+        );
+      });
+      const first = sent[0];
+      if (first === undefined) throw new Error('telegram: o sendMediaGroup não devolveu mensagens');
+      if (index === 0) {
+        key = { chatId, id: String(first.message_id), fromMe: true, senderId: null };
+        if (filled.length > 1) this.#albumKeys.set(content, key);
+      }
+    }
+    this.#albumKeys.delete(content);
+    if (key === undefined) throw new TypeError('telegram: álbum sem itens');
+    return key;
   }
 
   #rememberPoll(pollId: string, chat: Chat, messageId: string): void {
@@ -656,6 +798,42 @@ function input(media: MediaInput, fileName?: string): InputFile | string {
   if (Buffer.isBuffer(media)) return new InputFile(media, fileName);
   // Pela URL direta, o Telegram usaria o nome do caminho: o grammY baixa e sobe com o nome.
   return fileName === undefined ? media.url : new InputFile(new URL(media.url), fileName);
+}
+
+/** O que o álbum repassa a cada envio: o tópico e a citação (botões o `sendMediaGroup` não tem). */
+interface AlbumExtra {
+  readonly message_thread_id?: number;
+  readonly reply_parameters?: ReplyParameters;
+}
+
+type CaptionFields = ReturnType<typeof caption>;
+
+function inputMedia(item: AlbumItem, text: CaptionFields): InputMedia {
+  switch (item.type) {
+    case 'image':
+      return { type: 'photo', media: input(item.media), ...text };
+    case 'video':
+      return { type: 'video', media: input(item.media), ...text };
+    case 'document':
+      return { type: 'document', media: input(item.media, item.fileName), ...text };
+  }
+}
+
+/** Item que sobrou sozinho no seu grupo: vai como mensagem comum. */
+function sendSingle(
+  api: Bot['api'],
+  chat: number,
+  item: AlbumItem,
+  options: AlbumExtra & CaptionFields,
+): Promise<TgMessage> {
+  switch (item.type) {
+    case 'image':
+      return api.sendPhoto(chat, input(item.media), options);
+    case 'video':
+      return api.sendVideo(chat, input(item.media), options);
+    case 'document':
+      return api.sendDocument(chat, input(item.media, item.fileName), options);
+  }
 }
 
 function caption(content: {

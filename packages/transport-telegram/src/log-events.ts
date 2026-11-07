@@ -40,3 +40,8 @@ export const stopFailed: LogEvent = defineLogEvent({
   level: 'warn',
   message: 'falha ao parar o polling do Telegram',
 });
+export const albumFailed: LogEvent = defineLogEvent({
+  name: 'telegram.album.failed',
+  level: 'error',
+  message: 'falha ao juntar o álbum do Telegram; descartado',
+});

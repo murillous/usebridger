@@ -107,14 +107,15 @@ O comando chega como texto comum. O `/cmd@NomeDoBot` funciona sem configuração
 ## O que o transport declara
 
 `send.text`, `send.image`, `send.video`, `send.audio`, `send.voice`, `send.sticker`,
-`send.document`, `media.download`, `media.ref`, `quoted`, `mentions`, `reactions`,
-`message.edit`, `message.delete`, `polls`, `typing`, `actions`, `groups`, `groups.remove` e
-`groups.promote`. O álbum ainda não está; bot do Telegram não adiciona ninguém a grupo, então
+`send.document`, `send.album`, `media.download`, `media.ref`, `quoted`, `mentions`,
+`reactions`, `message.edit`, `message.delete`, `polls`, `typing`, `actions`, `groups`,
+`groups.remove` e `groups.promote`. Bot do Telegram não adiciona ninguém a grupo, então
 `groups.add` nunca vai estar.
 
-Limites: 4096 caracteres de texto e 1024 de legenda (a fila de saída divide acima deles). Ritmo
-padrão da fila: 34 ms entre envios quaisquer (30 por segundo) e 1 s por chat. O limite de 20
-mensagens por minuto num grupo chega como 429 com `retry_after`, que a fila respeita.
+Limites: 4096 caracteres de texto, 1024 de legenda e 10 itens por álbum (a fila de saída divide
+acima deles). Ritmo padrão da fila: 34 ms entre envios quaisquer (30 por segundo) e 1 s por
+chat. O limite de 20 mensagens por minuto num grupo chega como 429 com `retry_after`, que a fila
+respeita.
 
 ## Entrada
 
@@ -146,6 +147,12 @@ mensagens por minuto num grupo chega como 429 com `retry_after`, que a fila resp
   O `isChatAdmin` reconhece o admin anônimo, que fala como o próprio grupo.
 - **Menções:** a `text_mention` traz o contato com o ID. A `@usuario` só traz o texto, e a Bot
   API não resolve o ID: só a menção ao próprio bot entra em `message.mentions`.
+- **Álbum:** os updates com o mesmo `media_group_id` viram uma `message` só, com todas as mídias
+  em `attachments` (o `type` é o do primeiro). Só a primeira legenda do álbum vira `text`; as
+  outras são ignoradas. O transport espera 500 ms desde o último update do grupo antes de emitir,
+  então a mensagem de um álbum chega com esse atraso. O `id` e o `raw()` são os do primeiro
+  update. O `disconnect()` e a queda terminal descartam o álbum que ainda esperava. A edição de
+  um item do álbum chega à parte, como `message.edited`.
 - **Mídia:** baixa pelo `getFile` e pela URL de arquivos da Bot API, que não entrega arquivo
   acima de 20 MB. O `ctx.media.ref()` guarda o `file_id`, que vale entre restarts para o mesmo
   bot. Um `file_id` que o Telegram não reconhece rejeita com `MediaExpiredError`.
@@ -165,6 +172,17 @@ mensagens por minuto num grupo chega como 429 com `retry_after`, que a fila resp
   (`answerCallbackQuery`) e chega ao plugin como o comando do botão.
 - **Mídia por URL:** vai para o Telegram baixar, que aceita até 5 MB de foto e 20 MB dos outros
   tipos. O documento com `fileName` é baixado pelo grammY e sobe com o nome.
+- **Álbum:** `reply.album` vai por `sendMediaGroup` (de 2 a 10 itens), com a legenda no primeiro
+  item. Documento não se mistura com foto ou vídeo: o álbum com os dois sai em dois envios, o
+  do primeiro item na frente, com a legenda e a citação, e a chave devolvida é a do primeiro.
+  A ordem original não se mantém entre os dois grupos: `[foto, doc, foto]` sai como
+  `[foto, foto]` e depois `[doc]`. Um grupo de um item só sai como mensagem comum. O tópico de
+  fórum vai nos dois envios.
+- **Álbum com botões:** o `sendMediaGroup` não tem `reply_markup`, então `actions` num álbum
+  rejeita com `TypeError` e `retryable: false`, sem enviar nada.
+- **Álbum que falha no meio:** se o segundo envio falhar (um 429, por exemplo), a fila re-tenta
+  com o mesmo `content`, e o transport pula o primeiro envio, que já saiu, e devolve a chave dele.
+  Não há duplicata.
 - **Reação:** o Telegram aceita um conjunto fixo de emojis. Fora dele, a API devolve 400, e o
   erro chega com `retryable: false`.
 - **Erros:** o 429 leva `retryAfterMs` (o `retry_after` × 1000), e os outros 4xx levam
