@@ -217,6 +217,10 @@ O job `Benchmark` (`.github/workflows/ci.yml`) mede o baseline no próprio runne
 ([ADR 0085](../../docs/adr/0085-benchmark-intercalado.md)). Entre máquinas diferentes, a
 variação passa dos 10%, então um baseline versionado ou de outro job não serviria.
 
+Ele roda no push na `develop`/`main` e só no PR com o label `bench`
+([ADR 0139](../../docs/adr/0139-benchmark-fora-do-pr.md)). O label vale a partir do próximo push do
+PR. Ponha o label em PR que mexe em `packages/core`, em `bench/` ou numa dependência do core.
+
 1. `Build da base`: faz o build do primeiro pai do commit testado num `git worktree`. No PR, o
    primeiro pai do merge commit é a ponta da base; no push, é o commit anterior.
 2. `Benchmark`: roda `pnpm bench --baseline` com o worktree da base.

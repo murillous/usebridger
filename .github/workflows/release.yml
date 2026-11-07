@@ -40,7 +40,7 @@ jobs:
     env:
       BRIDGER_TEST_POSTGRES_URL: postgres://postgres:postgres@localhost:5432/postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
 
       # Gate no commit exato que vai virar PR de versão ou publish.
@@ -52,7 +52,7 @@ jobs:
 
       # PR aberto com o GITHUB_TOKEN não dispara o ci.yml; com o token do App, o PR de versão
       # roda os checks como qualquer outro.
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ vars.RELEASE_APP_ID }}

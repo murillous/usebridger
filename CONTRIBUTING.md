@@ -202,7 +202,9 @@ em cache. O job `Scaffold` gera um plugin com o `create-bridger-plugin` e confer
 instala, testa e builda ([e2e](packages/create-plugin/docs/README.md#e2e)). O job `Testes` sobe
 um Postgres em container para o `@usebridger/storage-postgres`. O job `Benchmark` mede as metas
 de performance e falha com piora > 10% sobre o baseline do commit-base, medido no mesmo runner
-e intercalado com o commit testado. O job `Docs` builda o site e falha com link quebrado ou warning do TypeDoc; o
+e intercalado com o commit testado. Ele leva ~19 min, então roda só no push na `develop`/`main` e
+no PR com o label `bench`, que vale a partir do próximo push: ponha o label em PR que mexe no
+caminho quente do core ([ADR 0139](docs/adr/0139-benchmark-fora-do-pr.md)). O job `Docs` builda o site e falha com link quebrado ou warning do TypeDoc; o
 [`docs.yml`](.github/workflows/docs.yml) o publica no GitHub Pages a cada push na `main`. O job `Pacotes` builda e roda o
 `pnpm check:packages`, para um pacote que não publicaria quebrar no PR e não no release.
 

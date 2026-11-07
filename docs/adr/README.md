@@ -158,3 +158,4 @@ Um ADR novo entra no fim da lista.
 - [0136](0136-referencia-de-midia-serializavel.md) — Referência de mídia serializável: `ctx.media.ref`/`fromRef`, capability `media.ref`, `Transport.mediaFromRef` e `MediaExpiredError`
 - [0137](0137-transport-telegram.md) — Transport do Telegram sobre o grammY: long polling padrão, 401/409 terminais, texto cru sem `parse_mode`, clique respondido com mensagem nova
 - [0138](0138-sem-dashboard-oficial.md) — Sem dashboard oficial: sai o `plugin-dashboard`, cada app monta o seu painel sobre a API do core
+- [0139](0139-benchmark-fora-do-pr.md) — Benchmark fora do caminho do PR: roda no push na `develop`/`main` e no PR com o label `bench`
