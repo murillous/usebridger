@@ -1,0 +1,19 @@
+{
+  "name": "@usebridger/example-painel",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Painel mínimo sobre a API HTTP do core: login, status da conexão e QR.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/main.ts"
+  },
+  "dependencies": {
+    "@usebridger/core": "workspace:*",
+    "@usebridger/storage-sqlite": "workspace:*",
+    "@usebridger/transport-baileys": "workspace:*"
+  },
+  "devDependencies": {
+    "@usebridger/testing": "workspace:*"
+  }
+}

@@ -28,6 +28,7 @@
     { "path": "examples/primeiro-plugin" },
     { "path": "examples/conversa-guiada" },
     { "path": "examples/configuracao" },
-    { "path": "examples/producao" }
+    { "path": "examples/producao" },
+    { "path": "examples/painel" }
   ]
 }

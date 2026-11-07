@@ -2,6 +2,7 @@
 
 Esta página mostra como usar a API HTTP do Bridger (conectar o número, ver logs, gerenciar
 plugins, config, usuários e chaves, consultar a auditoria) e como seu plugin registra rotas nela.
+Para montar um painel sobre ela, comece pelo guia [API HTTP e painéis](../../../docs/guias/painel.md).
 
 O core expõe uma API HTTP descrita em OpenAPI 3.2 sobre o [servidor HTTP](http.md). Sem
 `api.auth` a API fica aberta e só sobe em loopback (veja [Autenticação](#autenticação)). Para

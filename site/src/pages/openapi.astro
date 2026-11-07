@@ -1,0 +1,29 @@
+---
+// Referência navegável da spec OpenAPI do core (public/openapi.json, copiada do snapshot pelo
+// sync). Página fora do layout do Starlight: o Scalar precisa da largura toda. A versão do Scalar
+// fica fixa para a página não mudar sozinha com um release dele.
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+const spec = `${base}openapi.json`;
+---
+
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>API HTTP do core | Bridger</title>
+    <meta name="description" content="Spec OpenAPI 3.2 da API HTTP do core do Bridger." />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script is:inline src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.75.0/dist/browser/standalone.js"></script>
+    <script is:inline define:vars={{ spec }}>
+      Scalar.createApiReference('#app', {
+        url: spec,
+        // Sem cliente de teste apontando para o próprio site: a API roda no bot de cada app.
+        hideTestRequestButton: true,
+        metaData: { title: 'API HTTP do core | Bridger' },
+      });
+    </script>
+  </body>
+</html>

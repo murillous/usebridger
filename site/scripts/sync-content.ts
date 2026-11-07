@@ -22,7 +22,7 @@ export interface Entry {
 }
 
 /** Rota do site (sem barras nas pontas) de um destino: `guias/index.md` vira `guias`. */
-function routeOf(out: string): string {
+export function routeOf(out: string): string {
   return out.replace(/\.md$/, '').replace(/(^|\/)index$/, '');
 }
 
@@ -149,9 +149,25 @@ export function syncContent(root: string, contentDir: string): void {
   console.log(`site: ${entries.length} páginas sincronizadas`);
 }
 
+/**
+ * Publica a spec OpenAPI do core em `public/openapi.json`. A fonte é o snapshot que o teste do core
+ * mantém igual à spec gerada (packages/core/src/api/api.test.ts); o snapshot sai com versão
+ * `0.0.0`, e aqui ganha a do pacote.
+ */
+export function syncSpec(root: string, publicDir: string): void {
+  const spec = JSON.parse(
+    readFileSync(join(root, 'packages/core/src/api/__snapshots__/openapi.json'), 'utf8'),
+  ) as { info: { version: string } };
+  const { version } = JSON.parse(
+    readFileSync(join(root, 'packages/core/package.json'), 'utf8'),
+  ) as { version: string };
+  spec.info.version = version;
+  mkdirSync(publicDir, { recursive: true });
+  writeFileSync(join(publicDir, 'openapi.json'), `${JSON.stringify(spec, null, 2)}\n`);
+}
+
 if (import.meta.main) {
-  syncContent(
-    join(import.meta.dirname, '..', '..'),
-    join(import.meta.dirname, '..', 'src', 'content', 'docs'),
-  );
+  const root = join(import.meta.dirname, '..', '..');
+  syncContent(root, join(import.meta.dirname, '..', 'src', 'content', 'docs'));
+  syncSpec(root, join(import.meta.dirname, '..', 'public'));
 }

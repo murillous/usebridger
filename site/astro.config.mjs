@@ -3,11 +3,14 @@ import { defineConfig } from 'astro/config';
 import starlightLinksValidator from 'starlight-links-validator';
 import starlightLlmsTxt from 'starlight-llms-txt';
 import starlightTypeDoc, { typeDocSidebarGroup } from 'starlight-typedoc';
+import { renderIndex } from './scripts/llms.ts';
 import { BASE } from './scripts/sync-content.ts';
+
+const SITE = 'https://murillous.github.io';
 
 // Astro só lê a config como `export default` (por isso a exceção no biome.json).
 export default defineConfig({
-  site: 'https://murillous.github.io',
+  site: SITE,
   base: BASE,
   integrations: [
     starlight({
@@ -27,10 +30,13 @@ export default defineConfig({
         // Gera /llms.txt, /llms-full.txt e /llms-small.txt. A API gerada (que inflaria o full) sai
         // do full/small e fica só como conjunto à parte listado no índice.
         // O `exclude` valer também para o full depende de patches/ (o plugin só o aplica ao small).
+        // O `details` é o mapa de conjuntos por tópico e por pacote; os conjuntos saem por rota
+        // própria (src/pages/llms/), porque o `customSets` não aponta para os relacionados.
         starlightLlmsTxt({
           projectName: 'Bridger',
           description:
             'Framework de bots de mensageria em TypeScript: core, transports, storages e plugins.',
+          details: renderIndex(new URL(`${BASE}/`, SITE).href),
           exclude: ['api/**'],
           // O link de âncora dos títulos viraria "[Seção intitulada …](#…)" sob cada título, aqui
           // e no `.md` de cada página (src/pages/[...slug].md.ts), que usa a mesma conversão.
@@ -111,6 +117,8 @@ export default defineConfig({
           label: 'Referência',
           items: [
             { autogenerate: { directory: 'pacotes', collapsed: true } },
+            // Página fora do Starlight (src/pages/openapi.astro); o Starlight põe o base no link.
+            { label: 'API HTTP (OpenAPI)', link: '/openapi/' },
             { ...typeDocSidebarGroup, label: 'API', collapsed: true },
           ],
         },
