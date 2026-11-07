@@ -33,8 +33,10 @@ Alternativas consideradas:
 - **Long polling pelo `bot.start()` do grammY** é o modo padrão. Ele não exige URL pública nem a
   opção `http` no `createBot`. O grammY re-tenta sozinho as falhas transitórias do `getUpdates` e
   só para em 401 e 409. Por isso o transport emite `closed` só quando a queda é terminal, como o
-  ADR 0064 prevê para quem se reconecta sozinho. O webhook, por `TransportDeps.http`, fica como
-  opção para depois (#310).
+  ADR 0064 prevê para quem se reconecta sozinho. O webhook, por `TransportDeps.http`, é opção
+  (#310): `webhook: { url, secretToken }`, rota `POST /webhook` sob o `basePath` do transport, o
+  `webhookCallback` do grammY e o `setWebhook` no `connect()`. O `disconnect()` não o apaga, e o
+  401 vem do `getMe` ou do `setWebhook`.
 - **Mapeamento da queda:** 401 → `auth-failed`, 409 → `replaced`, qualquer outra rejeição do
   `start()` (rede no `getMe` do boot) → `connection-lost`. O `start()` apaga o webhook antes de
   começar, então o 409 que chega é sempre de outro `getUpdates`.
