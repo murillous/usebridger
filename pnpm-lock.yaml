@@ -241,6 +241,22 @@ importers:
         specifier: workspace:*
         version: link:../../packages/testing
 
+  examples/painel:
+    dependencies:
+      '@usebridger/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@usebridger/storage-sqlite':
+        specifier: workspace:*
+        version: link:../../packages/storage-sqlite
+      '@usebridger/transport-baileys':
+        specifier: workspace:*
+        version: link:../../packages/transport-baileys
+    devDependencies:
+      '@usebridger/testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
+
   examples/primeiro-bot:
     dependencies:
       '@usebridger/core':

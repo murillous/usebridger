@@ -17,6 +17,7 @@ quando o detalhe importa.
 | [Portabilidade entre plataformas](portabilidade.md) | Formatação neutra, IDs e owners, botões, resposta esperada, tenant |
 | [Escape hatch](escape-hatch.md) | Objeto bruto da mensagem e do transport |
 | [Testes](testes.md) | `@usebridger/testing` e os perfis de transport |
+| [API HTTP e painéis](painel.md) | Montar um painel ou integração sobre a API do core: auth, conexão, config, recursos e cliente tipado |
 
 ## Outras referências
 

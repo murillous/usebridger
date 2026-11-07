@@ -2,7 +2,13 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { expect, it } from 'vitest';
-import { extractTitle, type LinkContext, rewriteLinks, syncContent } from './sync-content.ts';
+import {
+  extractTitle,
+  type LinkContext,
+  rewriteLinks,
+  syncContent,
+  syncSpec,
+} from './sync-content.ts';
 
 const ctx: LinkContext = {
   routes: new Map([
@@ -77,6 +83,26 @@ it('syncContent limpa só o gerado e transforma README.md em index.md', () => {
     expect(index).toContain('title: "Guias"');
     expect(index).toContain('/edit/develop/docs/guias/README.md');
     expect(readFileSync(join(site, 'conceitos/index.md'), 'utf8')).toContain('title: "Conceitos"');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+it('syncSpec publica a spec do core com a versão do pacote', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'sync-spec-'));
+  try {
+    const root = join(tmp, 'repo');
+    const snapshot = join(root, 'packages/core/src/api/__snapshots__/openapi.json');
+    mkdirSync(dirname(snapshot), { recursive: true });
+    writeFileSync(snapshot, JSON.stringify({ openapi: '3.2.0', info: { version: '0.0.0' } }));
+    writeFileSync(join(root, 'packages/core/package.json'), JSON.stringify({ version: '1.2.3' }));
+
+    syncSpec(root, join(tmp, 'public'));
+
+    expect(JSON.parse(readFileSync(join(tmp, 'public/openapi.json'), 'utf8'))).toEqual({
+      openapi: '3.2.0',
+      info: { version: '1.2.3' },
+    });
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

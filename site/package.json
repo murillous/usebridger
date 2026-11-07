@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "imports": {
-    "#regiao": "./scripts/regiao.ts"
+    "#regiao": "./scripts/regiao.ts",
+    "#llms": "./scripts/llms.ts"
   },
   "scripts": {
     "sync": "node scripts/sync-content.ts",
