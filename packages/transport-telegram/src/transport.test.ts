@@ -685,3 +685,144 @@ describe('menu de comandos', () => {
     expect(fake.callsTo('setMyCommands')).toHaveLength(2);
   });
 });
+
+describe('enquetes', () => {
+  /** Resposta do `sendPoll`: o Telegram devolve a mensagem com a enquete dentro. */
+  function answerPolls(fake: FakeTelegram, pollId: string, messageId = 500, chat = GROUP): void {
+    fake.handlers.set('sendPoll', () => ({
+      message_id: messageId,
+      date: 1_760_000_000,
+      chat,
+      poll: { id: pollId },
+    }));
+  }
+
+  it('declara polls e pede o poll_answer ao getUpdates', async () => {
+    const { fake, transport } = await connected();
+    expect(transport.capabilities.has('polls')).toBe(true);
+    const polling = fake.callsTo('getUpdates').find((p) => p['timeout'] !== undefined);
+    expect(polling?.['allowed_updates']).toContain('poll_answer');
+  });
+
+  it('envia enquete não anônima; multiple vira allows_multiple_answers', async () => {
+    const { fake, transport } = await connected();
+    answerPolls(fake, 'p1');
+    const key = await transport.send('-100123/5', {
+      type: 'poll',
+      name: 'Almoço?',
+      options: ['Sim', 'Não'],
+      multiple: true,
+    });
+    await transport.send('-100123', { type: 'poll', name: 'Outra', options: ['A', 'B'] });
+    expect(key).toMatchObject({ chatId: '-100123/5', id: '500', fromMe: true });
+    const [first, second] = fake.callsTo('sendPoll');
+    expect(first).toEqual({
+      chat_id: -100123,
+      message_thread_id: 5,
+      question: 'Almoço?',
+      options: [{ text: 'Sim' }, { text: 'Não' }],
+      is_anonymous: false,
+      allows_multiple_answers: true,
+    });
+    expect(second).toMatchObject({ is_anonymous: false, allows_multiple_answers: false });
+  });
+
+  it('poll_answer vira poll.vote com o chat e a mensagem da enquete enviada', async () => {
+    const { fake, transport } = await connected();
+    answerPolls(fake, 'p1', 500);
+    await transport.send('-100123', { type: 'poll', name: 'Q', options: ['A', 'B', 'C'] });
+    const got = next(transport, 'poll.vote');
+    fake.push({ poll_answer: { poll_id: 'p1', user: USER, option_ids: [2, 0] } });
+    expect(await got).toEqual({
+      chat: { id: '-100123', isGroup: true, kind: 'group', title: 'Turma' },
+      messageId: '500',
+      sender: expect.objectContaining({ id: '7' }),
+      options: [0, 2],
+      fromMe: false,
+    });
+  });
+
+  it('voto retirado chega com options vazio', async () => {
+    const { fake, transport } = await connected();
+    answerPolls(fake, 'p1');
+    await transport.send('-100123', { type: 'poll', name: 'Q', options: ['A', 'B'] });
+    const got = next(transport, 'poll.vote');
+    fake.push({ poll_answer: { poll_id: 'p1', user: USER, option_ids: [] } });
+    expect((await got).options).toEqual([]);
+  });
+
+  it('voto de enquete desconhecida (antes do restart) é descartado com log', async () => {
+    const { fake, transport, log } = await connected();
+    const votes: unknown[] = [];
+    transport.on('poll.vote', (v) => {
+      votes.push(v);
+    });
+    // O voto desconhecido vem primeiro; a reação seguinte prova que o update foi consumido.
+    fake.push({ poll_answer: { poll_id: 'velha', user: USER, option_ids: [1] } });
+    const reaction = next(transport, 'reaction');
+    fake.push({
+      message_reaction: {
+        chat: GROUP,
+        message_id: 1,
+        user: USER,
+        date: 1,
+        old_reaction: [],
+        new_reaction: [{ type: 'emoji', emoji: '👍' }],
+      },
+    });
+    await reaction;
+    expect(votes).toEqual([]);
+    expect(log.event).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'telegram.poll.vote-unknown' }),
+      expect.objectContaining({ pollId: 'velha' }),
+    );
+  });
+});
+
+describe('enquetes: limite e voto de chat', () => {
+  it('guarda no máximo 1000 enquetes: a mais antiga sai primeiro', async () => {
+    const { fake, transport, log } = await connected();
+    let n = 0;
+    fake.handlers.set('sendPoll', () => {
+      n += 1;
+      return {
+        message_id: n,
+        date: 1_760_000_000,
+        chat: GROUP,
+        poll: { id: `p${n}` },
+      };
+    });
+    for (let i = 0; i < 1001; i++) {
+      await transport.send('-100123', { type: 'poll', name: 'Q', options: ['A', 'B'] });
+    }
+    const got = next(transport, 'poll.vote');
+    fake.push({ poll_answer: { poll_id: 'p1', user: USER, option_ids: [0] } });
+    fake.push({ poll_answer: { poll_id: 'p1001', user: USER, option_ids: [1] } });
+    const vote = await got;
+    expect(vote).toMatchObject({ messageId: '1001', options: [1] });
+    expect(log.event).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'telegram.poll.vote-unknown' }),
+      expect.objectContaining({ pollId: 'p1' }),
+    );
+  }, 30_000);
+
+  it('voto de voter_chat vem com o chat como sender', async () => {
+    const { fake, transport } = await connected();
+    fake.handlers.set('sendPoll', () => ({
+      message_id: 9,
+      date: 1_760_000_000,
+      chat: GROUP,
+      poll: { id: 'pv' },
+    }));
+    await transport.send('-100123', { type: 'poll', name: 'Q', options: ['A', 'B'] });
+    const got = next(transport, 'poll.vote');
+    fake.push({
+      poll_answer: {
+        poll_id: 'pv',
+        voter_chat: { id: -1009, type: 'channel', title: 'Canal' },
+        option_ids: [0],
+      },
+    });
+    expect((await got).sender).toMatchObject({ id: '-1009', name: 'Canal' });
+  });
+});

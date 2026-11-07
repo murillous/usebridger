@@ -108,9 +108,9 @@ O comando chega como texto comum. O `/cmd@NomeDoBot` funciona sem configuração
 
 `send.text`, `send.image`, `send.video`, `send.audio`, `send.voice`, `send.sticker`,
 `send.document`, `media.download`, `media.ref`, `quoted`, `mentions`, `reactions`,
-`message.edit`, `message.delete`, `typing`, `actions`, `groups`, `groups.remove` e
-`groups.promote`. O álbum e as enquetes ainda não estão; bot do Telegram não
-adiciona ninguém a grupo, então `groups.add` nunca vai estar.
+`message.edit`, `message.delete`, `polls`, `typing`, `actions`, `groups`, `groups.remove` e
+`groups.promote`. O álbum ainda não está; bot do Telegram não adiciona ninguém a grupo, então
+`groups.add` nunca vai estar.
 
 Limites: 4096 caracteres de texto e 1024 de legenda (a fila de saída divide acima deles). Ritmo
 padrão da fila: 34 ms entre envios quaisquer (30 por segundo) e 1 s por chat. O limite de 20
@@ -132,6 +132,7 @@ mensagens por minuto num grupo chega como 429 com `retry_after`, que a fila resp
 | Mensagem de serviço (entrou, saiu, fixou) | nada; o título novo vira `group.updated` |
 | `edited_message` | `message.edited` |
 | `callback_query` | clique num botão (`interaction`) |
+| `poll_answer` | `poll.vote` (veja [Enquetes](#enquetes)) |
 | `message_reaction` | `reaction` (só reação de emoji; a personalizada não vira evento) |
 | `my_chat_member` | `group.joined` / `group.left` |
 | `chat_member` | `group.participants` (`add`, `remove`, `promote`, `demote`, com o autor) |
@@ -169,6 +170,24 @@ mensagens por minuto num grupo chega como 429 com `retry_after`, que a fila resp
 - **Erros:** o 429 leva `retryAfterMs` (o `retry_after` × 1000), e os outros 4xx levam
   `retryable: false`. Queda de rede e 5xx seguem sem campo, e a fila re-tenta com backoff
   ([Erros de envio](../../core/docs/transport.md#erros-de-envio)).
+
+## Enquetes
+
+- **Envio:** `reply.poll` vira `sendPoll` **não anônimo**, porque o Telegram só manda o voto
+  (`poll_answer`) de enquete não anônima ([ADR 0067](../../../docs/adr/0067-voto-em-enquete.md)).
+  O `multiple` vira `allows_multiple_answers`. Os limites da Bot API (de 2 a 12 opções, 300
+  caracteres na pergunta) voltam como 400, com `retryable: false`. Quem precisar de enquete
+  anônima, ou de quiz, usa `ctx.unsafe.native`, e o voto dela não chega.
+- **Canal:** a enquete sai não anônima como em qualquer chat; em canal o voto não chega ao bot, e
+  se o Telegram recusar a não anônima ali o envio volta 400 com `retryable: false`. Enquete
+  anônima vai pelo `ctx.unsafe.native`.
+- **Voto:** o `poll_answer` vira `poll.vote` com a escolha inteira em `options` (índices a partir
+  de 0); a lista vazia é o voto retirado. Quem vota como canal (`voter_chat`) vem como o próprio
+  canal.
+- **Restart:** o `poll_answer` não traz o chat nem a mensagem, então o transport guarda em memória
+  o `poll_id` das últimas 1000 enquetes que enviou. Voto de enquete enviada antes do restart (ou
+  já expulsa dessa lista) é descartado, com log `telegram.poll.vote-unknown` em `debug`. O plugin
+  que apura votos por muito tempo guarda a apuração no próprio storage a cada evento.
 
 ## Grupos
 
@@ -212,5 +231,7 @@ Os eventos de log do pacote estão no
 - **O bot para com `replaced`:** outro processo usa o mesmo token. Só uma instância pode fazer
   long polling por bot.
 - **No grupo, o bot só responde a comandos:** é o [privacy mode](#privacy-mode).
+- **Voto em enquete não chega:** a enquete é de antes do restart (veja [Enquetes](#enquetes)) ou foi
+  enviada anônima por fora do transport.
 - **Sem reações nem entrada/saída de membros:** esses eventos só chegam com o bot admin do grupo.
 - **Arquivo grande não baixa:** a Bot API não entrega arquivo acima de 20 MB.

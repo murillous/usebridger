@@ -30,6 +30,11 @@ export const commandSkipped: LogEvent = defineLogEvent({
   level: 'debug',
   message: 'comando fora do menu do Telegram: nome fora de [a-z0-9_]{1,32}',
 });
+export const pollVoteUnknown: LogEvent = defineLogEvent({
+  name: 'telegram.poll.vote-unknown',
+  level: 'debug',
+  message: 'voto de enquete desconhecida (anterior ao restart); descartado',
+});
 export const stopFailed: LogEvent = defineLogEvent({
   name: 'telegram.stop.failed',
   level: 'warn',

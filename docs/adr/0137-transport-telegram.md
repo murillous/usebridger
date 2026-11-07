@@ -44,8 +44,8 @@ Alternativas consideradas:
   legenda, citação, menções, botões com `callback_query`, menu de comandos (`setMyCommands`),
   "digitando", reações, edição, apagamento, download e referência de mídia (`file_id`), grupos
   com consulta de admin, remoção e promoção de participantes, e tópicos de fórum no `chat.id`. O
-  álbum (envio e agrupamento na entrada, #308) e as enquetes (#309) ficam para issues próprias,
-  e o transport não declara `send.album` nem `polls` até lá. O webhook entrou depois (#310).
+  álbum (envio e agrupamento na entrada, #308) fica para issue própria, e o transport não declara
+  `send.album` até lá. As enquetes (#309) e o webhook (#310) entraram depois.
 - **Texto cru vai sem `parse_mode`.** A Bot API devolve 400 numa marcação mal escapada, e um `<`
   ou `_` solto num texto comum derrubaria o envio. Quem quer formatação usa a árvore neutra, que o
   transport renderiza em HTML com escape. A menção da árvore vira um link `tg://user?id=`, que
@@ -74,6 +74,7 @@ Alternativas consideradas:
   Uma menção `@usuario` sem conta vinculada não traz ID: só a menção ao próprio bot entra em
   `mentions`.
 - O perfil `telegram` do kit de testes (ADR 0069) continua com `send.album` e `polls`, que é o
-  alvo. O transport passa a declará-los quando as issues de álbum e enquete fecharem.
+  alvo. O transport declara `polls` desde a #309 e passa a declarar `send.album` quando a issue
+  de álbum fechar.
 - Depois de um `stop()` durante uma falha de rede, o `sleep` de 3 s do `handlePollingError` do
   grammY ainda termina sozinho. Ele não emite nada, porque a tentativa já foi invalidada.
