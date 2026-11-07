@@ -11,8 +11,9 @@ registradas; para mudar uma, proponha um ADR novo que a substitua.
   monorepo") — leia antes de criar ou mexer num pacote.
 - O LumaBot (app de referência, plugins da Luma e `legacy/`) vive em `murillous/LumaBot` e usa
   os pacotes do npm ([ADR 0080](docs/adr/0080-repositorios-separados.md),
-  [ADR 0082](docs/adr/0082-plugins-da-luma-no-lumabot.md)). O monorepo publica só os plugins
-  oficiais `plugin-metrics` e `plugin-dashboard` ([ADR 0103](docs/adr/0103-plugins-oficiais-de-metricas-e-dashboard.md)).
+  [ADR 0082](docs/adr/0082-plugins-da-luma-no-lumabot.md)). O monorepo publica só o plugin
+  oficial `plugin-metrics` ([ADR 0103](docs/adr/0103-plugins-oficiais-de-metricas-e-dashboard.md));
+  dashboard é de cada app, sobre a API do core ([ADR 0138](docs/adr/0138-sem-dashboard-oficial.md)).
 
 ## Git
 

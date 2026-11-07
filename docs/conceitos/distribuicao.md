@@ -3,8 +3,7 @@
 Esta página mostra como levar um plugin até um bot: publicar no npm, instalar durante o
 desenvolvimento ou carregar de uma pasta do app.
 
-O Bridger só publica dois plugins oficiais, `@usebridger/plugin-metrics` e
-`@usebridger/plugin-dashboard`. Todo o resto é código de quem o escreve, num repositório próprio
+O Bridger só publica um plugin oficial, o `@usebridger/plugin-metrics`. Todo o resto é código de quem o escreve, num repositório próprio
 ou dentro do app. Há dois caminhos para um plugin chegar ao bot, e os dois produzem o mesmo
 objeto.
 

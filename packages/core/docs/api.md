@@ -85,7 +85,7 @@ export default definePlugin({
 Para expor dados que um
 frontend lista, abre e edita, declare um **recurso** no ponto `api.resources` em vez de escrever
 cada operação. O core monta as rotas, a validação, a auth e a spec; o plugin não declara UI, e o
-dashboard (ou outro app) desenha a tela a partir do schema.
+frontend de cada app desenha a tela a partir do schema.
 
 ```ts
 import { ApiError, definePlugin, defineResource } from '@usebridger/core';
@@ -170,8 +170,8 @@ export const ranking = definePlugin({
 
 ### Migrar do `dashboard.tabs`
 
-O ponto `dashboard.tabs` (abas com widgets) saiu: o dashboard agora mostra cada
-recurso numa tela genérica. Cada widget vira dado num recurso, e o desenho fica com o frontend:
+O ponto `dashboard.tabs` (abas com widgets) saiu: o plugin expõe cada recurso pela API e o
+frontend do app monta a tela. Cada widget vira dado num recurso, e o desenho fica com o frontend:
 
 | Widget da aba | No recurso |
 | --- | --- |
@@ -650,7 +650,7 @@ carregado. Formato e filtros na [doc do plugin](../../plugin-metrics/docs/README
 
 ## Conexão e tempo real
 
-Um app conecta o número sem o dashboard. As rotas ficam sob `/api` (ou
+Um app conecta o número pela API. As rotas ficam sob `/api` (ou
 `/sessions/<sessão>/api`) e só existem com `BotConfig.http`. A porta abre quando algum plugin ou o
 transport tem rota.
 

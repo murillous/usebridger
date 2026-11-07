@@ -162,7 +162,7 @@ diz qual foi.
 
 ## Plugins oficiais
 
-As linhas saem com `plugin=metrics`. O `plugin-dashboard` não define eventos próprios.
+As linhas saem com `plugin=metrics`.
 
 ### `@usebridger/plugin-metrics`
 

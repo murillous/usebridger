@@ -29,5 +29,4 @@ export function syncConstant(packageDir: string, name: string): boolean {
 
 if (import.meta.main) {
   syncCoreVersion(join(import.meta.dirname, '..'));
-  syncConstant(join(import.meta.dirname, '..', '..', 'plugin-dashboard'), 'DASHBOARD_VERSION');
 }

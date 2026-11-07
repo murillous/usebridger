@@ -63,10 +63,9 @@ todo bot precisa", e logo todo bot carrega o que não usa, com a API e os bugs j
 prático é: se um plugin consegue fazer pela API pública, é plugin. Se um plugin **não consegue**
 por falta de API, a lacuna é do core, e se resolve no core.
 
-Até o painel de administração é plugin. O `@usebridger/plugin-dashboard` é um app web que usa a
-API HTTP do core como qualquer outro cliente (login, conexão e QR ao vivo, logs, plugins e config,
-auditoria). Quem quiser outro painel, ou integrar com um sistema próprio, usa a mesma API
-([Bot e sessão → HTTP](bot-e-sessao.md#http)). O outro plugin oficial é o
+O Bridger não traz painel de administração. A API HTTP do core, descrita em OpenAPI, expõe login,
+conexão e QR ao vivo, logs, plugins e config e auditoria, e cada app monta o painel que precisar
+sobre ela ([Bot e sessão → HTTP](bot-e-sessao.md#http)). O único plugin oficial é o
 `@usebridger/plugin-metrics`, que reúne métricas e expõe o `GET /metrics`.
 
 ## Plataformas
