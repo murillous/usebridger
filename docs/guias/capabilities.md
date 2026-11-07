@@ -94,7 +94,7 @@ Usar uma capability que o transport não tem rejeita com `UnsupportedError` (com
 | `reactions` | ✓ | ✓ | ✓ | — |
 | `message.edit` | ✓ | ✓ | ✓ | ✓ |
 | `message.delete` | ✓ | ✓ | ✓ | ✓ |
-| `polls` | ✓ | — | ✓ | — |
+| `polls` | ✓ | ✓ | ✓ | — |
 | `actions` | — | ✓ | ✓ | ✓ |
 | `typing` | ✓ | ✓ | ✓ | ✓ |
 | `groups` | ✓ | ✓ | ✓ | — |

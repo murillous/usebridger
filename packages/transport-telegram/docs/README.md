@@ -2,7 +2,8 @@
 
 Esta página mostra como ligar o bot ao Telegram. O transport usa a Bot API pelo
 [grammY](https://grammy.dev). Recebe por long polling (o bot pergunta ao Telegram pelas mensagens
-novas), então não precisa de URL pública nem de `http` no `createBot`.
+novas), então não precisa de URL pública nem de `http` no `createBot`. O [webhook](#webhook) é
+opção para quem já tem o HTTP do core exposto.
 
 ## Criar o bot no BotFather
 
@@ -28,8 +29,9 @@ const bot = createBot({
 await bot.start();
 ```
 
-A única opção do transport é `token` (obrigatória). Ele é validado na fábrica: um formato
-inválido vira `BotConfigError` no `createBot`, sem o token na mensagem. Não há pareamento nem
+A opção `token` é obrigatória, e `webhook` é opcional (veja [Webhook](#webhook)). A fábrica
+valida o token: um formato inválido vira `BotConfigError` no `createBot`, sem o token na
+mensagem. Não há pareamento nem
 credencial no storage: tudo de que o bot precisa está no token.
 
 ## Conexão
@@ -48,6 +50,47 @@ quando a queda é terminal:
 O `disconnect()` cancela o `getUpdates` em andamento e confirma o offset no Telegram: os updates
 que chegaram e não foram tratados voltam na próxima subida.
 
+## Webhook
+
+Com `webhook`, o Telegram chama o bot em vez de o bot perguntar. Serve a quem já expõe o HTTP do
+core (ADR 0072) e quer menos latência e nenhum `getUpdates` aberto. Exige `http` no `createBot`:
+sem ele, a fábrica lança.
+
+```ts
+import { createBot, createHttp } from '@usebridger/core';
+import { telegram } from '@usebridger/transport-telegram';
+
+const bot = createBot({
+  http: createHttp({ port: 3000 }),
+  transport: telegram({
+    token: process.env.TELEGRAM_TOKEN ?? '',
+    webhook: {
+      // https, público; chega à rota POST /transports/telegram/webhook do core
+      url: 'https://bot.exemplo.com/transports/telegram/webhook',
+      secretToken: process.env.TELEGRAM_WEBHOOK_SECRET ?? '', // 1 a 256 de A-Z a-z 0-9 _ -
+    },
+  }),
+  plugins: [/* ... */],
+});
+```
+
+- **Rota:** `POST <basePath>/webhook`, ou seja, `/transports/telegram/webhook` na sessão
+  `default` e `/sessions/<sessão>/transports/telegram/webhook` nas outras. A `url` tem de levar
+  até ela (proxy reverso, túnel); o transport não confere o caminho.
+- **Segredo:** o Telegram devolve o `secretToken` no `X-Telegram-Bot-Api-Secret-Token` de cada
+  chamada, e o grammY confere em tempo constante. Sem o cabeçalho certo a rota responde 401 e o
+  update é descartado. É a única defesa da rota pública: gere um valor aleatório.
+- **Conexão:** o `connect()` faz o `getMe` e o `setWebhook` com o segredo e os mesmos
+  `allowed_updates` do polling; o `open` sai depois dele. O `disconnect()` **não** apaga o
+  webhook: a rota passa a responder 503 e o Telegram re-tenta os updates depois. Trocar para
+  polling funciona sozinho, porque o `start()` apaga o webhook.
+- **Queda:** sem `getUpdates`, o 401 do token vem do `getMe` ou do `setWebhook` e vira
+  `auth-failed`, como no polling. Outra falha na subida vira `connection-lost`. Não há 409.
+- Um update com erro de conversão vira log `telegram.update.failed` e a rota responde 200: o
+  Telegram não re-entrega um update que sempre falharia. Um update que chega no meio do
+  `disconnect()` recebe 503, e o Telegram o re-entrega.
+- Só uma instância por token: o `setWebhook` de outro processo troca a URL.
+
 ## Privacy mode
 
 Em grupo, o bot com privacy mode (o padrão do BotFather) só recebe comandos (`/cmd`), menções a
@@ -65,9 +108,9 @@ O comando chega como texto comum. O `/cmd@NomeDoBot` funciona sem configuração
 
 `send.text`, `send.image`, `send.video`, `send.audio`, `send.voice`, `send.sticker`,
 `send.document`, `send.album`, `media.download`, `media.ref`, `quoted`, `mentions`,
-`reactions`, `message.edit`, `message.delete`, `typing`, `actions`, `groups`, `groups.remove` e
-`groups.promote`. As enquetes ainda não estão; bot do Telegram não adiciona ninguém a grupo,
-então `groups.add` nunca vai estar.
+`reactions`, `message.edit`, `message.delete`, `polls`, `typing`, `actions`, `groups`,
+`groups.remove` e `groups.promote`. Bot do Telegram não adiciona ninguém a grupo, então
+`groups.add` nunca vai estar.
 
 Limites: 4096 caracteres de texto, 1024 de legenda e 10 itens por álbum (a fila de saída divide
 acima deles). Ritmo padrão da fila: 34 ms entre envios quaisquer (30 por segundo) e 1 s por
@@ -90,6 +133,7 @@ respeita.
 | Mensagem de serviço (entrou, saiu, fixou) | nada; o título novo vira `group.updated` |
 | `edited_message` | `message.edited` |
 | `callback_query` | clique num botão (`interaction`) |
+| `poll_answer` | `poll.vote` (veja [Enquetes](#enquetes)) |
 | `message_reaction` | `reaction` (só reação de emoji; a personalizada não vira evento) |
 | `my_chat_member` | `group.joined` / `group.left` |
 | `chat_member` | `group.participants` (`add`, `remove`, `promote`, `demote`, com o autor) |
@@ -145,6 +189,24 @@ respeita.
   `retryable: false`. Queda de rede e 5xx seguem sem campo, e a fila re-tenta com backoff
   ([Erros de envio](../../core/docs/transport.md#erros-de-envio)).
 
+## Enquetes
+
+- **Envio:** `reply.poll` vira `sendPoll` **não anônimo**, porque o Telegram só manda o voto
+  (`poll_answer`) de enquete não anônima ([ADR 0067](../../../docs/adr/0067-voto-em-enquete.md)).
+  O `multiple` vira `allows_multiple_answers`. Os limites da Bot API (de 2 a 12 opções, 300
+  caracteres na pergunta) voltam como 400, com `retryable: false`. Quem precisar de enquete
+  anônima, ou de quiz, usa `ctx.unsafe.native`, e o voto dela não chega.
+- **Canal:** a enquete sai não anônima como em qualquer chat; em canal o voto não chega ao bot, e
+  se o Telegram recusar a não anônima ali o envio volta 400 com `retryable: false`. Enquete
+  anônima vai pelo `ctx.unsafe.native`.
+- **Voto:** o `poll_answer` vira `poll.vote` com a escolha inteira em `options` (índices a partir
+  de 0); a lista vazia é o voto retirado. Quem vota como canal (`voter_chat`) vem como o próprio
+  canal.
+- **Restart:** o `poll_answer` não traz o chat nem a mensagem, então o transport guarda em memória
+  o `poll_id` das últimas 1000 enquetes que enviou. Voto de enquete enviada antes do restart (ou
+  já expulsa dessa lista) é descartado, com log `telegram.poll.vote-unknown` em `debug`. O plugin
+  que apura votos por muito tempo guarda a apuração no próprio storage a cada evento.
+
 ## Grupos
 
 - `getGroupMetadata` traz título, descrição e o dono (dos admins). Não traz `participants`: o
@@ -182,8 +244,12 @@ Os eventos de log do pacote estão no
 - **`BotConfigError` ao subir:** o token está vazio ou fora do formato `123456:ABC-DEF`. Confira
   se a variável de ambiente existe.
 - **O bot para com `auth-failed`:** o BotFather revogou o token ou ele está errado.
+- **Webhook sem receber nada:** confira se a `url` chega à rota do core e se o `secretToken`
+  é o mesmo; use `getWebhookInfo` (`ctx.unsafe.native.api`) para ver o `last_error_message`.
 - **O bot para com `replaced`:** outro processo usa o mesmo token. Só uma instância pode fazer
   long polling por bot.
 - **No grupo, o bot só responde a comandos:** é o [privacy mode](#privacy-mode).
+- **Voto em enquete não chega:** a enquete é de antes do restart (veja [Enquetes](#enquetes)) ou foi
+  enviada anônima por fora do transport.
 - **Sem reações nem entrada/saída de membros:** esses eventos só chegam com o bot admin do grupo.
 - **Arquivo grande não baixa:** a Bot API não entrega arquivo acima de 20 MB.
