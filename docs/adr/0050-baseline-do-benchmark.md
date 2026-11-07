@@ -1,5 +1,7 @@
 # ADR 0050 — Baseline do benchmark medido no mesmo job, a partir do commit base
 
+> Em quais eventos o job roda: alterado pelo [ADR 0139](0139-benchmark-fora-do-pr.md).
+
 **Status:** Aceito (2026-10-09) · Detalha **D27** ([ADR 0027](0027-metas-de-performance.md))
 
 ## Contexto

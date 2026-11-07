@@ -18,7 +18,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: pnpm lint
 
@@ -26,7 +26,7 @@ jobs:
     name: Typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: pnpm typecheck
 
@@ -50,7 +50,7 @@ jobs:
     env:
       BRIDGER_TEST_POSTGRES_URL: postgres://postgres:postgres@localhost:5432/postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: pnpm test
 
@@ -58,7 +58,7 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: pnpm build
 
@@ -68,7 +68,7 @@ jobs:
     name: Pacotes
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: pnpm build
       - run: pnpm check:packages
@@ -80,7 +80,7 @@ jobs:
     name: Docs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: pnpm build
       - run: pnpm run docs
@@ -91,7 +91,7 @@ jobs:
     name: Scaffold
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: pnpm build
       - run: pnpm --filter create-bridger-plugin e2e
@@ -99,11 +99,13 @@ jobs:
   # Metas do plano §7 e piora > 10% sobre o baseline (ADR 0050). O baseline é medido neste mesmo
   # runner, intercalado com o commit testado (ADR 0085): entre máquinas diferentes, ou mesmo entre
   # dois momentos do runner, a variação passa dos 10%.
+  # Leva ~19 min: roda no push da develop/main e só no PR com o label `bench` (ADR 0139).
   benchmark:
     name: Benchmark
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'bench')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # O baseline é o primeiro pai do commit testado: a base, no merge commit do PR; o commit
           # anterior, no push.

@@ -43,7 +43,8 @@ describe('cenários', () => {
     const load = { warmup: 500, messages: 3_000, logged: true };
     expect(await throughput({ ...load, trail: 'info' })).toBeGreaterThan(0);
     expect(await throughput({ ...load, trail: 'off' })).toBeGreaterThan(0);
-  });
+    // Duas vazões seguidas: com a suíte toda disputando CPU, passa dos 5 s padrão (#325).
+  }, 30_000);
 
   it('overhead e vazão com o plugin-metrics carregado', async () => {
     expect(await overhead({ warmup: 30, messages: 300, metrics: true })).toBeGreaterThan(0);
