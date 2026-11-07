@@ -1,6 +1,7 @@
 # ADR 0103 — Plugins oficiais de métricas e dashboard
 
-**Status:** Aceito (2026-10-17) · Agregação, histograma, `/metrics` e retenção: substituídos em
+**Status:** Aceito (2026-10-17) · O `plugin-dashboard`: substituído pelo **D138**
+([ADR 0138](0138-sem-dashboard-oficial.md)) · Agregação, histograma, `/metrics` e retenção: substituídos em
 parte pelo **D121** ([ADR 0121](0121-plugin-metrics-sobre-o-prom-client.md)) · Substitui parte do **D82**
 ([ADR 0082](0082-plugins-da-luma-no-lumabot.md)) · Detalha **D19**
 ([ADR 0019](0019-dashboard-vira-plugin.md)) · Usa **D102** ([ADR 0102](0102-observadores-do-core.md))

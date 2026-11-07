@@ -16,7 +16,8 @@ plugins.
 - **Config e segredos**: cada plugin declara o que é configurável (schema Zod); os valores vêm de
   variável de ambiente, e segredo nunca vai para o log.
 - **Storage e scheduler**: dados dos plugins e jobs agendados em SQLite ou Postgres.
-- **Dashboard e métricas**: plugins oficiais com painel web e métricas Prometheus.
+- **API HTTP e métricas**: API do core em OpenAPI para o painel de cada app, e plugin oficial de
+  métricas Prometheus.
 - **Kit de testes**: teste o plugin sobre um transport falso, sem rede.
 
 Exemplo real de um bot construído sobre o Bridger: [LumaBot](https://github.com/murillous/LumaBot).
@@ -34,7 +35,6 @@ Exemplo real de um bot construído sobre o Bridger: [LumaBot](https://github.com
 | [`@usebridger/testing`](packages/testing/docs/README.md) | Kit de testes: bot com transport falso e matchers para o Vitest |
 | [`create-bridger-plugin`](packages/create-plugin/docs/README.md) | Gera um plugin pronto para desenvolver, testar e publicar |
 | [`@usebridger/plugin-metrics`](packages/plugin-metrics/docs/README.md) | Plugin oficial de métricas (Prometheus) |
-| [`@usebridger/plugin-dashboard`](packages/plugin-dashboard/docs/README.md) | Plugin oficial com painel web do bot |
 
 ## Setup
 

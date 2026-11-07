@@ -1,6 +1,6 @@
 # ADR 0019 — Dashboard vira plugin
 
-**Status:** Aceito (2026-10-06) · Decisão **D19** do [plano](../../BRIDGER_PLAN.md#4-decisões) ·
+**Status:** Substituído por [ADR 0138](0138-sem-dashboard-oficial.md) (2026-11-07) · Aceito (2026-10-06) · Decisão **D19** do [plano](../../BRIDGER_PLAN.md#4-decisões) ·
 Rotas e autenticação do dashboard substituídas pelo **D125**
 ([ADR 0125](0125-api-http-do-core-e-dashboard-cliente.md))
 

@@ -1,7 +1,6 @@
 ---
 "@usebridger/core": patch
 "create-bridger-plugin": patch
-"@usebridger/plugin-dashboard": patch
 "@usebridger/plugin-metrics": patch
 "@usebridger/storage-postgres": patch
 "@usebridger/storage-sqlite": patch
