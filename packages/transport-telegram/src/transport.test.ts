@@ -795,6 +795,62 @@ describe('álbum no envio', () => {
   });
 });
 
+describe('álbum no envio: retry, tópico e botões', () => {
+  const photo = (url: string) => ({ type: 'image' as const, media: { url } });
+  const pdf = {
+    type: 'document' as const,
+    media: { url: 'https://x/a.pdf' },
+    fileName: 'a.pdf',
+    mimetype: 'application/pdf',
+  };
+
+  it('429 no segundo envio: a nova tentativa com o mesmo content não reenvia o primeiro', async () => {
+    const { fake, transport } = await connected();
+    let failed = false;
+    fake.handlers.set('sendDocument', () => {
+      if (failed) return { message_id: 2000, date: 1, chat: DM, text: '' };
+      failed = true;
+      return failure(429, 'Too Many Requests', { retry_after: 1 });
+    });
+    // A fila re-tenta com o mesmo objeto: o teste faz o mesmo.
+    const content = {
+      type: 'album' as const,
+      items: [photo('https://x/1.jpg'), photo('https://x/2.jpg'), pdf],
+    };
+    await expect(transport.send('7', content)).rejects.toMatchObject({ retryAfterMs: 1000 });
+    const key = await transport.send('7', content);
+    expect(fake.callsTo('sendMediaGroup')).toHaveLength(1);
+    expect(fake.callsTo('sendDocument')).toHaveLength(2);
+    expect(key.id).toBe('1000');
+    // Concluído, a chave guardada é esquecida: um novo envio do mesmo objeto sai de novo.
+    await transport.send('7', content);
+    expect(fake.callsTo('sendMediaGroup')).toHaveLength(2);
+  });
+
+  it('o tópico de fórum vai nos dois envios', async () => {
+    const { fake, transport } = await connected();
+    await transport.send('-100123/5', {
+      type: 'album',
+      items: [photo('https://x/1.jpg'), photo('https://x/2.jpg'), pdf],
+    });
+    expect(fake.callsTo('sendMediaGroup')[0]).toMatchObject({ message_thread_id: 5 });
+    expect(fake.callsTo('sendDocument')[0]).toMatchObject({ message_thread_id: 5 });
+  });
+
+  it('álbum com botões é recusado, sem enviar nada e sem re-tentativa', async () => {
+    const { fake, transport } = await connected();
+    const error = await transport
+      .send(
+        '7',
+        { type: 'album', items: [photo('https://x/1.jpg'), photo('https://x/2.jpg')] },
+        { actions: [{ id: 'a', label: 'A' }] },
+      )
+      .catch((e: unknown) => e);
+    expect(error).toMatchObject({ retryable: false });
+    expect(fake.callsTo('sendMediaGroup')).toHaveLength(0);
+  });
+});
+
 describe('álbum na entrada', () => {
   const photoUpdate = (groupId: string, fileId: string, fields: Record<string, unknown> = {}) => ({
     message: tgMessage({
@@ -826,7 +882,7 @@ describe('álbum na entrada', () => {
     fake.push(photoUpdate('g1', 'c', { caption: 'legenda' }));
     // Outro grupo não se mistura.
     fake.push(photoUpdate('g2', 'x'));
-    await vi.waitFor(() => expect(messages).toHaveLength(2));
+    await vi.waitFor(() => expect(messages).toHaveLength(2), { timeout: 2000 });
     const message = messages.find((m) => m.attachments.length === 3);
     if (message === undefined) throw new Error('esperava o álbum de três anexos');
     expect(message.type).toBe('image');
@@ -845,11 +901,21 @@ describe('álbum na entrada', () => {
 
   it('a janela conta desde o último update: um update tardio ainda entra no álbum', async () => {
     const { fake, transport } = await connected();
-    const got = next(transport, 'message');
+    const messages: Message[] = [];
+    transport.on('message', (m) => {
+      messages.push(m);
+    });
+    // Três updates a ~350 ms um do outro: cada um dentro da janela de 500 ms do anterior, mas o
+    // último chega 700 ms depois do primeiro. Contada desde o primeiro, sairiam dois álbuns.
     fake.push(photoUpdate('g', 'a'));
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 350));
     fake.push(photoUpdate('g', 'b'));
-    expect((await got).attachments).toHaveLength(2);
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    fake.push(photoUpdate('g', 'c'));
+    await vi.waitFor(() => expect(messages).toHaveLength(1), { timeout: 2000 });
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.attachments).toHaveLength(3);
   });
 
   it('edição de item do álbum não é juntada: sai como message.edited', async () => {

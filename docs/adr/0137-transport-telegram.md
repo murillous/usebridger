@@ -42,9 +42,9 @@ Alternativas consideradas:
   legenda, citação, menções, botões com `callback_query`, menu de comandos (`setMyCommands`),
   "digitando", reações, edição, apagamento, download e referência de mídia (`file_id`), grupos
   com consulta de admin, remoção e promoção de participantes, e tópicos de fórum no `chat.id`. O
-  álbum (envio e agrupamento na entrada, #308), as enquetes (#309) e o webhook (#310) ficam para
+  álbum entrou com a #308 (ver "Álbum" abaixo). As enquetes (#309) e o webhook (#310) ficam para
   issues próprias. O
-  transport não declara `send.album` nem `polls` até lá.
+  transport não declara `polls` até lá.
 - **Texto cru vai sem `parse_mode`.** A Bot API devolve 400 numa marcação mal escapada, e um `<`
   ou `_` solto num texto comum derrubaria o envio. Quem quer formatação usa a árvore neutra, que o
   transport renderiza em HTML com escape. A menção da árvore vira um link `tg://user?id=`, que
@@ -61,7 +61,7 @@ Alternativas consideradas:
   serviço (`new_chat_members`). O Telegram só manda o `chat_member` a bot admin. As mensagens de
   serviço não viram `message`.
 - **Ritmo e limites:** `pacing` de 34 ms global (30 mensagens/s) e 1000 ms por chat; `limits` de
-  4096 de texto e 1024 de legenda.
+  4096 de texto, 1024 de legenda e 10 itens por álbum.
 
 ## Consequências
 
@@ -72,7 +72,16 @@ Alternativas consideradas:
 - A Bot API não avisa quando uma mensagem é apagada: o transport nunca emite `message.deleted`.
   Uma menção `@usuario` sem conta vinculada não traz ID: só a menção ao próprio bot entra em
   `mentions`.
-- O perfil `telegram` do kit de testes (ADR 0069) continua com `send.album` e `polls`, que é o
-  alvo. O transport passa a declará-los quando as issues de álbum e enquete fecharem.
+- O perfil `telegram` do kit de testes (ADR 0069) continua com `polls`, que é o alvo. O
+  transport passa a declará-lo quando a issue de enquete fechar. O `send.album` já bate com o
+  perfil desde a #308.
+- **Álbum (#308).** O transport declara `send.album` com `limits.album: 10`. Entrada: os updates
+  com o mesmo `media_group_id` viram uma `message` com `attachments`, depois de 500 ms sem novo
+  update do grupo (a janela é contada desde o último); o `disconnect()` e a queda terminal
+  descartam o álbum pendente. Envio: documento não se mistura com foto ou vídeo no
+  `sendMediaGroup`, então o álbum misto sai em dois envios, o do primeiro item na frente (a ordem
+  original não vale entre eles), com a legenda e a citação, e a chave devolvida é a do primeiro. Se
+  o segundo falhar, a nova tentativa da fila (mesmo `content`) pula o primeiro, sem duplicá-lo.
+  `actions` num álbum rejeita com `retryable: false`, porque o `sendMediaGroup` não tem botões.
 - Depois de um `stop()` durante uma falha de rede, o `sleep` de 3 s do `handlePollingError` do
   grammY ainda termina sozinho. Ele não emite nada, porque a tentativa já foi invalidada.

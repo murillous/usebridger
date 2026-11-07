@@ -147,6 +147,11 @@ export class TelegramTransport implements Transport {
   #menu: string | undefined;
   /** Álbuns de entrada incompletos, por `chat.id:media_group_id`. */
   readonly #albums = new Map<string, PendingAlbum>();
+  /**
+   * Chave do primeiro álbum de um envio dividido, por `content`. A fila re-tenta com o mesmo
+   * objeto, e a chave evita reenviar o que já saiu. Fraco: o objeto some com o envio.
+   */
+  readonly #albumKeys = new WeakMap<OutgoingContent, MessageKey>();
 
   constructor(driver: TelegramDriver, deps: TransportDeps) {
     this.#driver = driver;
@@ -211,16 +216,21 @@ export class TelegramTransport implements Transport {
         (error: unknown) => {
           if (!current()) return;
           this.#bot = null;
+          this.#dropAlbums();
           const reason = toDisconnectReason(error);
           this.#events.emit('connection.status', { status: 'closed', reason, error });
         },
       );
   }
 
-  async disconnect(): Promise<void> {
-    // O álbum pendente é descartado: o timer não pode disparar depois da desconexão.
+  /** Descarta os álbuns de entrada pendentes: o timer não pode disparar sem conexão. */
+  #dropAlbums(): void {
     for (const pending of this.#albums.values()) clearTimeout(pending.timer);
     this.#albums.clear();
+  }
+
+  async disconnect(): Promise<void> {
+    this.#dropAlbums();
     const bot = this.#bot;
     if (bot === null) return;
     this.#bot = null;
@@ -398,6 +408,12 @@ export class TelegramTransport implements Transport {
         }),
     };
     if (content.type === 'album') {
+      if (options?.actions !== undefined && options.actions.length > 0) {
+        // `retryable: false`: sem isso a fila re-tentaria um erro que nunca passa.
+        throw Object.assign(new TypeError('telegram: o álbum não aceita botões (actions)'), {
+          retryable: false,
+        });
+      }
       const { message_thread_id: thread, reply_parameters: reply } = other;
       return this.#sendAlbum(chatId, chat_id, content, {
         ...(thread !== undefined && { message_thread_id: thread }),
@@ -445,8 +461,8 @@ export class TelegramTransport implements Transport {
    * O `sendMediaGroup` não mistura documento com foto ou vídeo (ADR 0061): vira um álbum de cada,
    * o do primeiro item na frente, com a legenda e a citação. A chave é a da primeira mensagem do
    * primeiro. Um grupo de um item só sai como mensagem comum, porque o álbum pede de 2 a 10. Se o
-   * segundo falhar depois do primeiro enviado, o erro sobe e a fila re-tenta o álbum inteiro; o
-   * primeiro pode sair duas vezes, porque a Bot API não tem como desfazê-lo.
+   * segundo falhar depois do primeiro enviado, o erro sobe e a fila re-tenta com o mesmo objeto
+   * `content`: a chave do primeiro fica em `#albumKeys` e a nova tentativa só envia o que falta.
    */
   async #sendAlbum(
     chatId: string,
@@ -460,8 +476,11 @@ export class TelegramTransport implements Transport {
     const sameKind = (item: AlbumItem): boolean =>
       (item.type === 'document') === (head.type === 'document');
     const lots = [content.items.filter(sameKind), content.items.filter((i) => !sameKind(i))];
-    let key: MessageKey | undefined;
-    for (const [index, lot] of lots.filter((l) => l.length > 0).entries()) {
+    const filled = lots.filter((l) => l.length > 0);
+    // Tentativa repetida: o primeiro álbum já saiu, e reenviá-lo duplicaria a mensagem.
+    let key = this.#albumKeys.get(content);
+    for (const [index, lot] of filled.entries()) {
+      if (index === 0 && key !== undefined) continue;
       // A legenda e a citação ficam no primeiro álbum; o segundo sai solto.
       const { reply_parameters: _quoted, ...unquoted } = extra;
       const options = index === 0 ? extra : unquoted;
@@ -481,8 +500,12 @@ export class TelegramTransport implements Transport {
       });
       const first = sent[0];
       if (first === undefined) throw new Error('telegram: o sendMediaGroup não devolveu mensagens');
-      key ??= { chatId, id: String(first.message_id), fromMe: true, senderId: null };
+      if (index === 0) {
+        key = { chatId, id: String(first.message_id), fromMe: true, senderId: null };
+        if (filled.length > 1) this.#albumKeys.set(content, key);
+      }
     }
+    this.#albumKeys.delete(content);
     if (key === undefined) throw new TypeError('telegram: álbum sem itens');
     return key;
   }
