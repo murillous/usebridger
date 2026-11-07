@@ -22,7 +22,7 @@ jobs:
     if: github.repository == 'murillous/usebridger' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       # O TypeDoc do site lê o fonte dos pacotes, que resolve os imports entre eles pelo dist.
       - run: pnpm build

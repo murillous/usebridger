@@ -23,3 +23,5 @@ site/src/content/docs/api/
 examples/*/data/
 # Referência HTML gerada localmente pelo TypeDoc.
 docs/referencia/
+# Spec OpenAPI do core, copiada do snapshot por site/scripts/sync-content.ts.
+site/public/openapi.json

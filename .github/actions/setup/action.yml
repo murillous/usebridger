@@ -5,9 +5,9 @@ runs:
   using: composite
   steps:
     # Antes do setup-node: o cache precisa do pnpm instalado para achar o store.
-    - uses: pnpm/action-setup@v4
+    - uses: pnpm/action-setup@v6
 
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v7
       with:
         node-version-file: .nvmrc
         # Cacheia o store do pnpm, com chave pelo hash do pnpm-lock.yaml.

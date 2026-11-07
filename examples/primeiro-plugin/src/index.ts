@@ -32,7 +32,7 @@ export const ola: PluginDefinition = definePlugin({
   },
   setup(ctx) {
     const saudacoes = ctx.storage.collection<Saudacao>('saudacoes');
-    // Dados na API do core, sem UI: o dashboard (ou outro app) desenha a tela pelo schema. Sem
+    // Dados na API do core, sem UI: o frontend do app desenha a tela pelo schema. Sem
     // `http` no `createBot`, o recurso só fica no ponto, sem rota.
     ctx.services.contribute(
       'api.resources',

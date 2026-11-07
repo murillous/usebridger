@@ -90,7 +90,7 @@ Débitos que **impedem** um kernel de verdade e que o Bridger deve corrigir por 
 | 9 | Sem contrato de eventos | Só `messages.upsert` chega aos plugins | Barramento tipado: mensagem, reação, edição, deleção, grupo (entrada/saída/update), conexão, QR |
 | 10 | Sem fila de saída | Só há rate limit de entrada; rajadas de envio arriscam ban | Fila de saída com taxa global/por chat, prioridade e retry |
 | 11 | Auth em arquivos | `useMultiFileAuthState` (não recomendado pelo Baileys em produção) | Auth state no `StoragePort` (SQLite/Postgres) |
-| 12 | Dashboard via stdout | Sinais `[LUMA_QR]`, `[LUMA_STATUS]` parseados de texto; processo filho | Dashboard vira plugin, cliente da API HTTP do core (D19, D125) |
+| 12 | Dashboard via stdout | Sinais `[LUMA_QR]`, `[LUMA_STATUS]` parseados de texto; processo filho | API HTTP do core; cada app monta o próprio dashboard (D125, D138) |
 
 ---
 
@@ -116,7 +116,6 @@ bridger/
 │   ├── storage-postgres/     # @usebridger/storage-postgres
 │   ├── testing/              # @usebridger/testing — FakeTransport, createTestBot, matchers
 │   ├── plugin-metrics/       # @usebridger/plugin-metrics (D103)
-│   ├── plugin-dashboard/     # @usebridger/plugin-dashboard (D103)
 │   └── create-plugin/        # create-bridger-plugin — scaffold
 ├── bench/                    # benchmarks do CI
 └── docs/
@@ -150,7 +149,7 @@ bridger/
 | API HTTP | OpenAPI em `/openapi.json`, auth (usuários, API keys, papéis), SSE, `api.resources` (D125) |
 | Logger | pino estruturado com `plugin` no contexto |
 
-**Plugins oficiais** (no `usebridger`, D103): metrics e dashboard.
+**Plugin oficial** (no `usebridger`, D103): metrics. Dashboard é de cada app, sobre a API do core (D138).
 
 **Plugins da Luma** (no `LumaBot`, D82): help (gerado a partir dos comandos registrados), everyone (`@todos`),
 user-names (resolução JID → nome/nick, provê service), media (sticker/imagem/GIF/PDF), download
@@ -517,6 +516,7 @@ sem rota nem auth próprias. Atendimento humano fica com cada app (ex.: Chatwoot
 - #M7-8 Ponto de extensão `api.resources` no lugar do `dashboard.tabs` (#279)
 - #M7-9 Auditoria na API: consulta, exportação e `verify` (#261)
 - #M7-10 `plugin-dashboard` refeito como cliente genérico da API (#280)
+- #M7-11 ADR 0138: sai o `plugin-dashboard`; cada app monta o seu painel sobre a API
 
 ### v1.0
 

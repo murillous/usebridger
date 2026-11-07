@@ -1,6 +1,7 @@
 # ADR 0125 — API HTTP do core em OpenAPI e dashboard como cliente
 
-**Status:** Aceito (2026-10-25) · Substitui o **D104**
+**Status:** Aceito (2026-10-25) · O `plugin-dashboard` como cliente: substituído pelo **D138**
+([ADR 0138](0138-sem-dashboard-oficial.md)) · Substitui o **D104**
 ([ADR 0104](0104-abas-do-dashboard-por-ponto-de-extensao.md)), o **D109**
 ([ADR 0109](0109-contrato-das-abas-do-dashboard-complemento.md)) e o **D114**
 ([ADR 0114](0114-titulo-tom-e-rotulo-nos-widgets-das-abas.md)) · Substitui em parte o **D19**

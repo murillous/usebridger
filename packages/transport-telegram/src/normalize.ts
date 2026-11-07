@@ -113,19 +113,23 @@ export function senderOf(message: Pick<TgMessage, 'from' | 'sender_chat'>): Cont
 
 /**
  * Converte a mensagem. `null` para mensagem de serviço e para o que não tem remetente. A citada
- * vem sem a própria citada, como a Bot API a entrega.
+ * vem sem a própria citada, como a Bot API a entrega. Com `album`, as mensagens do mesmo
+ * `media_group_id` (a primeira é `message`) viram uma só: `message` dá o ID, o remetente e a
+ * citação, e a mídia de cada uma entra em `attachments` (ADR 0061).
  */
 export function toMessage(
   message: TgMessage,
   env: NormalizeEnv,
-  options: { readonly edited?: boolean } = {},
+  options: { readonly edited?: boolean; readonly album?: readonly TgMessage[] } = {},
 ): Message | null {
   const sender = senderOf(message);
   if (sender === null) return null;
   const content = contentOf(message, env);
   if (content === null) return null;
-  const text = message.text ?? message.caption ?? null;
-  const entities = message.entities ?? message.caption_entities ?? [];
+  // O Telegram põe a legenda do álbum em uma só das mensagens, em geral a primeira.
+  const captioned = options.album?.find((m) => m.caption !== undefined) ?? message;
+  const text = captioned.text ?? captioned.caption ?? null;
+  const entities = captioned.entities ?? captioned.caption_entities ?? [];
   const selfId = env.self?.id;
   // No tópico, toda mensagem responde à criação do tópico: isso não é citação.
   const reply = message.reply_to_message;
@@ -147,8 +151,23 @@ export function toMessage(
     mentions: text === null ? [] : mentionsOf(text, entities, env.self),
     isForwarded: message.forward_origin !== undefined,
     isEdited: options.edited ?? false,
+    ...(options.album !== undefined &&
+      'media' in content && { attachments: albumMedia(options.album, content.media, env) }),
   } as MessageInit;
   return createMessage(init);
+}
+
+/** A mídia de cada mensagem do álbum; a primeira é a `media` já criada, o mesmo objeto. */
+function albumMedia(
+  album: readonly TgMessage[],
+  first: MediaSource,
+  env: NormalizeEnv,
+): readonly MediaSource[] {
+  const rest = album.slice(1).flatMap((m) => {
+    const content = contentOf(m, env);
+    return content !== null && 'media' in content ? [content.media] : [];
+  });
+  return [first, ...rest];
 }
 
 type Content =

@@ -86,7 +86,7 @@ Usar uma capability que o transport não tem rejeita com `UnsupportedError` (com
 | `send.voice` | ✓ | ✓ | — | — |
 | `send.sticker` | ✓ | ✓ | — | — |
 | `send.document` | ✓ | ✓ | ✓ | ✓ |
-| `send.album` | — | — | ✓ | — |
+| `send.album` | — | ✓ | ✓ | — |
 | `media.download` | ✓ | ✓ | ✓ | ✓ |
 | `media.ref` | ✓ | ✓ | — | — |
 | `quoted` | ✓ | ✓ | ✓ | ✓ |
@@ -94,7 +94,7 @@ Usar uma capability que o transport não tem rejeita com `UnsupportedError` (com
 | `reactions` | ✓ | ✓ | ✓ | — |
 | `message.edit` | ✓ | ✓ | ✓ | ✓ |
 | `message.delete` | ✓ | ✓ | ✓ | ✓ |
-| `polls` | ✓ | — | ✓ | — |
+| `polls` | ✓ | ✓ | ✓ | — |
 | `actions` | — | ✓ | ✓ | ✓ |
 | `typing` | ✓ | ✓ | ✓ | ✓ |
 | `groups` | ✓ | ✓ | ✓ | — |

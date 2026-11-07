@@ -685,3 +685,419 @@ describe('menu de comandos', () => {
     expect(fake.callsTo('setMyCommands')).toHaveLength(2);
   });
 });
+
+describe('álbum no envio', () => {
+  const photo = (url: string) => ({ type: 'image' as const, media: { url } });
+  const doc = (url: string, fileName: string) => ({
+    type: 'document' as const,
+    media: { url },
+    fileName,
+    mimetype: 'application/pdf',
+  });
+
+  it('declara send.album e o limite de dez itens', () => {
+    const { transport } = setup();
+    expect(transport.capabilities.has('send.album')).toBe(true);
+    expect(transport.limits.album).toBe(10);
+  });
+
+  it('foto e vídeo vão num sendMediaGroup, com a legenda no primeiro item', async () => {
+    const { fake, transport } = await connected();
+    const key = await transport.send(
+      '-100123/5',
+      {
+        type: 'album',
+        items: [photo('https://x/a.jpg'), { type: 'video', media: { url: 'https://x/b.mp4' } }],
+        caption: 'c',
+        formattedCaption: fmt`${bold('c')}`,
+      },
+      { quoted: { id: '9' } as Message },
+    );
+    expect(fake.callsTo('sendMediaGroup')).toEqual([
+      {
+        chat_id: -100123,
+        message_thread_id: 5,
+        reply_parameters: { message_id: 9, allow_sending_without_reply: true },
+        media: [
+          { type: 'photo', media: 'https://x/a.jpg', caption: '<b>c</b>', parse_mode: 'HTML' },
+          { type: 'video', media: 'https://x/b.mp4' },
+        ],
+      },
+    ]);
+    expect(key).toEqual({ chatId: '-100123/5', id: '1000', fromMe: true, senderId: null });
+  });
+
+  it('documento e foto viram dois álbuns: legenda e citação no primeiro, chave do primeiro', async () => {
+    const { fake, transport } = await connected();
+    const key = await transport.send(
+      '7',
+      {
+        type: 'album',
+        items: [
+          photo('https://x/1.jpg'),
+          doc('https://x/a.pdf', 'a.pdf'),
+          photo('https://x/2.jpg'),
+        ],
+        caption: 'c',
+      },
+      { quoted: { id: '9' } as Message },
+    );
+    const sends = fake.calls.filter((c) => c.method.startsWith('send'));
+    expect(sends.map((c) => c.method)).toEqual(['sendMediaGroup', 'sendDocument']);
+    expect(sends[0]?.payload).toEqual({
+      chat_id: 7,
+      reply_parameters: { message_id: 9, allow_sending_without_reply: true },
+      media: [
+        { type: 'photo', media: 'https://x/1.jpg', caption: 'c' },
+        { type: 'photo', media: 'https://x/2.jpg' },
+      ],
+    });
+    // O documento sozinho sai como mensagem comum, sem legenda nem citação.
+    expect(sends[1]?.payload).toMatchObject({ chat_id: 7 });
+    expect(sends[1]?.payload).not.toHaveProperty('caption');
+    expect(sends[1]?.payload).not.toHaveProperty('reply_parameters');
+    expect(key.id).toBe('1000');
+  });
+
+  it('começando por documento, o álbum de documentos vai primeiro e leva a legenda', async () => {
+    const { fake, transport } = await connected();
+    await transport.send('7', {
+      type: 'album',
+      items: [
+        doc('https://x/a.pdf', 'a.pdf'),
+        photo('https://x/1.jpg'),
+        doc('https://x/b.pdf', 'b.pdf'),
+      ],
+      caption: 'c',
+    });
+    const [group] = fake.callsTo('sendMediaGroup');
+    expect(group?.['media']).toMatchObject([
+      { type: 'document', caption: 'c' },
+      { type: 'document' },
+    ]);
+    expect(fake.callsTo('sendPhoto')).toHaveLength(1);
+    expect(fake.callsTo('sendPhoto')[0]).not.toHaveProperty('caption');
+  });
+
+  it('o erro do segundo álbum sobe com a classificação da API', async () => {
+    const { fake, transport } = await connected();
+    fake.handlers.set('sendDocument', () => failure(400, 'Bad Request: wrong file'));
+    await expect(
+      transport.send('7', {
+        type: 'album',
+        items: [
+          photo('https://x/1.jpg'),
+          photo('https://x/2.jpg'),
+          doc('https://x/a.pdf', 'a.pdf'),
+        ],
+      }),
+    ).rejects.toMatchObject({ retryable: false });
+  });
+});
+
+describe('álbum no envio: retry, tópico e botões', () => {
+  const photo = (url: string) => ({ type: 'image' as const, media: { url } });
+  const pdf = {
+    type: 'document' as const,
+    media: { url: 'https://x/a.pdf' },
+    fileName: 'a.pdf',
+    mimetype: 'application/pdf',
+  };
+
+  it('429 no segundo envio: a nova tentativa com o mesmo content não reenvia o primeiro', async () => {
+    const { fake, transport } = await connected();
+    let failed = false;
+    fake.handlers.set('sendDocument', () => {
+      if (failed) return { message_id: 2000, date: 1, chat: DM, text: '' };
+      failed = true;
+      return failure(429, 'Too Many Requests', { retry_after: 1 });
+    });
+    // A fila re-tenta com o mesmo objeto: o teste faz o mesmo.
+    const content = {
+      type: 'album' as const,
+      items: [photo('https://x/1.jpg'), photo('https://x/2.jpg'), pdf],
+    };
+    await expect(transport.send('7', content)).rejects.toMatchObject({ retryAfterMs: 1000 });
+    const key = await transport.send('7', content);
+    expect(fake.callsTo('sendMediaGroup')).toHaveLength(1);
+    expect(fake.callsTo('sendDocument')).toHaveLength(2);
+    expect(key.id).toBe('1000');
+    // Concluído, a chave guardada é esquecida: um novo envio do mesmo objeto sai de novo.
+    await transport.send('7', content);
+    expect(fake.callsTo('sendMediaGroup')).toHaveLength(2);
+  });
+
+  it('o tópico de fórum vai nos dois envios', async () => {
+    const { fake, transport } = await connected();
+    await transport.send('-100123/5', {
+      type: 'album',
+      items: [photo('https://x/1.jpg'), photo('https://x/2.jpg'), pdf],
+    });
+    expect(fake.callsTo('sendMediaGroup')[0]).toMatchObject({ message_thread_id: 5 });
+    expect(fake.callsTo('sendDocument')[0]).toMatchObject({ message_thread_id: 5 });
+  });
+
+  it('álbum com botões é recusado, sem enviar nada e sem re-tentativa', async () => {
+    const { fake, transport } = await connected();
+    const error = await transport
+      .send(
+        '7',
+        { type: 'album', items: [photo('https://x/1.jpg'), photo('https://x/2.jpg')] },
+        { actions: [{ id: 'a', label: 'A' }] },
+      )
+      .catch((e: unknown) => e);
+    expect(error).toMatchObject({ retryable: false });
+    expect(fake.callsTo('sendMediaGroup')).toHaveLength(0);
+  });
+});
+
+describe('álbum na entrada', () => {
+  const photoUpdate = (groupId: string, fileId: string, fields: Record<string, unknown> = {}) => ({
+    message: tgMessage({
+      media_group_id: groupId,
+      photo: [{ file_id: fileId, file_unique_id: fileId, width: 9, height: 9 }],
+      ...fields,
+    }),
+  });
+
+  it('junta os updates do mesmo media_group_id numa message só, com a legenda e os anexos', async () => {
+    const { fake, transport } = await connected();
+    const messages: Message[] = [];
+    transport.on('message', (m) => {
+      messages.push(m);
+    });
+    const first = photoUpdate('g1', 'a');
+    fake.push(first);
+    fake.push({
+      message: tgMessage({
+        media_group_id: 'g1',
+        document: {
+          file_id: 'd',
+          file_unique_id: 'd',
+          file_name: 'n.pdf',
+          mime_type: 'application/pdf',
+        },
+      }),
+    });
+    fake.push(photoUpdate('g1', 'c', { caption: 'legenda' }));
+    // Outro grupo não se mistura.
+    fake.push(photoUpdate('g2', 'x'));
+    await vi.waitFor(() => expect(messages).toHaveLength(2), { timeout: 2000 });
+    const message = messages.find((m) => m.attachments.length === 3);
+    if (message === undefined) throw new Error('esperava o álbum de três anexos');
+    expect(message.type).toBe('image');
+    expect(message.id).toBe(String(first.message.message_id));
+    expect(message.text).toBe('legenda');
+    expect(message.attachments.map((m) => m.mimetype)).toEqual([
+      'image/jpeg',
+      'application/pdf',
+      'image/jpeg',
+    ]);
+    expect(message.attachments[0]).toBe(message.is('image') ? message.media : undefined);
+    expect(message.attachments[1]?.fileName).toBe('n.pdf');
+    expect(transport.raw(message)).toMatchObject({ update_id: 1 });
+    expect(messages.find((m) => m !== message)?.attachments).toHaveLength(1);
+  });
+
+  it('a janela conta desde o último update: um update tardio ainda entra no álbum', async () => {
+    const { fake, transport } = await connected();
+    const messages: Message[] = [];
+    transport.on('message', (m) => {
+      messages.push(m);
+    });
+    // Três updates a ~350 ms um do outro: cada um dentro da janela de 500 ms do anterior, mas o
+    // último chega 700 ms depois do primeiro. Contada desde o primeiro, sairiam dois álbuns.
+    fake.push(photoUpdate('g', 'a'));
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    fake.push(photoUpdate('g', 'b'));
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    fake.push(photoUpdate('g', 'c'));
+    await vi.waitFor(() => expect(messages).toHaveLength(1), { timeout: 2000 });
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.attachments).toHaveLength(3);
+  });
+
+  it('edição de item do álbum não é juntada: sai como message.edited', async () => {
+    const { fake, transport } = await connected();
+    const got = next(transport, 'message.edited');
+    fake.push({ edited_message: photoUpdate('g', 'a').message });
+    expect((await got).isEdited).toBe(true);
+  });
+
+  it('queda terminal com álbum pendente descarta o álbum e nada é emitido', async () => {
+    const { fake, transport, statuses } = await connected();
+    const messages: Message[] = [];
+    transport.on('message', (m) => {
+      messages.push(m);
+    });
+    const polls = fake.callsTo('getUpdates').length;
+    fake.push(photoUpdate('g', 'a'));
+    await vi.waitFor(() => expect(fake.callsTo('getUpdates').length).toBeGreaterThan(polls), {
+      timeout: 2000,
+    });
+    // O poll pendurado já passou pelo handler: o texto o solta, e o próximo getUpdates leva o 409.
+    fake.handlers.set('getUpdates', () => failure(409, 'Conflict: terminated by other getUpdates'));
+    fake.push({ message: tgMessage({ text: 'solta o poll' }) });
+    await vi.waitFor(
+      () => expect(statuses.at(-1)).toMatchObject({ status: 'closed', reason: 'replaced' }),
+      { timeout: 2000 },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(messages.filter((m) => m.attachments.length > 0)).toEqual([]);
+  });
+
+  it('disconnect com álbum pendente cancela o timer e nada é emitido', async () => {
+    const { fake, transport } = await connected();
+    const emitted = vi.fn();
+    transport.on('message', emitted);
+    const polls = fake.callsTo('getUpdates').length;
+    fake.push(photoUpdate('g', 'a'));
+    // O grammY só pede o próximo lote depois de tratar o update: ele já está no buffer.
+    await vi.waitFor(() => expect(fake.callsTo('getUpdates').length).toBeGreaterThan(polls));
+    await transport.disconnect();
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(emitted).not.toHaveBeenCalled();
+  });
+});
+
+describe('enquetes', () => {
+  /** Resposta do `sendPoll`: o Telegram devolve a mensagem com a enquete dentro. */
+  function answerPolls(fake: FakeTelegram, pollId: string, messageId = 500, chat = GROUP): void {
+    fake.handlers.set('sendPoll', () => ({
+      message_id: messageId,
+      date: 1_760_000_000,
+      chat,
+      poll: { id: pollId },
+    }));
+  }
+
+  it('declara polls e pede o poll_answer ao getUpdates', async () => {
+    const { fake, transport } = await connected();
+    expect(transport.capabilities.has('polls')).toBe(true);
+    const polling = fake.callsTo('getUpdates').find((p) => p['timeout'] !== undefined);
+    expect(polling?.['allowed_updates']).toContain('poll_answer');
+  });
+
+  it('envia enquete não anônima; multiple vira allows_multiple_answers', async () => {
+    const { fake, transport } = await connected();
+    answerPolls(fake, 'p1');
+    const key = await transport.send('-100123/5', {
+      type: 'poll',
+      name: 'Almoço?',
+      options: ['Sim', 'Não'],
+      multiple: true,
+    });
+    await transport.send('-100123', { type: 'poll', name: 'Outra', options: ['A', 'B'] });
+    expect(key).toMatchObject({ chatId: '-100123/5', id: '500', fromMe: true });
+    const [first, second] = fake.callsTo('sendPoll');
+    expect(first).toEqual({
+      chat_id: -100123,
+      message_thread_id: 5,
+      question: 'Almoço?',
+      options: [{ text: 'Sim' }, { text: 'Não' }],
+      is_anonymous: false,
+      allows_multiple_answers: true,
+    });
+    expect(second).toMatchObject({ is_anonymous: false, allows_multiple_answers: false });
+  });
+
+  it('poll_answer vira poll.vote com o chat e a mensagem da enquete enviada', async () => {
+    const { fake, transport } = await connected();
+    answerPolls(fake, 'p1', 500);
+    await transport.send('-100123', { type: 'poll', name: 'Q', options: ['A', 'B', 'C'] });
+    const got = next(transport, 'poll.vote');
+    fake.push({ poll_answer: { poll_id: 'p1', user: USER, option_ids: [2, 0] } });
+    expect(await got).toEqual({
+      chat: { id: '-100123', isGroup: true, kind: 'group', title: 'Turma' },
+      messageId: '500',
+      sender: expect.objectContaining({ id: '7' }),
+      options: [0, 2],
+      fromMe: false,
+    });
+  });
+
+  it('voto retirado chega com options vazio', async () => {
+    const { fake, transport } = await connected();
+    answerPolls(fake, 'p1');
+    await transport.send('-100123', { type: 'poll', name: 'Q', options: ['A', 'B'] });
+    const got = next(transport, 'poll.vote');
+    fake.push({ poll_answer: { poll_id: 'p1', user: USER, option_ids: [] } });
+    expect((await got).options).toEqual([]);
+  });
+
+  it('voto de enquete desconhecida (antes do restart) é descartado com log', async () => {
+    const { fake, transport, log } = await connected();
+    const votes: unknown[] = [];
+    transport.on('poll.vote', (v) => {
+      votes.push(v);
+    });
+    // O voto desconhecido vem primeiro; a reação seguinte prova que o update foi consumido.
+    fake.push({ poll_answer: { poll_id: 'velha', user: USER, option_ids: [1] } });
+    const reaction = next(transport, 'reaction');
+    fake.push({
+      message_reaction: {
+        chat: GROUP,
+        message_id: 1,
+        user: USER,
+        date: 1,
+        old_reaction: [],
+        new_reaction: [{ type: 'emoji', emoji: '👍' }],
+      },
+    });
+    await reaction;
+    expect(votes).toEqual([]);
+    expect(log.event).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'telegram.poll.vote-unknown' }),
+      expect.objectContaining({ pollId: 'velha' }),
+    );
+  });
+});
+
+describe('enquetes: limite e voto de chat', () => {
+  it('guarda no máximo 1000 enquetes: a mais antiga sai primeiro', async () => {
+    const { fake, transport, log } = await connected();
+    let n = 0;
+    fake.handlers.set('sendPoll', () => {
+      n += 1;
+      return {
+        message_id: n,
+        date: 1_760_000_000,
+        chat: GROUP,
+        poll: { id: `p${n}` },
+      };
+    });
+    for (let i = 0; i < 1001; i++) {
+      await transport.send('-100123', { type: 'poll', name: 'Q', options: ['A', 'B'] });
+    }
+    const got = next(transport, 'poll.vote');
+    fake.push({ poll_answer: { poll_id: 'p1', user: USER, option_ids: [0] } });
+    fake.push({ poll_answer: { poll_id: 'p1001', user: USER, option_ids: [1] } });
+    const vote = await got;
+    expect(vote).toMatchObject({ messageId: '1001', options: [1] });
+    expect(log.event).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'telegram.poll.vote-unknown' }),
+      expect.objectContaining({ pollId: 'p1' }),
+    );
+  }, 30_000);
+
+  it('voto de voter_chat vem com o chat como sender', async () => {
+    const { fake, transport } = await connected();
+    fake.handlers.set('sendPoll', () => ({
+      message_id: 9,
+      date: 1_760_000_000,
+      chat: GROUP,
+      poll: { id: 'pv' },
+    }));
+    await transport.send('-100123', { type: 'poll', name: 'Q', options: ['A', 'B'] });
+    const got = next(transport, 'poll.vote');
+    fake.push({
+      poll_answer: {
+        poll_id: 'pv',
+        voter_chat: { id: -1009, type: 'channel', title: 'Canal' },
+        option_ids: [0],
+      },
+    });
+    expect((await got).sender).toMatchObject({ id: '-1009', name: 'Canal' });
+  });
+});

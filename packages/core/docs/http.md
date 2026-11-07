@@ -3,8 +3,8 @@
 Esta página mostra como ligar o servidor HTTP do Bridger e registrar rotas e WebSockets nos seus
 plugins (webhooks, painéis, APIs).
 
-O core tem **um** servidor HTTP por processo, dividido por todos os bots, para webhooks, o
-dashboard e o chat web. Plugins registram rotas em `ctx.http`, o transport em `deps.http`. A
+O core tem **um** servidor HTTP por processo, dividido por todos os bots, para webhooks,
+painéis e o chat web. Plugins registram rotas em `ctx.http`, o transport em `deps.http`. A
 porta só abre se houver rota. A API do core (`/api`, `/openapi.json`) fica em [API HTTP](api.md).
 
 ## Ligar o servidor
@@ -43,7 +43,7 @@ await Promise.all([zap.start(), erp.start()]);
 | Rota | Sessão `default` | Outra sessão (`erp`) |
 | --- | --- | --- |
 | saúde | `/health` | `/health` |
-| plugin `dashboard` | `/plugins/dashboard/...` | `/sessions/erp/plugins/dashboard/...` |
+| plugin `painel` | `/plugins/painel/...` | `/sessions/erp/plugins/painel/...` |
 | transport `web` | `/transports/web/...` | `/sessions/erp/transports/web/...` |
 
 A sessão `default` não tem prefixo: a URL de um webhook já cadastrado na plataforma não muda

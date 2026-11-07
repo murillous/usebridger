@@ -4,6 +4,7 @@
 // updates fica em `normalize.ts`; a formatação, em `format.ts`.
 
 import type {
+  AlbumItem,
   Capability,
   Chat,
   Contact,
@@ -31,8 +32,15 @@ import {
   type TransportEvents,
   TypedEmitter,
 } from '@usebridger/core/adapter';
-import { type Bot, InputFile } from 'grammy';
-import type { ChatMember, ReactionTypeEmoji, Message as TgMessage, Update } from 'grammy/types';
+import { type Bot, BotError, GrammyError, InputFile, webhookCallback } from 'grammy';
+import type {
+  ChatMember,
+  InputMedia,
+  ReactionTypeEmoji,
+  ReplyParameters,
+  Message as TgMessage,
+  Update,
+} from 'grammy/types';
 import { commandMenus } from './commands.ts';
 import { call, expiredOr, toDisconnectReason } from './errors.ts';
 import { renderHtml } from './format.ts';
@@ -65,13 +73,50 @@ const ALLOWED_UPDATES = [
   'message_reaction',
   'my_chat_member',
   'chat_member',
+  // Só chega de enquete não anônima, que é como o transport as envia (ADR 0067).
+  'poll_answer',
 ] as const;
+
+/** Webhook: a URL pública que o Telegram chama e o segredo que ele devolve no cabeçalho. */
+export interface TelegramWebhook {
+  readonly url: string;
+  readonly secretToken: string;
+}
+
+/** Caminho da rota do webhook sob o `basePath` do transport (`/transports/telegram`). */
+export const WEBHOOK_PATH = '/webhook';
+
+/**
+ * O update chegou com a conexão já trocada ou encerrada. No webhook vira 503, para o Telegram
+ * re-entregar em vez de perder o update com um 200.
+ */
+class StaleConnectionError extends Error {}
+
+/**
+ * Enquetes enviadas que o transport lembra. O `poll_answer` não traz o chat nem a mensagem, então
+ * o mapa é a única ponte do voto até a enquete. O limite evita crescer sem fim; a mais antiga sai
+ * primeiro.
+ */
+const MAX_POLLS = 1000;
 
 /**
  * Prefixo do ID da interação: o `callback_query.id` não é ID de mensagem, e o envio que a cita
  * não pode virar `reply_parameters`.
  */
 const INTERACTION_PREFIX = 'cb:';
+
+/**
+ * Espera pelo resto do álbum, contada desde o último update do grupo. Os updates de um álbum
+ * chegam quase juntos (em geral no mesmo `getUpdates`); meio segundo cobre a folga da rede sem
+ * atrasar muito a resposta.
+ */
+const ALBUM_WINDOW_MS = 500;
+
+/** Updates de um álbum à espera do resto do grupo. */
+interface PendingAlbum {
+  readonly updates: Update[];
+  readonly timer: ReturnType<typeof setTimeout>;
+}
 
 /** Direitos dados no `promote`: os de moderação comuns de um admin de grupo. */
 const ADMIN_RIGHTS = {
@@ -85,8 +130,8 @@ const ADMIN_RIGHTS = {
 export class TelegramTransport implements Transport {
   readonly name = 'telegram';
   /**
-   * O núcleo da Bot API. `send.album` e `polls` entram com as issues de álbum e de enquete
-   *; `groups.add` não existe para bot no Telegram.
+   * O núcleo da Bot API, o álbum e as enquetes; `groups.add` não existe para bot no
+   * Telegram.
    */
   readonly capabilities: ReadonlySet<Capability> = new Set<Capability>([
     'actions',
@@ -103,14 +148,16 @@ export class TelegramTransport implements Transport {
     'send.voice',
     'send.sticker',
     'send.document',
+    'send.album',
     'media.download',
     // O `file_id` vale entre restarts para o mesmo bot (ADR 0136).
     'media.ref',
     'message.edit',
     'message.delete',
+    'polls',
     'quoted',
   ]);
-  readonly limits = { text: 4096, caption: 1024 };
+  readonly limits = { text: 4096, caption: 1024, album: 10 };
   /** 30 mensagens/s no total e cerca de 1/s por chat. */
   readonly pacing = { globalIntervalMs: 34, chatIntervalMs: 1000 };
 
@@ -123,10 +170,41 @@ export class TelegramTransport implements Transport {
   readonly #raws = new WeakMap<Message | Interaction, unknown>();
   /** O último menu enviado ao Telegram, para só chamar a API quando ele muda. */
   #menu: string | undefined;
+  /** Álbuns de entrada incompletos, por `chat.id:media_group_id`. */
+  readonly #albums = new Map<string, PendingAlbum>();
+  /**
+   * Chave do primeiro álbum de um envio dividido, por `content`. A fila re-tenta com o mesmo
+   * objeto, e a chave evita reenviar o que já saiu. Fraco: o objeto some com o envio.
+   */
+  readonly #albumKeys = new WeakMap<OutgoingContent, MessageKey>();
+  /**
+   * `poll_id` → onde a enquete foi enviada. Só em memória: o voto de enquete anterior ao restart
+   * é descartado (ADR 0067 aceita o mesmo limite no Baileys), e o plugin que apura por muito tempo
+   * guarda a apuração no próprio storage. Diferente do Baileys, não é esvaziado no
+   * `disconnect()`: o `poll_id` segue válido para o mesmo bot depois de reconectar.
+   */
+  readonly #polls = new Map<string, { readonly chat: Chat; readonly messageId: string }>();
 
-  constructor(driver: TelegramDriver, deps: TransportDeps) {
+  readonly #webhook: TelegramWebhook | undefined;
+  /** O tratador do webhook da conexão atual; `null` sem conexão (a rota responde 503). */
+  #onWebhook: ((request: Request) => Promise<Response>) | null = null;
+
+  constructor(driver: TelegramDriver, deps: TransportDeps, webhook?: TelegramWebhook) {
     this.#driver = driver;
     this.#deps = deps;
+    this.#webhook = webhook;
+    if (webhook !== undefined) {
+      if (deps.http === undefined) {
+        throw new TypeError('telegram: o webhook precisa de `http` no createBot (ver createHttp)');
+      }
+      // A rota nasce uma vez, na fábrica (a porta abre antes do `connect()`), mas o `Bot` do
+      // grammY muda a cada conexão: ela delega ao tratador da conexão atual.
+      deps.http.route('POST', WEBHOOK_PATH, (request) => {
+        const handle = this.#onWebhook;
+        // Sem conexão o Telegram re-tenta o update depois, em vez de perdê-lo num 200.
+        return handle === null ? new Response(null, { status: 503 }) : handle(request);
+      });
+    }
     this.#events = new TypedEmitter<TransportEvents>((error, event) =>
       this.#log.event(LOG.handlerFailed, { err: error, eventName: event }),
     );
@@ -164,39 +242,106 @@ export class TelegramTransport implements Transport {
     const current = (): boolean => this.#bot === bot;
     bot.use((ctx) => {
       if (current()) this.#onUpdate(ctx.update);
+      // No polling, o update de um bot já fora de cena se descarta; no webhook, volta 503.
+      else if (this.#webhook !== undefined) throw new StaleConnectionError();
     });
-    // Erro de conversão descarta só o update: relançar pararia o polling.
+    // Erro de conversão descarta só o update: relançar pararia o polling. Vale só para o
+    // polling; no webhook o erro sobe até a rota, e `#startWebhook` o trata.
     bot.catch(({ error, ctx }) => {
       this.#log.event(LOG.updateFailed, { err: error, updateId: ctx.update.update_id });
     });
     this.#events.emit('connection.status', { status: 'connecting' });
-    bot
-      .start({
+    const onOpen = (me: Parameters<typeof toContact>[0]): void => {
+      if (!current()) return;
+      this.#self = toContact(me);
+      this.#events.emit('connection.status', { status: 'open' });
+      this.#syncCommands();
+    };
+    const running =
+      this.#webhook === undefined
+        ? bot.start({ allowed_updates: ALLOWED_UPDATES, onStart: onOpen })
+        : this.#startWebhook(bot, this.#webhook, current, onOpen);
+    running.then(
+      () => {
+        // Polling: só o `disconnect()` o para sem erro, e ele já tirou este bot de cena.
+        // Webhook: resolve ao armar o `setWebhook`, e não há laço a acompanhar.
+      },
+      (error: unknown) => {
+        if (!current()) return;
+        this.#bot = null;
+        this.#onWebhook = null;
+        this.#dropAlbums();
+        const reason = toDisconnectReason(error);
+        this.#events.emit('connection.status', { status: 'closed', reason, error });
+      },
+    );
+  }
+
+  /**
+   * Sem `getUpdates`, a queda de credencial aparece no `getMe` (`init`) ou no `setWebhook`, e
+   * o `toDisconnectReason` os mapeia igual (401 → `auth-failed`). Resolve quando o webhook
+   * está armado: depois disso não há laço a esperar.
+   */
+  async #startWebhook(
+    bot: Bot,
+    webhook: TelegramWebhook,
+    current: () => boolean,
+    onOpen: (me: Parameters<typeof toContact>[0]) => void,
+  ): Promise<void> {
+    await bot.init();
+    if (!current()) return;
+    // Pronto antes do `setWebhook`: o Telegram pode chamar assim que ele responde.
+    const handle = webhookCallback(bot, 'std/http', { secretToken: webhook.secretToken });
+    this.#onWebhook = async (request) => {
+      try {
+        return await handle(request);
+      } catch (error) {
+        // Sem o `bot.catch` do polling, o `BotError` sobe até aqui. Um 500 faria o Telegram
+        // re-entregar para sempre um update que sempre falha: loga e responde 200.
+        if (error instanceof BotError) {
+          if (error.error instanceof StaleConnectionError) {
+            return new Response(null, { status: 503 });
+          }
+          this.#log.event(LOG.updateFailed, {
+            err: error.error,
+            updateId: error.ctx.update.update_id,
+          });
+          return new Response(null, { status: 200 });
+        }
+        throw error;
+      }
+    };
+    await bot.api
+      .setWebhook(webhook.url, {
+        secret_token: webhook.secretToken,
         allowed_updates: ALLOWED_UPDATES,
-        onStart: (me) => {
-          if (!current()) return;
-          this.#self = toContact(me);
-          this.#events.emit('connection.status', { status: 'open' });
-          this.#syncCommands();
-        },
       })
-      .then(
-        () => {
-          // Só o `disconnect()` para o polling sem erro, e ele já tirou este bot de cena.
-        },
-        (error: unknown) => {
-          if (!current()) return;
-          this.#bot = null;
-          const reason = toDisconnectReason(error);
-          this.#events.emit('connection.status', { status: 'closed', reason, error });
-        },
-      );
+      .catch((error: unknown) => {
+        // O `GrammyError` carrega o payload da chamada, com o segredo, e o erro vai ao log do
+        // core pelo `closed`. Mantém o `error_code`, que o `toDisconnectReason` lê.
+        if (error instanceof GrammyError) {
+          Object.assign(error, { payload: { ...error.payload, secret_token: '[REDACTED]' } });
+        }
+        throw error;
+      });
+    onOpen(bot.botInfo);
+  }
+
+  /** Descarta os álbuns de entrada pendentes: o timer não pode disparar sem conexão. */
+  #dropAlbums(): void {
+    for (const pending of this.#albums.values()) clearTimeout(pending.timer);
+    this.#albums.clear();
   }
 
   async disconnect(): Promise<void> {
+    this.#dropAlbums();
     const bot = this.#bot;
     if (bot === null) return;
     this.#bot = null;
+    this.#onWebhook = null;
+    // O webhook segue registrado no Telegram: o próximo polling o apaga (`start()` do grammY) e
+    // um novo `connect()` o reescreve. Sem laço de `getUpdates` a parar.
+    if (this.#webhook !== undefined) return;
     // O `stop()` cancela o `getUpdates` em andamento e confirma o offset no Telegram.
     await bot.stop().catch((error: unknown) => {
       this.#log.event(LOG.stopFailed, { err: error });
@@ -211,10 +356,69 @@ export class TelegramTransport implements Transport {
     else if (update.message_reaction !== undefined) this.#onReaction(update.message_reaction);
     else if (update.my_chat_member !== undefined) this.#onSelfMember(update.my_chat_member);
     else if (update.chat_member !== undefined) this.#onMember(update.chat_member);
+    else if (update.poll_answer !== undefined) this.#onPollAnswer(update.poll_answer);
+  }
+
+  #onPollAnswer(answer: NonNullable<Update['poll_answer']>): void {
+    const sender = senderOf({ from: answer.user, sender_chat: answer.voter_chat });
+    if (sender === null) return;
+    const poll = this.#polls.get(answer.poll_id);
+    if (poll === undefined) {
+      // Enquete de antes do restart (ou já expulsa do mapa): sem o chat, o voto não tem destino.
+      this.#log.event(LOG.pollVoteUnknown, { pollId: answer.poll_id });
+      return;
+    }
+    this.#events.emit('poll.vote', {
+      chat: poll.chat,
+      messageId: poll.messageId,
+      sender,
+      // Já é a escolha inteira, a partir de 0; vazio é o voto retirado. Ordena para o contrato.
+      options: [...new Set(answer.option_ids)].sort((a, b) => a - b),
+      fromMe: sender.id === this.#self?.id,
+    });
   }
 
   #onMessage(update: Update, raw: TgMessage, edited: boolean): void {
-    const message = toMessage(raw, this.#env(), { edited });
+    // A edição de um item do álbum chega sozinha, como edição comum.
+    if (!edited && raw.media_group_id !== undefined) {
+      this.#bufferAlbum(update, raw.chat.id, raw.media_group_id);
+      return;
+    }
+    this.#emitMessage(update, raw, edited, undefined);
+  }
+
+  /** Guarda o update e reinicia a janela: o álbum sai quando o grupo fica quieto. */
+  #bufferAlbum(update: Update, chatId: number, groupId: string): void {
+    const key = `${chatId}:${groupId}`;
+    const pending = this.#albums.get(key);
+    if (pending !== undefined) clearTimeout(pending.timer);
+    const updates = pending?.updates ?? [];
+    updates.push(update);
+    const timer = setTimeout(() => {
+      this.#albums.delete(key);
+      const album = updates.flatMap((u) => (u.message === undefined ? [] : [u.message]));
+      const [first] = album;
+      // O primeiro update do grupo dá o `raw()` e o ID da mensagem juntada.
+      const [head] = updates;
+      if (first === undefined || head === undefined) return;
+      // Fora do `bot.catch`: o erro daqui só tem o log como destino.
+      try {
+        this.#emitMessage(head, first, false, album);
+      } catch (error) {
+        this.#log.event(LOG.albumFailed, { err: error, updateId: head.update_id });
+      }
+    }, ALBUM_WINDOW_MS);
+    this.#albums.set(key, { updates, timer });
+  }
+
+  /** Converte e emite. No álbum, o primeiro update dá o `raw()`. */
+  #emitMessage(
+    update: Update,
+    raw: TgMessage,
+    edited: boolean,
+    album: readonly TgMessage[] | undefined,
+  ): void {
+    const message = toMessage(raw, this.#env(), { edited, ...(album && { album }) });
     if (message === null) {
       // Mensagem de serviço: só a troca de título tem evento no core.
       if (raw.new_chat_title !== undefined) {
@@ -331,6 +535,19 @@ export class TelegramTransport implements Transport {
           },
         }),
     };
+    if (content.type === 'album') {
+      if (options?.actions !== undefined && options.actions.length > 0) {
+        // `retryable: false`: sem isso a fila re-tentaria um erro que nunca passa.
+        throw Object.assign(new TypeError('telegram: o álbum não aceita botões (actions)'), {
+          retryable: false,
+        });
+      }
+      const { message_thread_id: thread, reply_parameters: reply } = other;
+      return this.#sendAlbum(chatId, chat_id, content, {
+        ...(thread !== undefined && { message_thread_id: thread }),
+        ...(reply !== undefined && { reply_parameters: reply }),
+      });
+    }
     const sent = await call((): Promise<TgMessage> => {
       switch (content.type) {
         case 'text':
@@ -355,10 +572,18 @@ export class TelegramTransport implements Transport {
             ...other,
             ...caption(content),
           });
-        case 'album':
-          throw new UnsupportedError('send.album', this.name);
         case 'poll':
-          throw new UnsupportedError('polls', this.name);
+          // Não anônima: só assim o Telegram manda o `poll_answer` (ADR 0067).
+          return api.sendPoll(
+            chat_id,
+            content.name,
+            content.options.map((text) => ({ text })),
+            {
+              ...other,
+              is_anonymous: false,
+              allows_multiple_answers: content.multiple === true,
+            },
+          );
         case 'template':
           throw new UnsupportedError('send.template', this.name);
         default:
@@ -367,7 +592,72 @@ export class TelegramTransport implements Transport {
           );
       }
     });
+    if (content.type === 'poll' && sent.poll !== undefined) {
+      this.#rememberPoll(sent.poll.id, toChat(sent.chat, sent), String(sent.message_id));
+    }
     return { chatId, id: String(sent.message_id), fromMe: true, senderId: null };
+  }
+
+  /**
+   * O `sendMediaGroup` não mistura documento com foto ou vídeo (ADR 0061): vira um álbum de cada,
+   * o do primeiro item na frente, com a legenda e a citação. A chave é a da primeira mensagem do
+   * primeiro. Um grupo de um item só sai como mensagem comum, porque o álbum pede de 2 a 10. Se o
+   * segundo falhar depois do primeiro enviado, o erro sobe e a fila re-tenta com o mesmo objeto
+   * `content`: a chave do primeiro fica em `#albumKeys` e a nova tentativa só envia o que falta.
+   * Limite conhecido: a chave só é gravada quando o primeiro envio termina. Se a fila desistir
+   * (timeout) enquanto ele ainda está no ar e re-tentar, o primeiro pode sair duas vezes.
+   */
+  async #sendAlbum(
+    chatId: string,
+    target: number,
+    content: Extract<OutgoingContent, { readonly type: 'album' }>,
+    extra: AlbumExtra,
+  ): Promise<MessageKey> {
+    const api = this.#connected().api;
+    const [head] = content.items;
+    if (head === undefined) throw new TypeError('telegram: álbum sem itens');
+    const sameKind = (item: AlbumItem): boolean =>
+      (item.type === 'document') === (head.type === 'document');
+    const lots = [content.items.filter(sameKind), content.items.filter((i) => !sameKind(i))];
+    const filled = lots.filter((l) => l.length > 0);
+    // Tentativa repetida: o primeiro álbum já saiu, e reenviá-lo duplicaria a mensagem.
+    let key = this.#albumKeys.get(content);
+    for (const [index, lot] of filled.entries()) {
+      if (index === 0 && key !== undefined) continue;
+      // A legenda e a citação ficam no primeiro álbum; o segundo sai solto.
+      const { reply_parameters: _quoted, ...unquoted } = extra;
+      const options = index === 0 ? extra : unquoted;
+      const text = index === 0 ? caption(content) : {};
+      const sent = await call(async (): Promise<TgMessage[]> => {
+        const [only] = lot;
+        if (lot.length === 1 && only !== undefined) {
+          return [await sendSingle(api, target, only, { ...options, ...text })];
+        }
+        // O tipo do grammY separa documentos de fotos e vídeos, e o lote já é de um lado só.
+        const media = lot.map((item, i) => inputMedia(item, i === 0 ? text : {}));
+        return api.sendMediaGroup(
+          target,
+          media as Parameters<Bot['api']['sendMediaGroup']>[1],
+          options,
+        );
+      });
+      const first = sent[0];
+      if (first === undefined) throw new Error('telegram: o sendMediaGroup não devolveu mensagens');
+      if (index === 0) {
+        key = { chatId, id: String(first.message_id), fromMe: true, senderId: null };
+        if (filled.length > 1) this.#albumKeys.set(content, key);
+      }
+    }
+    this.#albumKeys.delete(content);
+    if (key === undefined) throw new TypeError('telegram: álbum sem itens');
+    return key;
+  }
+
+  #rememberPoll(pollId: string, chat: Chat, messageId: string): void {
+    this.#polls.set(pollId, { chat, messageId });
+    if (this.#polls.size <= MAX_POLLS) return;
+    const oldest = this.#polls.keys().next();
+    if (!oldest.done) this.#polls.delete(oldest.value);
   }
 
   async react(key: MessageKey, emoji: string | null): Promise<void> {
@@ -508,6 +798,42 @@ function input(media: MediaInput, fileName?: string): InputFile | string {
   if (Buffer.isBuffer(media)) return new InputFile(media, fileName);
   // Pela URL direta, o Telegram usaria o nome do caminho: o grammY baixa e sobe com o nome.
   return fileName === undefined ? media.url : new InputFile(new URL(media.url), fileName);
+}
+
+/** O que o álbum repassa a cada envio: o tópico e a citação (botões o `sendMediaGroup` não tem). */
+interface AlbumExtra {
+  readonly message_thread_id?: number;
+  readonly reply_parameters?: ReplyParameters;
+}
+
+type CaptionFields = ReturnType<typeof caption>;
+
+function inputMedia(item: AlbumItem, text: CaptionFields): InputMedia {
+  switch (item.type) {
+    case 'image':
+      return { type: 'photo', media: input(item.media), ...text };
+    case 'video':
+      return { type: 'video', media: input(item.media), ...text };
+    case 'document':
+      return { type: 'document', media: input(item.media, item.fileName), ...text };
+  }
+}
+
+/** Item que sobrou sozinho no seu grupo: vai como mensagem comum. */
+function sendSingle(
+  api: Bot['api'],
+  chat: number,
+  item: AlbumItem,
+  options: AlbumExtra & CaptionFields,
+): Promise<TgMessage> {
+  switch (item.type) {
+    case 'image':
+      return api.sendPhoto(chat, input(item.media), options);
+    case 'video':
+      return api.sendVideo(chat, input(item.media), options);
+    case 'document':
+      return api.sendDocument(chat, input(item.media, item.fileName), options);
+  }
 }
 
 function caption(content: {
