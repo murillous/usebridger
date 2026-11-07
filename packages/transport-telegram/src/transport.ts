@@ -65,7 +65,16 @@ const ALLOWED_UPDATES = [
   'message_reaction',
   'my_chat_member',
   'chat_member',
+  // Só chega de enquete não anônima, que é como o transport as envia (ADR 0067).
+  'poll_answer',
 ] as const;
+
+/**
+ * Enquetes enviadas que o transport lembra. O `poll_answer` não traz o chat nem a mensagem, então
+ * o mapa é a única ponte do voto até a enquete. O limite evita crescer sem fim; a mais antiga sai
+ * primeiro.
+ */
+const MAX_POLLS = 1000;
 
 /**
  * Prefixo do ID da interação: o `callback_query.id` não é ID de mensagem, e o envio que a cita
@@ -85,8 +94,8 @@ const ADMIN_RIGHTS = {
 export class TelegramTransport implements Transport {
   readonly name = 'telegram';
   /**
-   * O núcleo da Bot API. `send.album` e `polls` entram com as issues de álbum e de enquete
-   *; `groups.add` não existe para bot no Telegram.
+   * O núcleo da Bot API e as enquetes. `send.album` entra com a issue do álbum; `groups.add` não
+   * existe para bot no Telegram.
    */
   readonly capabilities: ReadonlySet<Capability> = new Set<Capability>([
     'actions',
@@ -108,6 +117,7 @@ export class TelegramTransport implements Transport {
     'media.ref',
     'message.edit',
     'message.delete',
+    'polls',
     'quoted',
   ]);
   readonly limits = { text: 4096, caption: 1024 };
@@ -123,6 +133,12 @@ export class TelegramTransport implements Transport {
   readonly #raws = new WeakMap<Message | Interaction, unknown>();
   /** O último menu enviado ao Telegram, para só chamar a API quando ele muda. */
   #menu: string | undefined;
+  /**
+   * `poll_id` → onde a enquete foi enviada. Só em memória: o voto de enquete anterior ao restart
+   * é descartado (ADR 0067 aceita o mesmo limite no Baileys), e o plugin que apura por muito tempo
+   * guarda a apuração no próprio storage.
+   */
+  readonly #polls = new Map<string, { readonly chat: Chat; readonly messageId: string }>();
 
   constructor(driver: TelegramDriver, deps: TransportDeps) {
     this.#driver = driver;
@@ -211,6 +227,26 @@ export class TelegramTransport implements Transport {
     else if (update.message_reaction !== undefined) this.#onReaction(update.message_reaction);
     else if (update.my_chat_member !== undefined) this.#onSelfMember(update.my_chat_member);
     else if (update.chat_member !== undefined) this.#onMember(update.chat_member);
+    else if (update.poll_answer !== undefined) this.#onPollAnswer(update.poll_answer);
+  }
+
+  #onPollAnswer(answer: NonNullable<Update['poll_answer']>): void {
+    const sender = senderOf({ from: answer.user, sender_chat: answer.voter_chat });
+    if (sender === null) return;
+    const poll = this.#polls.get(answer.poll_id);
+    if (poll === undefined) {
+      // Enquete de antes do restart (ou já expulsa do mapa): sem o chat, o voto não tem destino.
+      this.#log.event(LOG.pollVoteUnknown, { pollId: answer.poll_id });
+      return;
+    }
+    this.#events.emit('poll.vote', {
+      chat: poll.chat,
+      messageId: poll.messageId,
+      sender,
+      // Já é a escolha inteira, a partir de 0; vazio é o voto retirado. Ordena para o contrato.
+      options: [...new Set(answer.option_ids)].sort((a, b) => a - b),
+      fromMe: sender.id === this.#self?.id,
+    });
   }
 
   #onMessage(update: Update, raw: TgMessage, edited: boolean): void {
@@ -358,7 +394,17 @@ export class TelegramTransport implements Transport {
         case 'album':
           throw new UnsupportedError('send.album', this.name);
         case 'poll':
-          throw new UnsupportedError('polls', this.name);
+          // Não anônima: só assim o Telegram manda o `poll_answer` (ADR 0067).
+          return api.sendPoll(
+            chat_id,
+            content.name,
+            content.options.map((text) => ({ text })),
+            {
+              ...other,
+              is_anonymous: false,
+              allows_multiple_answers: content.multiple === true,
+            },
+          );
         case 'template':
           throw new UnsupportedError('send.template', this.name);
         default:
@@ -367,7 +413,17 @@ export class TelegramTransport implements Transport {
           );
       }
     });
+    if (content.type === 'poll' && sent.poll !== undefined) {
+      this.#rememberPoll(sent.poll.id, toChat(sent.chat, sent), String(sent.message_id));
+    }
     return { chatId, id: String(sent.message_id), fromMe: true, senderId: null };
+  }
+
+  #rememberPoll(pollId: string, chat: Chat, messageId: string): void {
+    this.#polls.set(pollId, { chat, messageId });
+    if (this.#polls.size <= MAX_POLLS) return;
+    const oldest = this.#polls.keys().next();
+    if (!oldest.done) this.#polls.delete(oldest.value);
   }
 
   async react(key: MessageKey, emoji: string | null): Promise<void> {
