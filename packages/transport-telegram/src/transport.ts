@@ -31,7 +31,7 @@ import {
   type TransportEvents,
   TypedEmitter,
 } from '@usebridger/core/adapter';
-import { type Bot, InputFile, webhookCallback } from 'grammy';
+import { type Bot, BotError, GrammyError, InputFile, webhookCallback } from 'grammy';
 import type { ChatMember, ReactionTypeEmoji, Message as TgMessage, Update } from 'grammy/types';
 import { commandMenus } from './commands.ts';
 import { call, expiredOr, toDisconnectReason } from './errors.ts';
@@ -75,6 +75,12 @@ export interface TelegramWebhook {
 
 /** Caminho da rota do webhook sob o `basePath` do transport (`/transports/telegram`). */
 export const WEBHOOK_PATH = '/webhook';
+
+/**
+ * O update chegou com a conexão já trocada ou encerrada. No webhook vira 503, para o Telegram
+ * re-entregar em vez de perder o update com um 200.
+ */
+class StaleConnectionError extends Error {}
 
 /**
  * Prefixo do ID da interação: o `callback_query.id` não é ID de mensagem, e o envio que a cita
@@ -189,8 +195,11 @@ export class TelegramTransport implements Transport {
     const current = (): boolean => this.#bot === bot;
     bot.use((ctx) => {
       if (current()) this.#onUpdate(ctx.update);
+      // No polling, o update de um bot já fora de cena se descarta; no webhook, volta 503.
+      else if (this.#webhook !== undefined) throw new StaleConnectionError();
     });
-    // Erro de conversão descarta só o update: relançar pararia o polling.
+    // Erro de conversão descarta só o update: relançar pararia o polling. Vale só para o
+    // polling; no webhook o erro sobe até a rota, e `#startWebhook` o trata.
     bot.catch(({ error, ctx }) => {
       this.#log.event(LOG.updateFailed, { err: error, updateId: ctx.update.update_id });
     });
@@ -207,7 +216,8 @@ export class TelegramTransport implements Transport {
         : this.#startWebhook(bot, this.#webhook, current, onOpen);
     running.then(
       () => {
-        // Só o `disconnect()` para o polling sem erro, e ele já tirou este bot de cena.
+        // Polling: só o `disconnect()` o para sem erro, e ele já tirou este bot de cena.
+        // Webhook: resolve ao armar o `setWebhook`, e não há laço a acompanhar.
       },
       (error: unknown) => {
         if (!current()) return;
@@ -233,11 +243,39 @@ export class TelegramTransport implements Transport {
     await bot.init();
     if (!current()) return;
     // Pronto antes do `setWebhook`: o Telegram pode chamar assim que ele responde.
-    this.#onWebhook = webhookCallback(bot, 'std/http', { secretToken: webhook.secretToken });
-    await bot.api.setWebhook(webhook.url, {
-      secret_token: webhook.secretToken,
-      allowed_updates: ALLOWED_UPDATES,
-    });
+    const handle = webhookCallback(bot, 'std/http', { secretToken: webhook.secretToken });
+    this.#onWebhook = async (request) => {
+      try {
+        return await handle(request);
+      } catch (error) {
+        // Sem o `bot.catch` do polling, o `BotError` sobe até aqui. Um 500 faria o Telegram
+        // re-entregar para sempre um update que sempre falha: loga e responde 200.
+        if (error instanceof BotError) {
+          if (error.error instanceof StaleConnectionError) {
+            return new Response(null, { status: 503 });
+          }
+          this.#log.event(LOG.updateFailed, {
+            err: error.error,
+            updateId: error.ctx.update.update_id,
+          });
+          return new Response(null, { status: 200 });
+        }
+        throw error;
+      }
+    };
+    await bot.api
+      .setWebhook(webhook.url, {
+        secret_token: webhook.secretToken,
+        allowed_updates: ALLOWED_UPDATES,
+      })
+      .catch((error: unknown) => {
+        // O `GrammyError` carrega o payload da chamada, com o segredo, e o erro vai ao log do
+        // core pelo `closed`. Mantém o `error_code`, que o `toDisconnectReason` lê.
+        if (error instanceof GrammyError) {
+          Object.assign(error, { payload: { ...error.payload, secret_token: '[REDACTED]' } });
+        }
+        throw error;
+      });
     onOpen(bot.botInfo);
   }
 

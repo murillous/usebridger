@@ -1,7 +1,8 @@
 # @usebridger/transport-telegram
 
 Transport do [Bridger](https://www.npmjs.com/package/@usebridger/core) para o Telegram, sobre a
-Bot API (pelo [grammY](https://grammy.dev)). Recebe por long polling: não precisa de URL pública.
+Bot API (pelo [grammY](https://grammy.dev)). Recebe por long polling (sem URL pública) ou, como opção, por webhook
+pelo HTTP do core.
 
 ```sh
 npm install @usebridger/transport-telegram

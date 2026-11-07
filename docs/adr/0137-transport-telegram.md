@@ -44,9 +44,8 @@ Alternativas consideradas:
   legenda, citação, menções, botões com `callback_query`, menu de comandos (`setMyCommands`),
   "digitando", reações, edição, apagamento, download e referência de mídia (`file_id`), grupos
   com consulta de admin, remoção e promoção de participantes, e tópicos de fórum no `chat.id`. O
-  álbum (envio e agrupamento na entrada, #308), as enquetes (#309) e o webhook (#310) ficam para
-  issues próprias. O
-  transport não declara `send.album` nem `polls` até lá.
+  álbum (envio e agrupamento na entrada, #308) e as enquetes (#309) ficam para issues próprias,
+  e o transport não declara `send.album` nem `polls` até lá. O webhook entrou depois (#310).
 - **Texto cru vai sem `parse_mode`.** A Bot API devolve 400 numa marcação mal escapada, e um `<`
   ou `_` solto num texto comum derrubaria o envio. Quem quer formatação usa a árvore neutra, que o
   transport renderiza em HTML com escape. A menção da árvore vira um link `tg://user?id=`, que

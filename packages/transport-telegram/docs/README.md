@@ -29,8 +29,9 @@ const bot = createBot({
 await bot.start();
 ```
 
-A opção `token` é obrigatória; `webhook` é opcional (veja [Webhook](#webhook)). Ele é validado na fábrica: um formato
-inválido vira `BotConfigError` no `createBot`, sem o token na mensagem. Não há pareamento nem
+A opção `token` é obrigatória, e `webhook` é opcional (veja [Webhook](#webhook)). A fábrica
+valida o token: um formato inválido vira `BotConfigError` no `createBot`, sem o token na
+mensagem. Não há pareamento nem
 credencial no storage: tudo de que o bot precisa está no token.
 
 ## Conexão
@@ -86,7 +87,8 @@ const bot = createBot({
 - **Queda:** sem `getUpdates`, o 401 do token vem do `getMe` ou do `setWebhook` e vira
   `auth-failed`, como no polling. Outra falha na subida vira `connection-lost`. Não há 409.
 - Um update com erro de conversão vira log `telegram.update.failed` e a rota responde 200: o
-  Telegram não re-entrega um update que sempre falharia.
+  Telegram não re-entrega um update que sempre falharia. Um update que chega no meio do
+  `disconnect()` recebe 503, e o Telegram o re-entrega.
 - Só uma instância por token: o `setWebhook` de outro processo troca a URL.
 
 ## Privacy mode
