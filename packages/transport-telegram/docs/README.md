@@ -135,8 +135,9 @@ mensagens por minuto num grupo chega como 429 com `retry_after`, que a fila resp
   O `multiple` vira `allows_multiple_answers`. Os limites da Bot API (de 2 a 12 opções, 300
   caracteres na pergunta) voltam como 400, com `retryable: false`. Quem precisar de enquete
   anônima, ou de quiz, usa `ctx.unsafe.native`, e o voto dela não chega.
-- **Canal:** a Bot API recusa enquete não anônima em canal, então lá a enquete sai anônima e o
-  voto não chega (o transport pergunta o tipo do chat ao `getChat` antes de enviar).
+- **Canal:** a enquete sai não anônima como em qualquer chat; em canal o voto não chega ao bot, e
+  se o Telegram recusar a não anônima ali o envio volta 400 com `retryable: false`. Enquete
+  anônima vai pelo `ctx.unsafe.native`.
 - **Voto:** o `poll_answer` vira `poll.vote` com a escolha inteira em `options` (índices a partir
   de 0); a lista vazia é o voto retirado. Quem vota como canal (`voter_chat`) vem como o próprio
   canal.

@@ -396,21 +396,16 @@ export class TelegramTransport implements Transport {
           throw new UnsupportedError('send.album', this.name);
         case 'poll':
           // Não anônima: só assim o Telegram manda o `poll_answer` (ADR 0067).
-          return (async () => {
-            // Canal não aceita enquete não anônima (a Bot API devolve 400), e lá o voto não chega
-            // de qualquer jeito: vai anônima. O tipo do chat só se descobre perguntando.
-            const channel = (await api.getChat(chat_id)).type === 'channel';
-            return api.sendPoll(
-              chat_id,
-              content.name,
-              content.options.map((text) => ({ text })),
-              {
-                ...other,
-                is_anonymous: channel,
-                allows_multiple_answers: content.multiple === true,
-              },
-            );
-          })();
+          return api.sendPoll(
+            chat_id,
+            content.name,
+            content.options.map((text) => ({ text })),
+            {
+              ...other,
+              is_anonymous: false,
+              allows_multiple_answers: content.multiple === true,
+            },
+          );
         case 'template':
           throw new UnsupportedError('send.template', this.name);
         default:

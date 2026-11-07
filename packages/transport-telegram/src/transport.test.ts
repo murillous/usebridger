@@ -806,13 +806,6 @@ describe('enquetes: limite, canal e voto de chat', () => {
     );
   }, 30_000);
 
-  it('em canal a enquete sai anônima', async () => {
-    const { fake, transport } = await connected();
-    fake.handlers.set('getChat', () => ({ id: -1009, type: 'channel', title: 'Canal' }));
-    await transport.send('-1009', { type: 'poll', name: 'Q', options: ['A', 'B'] });
-    expect(fake.callsTo('sendPoll').at(-1)).toMatchObject({ is_anonymous: true });
-  });
-
   it('voto de voter_chat vem com o chat como sender', async () => {
     const { fake, transport } = await connected();
     fake.handlers.set('sendPoll', () => ({
