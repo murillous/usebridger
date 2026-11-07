@@ -136,7 +136,8 @@ export class TelegramTransport implements Transport {
   /**
    * `poll_id` → onde a enquete foi enviada. Só em memória: o voto de enquete anterior ao restart
    * é descartado (ADR 0067 aceita o mesmo limite no Baileys), e o plugin que apura por muito tempo
-   * guarda a apuração no próprio storage.
+   * guarda a apuração no próprio storage. Diferente do Baileys, não é esvaziado no
+   * `disconnect()`: o `poll_id` segue válido para o mesmo bot depois de reconectar.
    */
   readonly #polls = new Map<string, { readonly chat: Chat; readonly messageId: string }>();
 
@@ -395,16 +396,21 @@ export class TelegramTransport implements Transport {
           throw new UnsupportedError('send.album', this.name);
         case 'poll':
           // Não anônima: só assim o Telegram manda o `poll_answer` (ADR 0067).
-          return api.sendPoll(
-            chat_id,
-            content.name,
-            content.options.map((text) => ({ text })),
-            {
-              ...other,
-              is_anonymous: false,
-              allows_multiple_answers: content.multiple === true,
-            },
-          );
+          return (async () => {
+            // Canal não aceita enquete não anônima (a Bot API devolve 400), e lá o voto não chega
+            // de qualquer jeito: vai anônima. O tipo do chat só se descobre perguntando.
+            const channel = (await api.getChat(chat_id)).type === 'channel';
+            return api.sendPoll(
+              chat_id,
+              content.name,
+              content.options.map((text) => ({ text })),
+              {
+                ...other,
+                is_anonymous: channel,
+                allows_multiple_answers: content.multiple === true,
+              },
+            );
+          })();
         case 'template':
           throw new UnsupportedError('send.template', this.name);
         default:

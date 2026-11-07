@@ -778,3 +778,58 @@ describe('enquetes', () => {
     );
   });
 });
+
+describe('enquetes: limite, canal e voto de chat', () => {
+  it('guarda no máximo 1000 enquetes: a mais antiga sai primeiro', async () => {
+    const { fake, transport, log } = await connected();
+    let n = 0;
+    fake.handlers.set('sendPoll', () => {
+      n += 1;
+      return {
+        message_id: n,
+        date: 1_760_000_000,
+        chat: GROUP,
+        poll: { id: `p${n}` },
+      };
+    });
+    for (let i = 0; i < 1001; i++) {
+      await transport.send('-100123', { type: 'poll', name: 'Q', options: ['A', 'B'] });
+    }
+    const got = next(transport, 'poll.vote');
+    fake.push({ poll_answer: { poll_id: 'p1', user: USER, option_ids: [0] } });
+    fake.push({ poll_answer: { poll_id: 'p1001', user: USER, option_ids: [1] } });
+    const vote = await got;
+    expect(vote).toMatchObject({ messageId: '1001', options: [1] });
+    expect(log.event).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'telegram.poll.vote-unknown' }),
+      expect.objectContaining({ pollId: 'p1' }),
+    );
+  }, 30_000);
+
+  it('em canal a enquete sai anônima', async () => {
+    const { fake, transport } = await connected();
+    fake.handlers.set('getChat', () => ({ id: -1009, type: 'channel', title: 'Canal' }));
+    await transport.send('-1009', { type: 'poll', name: 'Q', options: ['A', 'B'] });
+    expect(fake.callsTo('sendPoll').at(-1)).toMatchObject({ is_anonymous: true });
+  });
+
+  it('voto de voter_chat vem com o chat como sender', async () => {
+    const { fake, transport } = await connected();
+    fake.handlers.set('sendPoll', () => ({
+      message_id: 9,
+      date: 1_760_000_000,
+      chat: GROUP,
+      poll: { id: 'pv' },
+    }));
+    await transport.send('-100123', { type: 'poll', name: 'Q', options: ['A', 'B'] });
+    const got = next(transport, 'poll.vote');
+    fake.push({
+      poll_answer: {
+        poll_id: 'pv',
+        voter_chat: { id: -1009, type: 'channel', title: 'Canal' },
+        option_ids: [0],
+      },
+    });
+    expect((await got).sender).toMatchObject({ id: '-1009', name: 'Canal' });
+  });
+});
