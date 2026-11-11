@@ -1,5 +1,12 @@
 # @usebridger/core
 
+## 0.11.1
+
+### Patch Changes
+
+- 8064725: A doc da API HTTP aponta para o novo guia "API HTTP e painéis", que mostra como montar um painel ou integração sobre a API do core.
+- a8d1e79: Docs e template sem o `plugin-dashboard` (ADR 0138): o Bridger deixa de publicar dashboard, e cada app monta o seu painel sobre a API HTTP do core e a spec em `GET /openapi.json`. O `@usebridger/plugin-dashboard` fica `deprecated` no npm, nas versões já publicadas.
+
 ## 0.11.0
 
 ### Minor Changes
