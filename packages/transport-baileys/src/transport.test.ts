@@ -765,6 +765,38 @@ describe('BaileysTransport: capabilities', () => {
     });
     await expect(media.download()).rejects.toThrow('baileys: sem conexão');
   });
+
+  it('baixa a mídia pelo host do socket, não pelo host do url da mensagem (#334)', async () => {
+    const { transport, driver } = setup();
+    await transport.connect();
+    const socket = driver.last;
+    socket.user = { id: '5511999990000:7@s.whatsapp.net' };
+    socket.emit('connection.update', { connection: 'open' });
+    socket.mediaHost = 'mmg-fna.whatsapp.net';
+    const urls: string[] = [];
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      urls.push(String(url));
+      throw new Error('sem rede no teste');
+    });
+    try {
+      // O WhatsApp do PC manda o `url` com `a.whatsapp.net`, host que não existe.
+      const media = transport.mediaFromRef({
+        key: { remoteJid: '5511911110000@s.whatsapp.net', id: 'MSG1', fromMe: false },
+        type: 'imageMessage',
+        mediaKey: 'AQID',
+        directPath: '/v/t62/abc',
+        url: 'https://a.whatsapp.net/v/t62/abc',
+      });
+      await expect(media.download()).rejects.toThrow();
+      await expect(media.stream?.()).rejects.toThrow();
+      expect(urls).toEqual([
+        'https://mmg-fna.whatsapp.net/v/t62/abc',
+        'https://mmg-fna.whatsapp.net/v/t62/abc',
+      ]);
+    } finally {
+      fetch.mockRestore();
+    }
+  });
 });
 
 describe('BaileysTransport: envio e ações', () => {

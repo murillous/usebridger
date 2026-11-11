@@ -93,6 +93,13 @@ export class FakeSocket implements BaileysSocket {
     return this.pairingCode;
   }
 
+  /** Host que o "servidor" indicou no `media_conn`. */
+  mediaHost = 'mmg.whatsapp.net';
+
+  getMediaHost(): string {
+    return this.mediaHost;
+  }
+
   async updateMediaMessage(message: WAMessage): Promise<WAMessage> {
     return message;
   }
