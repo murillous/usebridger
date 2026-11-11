@@ -1,5 +1,27 @@
 # @usebridger/transport-telegram
 
+## 0.2.0
+
+### Minor Changes
+
+- 255b10a: Álbum no envio e na entrada (#308). O transport declara `send.album` com `limits.album: 10`: o
+  álbum vai por `sendMediaGroup`, e documento com foto ou vídeo vira dois envios (legenda e citação
+  no primeiro, chave do primeiro). Na entrada, os updates com o mesmo `media_group_id` viram uma
+  `message` só, com `attachments`, depois de 500 ms sem novo update do grupo; o `disconnect()`
+  descarta o álbum pendente. Novo evento de log `telegram.album.failed`.
+- 7a78181: O transport do Telegram passa a declarar `polls`: `reply.poll` envia uma enquete não anônima (`multiple` vira `allows_multiple_answers`) e o `poll_answer` chega como o evento `poll.vote`, com a escolha inteira em índices. Voto de enquete enviada antes do restart é descartado, com log `telegram.poll.vote-unknown`.
+- b0dde21: Webhook como opção (#310, ADR 0137): `telegram({ token, webhook: { url, secretToken } })` recebe
+  os updates pela rota `POST /transports/telegram/webhook` do HTTP do core (ADR 0072), com o
+  `webhookCallback` do grammY conferindo o `X-Telegram-Bot-Api-Secret-Token`. O `connect()` chama o
+  `setWebhook` com `allowed_updates`; o `disconnect()` não o apaga. Sem `http` no `createBot`, a
+  fábrica lança. Sem `getUpdates`, o 401 vem do `getMe` ou do `setWebhook` e vira `auth-failed`.
+
+### Patch Changes
+
+- Updated dependencies [8064725]
+- Updated dependencies [a8d1e79]
+  - @usebridger/core@0.11.1
+
 ## 0.1.1
 
 ### Patch Changes
