@@ -39,6 +39,7 @@ import {
   type Contact as BaileysContact,
   type BaileysEventMap,
   type GroupMetadata as BaileysGroupMetadata,
+  DEF_MEDIA_HOST,
   downloadMediaMessage,
   isJidGroup,
   isJidStatusBroadcast,
@@ -92,6 +93,8 @@ export interface BaileysSocket {
   /** Desvincula o aparelho; o socket fecha com `loggedOut`. */
   logout(): Promise<void>;
   requestPairingCode(phoneNumber: string): Promise<string>;
+  /** Host de mídia que o servidor indicou no último `media_conn`; antes dele, o padrão. */
+  getMediaHost(): string;
   /** Pede ao aparelho que reenvie uma mídia cujo link expirou. */
   updateMediaMessage(message: WAMessage): Promise<WAMessage>;
   sendMessage(
@@ -457,6 +460,10 @@ export class BaileysTransport implements Transport {
 
   #normalizeEnv(socket: BaileysSocket, state: AuthenticationState, logger: ILogger): NormalizeEnv {
     const media = { reuploadRequest: (m: WAMessage) => socket.updateMediaMessage(m), logger };
+    // Sem `host`, o Baileys monta a URL do `directPath` com o host do `url` da mensagem, e o
+    // WhatsApp do PC manda `a.whatsapp.net`, que não resolve. A referência serializável guarda
+    // esse `url`, então o erro se repetia. O host do socket vem do `media_conn` (#334).
+    const options = () => ({ host: socket.getMediaHost() || DEF_MEDIA_HOST });
     return {
       // Lido a cada mensagem: no primeiro pareamento o `me` só chega depois do socket criado.
       get selfIds() {
@@ -464,10 +471,10 @@ export class BaileysTransport implements Transport {
         return [me?.id, me?.lid].flatMap((id) => (id ? [jidNormalizedUser(id)] : []));
       },
       pnForLid: (lid) => this.#pnForLid(socket, lid),
-      download: (raw) => downloadMediaMessage(raw, 'buffer', {}, media),
+      download: (raw) => downloadMediaMessage(raw, 'buffer', options(), media),
       stream: async (raw) =>
         Readable.toWeb(
-          await downloadMediaMessage(raw, 'stream', {}, media),
+          await downloadMediaMessage(raw, 'stream', options(), media),
         ) as ReadableStream<Uint8Array>,
     };
   }
