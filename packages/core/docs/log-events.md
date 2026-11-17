@@ -61,6 +61,7 @@ nada. Os campos de cada linha seguem o [dicionário do logger](logger.md#campos)
 | `context.expired` | `warn` | operação recusada: o contexto já expirou; `context` diz qual (`command`, `step`, `expire`, `listener`, `plugin`) |
 | `command.timeout` | `error` | comando rejeitou depois do prazo |
 | `command.background.failed` | `error` | falha ao concluir o comando em segundo plano |
+| `command.audit.failed` | `error` | falha ao auditar o comando com papel restrito |
 | `command.refusal.failed` | `warn` | falha ao enviar a recusa do comando |
 | `command.role.unknown` | `error` | comando exige um papel que nenhum plugin carregado define: declare dependsOn no plugin dono do papel |
 | `command.unregistered.capability` | `warn` | comando não registrado: capability ausente no transport |

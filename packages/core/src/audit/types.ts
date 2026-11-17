@@ -106,7 +106,7 @@ export interface PluginAudit {
   verify(): Promise<AuditVerifyResult>;
 }
 
-/** Titular de um request ou fluxo LGPD, lido do `AsyncLocalStorage` (ver `scope.ts`). */
+/** Titular de um request HTTP ou de uma mensagem, lido do `AsyncLocalStorage` (ver `scope.ts`). */
 export interface AuditSubject {
   readonly actor: Extract<AuditActor, { kind: 'user' | 'contact' }>;
   readonly ip?: string;

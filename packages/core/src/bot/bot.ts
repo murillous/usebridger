@@ -274,6 +274,29 @@ export function createBot(config: BotConfig): Bot {
         command: command.name,
         role,
       }),
+    // `audit` nasce mais abaixo; seguro porque só há comando depois do boot.
+    onRestricted: ({ command, role, message, status }) => {
+      // `group-admin` fica de fora: é o papel do dia a dia do grupo (ex.: `!prefixo`), e
+      // auditá-lo encheria a cadeia de ruído (ADR 0140).
+      if (role === 'group-admin') return;
+      const { chat } = message;
+      audit.record({
+        action: status === 'denied' ? 'kernel.command.denied' : 'kernel.command.run',
+        // Conversa privada tem o id da pessoa: vai o pseudônimo, como o do ator (ADR 0119).
+        target: {
+          type: 'chat',
+          id: chat.isGroup ? chat.id : pseudonymizer.pseudonym(chat.id, 'user'),
+        },
+        outcome: status === 'ran' ? 'success' : status === 'failed' ? 'error' : 'denied',
+        // Nunca os argumentos: podem carregar texto do usuário (senha, chave).
+        details: {
+          plugin: command.plugin,
+          command: command.name,
+          invokedAs: command.invokedAs,
+          role,
+        },
+      });
+    },
   });
   // A espera com `onExpire` que vence entra na fila do chat como uma mensagem (ADR 0093). As de
   // passo com `persist` ficam no storage da sessão (ADR 0094); a coleção só abre no primeiro uso.
@@ -370,6 +393,7 @@ export function createBot(config: BotConfig): Bot {
     background,
     observers,
     trail,
+    transport: transport.name,
   });
   const reconnector: Reconnector | undefined =
     config.reconnection === false
