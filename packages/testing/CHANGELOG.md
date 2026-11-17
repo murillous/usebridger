@@ -1,5 +1,12 @@
 # @usebridger/testing
 
+## 0.7.2
+
+### Patch Changes
+
+- Updated dependencies [dc96111]
+  - @usebridger/core@0.12.0
+
 ## 0.7.1
 
 ### Patch Changes
