@@ -26,10 +26,17 @@ ctx.audit.record({
   (ver [`bench/docs`](../../../bench/docs/README.md#com-o-ctxauditrecord)).
 - **`action`** é `<plugin>.<recurso>.<verbo>`. O core exige o prefixo `<nome do plugin>.` e
   reserva `kernel.` e `audit.`: um plugin não forja a ação de outro nem a do kernel.
-- **Ator:** o `ctx` do plugin já está amarrado ao nome dele, então o evento sai com
-  `actor: { kind: 'plugin', name }`. Não existe campo de ator no `record`. O core (não o
-  plugin) entra com o titular num escopo assíncrono interno (request autenticado ou fluxo LGPD):
-  ali o ator é o `user`/`contact` e o evento leva `via: <plugin>`, `ip` e `userAgent`. `system` é só das chamadas internas do core.
+- **Ator:** não existe campo de ator no `record`; o core decide
+  ([ADR 0140](../../../docs/adr/0140-ator-contact-e-auditoria-de-comandos.md)):
+
+  | Onde o `record` roda | `actor` |
+  | --- | --- |
+  | tratamento de uma mensagem: middleware, comando (inclusive `background`), passo, botão, listener de `message` | `{ kind: 'contact', transport, id }`, com `id` = pseudônimo do remetente, e `via: <plugin>` |
+  | request HTTP autenticado | `{ kind: 'user', … }`, com `via`, `ip` e `userAgent` |
+  | `setup`, job do scheduler (mesmo agendado por um comando), `onExpire` de passo | `{ kind: 'plugin', name }` |
+
+  `system` é só das chamadas internas do core. O plugin não precisa guardar quem pediu em
+  `details`: o ator já é o remetente, e o `kernel.pseudonym.resolve` desfaz o pseudônimo.
 - **Redação:** valores dos segredos do bot e, em qualquer nível, chaves terminadas em
   `password`, `passwd`, `token`, `secret` ou `apiKey` (`accessToken`, `clientSecret`,
   `dbPassword`), além de `authorization` e `cookie`, viram `[REDACTED]`. A comparação ignora
@@ -58,10 +65,19 @@ O core grava sozinho, com `actor` `system` (chamada direta de `bot.plugins`/`bot
 | `kernel.key.created` / `.revoked` | `key` | API keys (nunca o segredo) |
 | `kernel.connection.pairing-code` / `.logout` | `connection` | `POST /api/connection/pairing-code` e `/logout` |
 | `kernel.pseudonym.resolve` | `pseudonym` | `{ found }`; nunca o id real |
+| `kernel.command.run` / `kernel.command.denied` | `chat` | `{ plugin, command, invokedAs, role }`; nunca os argumentos (veja abaixo) |
 
 `outcome` é `success` ou `error` (exceção, ou `setup` novo que falhou no `reload`/`enable`). A
 recusa do `ctx.admin` sobre o próprio plugin grava `denied`. `kernel.stop` é gravado
 antes do dreno do `stop`, e só se o `kernel.boot` foi gravado.
+
+**Comandos com papel restrito.** Comando com `role: 'owner'` ou papel custom (`ctx.roles.define`)
+grava `kernel.command.run` quando o `run` termina (`success` ou `error`, também no `background`) e
+`kernel.command.denied` quando o papel recusa o remetente. O ator é o contato que mandou o comando;
+o alvo é o chat, com o pseudônimo quando a conversa é privada. `everyone` e `group-admin` não
+gravam, nem a recusa por `accepts` (faltou a mídia), que não é decisão de autorização. O papel é o
+da definição no momento do dispatch, então o registro não depende do plugin dono do comando
+continuar carregado.
 
 ## Consultar e verificar (só admin)
 

@@ -212,6 +212,11 @@ export const commandBackgroundFailed: LogEvent = defineLogEvent({
   level: 'error',
   message: 'falha ao concluir o comando em segundo plano',
 });
+export const commandAuditFailed: LogEvent = defineLogEvent({
+  name: 'command.audit.failed',
+  level: 'error',
+  message: 'falha ao auditar o comando com papel restrito',
+});
 export const commandRefusalFailed: LogEvent = defineLogEvent({
   name: 'command.refusal.failed',
   level: 'warn',

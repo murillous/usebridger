@@ -9,6 +9,8 @@ import {
   numberedMenu,
   pickChoice,
 } from '#actions/actions.ts';
+import { runAsAuditSubject } from '#audit/scope.ts';
+import type { AuditSubject } from '#audit/types.ts';
 import type { CommandRouter, DispatchResult } from '#commands/router.ts';
 import {
   type ConversationRegistry,
@@ -64,6 +66,8 @@ export interface InboundFlowDeps {
   readonly observers: Pick<Observers, 'emit'>;
   /** Trilha de eventos. Padrão: desligada. */
   readonly trail?: Trail;
+  /** Nome do transport: vai no ator `contact` da auditoria (ADR 0140). */
+  readonly transport: string;
 }
 
 /**
@@ -118,7 +122,29 @@ export function createInboundFlow(deps: InboundFlowDeps): InboundFlow {
   ): Promise<void> {
     const ready = deps.ready();
     if (ready !== true && !(await ready)) return;
-    await pipeline.run(createMessageContext(message, contextDeps), handle);
+    // O remetente é o titular de tudo o que a mensagem dispara (middleware, comando, passo,
+    // botão, listeners), inclusive o `run` em segundo plano, que herda o escopo (ADR 0140).
+    await runAsAuditSubject(contactSubject(message.sender), () =>
+      pipeline.run(createMessageContext(message, contextDeps), handle),
+    );
+  }
+
+  /**
+   * O remetente como titular da auditoria. O ator só é montado quando alguém grava: o pseudônimo
+   * é um HMAC, e a maioria das mensagens não grava nada (caminho quente, plano §7).
+   */
+  function contactSubject(sender: Contact): AuditSubject {
+    let actor: AuditSubject['actor'] | undefined;
+    return {
+      get actor() {
+        actor ??= {
+          kind: 'contact',
+          transport: deps.transport,
+          id: deps.context.pseudonym?.(sender.id, 'user') ?? sender.id,
+        };
+        return actor;
+      },
+    };
   }
 
   // Só fato e metadado: o texto da mensagem não vai à trilha, em nível nenhum (ADR 0120).
