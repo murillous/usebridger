@@ -1,6 +1,7 @@
 // Prazo do `run` de comando (ADR 0004): um comando preso não pode segurar o chat para sempre.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AUDIT_FLUSH_MS } from '#audit/audit.ts';
 import { type CommandRejection, command, type RejectContext } from '#commands/command.ts';
 import { ContextExpiredError } from '#deadline.ts';
 import type { PluginErrorEvent } from '#events/types.ts';
@@ -211,6 +212,9 @@ describe('Bot: prazo de comando', () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(sentTexts(transport)).toEqual(['só o dono']);
+    // A recusa pelo papel grava `kernel.command.denied` (ADR 0140): o flush da auditoria arma o
+    // timer dele. Drenado, só sobraria o prazo do `onReject`.
+    await vi.advanceTimersByTimeAsync(AUDIT_FLUSH_MS);
     expect(vi.getTimerCount()).toBe(0);
   });
 

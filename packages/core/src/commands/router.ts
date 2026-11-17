@@ -61,6 +61,20 @@ export interface CommandRouterOptions {
    * (fail-closed) de todo jeito; aqui quem compõe o roteador registra o erro de configuração.
    */
   readonly onUnknownRole?: (role: string, command: MatchedCommand) => void;
+  /**
+   * Comando com papel diferente de `everyone`: chamado na recusa pelo papel e no fim do `run`
+   * (ADR 0140). O papel é o da definição no momento do dispatch, não de uma consulta posterior.
+   * Recusa por `accepts` não chama: não é decisão de autorização.
+   */
+  readonly onRestricted?: (entry: RestrictedCommand) => void;
+}
+
+/** O que o `onRestricted` recebe: o comando, o papel exigido e como terminou. */
+export interface RestrictedCommand {
+  readonly command: MatchedCommand;
+  readonly role: CommandRole;
+  readonly message: Message;
+  readonly status: 'denied' | 'ran' | 'failed';
 }
 
 /** Comando casado, para quem chamou o roteador saber o que rodou. */
@@ -228,6 +242,19 @@ export function createCommandRouter(options: CommandRouterOptions = {}): Command
   const registry = options.registry ?? createCommandRegistry();
   const roles = options.roles ?? createRoleRegistry();
 
+  // O gancho não pode quebrar o dispatch nem fazer o `done` rejeitar: a falha vai ao log.
+  function restricted(ctx: Pick<RejectContext, 'log'>, entry: RestrictedCommand): void {
+    try {
+      options.onRestricted?.(entry);
+    } catch (error) {
+      ctx.log.event(LOG.commandAuditFailed, {
+        plugin: entry.command.plugin,
+        command: entry.command.name,
+        err: error,
+      });
+    }
+  }
+
   function match(message: Message, workingText = message.text): CommandMatch | null {
     const text = workingText?.trimStart();
     if (!text) return null;
@@ -364,6 +391,8 @@ export function createCommandRouter(options: CommandRouterOptions = {}): Command
 
         const role = definition.role ?? 'everyone';
         if (!(await hasRole(role, base, command))) {
+          // Antes do `onReject`: a recusa fica registrada mesmo que ele falhe.
+          if (role !== 'everyone') restricted(base, { command, role, message, status: 'denied' });
           const rejection: CommandRejection = { reason: 'role', required: role };
           const reply = await reject(definition, base, rejection);
           return { consumed: true, status: 'rejected', command, rejection, reply };
@@ -385,7 +414,13 @@ export function createCommandRouter(options: CommandRouterOptions = {}): Command
 
         // `signal` vem do Bot, na visão do comando (ADR 0029); solto, do contexto recebido.
         const commandCtx = Object.assign(base, { accepted, media }) as CommandContext;
-        const done = runCommand(definition, commandCtx, command);
+        let done = runCommand(definition, commandCtx, command);
+        if (role !== 'everyone') {
+          done = done.then((outcome) => {
+            restricted(base, { command, role, message, status: outcome.status });
+            return outcome;
+          });
+        }
         if (definition.background) return { consumed: true, status: 'background', command, done };
         return await done;
       } catch (error) {

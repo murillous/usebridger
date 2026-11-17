@@ -1,5 +1,8 @@
 # ADR 0122 — Log de auditoria no kernel (`ctx.audit`)
 
+> Tabela de ator: alterada pelo [ADR 0140](0140-ator-contact-e-auditoria-de-comandos.md) (o remetente
+> como `contact` no fluxo de mensagem).
+
 **Status:** Aceito (2026-10-25) · Issue #224 · Depende do [ADR 0011](0011-escopo-do-core.md) (escopo do core),
 do [ADR 0107](0107-acesso-admin-para-plugins.md) (ações admin), do
 [ADR 0068](0068-isolamento-por-tenant.md) (tenant), do [ADR 0070](0070-trava-de-sessao-entre-processos.md)

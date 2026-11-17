@@ -846,3 +846,61 @@ describe('allowed: comandos que o remetente pode rodar (#133)', () => {
     ]);
   });
 });
+
+describe('onRestricted (ADR 0140)', () => {
+  it('avisa a recusa pelo papel antes do onReject, mesmo que ele lance', async () => {
+    const onRestricted = vi.fn();
+    const router = createCommandRouter({ owners: ['5511999999999'], onRestricted });
+    router.registry.add(
+      'admin',
+      command({
+        name: 'reboot',
+        role: 'owner',
+        onReject: () => {
+          throw new Error('onReject quebrou');
+        },
+        run: () => undefined,
+      }),
+    );
+    const result = await router.dispatch(ctxOf({ text: '!reboot' }));
+    expect(result.status).toBe('failed');
+    expect(onRestricted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: { plugin: 'admin', name: 'reboot', invokedAs: 'reboot' },
+        role: 'owner',
+        status: 'denied',
+      }),
+    );
+  });
+
+  it('avisa o fim do run do background; não avisa everyone', async () => {
+    const onRestricted = vi.fn();
+    const router = createCommandRouter({ owners: ['5511999999999'], onRestricted });
+    router.registry.add(
+      'admin',
+      command({ name: 'sync', role: 'owner', background: true, run: () => undefined }),
+    );
+    router.registry.add('admin', command({ name: 'ping', run: () => undefined }));
+    const ctx = ctxOf({ text: '!sync', phone: '5511999999999' });
+    const result = await router.dispatch(ctx);
+    expect(result.status).toBe('background');
+    if (result.status === 'background') await result.done;
+    await router.dispatch(ctxOf({ text: '!ping' }));
+    expect(onRestricted.mock.calls.map(([entry]) => entry.status)).toEqual(['ran']);
+  });
+
+  it('gancho que lança vai ao log e não muda o resultado', async () => {
+    const log = recordingLogger();
+    const router = createCommandRouter({
+      owners: ['5511999999999'],
+      onRestricted: () => {
+        throw new Error('auditoria quebrou');
+      },
+    });
+    router.registry.add('admin', command({ name: 'reboot', role: 'owner', run: () => undefined }));
+    const ctx = { ...ctxOf({ text: '!reboot', phone: '5511999999999' }), log } as MessageContext;
+    const result = await router.dispatch(ctx);
+    expect(result.status).toBe('ran');
+    expect(log.lines.map((line) => line.fields['event'])).toContain('command.audit.failed');
+  });
+});
