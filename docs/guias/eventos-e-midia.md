@@ -184,6 +184,7 @@ await e.reply.image(buffer, { caption: 'pronto' });
 await e.reply.video({ url: 'https://exemplo.com/video.mp4' });
 await e.reply.voice(ogg); // recado de voz; `audio` é arquivo de áudio
 await e.reply.sticker(webp);
+await e.reply.sticker(webp, { audio: ogg, audioSeconds: 3 }); // com som: capability `send.sticker.audio`
 await e.reply.document(pdf, { fileName: 'boletim.pdf', mimetype: 'application/pdf' });
 await e.reply.album([
   { type: 'image', media: foto1 },

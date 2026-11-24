@@ -92,7 +92,16 @@ export function createReply(
     audio: (media, o = {}) => send({ type: 'audio', media, ...pick(o, 'mimetype') }, o),
     voice: (media, o = {}) => send({ type: 'voice', media, ...pick(o, 'mimetype') }, o),
     sticker: (media, o = {}) =>
-      send({ type: 'sticker', media, ...pick(o, 'audio', 'audioMimetype', 'audioSeconds') }, o),
+      send(
+        {
+          type: 'sticker',
+          media,
+          ...pick(o, 'audio'),
+          ...pick(o, 'audioMimetype'),
+          ...pick(o, 'audioSeconds'),
+        },
+        o,
+      ),
     document: (media, o) =>
       send(
         {

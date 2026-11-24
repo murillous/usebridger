@@ -162,6 +162,7 @@ export class BaileysTransport implements Transport {
     'send.audio',
     'send.voice',
     'send.sticker',
+    'send.sticker.audio',
     'send.document',
     'media.download',
     // Referência com a media key, que baixa de novo após restart e pede o reenvio ao aparelho.
@@ -527,25 +528,34 @@ export class BaileysTransport implements Transport {
 
   async send(chatId: string, content: OutgoingContent, options?: SendOptions): Promise<MessageKey> {
     const socket = this.#connected();
-    if (content.type === 'sticker' && content.audio !== undefined) {
-      const id = await sendSoundSticker(
-        socket,
-        chatId,
-        {
-          media: content.media,
-          audio: content.audio,
-          audioMimetype: content.audioMimetype,
-          audioSeconds: content.audioSeconds,
-        },
-        options,
-      );
-      return {
-        chatId,
-        id,
-        fromMe: true,
-        senderId: isJidGroup(chatId) ? (this.#self?.id ?? null) : null,
-      };
-    }
+    const id =
+      content.type === 'sticker' && content.audio !== undefined
+        ? await sendSoundSticker(
+            socket,
+            chatId,
+            {
+              media: content.media,
+              audio: content.audio,
+              audioMimetype: content.audioMimetype,
+              audioSeconds: content.audioSeconds,
+            },
+            options,
+          )
+        : await this.#sendMessage(socket, chatId, content, options);
+    return {
+      chatId,
+      id,
+      fromMe: true,
+      senderId: isJidGroup(chatId) ? (this.#self?.id ?? null) : null,
+    };
+  }
+
+  async #sendMessage(
+    socket: BaileysSocket,
+    chatId: string,
+    content: OutgoingContent,
+    options?: SendOptions,
+  ): Promise<string> {
     const sent = await socket.sendMessage(
       chatId,
       toContent(content, options),
@@ -557,12 +567,7 @@ export class BaileysTransport implements Transport {
     if (!id) throw new Error('baileys: o envio não devolveu a chave da mensagem');
     // O segredo que cifra os votos só existe na mensagem enviada.
     if (content.type === 'poll' && sent) this.#polls.remember(sent);
-    return {
-      chatId,
-      id,
-      fromMe: true,
-      senderId: isJidGroup(chatId) ? (this.#self?.id ?? null) : null,
-    };
+    return id;
   }
 
   async react(key: MessageKey, emoji: string | null): Promise<void> {
