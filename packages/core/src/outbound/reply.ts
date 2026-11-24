@@ -91,7 +91,8 @@ export function createReply(
       send({ type: 'video', media, ...captionFields(o.caption), ...pick(o, 'mimetype') }, o),
     audio: (media, o = {}) => send({ type: 'audio', media, ...pick(o, 'mimetype') }, o),
     voice: (media, o = {}) => send({ type: 'voice', media, ...pick(o, 'mimetype') }, o),
-    sticker: (media, o) => send({ type: 'sticker', media }, o),
+    sticker: (media, o = {}) =>
+      send({ type: 'sticker', media, ...pick(o, 'audio', 'audioMimetype', 'audioSeconds') }, o),
     document: (media, o) =>
       send(
         {

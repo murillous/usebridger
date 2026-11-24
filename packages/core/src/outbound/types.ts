@@ -118,6 +118,15 @@ export interface ReplyPollOptions extends ReplyOptions {
   readonly multiple?: boolean;
 }
 
+export interface ReplyStickerOptions extends ReplyOptions {
+  /** Áudio embutido na figurinha (sound sticker); exige suporte do transport. */
+  readonly audio?: MediaInput;
+  /** Mimetype do áudio da figurinha (ex.: `audio/ogg; codecs=opus`). */
+  readonly audioMimetype?: string;
+  /** Duração do áudio em segundos. */
+  readonly audioSeconds?: number;
+}
+
 /**
  * `ctx.reply`: responde no chat da mensagem, citando-a, pela fila de saída. Chamado direto
  * envia texto, cru ou formatado; os atalhos cobrem cada tipo de `OutgoingContent`.
@@ -130,7 +139,7 @@ export interface Reply {
   audio(media: MediaInput, options?: ReplyAudioOptions): Promise<MessageKey>;
   /** Mensagem de voz (PTT). */
   voice(media: MediaInput, options?: ReplyAudioOptions): Promise<MessageKey>;
-  sticker(media: MediaInput, options?: ReplyOptions): Promise<MessageKey>;
+  sticker(media: MediaInput, options?: ReplyStickerOptions): Promise<MessageKey>;
   document(media: MediaInput, options: ReplyDocumentOptions): Promise<MessageKey>;
   /**
    * Várias mídias numa mensagem. Sem a capability `send.album`, sai um item por

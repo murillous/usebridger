@@ -282,7 +282,7 @@ fora.
 | `image`, `video` | `{ image }`/`{ video }`, com `caption` e `mimetype` |
 | `audio` | `{ audio, ptt: false }` |
 | `voice` | `{ audio, ptt: true }`; sem `mimetype`, o Baileys usa `audio/ogg; codecs=opus` |
-| `sticker` | `{ sticker }` |
+| `sticker` | `{ sticker }`; com `audio`, envia `StickerMessage` com `AudioMessage` (OGG/Opus) no campo `26` (figurinha com som nativa, exigindo `"sound-sha256"` no EXIF do WebP) |
 | `document` | `{ document, fileName, mimetype, caption }` |
 | `poll` | `{ poll: { name, values, selectableCount } }`, com `selectableCount` 1 (escolha única) ou 0 com `multiple: true` (quantas quiser) |
 
