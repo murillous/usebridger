@@ -47,6 +47,8 @@ import {
   jidNormalizedUser,
   type MiscMessageGenerationOptions,
   type ParticipantAction,
+  type proto,
+  type WAMediaUploadFunction,
   type WAMessage,
   WAMessageStubType,
   type WAPresence,
@@ -72,6 +74,7 @@ import { expiredOr, refMessage } from './media-ref.ts';
 import { type NormalizeEnv, nativeOf, toMessage } from './normalize.ts';
 import { toContent, toGroupMetadata, toQuoted, toWAKey } from './outgoing.ts';
 import { PollBook, pollUpdateOf, toPollVote } from './polls.ts';
+import { sendSoundSticker } from './sound-sticker.ts';
 
 /** Como parear uma sessão sem credenciais: escaneando o QR ou digitando um código no aparelho. */
 export type BaileysPairing = 'qr' | { readonly phone: string };
@@ -102,6 +105,12 @@ export interface BaileysSocket {
     content: AnyMessageContent,
     options?: MiscMessageGenerationOptions,
   ): Promise<WAMessage | undefined>;
+  readonly waUploadToServer?: WAMediaUploadFunction;
+  relayMessage?(
+    jid: string,
+    message: proto.IMessage,
+    options: { readonly messageId?: string },
+  ): Promise<string>;
   sendPresenceUpdate(type: WAPresence, toJid?: string): Promise<void>;
   groupMetadata(jid: string): Promise<BaileysGroupMetadata>;
   groupParticipantsUpdate(
@@ -517,7 +526,27 @@ export class BaileysTransport implements Transport {
   }
 
   async send(chatId: string, content: OutgoingContent, options?: SendOptions): Promise<MessageKey> {
-    const sent = await this.#connected().sendMessage(
+    const socket = this.#connected();
+    if (content.type === 'sticker' && content.audio !== undefined) {
+      const id = await sendSoundSticker(
+        socket,
+        chatId,
+        {
+          media: content.media,
+          audio: content.audio,
+          audioMimetype: content.audioMimetype,
+          audioSeconds: content.audioSeconds,
+        },
+        options,
+      );
+      return {
+        chatId,
+        id,
+        fromMe: true,
+        senderId: isJidGroup(chatId) ? (this.#self?.id ?? null) : null,
+      };
+    }
+    const sent = await socket.sendMessage(
       chatId,
       toContent(content, options),
       options?.quoted ? { quoted: toQuoted(options.quoted) } : undefined,

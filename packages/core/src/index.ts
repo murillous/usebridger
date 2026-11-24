@@ -209,6 +209,7 @@ export type {
   ReplyMediaOptions,
   ReplyOptions,
   ReplyPollOptions,
+  ReplyStickerOptions,
   ReplyTextOptions,
   Sender,
   SendPriority,
