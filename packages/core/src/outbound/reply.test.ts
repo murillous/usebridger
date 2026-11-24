@@ -76,6 +76,23 @@ describe('createReply', () => {
     );
   });
 
+  it('figurinha leva o áudio, o mimetype e a duração; as opções de envio ficam de fora', async () => {
+    const sender = spySender();
+    const media = Buffer.from('webp');
+    const audio = Buffer.from('ogg');
+    await createReply(sender, message).sticker(media, {
+      audio,
+      audioMimetype: 'audio/ogg; codecs=opus',
+      audioSeconds: 3,
+      mentions: ['a'],
+    });
+    expect(sender.send).toHaveBeenCalledWith(
+      'grupo@test',
+      { type: 'sticker', media, audio, audioMimetype: 'audio/ogg; codecs=opus', audioSeconds: 3 },
+      { priority: 'high', quoted: message, mentions: ['a'] },
+    );
+  });
+
   it('monta o conteúdo de cada atalho', async () => {
     const sender = spySender();
     const reply = createReply(sender, message);

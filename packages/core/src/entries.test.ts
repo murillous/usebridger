@@ -260,6 +260,7 @@ const entries: Record<string, { file: string; load: () => Promise<object> } & En
       'ReplyMediaOptions',
       'ReplyOptions',
       'ReplyPollOptions',
+      'ReplyStickerOptions',
       'ReplyTextOptions',
       'ResourceAction',
       'ResourceActor',

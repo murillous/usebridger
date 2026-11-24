@@ -160,3 +160,4 @@ Um ADR novo entra no fim da lista.
 - [0138](0138-sem-dashboard-oficial.md) — Sem dashboard oficial: sai o `plugin-dashboard`, cada app monta o seu painel sobre a API do core
 - [0139](0139-benchmark-fora-do-pr.md) — Benchmark fora do caminho do PR: roda no push na `develop`/`main` e no PR com o label `bench`
 - [0140](0140-ator-contact-e-auditoria-de-comandos.md) — Remetente como ator `contact` da auditoria no fluxo de mensagem e `kernel.command.*` para comando `owner` ou de papel custom
+- [0141](0141-figurinha-com-audio.md) — Figurinha com áudio: `audio` no `sticker` e capability `send.sticker.audio`, exigida quando o áudio vem; o Baileys envia pelo `relayMessage`

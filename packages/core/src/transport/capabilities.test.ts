@@ -20,7 +20,7 @@ const holder: CapabilityHolder = {
 
 describe('CAPABILITIES', () => {
   it('lista as capabilities iniciais do plano §6.10, sem repetição', () => {
-    expect(CAPABILITIES).toHaveLength(24);
+    expect(CAPABILITIES).toHaveLength(25);
     expect(new Set(CAPABILITIES).size).toBe(CAPABILITIES.length);
   });
 
@@ -108,6 +108,18 @@ describe('capabilitiesForSend / assertCanSend', () => {
     expect(capabilitiesForSend({ type: 'text', text: 'oi' }, { mentions: [] })).toEqual([
       'send.text',
     ]);
+  });
+
+  it('figurinha com áudio exige `send.sticker.audio` além de `send.sticker`', () => {
+    const media = Buffer.from('x');
+    expect(capabilitiesForSend({ type: 'sticker', media, audio: media })).toEqual([
+      'send.sticker',
+      'send.sticker.audio',
+    ]);
+    const onlySticker = { name: 'mudo', capabilities: new Set(['send.sticker'] as const) };
+    expect(() => assertCanSend(onlySticker, { type: 'sticker', media, audio: media })).toThrow(
+      expect.objectContaining({ capability: 'send.sticker.audio' }),
+    );
   });
 
   it('botões exigem `actions`; lista vazia não exige nada (ADR 0058)', () => {

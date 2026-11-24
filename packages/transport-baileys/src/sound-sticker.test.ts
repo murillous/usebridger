@@ -24,4 +24,3 @@ describe('sound-sticker proto', () => {
     expect(buf.includes(Buffer.from('audio/ogg; codecs=opus'))).toBe(true);
   });
 });
-

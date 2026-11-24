@@ -65,7 +65,7 @@ export function patchStickerAudioProto(): void {
     if (audio != null) {
       msg.audioMessage = AudioMessage.fromObject(audio);
     }
-    return msg;
+    return msg as proto.Message.StickerMessage;
   };
 }
 
@@ -79,7 +79,8 @@ export async function sendSoundSticker(
   content: SoundStickerContent,
   options?: SendOptions,
 ): Promise<string> {
-  if (!socket.waUploadToServer || !socket.relayMessage) {
+  const userJid = socket.user?.id;
+  if (!socket.waUploadToServer || !socket.relayMessage || !userJid) {
     throw new Error('baileys: socket sem suporte a upload/relay para figurinha com áudio');
   }
   patchStickerAudioProto();
@@ -105,12 +106,17 @@ export async function sendSoundSticker(
   stickerMessage.isLottie = false;
   stickerMessage.stickerSentTs = Date.now();
   stickerMessage.audioMessage = audioMedia.audioMessage;
+  // O `sendMessage` põe as menções no `contextInfo`; aqui o `relayMessage` não faz isso por nós.
+  // A citação o `generateWAMessageFromContent` junta ao mesmo `contextInfo`.
+  if (options?.mentions && options.mentions.length > 0) {
+    stickerMessage.contextInfo = { mentionedJid: [...options.mentions] };
+  }
 
   const full = generateWAMessageFromContent(
     chatId,
     { stickerMessage },
     {
-      userJid: socket.user?.id,
+      userJid,
       ...(options?.quoted ? { quoted: toQuoted(options.quoted) } : {}),
     },
   );

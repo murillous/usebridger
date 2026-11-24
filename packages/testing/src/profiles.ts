@@ -45,6 +45,7 @@ const whatsapp: TransportProfile = {
     'send.audio',
     'send.voice',
     'send.sticker',
+    'send.sticker.audio',
     'media.ref',
     'message.edit',
     'message.delete',

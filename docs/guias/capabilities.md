@@ -61,6 +61,7 @@ Usar uma capability que o transport não tem rejeita com `UnsupportedError` (com
 | `send.text`, `send.image`, `send.video`, `send.audio`, `send.document` | Enviar cada tipo |
 | `send.voice` | Recado de voz (o áudio gravado na hora, diferente de arquivo de áudio) |
 | `send.sticker` | Figurinha |
+| `send.sticker.audio` | Figurinha com som (`reply.sticker(webp, { audio })`). Sem ela, o envio falha em vez de sair mudo |
 | `send.album` | Várias mídias numa mensagem |
 | `media.download` | Baixar a mídia recebida (`media.download()`, `stream()`) |
 | `media.ref` | Guardar a referência de uma mídia e baixá-la depois (`ctx.media.ref`, `fromRef`) |
@@ -85,6 +86,7 @@ Usar uma capability que o transport não tem rejeita com `UnsupportedError` (com
 | `send.audio` | ✓ | ✓ | ✓ | ✓ |
 | `send.voice` | ✓ | ✓ | — | — |
 | `send.sticker` | ✓ | ✓ | — | — |
+| `send.sticker.audio` | ✓ | — | — | — |
 | `send.document` | ✓ | ✓ | ✓ | ✓ |
 | `send.album` | — | ✓ | ✓ | — |
 | `media.download` | ✓ | ✓ | ✓ | ✓ |

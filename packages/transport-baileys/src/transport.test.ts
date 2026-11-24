@@ -860,6 +860,47 @@ describe('BaileysTransport: envio e ações', () => {
     });
   });
 
+  it('figurinha com áudio sobe as duas mídias e vai pelo relayMessage, com citação e menções', async () => {
+    const { transport, socket } = await open();
+    const received: Message[] = [];
+    transport.on('message', (m) => {
+      received.push(m);
+    });
+    const raw: WAMessage = {
+      key: { remoteJid: GROUP, id: 'IN1', fromMe: false, participant: ALICE },
+      message: { conversation: '!som' },
+      messageTimestamp: 1_760_000_000,
+    };
+    socket.emit('messages.upsert', { type: 'notify', messages: [raw] });
+    await vi.waitFor(() => expect(received).toHaveLength(1));
+    const [message] = received;
+    if (!message) throw new Error('esperava mensagem');
+
+    const key = await transport.send(
+      GROUP,
+      { type: 'sticker', media: Buffer.from('webp'), audio: Buffer.from('ogg'), audioSeconds: 3 },
+      { quoted: message, mentions: [ALICE] },
+    );
+
+    expect(socket.sent).toEqual([]);
+    expect([...socket.uploads].sort()).toEqual(['audio', 'sticker']);
+    const [relayed] = socket.relayed;
+    expect(key).toEqual({
+      chatId: GROUP,
+      id: relayed?.messageId,
+      fromMe: true,
+      senderId: '5511999990000@s.whatsapp.net',
+    });
+    expect(relayed?.jid).toBe(GROUP);
+    const sticker = relayed?.message.stickerMessage as
+      | (NonNullable<typeof relayed>['message']['stickerMessage'] & {
+          audioMessage?: { mimetype?: string | null; seconds?: number | null };
+        })
+      | undefined;
+    expect(sticker?.audioMessage).toMatchObject({ mimetype: 'audio/ogg; codecs=opus', seconds: 3 });
+    expect(sticker?.contextInfo).toMatchObject({ mentionedJid: [ALICE], stanzaId: 'IN1' });
+  });
+
   it('envio sem chave de volta falha em vez de devolver chave inventada', async () => {
     const { transport, socket } = await open();
     socket.sendMessage = async () => undefined;
