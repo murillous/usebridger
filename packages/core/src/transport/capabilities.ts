@@ -20,6 +20,8 @@ export const CAPABILITIES = [
   'send.audio',
   'send.voice',
   'send.sticker',
+  // Figurinha com áudio embutido (sound sticker do WhatsApp); sem ela, a figurinha sairia muda.
+  'send.sticker.audio',
   'send.document',
   'send.album',
   // Template aprovado da plataforma: o que sai com a janela de atendimento fechada (ADR 0124).
@@ -114,15 +116,17 @@ const sendCapability: { readonly [K in Exclude<OutgoingContent['type'], 'album'>
 };
 
 /**
- * Capabilities que um envio exige: a do tipo de conteúdo, mais citação, menções e botões se
- * usados. O álbum exige a de cada tipo de item, e não a `send.album`: sem ela, a fila o envia
- * item a item.
+ * Capabilities que um envio exige: a do tipo de conteúdo, mais áudio da figurinha, citação,
+ * menções e botões se usados. O álbum exige a de cada tipo de item, e não a `send.album`: sem
+ * ela, a fila o envia item a item.
  */
 export function capabilitiesForSend(content: OutgoingContent, options?: SendOptions): Capability[] {
   const required: Capability[] =
     content.type === 'album'
       ? [...new Set(content.items.map((item) => sendCapability[item.type]))]
       : [sendCapability[content.type]];
+  if (content.type === 'sticker' && content.audio !== undefined)
+    required.push('send.sticker.audio');
   if (options?.quoted) required.push('quoted');
   if (options?.mentions && options.mentions.length > 0) required.push('mentions');
   if (options?.actions && options.actions.length > 0) required.push('actions');

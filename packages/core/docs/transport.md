@@ -380,7 +380,9 @@ await transport.send(chatId, {
 ```
 
 O core só entrega um `type` cuja capability o transport declara (`send.sticker` para figurinha,
-por exemplo; o Discord, que não deixa bot enviar figurinha arbitrária, não a declara). O
+por exemplo; o Discord, que não deixa bot enviar figurinha arbitrária, não a declara). A figurinha
+com `audio` exige também `send.sticker.audio`: o transport sem ela nunca a recebe, e não precisa
+olhar o campo. O
 `OutgoingContent` pode ganhar membros numa minor, cada um com capability nova. No `switch` sobre
 `content.type`, lance erro no `default` em vez do `never` exaustivo. O caso só acontece se algo
 fora da fila chamar o `send` direto:
@@ -678,7 +680,7 @@ mantém cache por grupo e o invalida em `group.participants` e `group.updated` (
 `CAPABILITIES` lista as capabilities que o core conhece:
 
 `actions`, `groups`, `groups.add`, `groups.remove`, `groups.promote`, `mentions`, `reactions`, `typing`,
-`send.text`, `send.image`, `send.video`, `send.audio`, `send.voice`, `send.sticker`, `send.document`, `send.album`, `send.template`, `media.download`,
+`send.text`, `send.image`, `send.video`, `send.audio`, `send.voice`, `send.sticker`, `send.sticker.audio`, `send.document`, `send.album`, `send.template`, `media.download`,
 `media.ref`, `message.edit`, `message.delete`, `polls`, `quoted`, `pairing`.
 
 `pairing` não é de envio: diz que a sessão se pareia por QR ou código (`connection.qr`,

@@ -263,7 +263,16 @@ export type OutgoingContent =
       readonly mimetype?: string;
     }
   | { readonly type: 'audio' | 'voice'; readonly media: MediaInput; readonly mimetype?: string }
-  | { readonly type: 'sticker'; readonly media: MediaInput }
+  | {
+      readonly type: 'sticker';
+      readonly media: MediaInput;
+      /** Áudio embutido na figurinha (sound sticker); exige suporte do transport. */
+      readonly audio?: MediaInput;
+      /** Mimetype do áudio da figurinha (ex.: `audio/ogg; codecs=opus`). */
+      readonly audioMimetype?: string;
+      /** Duração do áudio em segundos. */
+      readonly audioSeconds?: number;
+    }
   | {
       readonly type: 'document';
       readonly media: MediaInput;

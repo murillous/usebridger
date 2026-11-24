@@ -9,6 +9,8 @@ import type {
   GroupMetadata as BaileysGroupMetadata,
   MiscMessageGenerationOptions,
   ParticipantAction,
+  proto,
+  WAMediaUploadFunction,
   WAMessage,
   WAPresence,
   WAVersion,
@@ -126,6 +128,29 @@ export class FakeSocket implements BaileysSocket {
         },
       },
     };
+  }
+
+  /** Mídias "subidas" pelo `waUploadToServer`, por tipo, na ordem. */
+  readonly uploads: string[] = [];
+  /** Mensagens montadas à mão e enviadas pelo `relayMessage` (figurinha com áudio). */
+  readonly relayed: {
+    readonly jid: string;
+    readonly message: proto.IMessage;
+    readonly messageId: string | undefined;
+  }[] = [];
+
+  readonly waUploadToServer: WAMediaUploadFunction = async (_path, { mediaType }) => {
+    this.uploads.push(mediaType);
+    return { mediaUrl: `https://mmg.whatsapp.net/${mediaType}`, directPath: `/${mediaType}` };
+  };
+
+  async relayMessage(
+    jid: string,
+    message: proto.IMessage,
+    options: { readonly messageId?: string },
+  ): Promise<string> {
+    this.relayed.push({ jid, message, messageId: options.messageId });
+    return options.messageId ?? '';
   }
 
   async sendPresenceUpdate(type: WAPresence, toJid?: string): Promise<void> {

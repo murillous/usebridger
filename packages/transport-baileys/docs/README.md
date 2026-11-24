@@ -264,7 +264,7 @@ uma mensagem que chegou no mesmo lote pode vir incorporada a ela, sem evento pr�
 
 O transport declara todas as capabilities do core: `groups`, `groups.add`,
 `groups.remove`, `groups.promote`, `mentions`, `reactions`, `typing`, `send.text`, `send.image`, `send.video`, `send.audio`,
-`send.voice`, `send.sticker`, `send.document`, `media.download`, `media.ref`, `message.edit`,
+`send.voice`, `send.sticker`, `send.sticker.audio`, `send.document`, `media.download`, `media.ref`, `message.edit`,
 `message.delete`, `polls`, `quoted` e `pairing`. Todo plugin que declara `requires` com elas carrega.
 `pairing` diz ao bot que a sessão se pareia por QR ou código: com ela, credencial rejeitada
 (`auth-failed`) limpa a sessão e pareia de novo, em vez de parar o bot.
@@ -282,7 +282,7 @@ fora.
 | `image`, `video` | `{ image }`/`{ video }`, com `caption` e `mimetype` |
 | `audio` | `{ audio, ptt: false }` |
 | `voice` | `{ audio, ptt: true }`; sem `mimetype`, o Baileys usa `audio/ogg; codecs=opus` |
-| `sticker` | `{ sticker }` |
+| `sticker` | `{ sticker }`; com `audio`, envia `StickerMessage` com `AudioMessage` (OGG/Opus) no campo `26` (figurinha com som nativa, exigindo `"sound-sha256"` no EXIF do WebP). Vai por `relayMessage`: o Baileys não monta esse conteúdo no `sendMessage` |
 | `document` | `{ document, fileName, mimetype, caption }` |
 | `poll` | `{ poll: { name, values, selectableCount } }`, com `selectableCount` 1 (escolha única) ou 0 com `multiple: true` (quantas quiser) |
 
