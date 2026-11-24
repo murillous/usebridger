@@ -1,5 +1,12 @@
 # @usebridger/core
 
+## 0.13.0
+
+### Minor Changes
+
+- 3cc9d56: Suporte a figurinha com áudio nativo do WhatsApp (`reply.sticker(media, { audio, audioMimetype, audioSeconds })`), anexando `AudioMessage` no campo `26` do `StickerMessage`.
+- b25b437: Capability `send.sticker.audio`: a figurinha com `audio` passa a exigi-la, e o transport que não a declara recusa o envio com `UnsupportedError` em vez de mandar a figurinha muda. O `reply.sticker` agora repassa `audioMimetype` e `audioSeconds`, e a figurinha com áudio no Baileys leva as menções. O perfil `whatsapp` do `@usebridger/testing` declara a capability.
+
 ## 0.12.0
 
 ### Minor Changes
