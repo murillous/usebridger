@@ -1,6 +1,6 @@
 {
   "name": "@usebridger/transport-telegram",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Transport do Bridger para o Telegram via Bot API (grammY).",
   "license": "Apache-2.0",
   "repository": {
